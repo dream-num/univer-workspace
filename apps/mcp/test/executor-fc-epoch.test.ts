@@ -105,6 +105,25 @@ describe("executor epoch configuration", () => {
     ).toThrow(/MCP_EXECUTOR_URLS/u);
   });
 
+  it("polls executor capabilities every minute by default and can disable polling", () => {
+    const defaults = parseGatewayConfig({ ...gatewayEnv });
+    expect(defaults.executor?.capabilitiesIntervalMs).toBe(60_000);
+    const off = parseGatewayConfig({
+      ...gatewayEnv,
+      MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: "0",
+    });
+    expect(off.executor?.capabilitiesIntervalMs).toBe(0);
+    const longer = parseGatewayConfig({
+      ...gatewayEnv,
+      MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: "300000",
+    });
+    expect(longer.executor?.capabilitiesIntervalMs).toBe(300_000);
+    for (const invalid of ["-1", "1.5", "abc", "86400001"])
+      expect(() =>
+        parseGatewayConfig({ ...gatewayEnv, MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: invalid }),
+      ).toThrow(/MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS/u);
+  });
+
   it("builds the configured store and refuses a Redis store without a URL", () => {
     expect(createEpochStore().store).toBeInstanceOf(MemoryEpochStore);
     expect(createEpochStore({ store: "memory" }).store).toBeInstanceOf(MemoryEpochStore);
@@ -382,5 +401,109 @@ describe("executor capability failure logging", () => {
     expect(output).toContain("HTTP 401");
     expect(output).toContain("ECONNREFUSED");
     expect(output).toContain('"executor":"http://one.test"');
+  });
+});
+
+describe("executor capability cold start", () => {
+  it("retries discovery after a failure instead of waiting for the minute timer", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(
+        new TypeError("fetch failed", {
+          cause: Object.assign(new Error("connect timeout"), { code: "UND_ERR_CONNECT_TIMEOUT" }),
+        }),
+      )
+      .mockResolvedValue(Response.json({ v: 1, operations: ["content.inspect"] }));
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://one.test"], executorToken: "t".repeat(40) },
+      pino({ level: "silent" }),
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      expect(capabilities.available).toBe(false);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(capabilities.available).toBe(true);
+    } finally {
+      capabilities.close();
+      fetcher.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("backs off up to 15 seconds while the executor stays unreachable", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new TypeError("fetch failed", {
+        cause: Object.assign(new Error("refused"), { code: "ECONNREFUSED" }),
+      }),
+    );
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://one.test"], executorToken: "t".repeat(40) },
+      pino({ level: "silent" }),
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      // 1s, 2s, 4s, 8s, then 15s twice.
+      for (const step of [1_000, 2_000, 4_000, 8_000, 15_000, 15_000]) {
+        const before = fetcher.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(step);
+        expect(fetcher.mock.calls.length).toBe(before + 1);
+      }
+    } finally {
+      capabilities.close();
+      fetcher.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("executor capability polling", () => {
+  it("refreshes every minute by default", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json({ v: 1, operations: ["content.inspect"] }));
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://one.test"], executorToken: "t".repeat(40) },
+      pino({ level: "silent" }),
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      capabilities.close();
+      fetcher.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not poll when the interval is 0, while startup discovery still runs", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json({ v: 1, operations: ["content.inspect"] }));
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://one.test"], executorToken: "t".repeat(40), capabilitiesIntervalMs: 0 },
+      pino({ level: "silent" }),
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      expect(capabilities.available).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    } finally {
+      capabilities.close();
+      fetcher.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

@@ -101,6 +101,13 @@ const environment = z.object({
   MCP_EXECUTOR_ALLOWED_USER_IDS: executorAllowedUserIds.optional(),
   // FC HeaderField affinity: the header is always sent; only the epoch store is configurable.
   MCP_EXECUTOR_EPOCH_STORE: z.enum(["memory", "redis"]).default("memory"),
+  // 0 disables the periodic capability refresh; startup, cold-start retries and /readyz keep it.
+  MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .max(86_400_000)
+    .default(60_000),
   MCP_EXECUTOR_REDIS_URL: redisUrl.optional(),
   MCP_EXECUTOR_REDIS_KEY_PREFIX: z.string().min(1).max(128).default("mcp:executor-epoch:"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -115,6 +122,7 @@ export type GatewayConfig = Readonly<
     | "MCP_EXECUTOR_EPOCH_STORE"
     | "MCP_EXECUTOR_REDIS_URL"
     | "MCP_EXECUTOR_REDIS_KEY_PREFIX"
+    | "MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS"
   > & {
     readonly uploadLimits: UploadLimits;
     readonly executor: {
@@ -122,6 +130,8 @@ export type GatewayConfig = Readonly<
       readonly executorToken: string;
       /** Absent only in tests that build a partial executor config; the gateway uses memory. */
       readonly epochs?: EpochStoreSettings;
+      /** Periodic capability refresh; 0 disables it. Absent in partial test configs. */
+      readonly capabilitiesIntervalMs?: number;
     } | null;
     readonly WORKSPACE_TRANSPORT_URL: string;
     readonly auth: {
@@ -147,6 +157,7 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     MCP_EXECUTOR_EPOCH_STORE: epochStore,
     MCP_EXECUTOR_REDIS_URL: redisRedisUrl,
     MCP_EXECUTOR_REDIS_KEY_PREFIX: redisKeyPrefix,
+    MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: capabilitiesIntervalMs,
     ...configWithoutSecret
   } = config;
   if ((urls === undefined) !== (executorToken === undefined))
@@ -197,6 +208,7 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
               ...(redisRedisUrl === undefined ? {} : { redisUrl: redisRedisUrl }),
               keyPrefix: redisKeyPrefix,
             }),
+            capabilitiesIntervalMs,
           },
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,
     auth: Object.freeze({

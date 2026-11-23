@@ -83,10 +83,15 @@ the call is safe to repeat. Epochs live in gateway process memory by default; se
 that route the same keys need `MCP_EXECUTOR_EPOCH_STORE=redis` and a shared Redis. The header is
 always sent, so switching an executor to FC needs no gateway switch. Capability discovery is keyed too, with
 a single `mcp-gateway`/`capabilities` key shared by every replica: an unkeyed probe would open a new FC
-Session on every refresh, and session isolation turns each Session into an instance. The gateway logs every
-executor attempt as `mcp.executor_request` with the `x-executor-key` value it sends, and the executor logs
-the same field under `mcp.executor_request` when it receives one, so the two sides can be correlated. Set
-`LOG_LEVEL=warn` to silence them. See [`src/executor-fc`](src/executor-fc/README.md).
+Session on every refresh, and session isolation turns each Session into an instance. Discovery uses a
+five-second request timeout and, until the first success, retries after 1, 2, 4 and 8 seconds and then every
+15 seconds, so an FC cold start that outlives one attempt does not leave the executor tools hidden until the
+next minute, and polling then continues every minute. Setting `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS=0` stops
+that polling, so under FC the shared `mcp-gateway`/`capabilities` Session expires after its idle timeout and the
+instance can scale to zero; the tradeoff is a restart before an executor rollout or a later renderer shows up. The gateway logs every executor attempt as `mcp.executor_request` with the `x-executor-key` value
+it sends, and the executor logs the same field under `mcp.executor_request` when it receives one, so the two
+sides can be correlated. Set `LOG_LEVEL=warn` to silence them. See
+[`src/executor-fc`](src/executor-fc/README.md).
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production` and
@@ -242,6 +247,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_EXECUTOR_EPOCH_STORE` | `memory` | Epoch store behind the `x-executor-key` Session ID. `memory` is correct for one gateway replica; `redis` requires `MCP_EXECUTOR_REDIS_URL` and is required once several replicas route the same keys |
 | `MCP_EXECUTOR_REDIS_URL` | Unset | `redis://` or `rediss://` URL of the shared epoch store. Never logged. Set exactly when `MCP_EXECUTOR_EPOCH_STORE=redis`, and only with `MCP_EXECUTOR_URLS` |
 | `MCP_EXECUTOR_REDIS_KEY_PREFIX` | `mcp:executor-epoch:` | Redis key prefix. Routing keys are stored as their sha256 hex digest, so no user or Unit ID appears in Redis. Epochs never expire |
+| `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS` | `60000` | Periodic executor capability refresh in milliseconds, `0` through `86400000`. `0` disables polling; startup discovery, cold-start retries and the `/readyz` refresh stay. With polling off, an executor rollout or a renderer that starts later is only noticed after a gateway restart |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
 | `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
 | `EXECUTOR_SHEET_LENS_CACHE_BYTES` | `536870912` (512 MiB) | Per-executor Sheet Lens cache budget in estimated bytes. Non-negative integer; `0` disables caching. Malformed values fail startup |

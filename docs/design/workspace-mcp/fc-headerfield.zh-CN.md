@@ -287,6 +287,9 @@ MCP 2025-11-25 引入了**实验性的 Tasks utility**：`tools/call` 可以携�
 - 大量稀疏 key（上百）时 per-key 实例成本线性上涨；需要分层（热 key 长驻、冷 key 请求隔离）或重新评估是否值得上 FC。
 - **请求隔离不采用**：每次调用 1.5 s+ 冷启动，10 秒节奏下不可接受。
 - **10 秒节奏本身不构成使用 WebSocket 的理由**；它说明负载“几乎常热”，FC 的缩容收益有限，常驻 executor 可能更简单。
+- 网关的能力轮询会持续刷新 `mcp-gateway`/`capabilities` 会话，等于常驻一个实例。设
+  `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS=0` 可以停掉轮询，让该会话空闲 30 分钟后过期、实例缩到 0；
+  代价是执行层滚动或 renderer 后加入要重启网关才反映。
 
 ### 3.9 失败语义
 
