@@ -63,8 +63,8 @@ Workspace 已有 OAuth 授权码加 PKCE 的签发能力（`apps/workspace/serve
 `apps/agent` 正是用它登录。但它离 MCP 授权规范还有距离：
 
 - 客户端是 `OAUTH_CLIENTS_JSON` 里的静态配置，回调地址精确匹配，没有动态注册。
-- 只支持 `authorization_code`，没有 refresh token。拿到的 `access_token` 其实是 7 天有效的登录 session，
-  必须以 `workspace_session` cookie 的形式发送，产品与协同接口都不认 `Authorization: Bearer`。
+- 只支持 `authorization_code`，没有 refresh token。拿到的 `access_token` 其实是一个登录 session，签发时有效期默认 7 天，
+  有效期过半后被使用时续期，用户修改密码时失效。它必须以 `workspace_session` cookie 的形式发送，产品与协同接口都不认 `Authorization: Bearer`。
 - 没有 `/.well-known/oauth-protected-resource`（RFC 9728）和 `/.well-known/oauth-authorization-server`（RFC 8414）。
 - scope 只有 `identity` 和 `session`，后者等于用户全部权限，没有读写之分。
 

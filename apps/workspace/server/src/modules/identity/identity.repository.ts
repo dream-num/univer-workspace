@@ -149,11 +149,13 @@ export interface IdentityRepository {
   findUsers(userIds: readonly string[]): Promise<readonly User[]>;
   findCredential(username: string): Promise<StoredCredential | null>;
   findCredentialByUserId(userId: string): Promise<StoredCredential | null>;
+  /** Also deletes, in the same transaction, the User's sessions that renew on use, except `keepSessionId`, and returns their ids. */
   updatePasswordHash(
     userId: string,
     passwordHash: string,
-    updatedAt: number
-  ): Promise<void>;
+    updatedAt: number,
+    keepSessionId: string
+  ): Promise<string[]>;
   createSession(
     userId: string,
     session: NewPasswordUser["session"]

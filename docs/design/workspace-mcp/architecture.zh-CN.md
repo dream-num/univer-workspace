@@ -150,7 +150,7 @@ MCP 可以水平扩展，但每次编辑最终都落到单副本的 Workspace Se
 - Workspace 已有授权码加 PKCE 的 OAuth 流程（`apps/workspace/server/src/modules/identity/oauth-authorization-router.ts`），`apps/agent` 用它登录。
 - 客户端是 `OAUTH_CLIENTS_JSON` 里的静态配置，回调地址精确匹配（`apps/workspace/server/src/config.ts:133-182`）。
 - 只支持 `grant_type=authorization_code`。`state` 必须符合 `^[A-Za-z0-9_-]{32,256}$`。授权码 60 秒有效，存在内存里。
-- token 端点返回的 `access_token` 是 7 天有效的登录 session，由 `issueSession(user, "agent")` 签发，调用方必须以 `workspace_session` cookie 发送（`oauth-authorization-router.ts:152-166`）。`issueSession` 不接受自定义有效期。
+- token 端点返回的 `access_token` 是一个登录 session，由 `issueSession(user, "agent")` 签发，签发时有效期为 `SESSION_TTL_MS`（默认 7 天）。它在有效期过半后被使用时续期为一个完整有效期，闲置到当前有效期结束时失效，用户修改密码时被删除。调用方必须以 `workspace_session` cookie 发送（`oauth-authorization-router.ts:152-166`）。`issueSession` 不接受自定义有效期。
 - 产品 API 和协同端点只认 cookie，不认 `Authorization: Bearer`。服务端没有 Origin 或 CSRF 检查，也没有通用限流。
 - 没有授权服务器元数据、受保护资源元数据、动态注册、refresh token。
 - `login_sessions` 表只有 `id`、`secret_hash`、`user_id`、`created_at`、`expires_at`、`write_source`（`apps/workspace/server/src/db/sqlite/schema.sql:36-44`），没有 scope。
