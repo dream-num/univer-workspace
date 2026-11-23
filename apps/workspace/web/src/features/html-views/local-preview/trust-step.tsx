@@ -1,12 +1,12 @@
 import type { HtmlViewBinding } from "@univerjs-labs/html-view";
-import { Check, CircleCheck, Info, Lock, Sheet, Shield } from "lucide-react";
+import { Check, CircleCheck, Lock, Sheet, Shield } from "lucide-react";
 import { useI18n } from "../../../shared/i18n";
 import { Badge, Button, Skeleton } from "../../../shared/ui";
 import { cn } from "../../../shared/utils/cn";
 import { bindingAddress, byPosition } from "./bindings";
 import { unitLabel, type BoundUnit, type BoundUnits } from "./bound-units";
 import { usePreviewMessages } from "./messages";
-import { PageBox, StepCard } from "./step-card";
+import { PageBox, StepCard, StepLink, StepNote } from "./step-card";
 
 const MAX_ADDRESSES = 12;
 
@@ -32,7 +32,7 @@ export function TrustStep({ bindings, units, trusted, fileName, source, pullRequ
     footer={<>
       {canAlways && <Button onClick={() => onTrust("always")}><Check />{m.trustAlways}</Button>}
       <Button variant={canAlways ? "secondary" : "primary"} onClick={() => onTrust("session")}>{m.trustOnce}</Button>
-      <Button variant="link" size="sm" className="ml-auto px-1 text-muted-foreground underline decoration-border-strong hover:text-foreground" onClick={pick}>{m.pickAnother}</Button>
+      <StepLink onClick={pick}>{m.pickAnother}</StepLink>
       {canAlways && <p className="m-0 basis-full text-xs leading-relaxed text-subtle-foreground">{m.trustAlwaysHint}</p>}
     </>}>
     <div>
@@ -50,9 +50,7 @@ export function TrustStep({ bindings, units, trusted, fileName, source, pullRequ
         {m.trustAlready(new Intl.ListFormat(language).format(known.map((unit) => unitLabel(unit, m))), known.length)}
       </p>}
     </div>
-    <p className="m-0 flex items-start gap-2 text-[13px] leading-relaxed text-muted-foreground">
-      <Info className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" />{pullRequest ? m.trustNotePr(pullRequest.pr) : m.trustNote}
-    </p>
+    <StepNote>{pullRequest ? m.trustNotePr(pullRequest.pr) : m.trustNote}</StepNote>
   </StepCard>;
 }
 

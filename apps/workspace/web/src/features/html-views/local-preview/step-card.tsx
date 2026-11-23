@@ -1,6 +1,6 @@
-import { FileText, GitPullRequest, type LucideIcon } from "lucide-react";
+import { FileText, GitPullRequest, Info, type LucideIcon } from "lucide-react";
 import { useId, type ReactNode } from "react";
-import { Badge } from "../../../shared/ui";
+import { Badge, Button } from "../../../shared/ui";
 
 export function StepCard({ icon: Icon, title, lead, children, footer }: {
   icon: LucideIcon;
@@ -10,7 +10,7 @@ export function StepCard({ icon: Icon, title, lead, children, footer }: {
   footer?: ReactNode;
 }) {
   const titleId = useId();
-  return <div className="flex min-h-full justify-center bg-surface px-6 pt-[9vh] pb-24 text-sm">
+  return <div className="flex flex-1 justify-center bg-surface px-6 pt-[9vh] pb-24 text-sm">
     <section aria-labelledby={titleId} className="h-fit w-full max-w-140 rounded-xl border border-border bg-background shadow-lg">
       <div className="flex flex-col gap-5 px-7 pt-7 pb-6">
         <div className="flex items-start gap-3.5">
@@ -39,4 +39,16 @@ export function PageBox({ name, source, pullRequest }: { name: string; source: s
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-subtle-foreground">{source}{pullRequest && <PullRequestChip {...pullRequest} />}</div>
     </div>
   </div>;
+}
+
+export function StepNote({ children }: { children: ReactNode }) {
+  return <p className="m-0 flex items-start gap-2 text-[13px] leading-relaxed text-muted-foreground">
+    <Info className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" />{children}
+  </p>;
+}
+
+export function StepLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return <Button variant="link" size="sm" className="ml-auto px-1 text-muted-foreground underline decoration-border-strong hover:text-foreground" onClick={onClick}>
+    {children}
+  </Button>;
 }

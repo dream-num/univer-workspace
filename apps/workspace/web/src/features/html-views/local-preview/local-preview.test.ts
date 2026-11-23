@@ -133,7 +133,8 @@ it("asks for a click before the first load, so the browser can prompt for local 
   controls.idle = true;
   await render();
   expect(container.textContent).toContain("Load the page from your computer");
-  expect(container.textContent).toContain("127.0.0.1:41234");
+  expect(container.textContent).toContain("Local preview process · 127.0.0.1:41234");
+  expect(container.querySelector('[title="Local preview process http://127.0.0.1:41234"]')?.textContent).toBe("This computer :41234");
   expect(controls.start).not.toHaveBeenCalled();
   await click(button("Load page"));
   expect(controls.start).toHaveBeenCalledTimes(1);
