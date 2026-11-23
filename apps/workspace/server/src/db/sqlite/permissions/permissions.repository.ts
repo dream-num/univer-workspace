@@ -39,7 +39,7 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
           `SELECT id, username, display_name, avatar_url
            FROM users
            WHERE id <> ?
-             AND kind = 'human'
+             AND (kind = 'human' OR EXISTS (SELECT 1 FROM agents WHERE agents.user_id = users.id AND agents.owner_user_id IS NOT NULL))
              AND (
                id = ?
                OR username LIKE ? ESCAPE '\\' COLLATE NOCASE

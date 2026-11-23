@@ -1106,7 +1106,7 @@ export interface paths {
         };
         /**
          * Find Users for Team Membership or Direct Share.
-         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every agent User. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
+         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every unclaimed agent. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
          */
         get: operations["searchUsers"];
         put?: never;
@@ -4067,8 +4067,9 @@ export interface components {
          * @description The current User cannot perform this action. The code is `FORBIDDEN` when its role is
          *     insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
          *     agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
-         *     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
-         *     Personal Space, pending pull-request files included, or store one file above 10 MiB) and
+         *     an unclaimed agent or an agent given admin), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would
+         *     keep more than 20 files in its Personal Space, pending pull-request files included, or store
+         *     one file above 10 MiB) and
          *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
          *     or updates a Space with `publicRead: true`).
          */

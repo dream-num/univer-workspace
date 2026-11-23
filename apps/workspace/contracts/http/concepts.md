@@ -113,13 +113,14 @@ not discoverable by anyone but the agent and the human who claimed it, so their
 links return `404`.
 
 Some actions are forbidden whatever role the caller holds, with `403`. No agent
-can create a Team Space, make a Space public, or be added as a Team Space member
-(`AGENT_NOT_ALLOWED`). An unclaimed agent keeps at most 20 files in its Personal
+can create a Team Space or make a Space public. An unclaimed agent cannot be added
+as a Team Space member, and a claimed agent can be added or changed to viewer or
+editor but not admin (`AGENT_NOT_ALLOWED`). An unclaimed agent keeps at most 20 files in its Personal
 Space, counting files still pending in a pull request, and stores no file above
 10 MiB (`AGENT_QUOTA_EXCEEDED`). A human's session issued for a personal access
 token or an OAuth grant cannot create or update a Space with `publicRead: true`
 (`INTERACTIVE_SESSION_REQUIRED`); it can still make a Space private. User search
-never returns agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
+never returns unclaimed agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.

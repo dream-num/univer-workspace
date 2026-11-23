@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe("who takes a pull request to trunk", () => {
   it("is its author, or the person who claimed the authoring agent, for User and Team pull requests alike", async () => {
-    const { origin, application, repositories } = await start();
+    const { origin, application } = await start();
     const [owner, admin, author, editor, viewer, outsider, claimer, teamClaimer] = await Promise.all(
       ["owner", "admin", "author", "editor", "viewer", "outsider", "claimer", "team-claimer"].map((name) => person(origin, name)),
     );
@@ -23,10 +23,9 @@ describe("who takes a pull request to trunk", () => {
     for (const [member, role] of [[admin, "admin"], [author, "editor"], [editor, "editor"], [viewer, "viewer"], [teamClaimer, "editor"]] as const) {
       await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role });
     }
-    // No agent can join a Team Space now; this membership stands for one that predates that rule.
     const teamAgent = await guestAgent(origin);
-    await repositories.permissions.upsertMember({ spaceId: team.id, userId: teamAgent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
     await claim(origin, teamAgent, teamClaimer);
+    await application.permissions.upsertTeamMember(owner.id, team.id, teamAgent.id, { role: "editor" });
     const userAgent = await guestAgent(origin);
     await claim(origin, userAgent, claimer);
 
@@ -91,13 +90,12 @@ describe("who takes a pull request to trunk", () => {
   }, 30_000);
 
   it("names the agent's owner when refusing, tells an owner without edit access why, and lists the pull request to that owner", async () => {
-    const { origin, application, repositories } = await start();
+    const { origin, application } = await start();
     const [owner, claimer] = await Promise.all(["owner", "claimer"].map((name) => person(origin, name)));
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-    // No agent can join a Team Space now; this membership stands for one that predates that rule.
     const agent = await guestAgent(origin);
-    await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
     await claim(origin, agent, claimer);
+    await application.permissions.upsertTeamMember(owner.id, team.id, agent.id, { role: "editor" });
     const pull = await createPull(origin, agent, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
     await transition(origin, pull, "ready", agent);
 
@@ -114,14 +112,13 @@ describe("who takes a pull request to trunk", () => {
   }, 30_000);
 
   it("names the person who claimed an agent author to whoever can see the pull request, and to nobody else", async () => {
-    const { origin, application, repositories } = await start();
+    const { origin, application } = await start();
     const [owner, member, claimer, outsider] = await Promise.all(["owner", "member", "claimer", "outsider"].map((name) => person(origin, name)));
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
     await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
-    // No agent can join a Team Space now; this membership stands for one that predates that rule.
     const agent = await guestAgent(origin);
-    await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
     await claim(origin, agent, claimer);
+    await application.permissions.upsertTeamMember(owner.id, team.id, agent.id, { role: "editor" });
     const unclaimed = await guestAgent(origin);
     const agentPull = await createPull(origin, agent, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
     const personPull = await createPull(origin, member, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);

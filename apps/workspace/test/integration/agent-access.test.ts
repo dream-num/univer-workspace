@@ -217,7 +217,7 @@ describe("access rules for agents", () => {
 });
 
 describe("ceilings", () => {
-  it("keeps an agent out of Team Spaces and public Spaces, whether or not a human claimed it", async () => {
+  it("keeps an agent from creating a Team Space or a public Space, whether or not a human claimed it", async () => {
     const { origin, application } = await start();
     const human = await register(origin, "owner");
     const agent = await createAgent(origin);
@@ -228,7 +228,6 @@ describe("ceilings", () => {
       if (claimed) claim(application, agent.id, human.id);
       await expectRefused(post(origin, "/api/team-spaces", { name: "Agent team" }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
       await expectRefused(send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
-      await expectRefused(put(origin, `/api/team-spaces/${team.id}/members/${agent.id}`, { role: "viewer" }, human.cookie), "AGENT_NOT_ALLOWED");
     }
     expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { name: "Renamed" }, { cookie: agent.cookie })).status).toBe(200);
     expect(await (await fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } })).json()).toMatchObject({
@@ -239,6 +238,46 @@ describe("ceilings", () => {
     expect((await put(origin, `/api/team-spaces/${team.id}/members/${other.id}`, { role: "viewer" }, human.cookie)).status).toBe(200);
     expect((await send(origin, "PATCH", `/api/spaces/${team.id}`, { publicRead: false }, { cookie: human.cookie })).status).toBe(200);
     expect((await send(origin, "PATCH", `/api/spaces/${team.id}`, { publicRead: true }, { cookie: human.cookie })).status).toBe(200);
+  });
+
+  it("lets a human add a claimed agent to a Team Space as viewer or editor, never as admin, and no unclaimed agent", async () => {
+    const { origin, application } = await start();
+    const human = await register(origin, "owner");
+    const claimer = await register(origin, "claimer");
+    const agent = await createAgent(origin);
+    const unclaimed = await createAgent(origin);
+    claim(application, agent.id, claimer.id);
+    const team = (await (await post(origin, "/api/team-spaces", { name: "Team" }, { cookie: human.cookie })).json()) as { id: string };
+    const created = await post(
+      origin,
+      "/api/resources",
+      { kind: "univer", spaceId: team.id, parentNodeId: null, name: "Budget", unitType: "sheet" },
+      { cookie: human.cookie, "idempotency-key": randomUUID() },
+    );
+    const nodeId = ((await created.json()) as { node: { id: string } }).node.id;
+    const setRole = (userId: string, role: string) => put(origin, `/api/team-spaces/${team.id}/members/${userId}`, { role }, human.cookie);
+    const members = async () =>
+      ((await (await fetch(`${origin}/api/team-spaces/${team.id}/members`, { headers: { cookie: human.cookie } })).json()) as {
+        members: { user: { id: string }; role: string }[];
+      }).members.map(({ user, role }) => [user.id, role]);
+    const agentSpaces = async () =>
+      ((await (await fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } })).json()) as { spaces: { id: string }[] }).spaces.map(
+        (space) => space.id,
+      );
+
+    for (const role of ["viewer", "editor", "admin"]) await expectRefused(setRole(unclaimed.id, role), "AGENT_NOT_ALLOWED");
+    await expectRefused(setRole(agent.id, "admin"), "AGENT_NOT_ALLOWED");
+    expect(await members()).toEqual([]);
+    expect(await accessRole(origin, nodeId, agent.cookie)).toBeNull();
+
+    expect((await setRole(agent.id, "viewer")).status).toBe(200);
+    expect(await agentSpaces()).toContain(team.id);
+    expect(await accessRole(origin, nodeId, agent.cookie)).toBe("viewer");
+
+    expect((await setRole(agent.id, "editor")).status).toBe(200);
+    expect(await accessRole(origin, nodeId, agent.cookie)).toBe("editor");
+    await expectRefused(setRole(agent.id, "admin"), "AGENT_NOT_ALLOWED");
+    expect(await members()).toEqual([[agent.id, "editor"]]);
   });
 
   it("refuses an unclaimed agent's 21st file on the direct path, and counts Trash out and restores in", async () => {
@@ -462,8 +501,8 @@ function memoryWorktreeBackend(): WorktreeBackend {
 }
 
 describe("GET /api/users/search", () => {
-  it("returns humans only, by name and by exact id", async () => {
-    const { origin } = await start();
+  it("returns humans and claimed agents, by name and by exact id", async () => {
+    const { origin, application } = await start();
     const alice = await register(origin, "alice");
     const bob = await register(origin, "bobby");
     const agent = (await (await post(origin, "/api/agents", { label: "bobbin" })).json()) as { agent: { id: string; username: string } };
@@ -476,6 +515,10 @@ describe("GET /api/users/search", () => {
     expect(await search("bobb")).toEqual([bob.id]);
     expect(await search(agent.agent.id)).toEqual([]);
     expect(await search(bob.id)).toEqual([bob.id]);
+
+    claim(application, agent.agent.id, bob.id);
+    expect(await search("bobb")).toEqual([agent.agent.id, bob.id]);
+    expect(await search(agent.agent.id)).toEqual([agent.agent.id]);
   });
 
   it("refuses an unclaimed agent, which anyone can create", async () => {

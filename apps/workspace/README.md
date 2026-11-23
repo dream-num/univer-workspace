@@ -262,10 +262,11 @@ restart. Grant the users who use the executor today before you switch MCP from `
 which admits nobody else.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
-Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
+Team Space or make a Space public. An unclaimed agent cannot become a Team Space member, and a claimed
+agent can be a viewer or editor but not an admin (`AGENT_NOT_ALLOWED`). An unclaimed agent
 keeps at most 20 files in its Personal Space, each of at most 10 MiB (`AGENT_QUOTA_EXCEEDED`), and gets
 Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
-Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return agents, and refuses an unclaimed
+Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`).
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
