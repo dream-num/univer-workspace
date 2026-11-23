@@ -72,7 +72,7 @@ edit the target manifest under `deploy/colla-workspace/` in `dream-num/helm-char
 | Variable | Default | When to set it |
 | --- | --- | --- |
 | `PASSWORD_AUTH_ENABLED` | `true` | Set to `false` to disable password registration, login and changes. Configure email, GitHub, Google or Discord sign-in first. Existing sessions last until sign-out or expiry. |
-| `SESSION_TTL_MS` | `604800000` (7 days) | Login session lifetime in milliseconds. |
+| `SESSION_TTL_MS` | `604800000` (7 days) | Login session lifetime in milliseconds. A CLI session, or another session issued to a non-browser client, renews to a full lifetime when it is used after half of its lifetime has passed. Browser sessions and sessions issued for an access token keep a fixed lifetime. |
 | `SECURE_COOKIES` | `true` in production, otherwise `false` | Use secure cookies over HTTPS. For local plain HTTP in the production image, set `false`. |
 | `EMAIL_AUTH_ENABLED` | Off until email settings are supplied | Provider, sender or SMTP settings enable email sign-in. Set explicitly to `false` to disable it. |
 | `EMAIL_PROVIDER` | `smtp` with SMTP settings, otherwise `console` when enabled | Use `smtp` to deliver mail. For local testing, `console` writes codes to the server log. |

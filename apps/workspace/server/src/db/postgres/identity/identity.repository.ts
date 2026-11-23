@@ -704,6 +704,12 @@ export class PostgresIdentityRepository implements IdentityRepository {
     });
   }
 
+  async renewSession(sessionId: string, expiresAt: number): Promise<void> {
+    await this._database
+      .prepare("UPDATE login_sessions SET expires_at = ? WHERE id = ?")
+      .run(expiresAt, sessionId);
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     await this._database
       .prepare("DELETE FROM login_sessions WHERE id = ?")

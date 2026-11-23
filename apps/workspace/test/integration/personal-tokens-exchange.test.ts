@@ -443,7 +443,7 @@ describe("session-bound realtime sockets", () => {
     const alice = await register(origin, "alice");
     const control = await connectBoth(origin, alice.cookie);
     const user = (await application!.identity.requireSession(alice.cookie)).user;
-    const short = await application!.identity.issueSession(user, "agent", { ttlMs: 500 });
+    const short = await application!.identity.issueSession(user, "browser", { ttlMs: 500 });
     const cookie = `workspace_session=${short.cookieValue}`;
     const affected = await connectBoth(origin, cookie);
     const staleTickets = await ticketsForBoth(origin, cookie);

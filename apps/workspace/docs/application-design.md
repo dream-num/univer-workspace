@@ -155,7 +155,8 @@ Unit 加入继续使用现有资源权限检查；Link Sharing 变更保留既�
 Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
 保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
 Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
-取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、邮箱验证码、
+取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。CLI Session 在有效期过半后被使用时续期为一个完整有效期，
+闲置满一个有效期才失效，所以持续工作的 CLI 不需要再次 Browser 确认。Browser Cookie、密码、邮箱验证码、
 GitHub、Google 和 Discord Token 都不会经过 Agent。
 
 agent 是 `users.kind = 'agent'` 的 User，没有密码或外部身份。Identity 的 `createAgent` 在一个事务里创建
