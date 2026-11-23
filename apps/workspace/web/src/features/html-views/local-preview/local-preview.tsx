@@ -2,6 +2,7 @@ import { getHtmlViewUnitIds, parseHtmlView, type HtmlViewDocument } from "@unive
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ConfirmDialog, Segmented } from "../../../shared/ui";
 import type { HtmlViewSourceWorktree } from "../workspace-binding-engine";
+import { useBoundUnits } from "./bound-units";
 import { CheckedPreview, type PreviewWriteMode } from "./checked-preview";
 import { FilePicker } from "./file-picker";
 import { usePreviewMessages } from "./messages";
@@ -32,6 +33,7 @@ export function LocalPreview({ search, worktree }: { search: PreviewSearch; work
   const parsed = useMemo(() => page ? parse(page.html) : null, [page?.html]);
   const unitIds = useMemo(() => parsed && "document" in parsed ? getHtmlViewUnitIds(parsed.document) : [], [parsed]);
   const token = host ? search.token ?? "local" : "local";
+  const units = useBoundUnits(page?.html, worktree);
 
   useEffect(() => {
     if (!page || !parsed || !("error" in parsed)) return;
@@ -68,9 +70,9 @@ export function LocalPreview({ search, worktree }: { search: PreviewSearch; work
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
       {page === null ? <Gate state={loader.state} loader={loader} pick={pick} fileName={search.file} origin={host ? new URL(search.src!).origin : ""} noSource={!host && !loader.isFile} /> :
         parsed && "error" in parsed ? <p role="alert" className="m-6 text-destructive">{m.parseFailed(parsed.error)}</p> :
-        !trusted ? <TrustStep html={page.html} bindings={parsed!.document.bindings} fileName={page.name} sourceLabel={sourceLabel} worktree={worktree}
+        !trusted ? <TrustStep bindings={parsed!.document.bindings} units={units} fileName={page.name} sourceLabel={sourceLabel}
           onConfirm={() => { remember(key, unitIds); confirmed((n) => n + 1); }} pick={pick} /> :
-        <CheckedPreview key={`${page.generation}:${writeMode}:${viewport}`} page={page} bindings={parsed!.document.bindings} unitIds={unitIds} token={token}
+        <CheckedPreview key={`${page.generation}:${writeMode}:${viewport}`} page={page} bindings={parsed!.document.bindings} unitIds={unitIds} units={units} token={token}
           writeMode={worktree ? "trial" : writeMode} worktree={worktree && writeMode === "trial" ? worktree : undefined}
           viewportWidth={viewport === "fit" ? null : Number(viewport)} deliver={deliver} />}
     </div>

@@ -108,12 +108,16 @@ export async function createWorkspaceBindingEngine(
     },
     signal,
   );
+  const loadedWorkbook = () => runtime?.__getInjector().get(IUniverInstanceService).getUnit<Workbook>(unitId, UniverInstanceType.UNIVER_SHEET);
   return Object.assign(engine, {
     /** Formula and number-format facts for diagnostics, read from this engine's loaded workbook. */
     readCellMeta(sheetId: string, row: number, col: number): HtmlViewCellMeta {
-      const workbook = runtime?.__getInjector().get(IUniverInstanceService).getUnit<Workbook>(unitId, UniverInstanceType.UNIVER_SHEET);
+      const workbook = loadedWorkbook();
       const cell = workbook?.getSheetBySheetId(sheetId)?.getCellRaw(row, col);
       return { formula: !!(cell?.f || cell?.si), dateFormat: isDateFormat(cell ? workbook?.getStyles().getStyleByCell(cell)?.n?.pattern : undefined) };
+    },
+    readSheetName(sheetId: string): string | undefined {
+      return loadedWorkbook()?.getSheetBySheetId(sheetId)?.getName();
     },
   });
 }

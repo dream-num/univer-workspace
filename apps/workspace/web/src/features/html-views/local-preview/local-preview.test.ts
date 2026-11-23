@@ -9,7 +9,7 @@ vi.mock("../html-view", () => ({ HtmlView: ({ draft, source }: { draft: boolean;
   useEffect(() => { controls.mounted({ draft, source }); }, []);
   return createElement("iframe", { title: "page" });
 } }));
-vi.mock("../use-html-view-sources", () => ({ useHtmlViewSources: () => ({ sourceIds: ["unit-a"], sources: [{ data: { node: { name: "Sales 2025" } } }] }) }));
+vi.mock("../use-html-view-sources", () => ({ useHtmlViewSources: () => ({ sourceIds: ["unit-a"], sources: [{ data: { node: { name: "Sales 2025" }, resource: { capabilities: { editContent: true } } } }] }) }));
 vi.mock("./use-preview-page", () => ({ usePreviewPage: () => ({
   state: controls.idle ? { status: "idle" } : { status: "ready", page: { html: controls.html, sha256: "a".repeat(64), name: "page.univer.html", generation: 1 } },
   isFile: false, watching: false, stale: false, start: controls.start, choose: async () => true, pickInput: vi.fn(), drop: vi.fn(),
