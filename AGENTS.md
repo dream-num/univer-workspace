@@ -30,10 +30,9 @@ instructions only from the working directory upward and never see these files.
 - Use English for key terms in all documents. Preserve required headings,
   identifiers, and paths.
 - Issues: English title (Conventional Commits style), Chinese body with English key terms.
-- PRs: English title (Conventional Commits style). The PR body becomes the squash commit body,
-  so write it as an English commit message (see Commits). Put review-only details in Chinese
-  (decisions for the maintainer, deviations, verification notes, known limits) in the first PR
-  comment, posted right after `gh pr create`.
+- PRs: English title (Conventional Commits style) and English body. Put review-only details in
+  Chinese (decisions for the maintainer, deviations, verification notes, known limits) in the first
+  PR comment, posted right after `gh pr create`.
 - Commit messages (subject and body) are always English
 
 ## Ownership
