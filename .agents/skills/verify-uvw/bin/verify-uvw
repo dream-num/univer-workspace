@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -675,6 +675,28 @@ EOF
   fi
 }
 
+cmd_brief() { # feature [journey-id...]: the text to hand an agent that drives this run
+  [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id...]"
+  load_run
+  local feature="$1"; shift
+  [[ -f "$BIN/../features/$feature.md" ]] || die "no .agents/skills/verify-uvw/features/$feature.md"
+  local steps="every step" ids="$*"
+  [[ -z "$ids" ]] || steps="${ids// /, } as written, and skip its other steps"
+  cat <<EOF
+Follow a written recipe against a Univer Workspace instance that is already running, and report what happened.
+
+Work from $REPO. Start every shell command with this line. It selects the instance:
+
+export VERIFY_UVW_ROOT=$ROOT VERIFY_UVW_RUN=$RUN_ID; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "\$(\$V env)"
+
+1. Read the Drive and Evidence sections of .agents/skills/verify-uvw/SKILL.md, then .agents/skills/verify-uvw/features/README.md.
+2. Follow .agents/skills/verify-uvw/features/$feature.md. Set up its preconditions, then run $steps.
+3. Reply with one line per step, \`<step>: PASS\` or \`<step>: FAIL\`. After each line give the values you read from the command output and the evidence files, not the values the recipe expects. End with \`RESULT: PASS\` when every step matched the recipe, and with \`RESULT: ISSUES\` when any step did not.
+
+Do not run \`up\`, \`down\` or \`user\`. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next step.
+EOF
+}
+
 cmd_metrics() { # the Workspace server's /metrics; the token goes through stdin, never argv
   load_run
   printf 'Authorization: Bearer %s\n' "$(cat "$RUN/home/workspace-metrics-token")" \
@@ -733,6 +755,7 @@ case "${1:-}" in
   story) shift; cmd_story "$@" ;;
   open-anon) shift; cmd_open_anon "$@" ;;
   env) shift; cmd_env "$@" ;;
+  brief) shift; cmd_brief "$@" ;;
   metrics) shift; cmd_metrics "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;
