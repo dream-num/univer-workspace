@@ -184,6 +184,7 @@ export interface IdentityRepository {
   deleteEmailLoginCodesBefore(cutoff: number): Promise<void>;
   /** Updates supplied fields only. A provider may fill fields only while their observed values still match. */
   updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User>;
+  renewSession(sessionId: string, expiresAt: number): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   deleteExpiredSessions(now: number): Promise<string[]>;
 }

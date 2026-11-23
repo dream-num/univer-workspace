@@ -100,6 +100,10 @@ uvw auth login --complete
 `--complete` checks once and exits; it does not wait or poll. Approval creates a separate CLI session
 without copying the browser cookie or an OAuth access token through the agent.
 
+The server renews a CLI session to a full session lifetime when the CLI uses it after half of that
+lifetime has passed, so a CLI in regular use stays signed in. A CLI session left unused for a full
+lifetime, 7 days by default, ends, and signing in again needs a new browser approval.
+
 For compatibility, a user at an interactive terminal can still sign in directly with a Workspace
 username and password:
 

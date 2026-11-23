@@ -333,6 +333,12 @@ export function createIdentityModule(options: {
       const { at, staleBefore, expiresAt } = authenticated.activity;
       await repository.touchAgent({ userId: stored.id }, at, staleBefore, expiresAt);
     }
+    // A CLI in use must not stop for a new browser approval; a token's session stays bound to the token's lifetime.
+    const renewedUntil = now() + options.sessionTtlMs;
+    if (!readOnly && stored.writeSource === "agent" && !stored.tokenIssued && renewedUntil - stored.expiresAt > options.sessionTtlMs / 2) {
+      await repository.renewSession(stored.sessionId, renewedUntil);
+      return { ...stored, expiresAt: renewedUntil };
+    }
     return stored;
   }
 

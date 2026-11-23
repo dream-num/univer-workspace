@@ -69,7 +69,7 @@ BLOB_S3_FORCE_PATH_STYLE=true
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
 | `PASSWORD_AUTH_ENABLED` | `true` | 设为 `false` 可关闭密码注册、登录和修改。须先配置邮箱、GitHub、Google 或 Discord 登录。已有会话持续到退出或到期。 |
-| `SESSION_TTL_MS` | `604800000`（7 天） | 登录会话有效期，单位为毫秒。 |
+| `SESSION_TTL_MS` | `604800000`（7 天） | 登录会话有效期，单位为毫秒。CLI 会话和其他签发给非 Browser 客户端的会话，在有效期过半后被使用时续期为一个完整有效期。Browser 会话和为访问令牌签发的会话有效期固定。 |
 | `SECURE_COOKIES` | 生产模式下为 `true`，其他情况为 `false` | HTTPS 部署使用安全 Cookie。本地通过明文 HTTP 测试生产镜像时设为 `false`。 |
 | `EMAIL_AUTH_ENABLED` | 未配置邮件时关闭 | 配置邮件提供方、发件人或 SMTP 即可开启邮箱登录。显式设为 `false` 可关闭。 |
 | `EMAIL_PROVIDER` | 有 SMTP 配置时为 `smtp`，仅开启邮箱登录时为 `console` | 通过邮件发码使用 `smtp`。本地测试可用 `console` 将验证码写入服务日志。 |
