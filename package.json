@@ -26,8 +26,9 @@
     "workspace:dev:server": "pnpm --filter @univerjs/univer-workspace dev:server",
     "workspace:start": "pnpm --filter @univerjs/univer-workspace start",
     "verify": "node scripts/verify.mjs",
-    "test:ci": "node scripts/test.mjs node scripts/verify.test.mjs scripts/ci-reliability.test.mjs",
-    "ci:reliability": "node scripts/ci-reliability.mjs"
+    "test:ci": "node scripts/test.mjs node scripts/verify.test.mjs scripts/ci-reliability.test.mjs scripts/check-agents-md.test.mjs",
+    "ci:reliability": "node scripts/ci-reliability.mjs",
+    "check:agents-md": "node scripts/check-agents-md.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

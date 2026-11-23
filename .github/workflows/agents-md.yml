@@ -1,0 +1,27 @@
+name: AGENTS.md references
+
+# No path filter: code changes delete the paths and scripts that AGENTS.md names.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents-md-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check AGENTS.md references
+        run: node scripts/check-agents-md.mjs
