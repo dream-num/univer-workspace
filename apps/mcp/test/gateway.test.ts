@@ -667,7 +667,7 @@ describe("gateway over real HTTP and the MCP client", () => {
   });
 
   it.each([false, true])(
-    "lists pr_merge with core and never repo_create for an agent (claimed: %s)",
+    "never lists repo_create for an agent (claimed: %s)",
     async (claimed) => {
       principal = { kind: "agent", claimed };
       const names = async (suffix: string) =>
@@ -676,8 +676,8 @@ describe("gateway over real HTTP and the MCP client", () => {
         );
       const agentAdmin = adminNames.filter((name) => name !== "repo_create");
       const agentCore = claimed ? coreNames : coreNames.flatMap((name) => (name === "share" ? [name, "claim"] : [name]));
-      expect(await names("")).toEqual([...agentCore, "pr_merge"]);
-      expect(await names("?toolsets=core")).toEqual([...agentCore, "pr_merge"]);
+      expect(await names("")).toEqual(agentCore);
+      expect(await names("?toolsets=core")).toEqual(agentCore);
       expect(await names("?toolsets=files")).toEqual(filesNames);
       expect(await names("?toolsets=admin")).toEqual(agentAdmin);
       expect(await names("?toolsets=admin,core")).toEqual([...agentCore, ...agentAdmin]);
@@ -724,18 +724,21 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"69fdd9784ef9de5067261333092a3111d11483c200e984ce8e51664762bdddfe"`);
+    expect(digest).toMatchInlineSnapshot(`"c709d4310e0e28a86c1e3fd5bd172332e69ceae91d9e7a7384b9af141c8333fb"`);
   });
 
-  it("tells an agent to merge and share, a claimed one when to hand over to its owner instead, and a person to review", async () => {
+  it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
     const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
     const review = "Give the user the pull request link so they can review it.";
     const leave = "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
     const human = await instructions();
-    expect(human).toContain(review);
-    expect(human).toContain(leave);
-    expect(human).not.toContain("agent identity");
-    expect(human).not.toContain("pr_merge");
+    expect(human).toContain("The user granted this connection the worktree:merge scope, so finish your own pull requests as the workflow says.");
+    expect(human).toContain(
+      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the user asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Then give the user the pull request link.",
+    );
+    for (const sentence of [review, leave, "agent identity", "Call share"]) {
+      expect(human).not.toContain(sentence);
+    }
 
     principal = { kind: "agent", claimed: false };
     const agent = await instructions();
@@ -752,10 +755,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(agent).not.toContain(sentence);
     }
-    const adminOnly = await instructions("?toolsets=admin");
-    expect(adminOnly).toContain("Once the result is verified, merge it with pr_merge.");
-    expect(adminOnly).not.toContain("Call share");
-    // Without pr_merge in the list, an agent gets the same hand-off as a person.
+    // Without pr_merge in the list, an agent gets the same hand-off as a person without the grant.
     const filesOnly = await instructions("?toolsets=files");
     expect(filesOnly).toContain(leave);
     expect(filesOnly).not.toContain("agent identity");
@@ -772,9 +772,6 @@ describe("gateway over real HTTP and the MCP client", () => {
     for (const sentence of ["nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(claimed).not.toContain(sentence);
     }
-    const claimedAdminOnly = await instructions("?toolsets=admin");
-    expect(claimedAdminOnly).toContain("they merge it in the browser. 4) Otherwise, merge it with pr_merge.");
-    expect(claimedAdminOnly).not.toContain("pr_ready");
   });
 
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {

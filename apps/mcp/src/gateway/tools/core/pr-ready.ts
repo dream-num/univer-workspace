@@ -15,7 +15,7 @@ export const prReadyTool: ToolDefinition = {
   scope: "write",
   title: "Mark pull request ready",
   description:
-    "Mark a draft pull request ready for review only when the user explicitly says the work is finished or requests review; otherwise leave verified changes in draft. With undo true, move a ready pull request back to draft before an explicitly requested write. Hand the returned url to the user for review; merging stays with the user unless they ask you to merge. For an agent identity, follow the server instructions instead for readiness, merging and which link to return.",
+    "Mark a draft pull request ready for review. With undo true, move a ready pull request back to draft before an explicitly requested write. The server instructions say when to mark it ready, whether to merge and which link to return.",
   inputSchema,
   outputSchema: worktreeSchema,
   annotations: writeAnnotations,

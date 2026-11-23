@@ -176,14 +176,15 @@ uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet -
 
 ```mermaid
 flowchart LR
-    Asst["🤖 你的 AI 助手"] -- Pull request 链接 --> You(["🧑 你<br/>审阅并合入"])
+    Asst["🤖 你的 AI 助手"] -- 没有 worktree:merge<br/>或你要求审阅 --> You(["🧑 你<br/>审阅并合入"])
+    Asst -- 其他情况 --> Self
     Guest["🤖 访客 Agent"] -- 总是 --> Self["🤖 自己合入<br/>用 pr_merge"]
     Claimed["🤖 已认领的 Agent"] -- 其他情况 --> Self
     Claimed -- 认领人要求审阅<br/>或改动需要人决定 --> Claimer(["🧑 认领人<br/>审阅并合入"])
 ```
 
-- 除非你加上 `?toolsets=admin` 或 `all`，你的 AI 助手没有 `pr_merge`。
-- MCP 服务的指示告诉 Agent 何时自己合入，没有机制强制执行。
+- 只有你授予了 `worktree:merge` scope，你的 AI 助手才会在验证后自己合入。没有这个 scope 时，`pr_merge` 返回 `workspace-scope-required`。
+- MCP 服务的指示告诉 AI 助手和 Agent 何时自己合入，没有机制强制执行。
 - 团队里的其他人试图合入时，会收到一条写明作者的错误。作者是已认领的 Agent 时，错误里还会写明认领人。
 
 认领了 Agent 的人可以在浏览器里合入它的工作，也可以用 CLI：

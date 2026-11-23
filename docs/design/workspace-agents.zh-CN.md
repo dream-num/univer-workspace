@@ -262,7 +262,7 @@ API key 只出现在浏览器到模型提供商的那条线上。Workspace 的�
 其他约定：
 
 - 网关无状态，每次 `tools/list`、`tools/call` 都是独立的 POST。
-- Phase 1 只加载默认的 `core` 工具集，不加载 `admin` 工具集，所以 agent 碰不到 `pr_merge`、`repo_edit` 这类工具。扩展点：需要 PDF、Markdown、HTML View 时按需加 `?toolsets=core,files`。
+- Phase 1 只加载默认的 `core` 工具集，不加载 `admin` 工具集，所以 agent 碰不到 `repo_edit` 这类工具。`pr_merge` 在 `core` 里列出，但 token 不带 `worktree:merge`，网关返回 scope 错误，客户端也拒绝这次调用。扩展点：需要 PDF、Markdown、HTML View 时按需加 `?toolsets=core,files`。
 - 工具列表随部署配置变化（例如执行层或渲染服务不可用时会少一批工具），agent 每次会话开始时读 `tools/list`，代码里不写死工具名。
 - 网关的 server instructions 和 `skill://univer-workspace/core/SKILL.md` 资源直接拼进系统提示词，和外部 MCP 客户端拿到的指引一致。
 - 工具错误以 `isError: true` 和 `structuredContent.code` 返回，交给模型处理；HTTP 401 由页面处理（重新取 token，见 3.3.4 节）。

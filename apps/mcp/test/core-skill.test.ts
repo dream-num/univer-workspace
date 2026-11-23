@@ -21,7 +21,7 @@ function unknownTools(content: string) {
 }
 
 describe("MCP core Skill tool bindings", () => {
-  it("keeps verified edits in draft until the user requests completion or review", async () => {
+  it("leaves readiness and merging of verified edits to the server instructions", async () => {
     for (const path of ["../skills/core/SKILL.md", "../dist/skill-data/core/SKILL.md"]) {
       const content = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
       expect(content, path).toContain("Continue draft directly. Only writes need draft");
@@ -31,9 +31,7 @@ describe("MCP core Skill tool bindings", () => {
       expect(content, path).toContain(
         "Before the first write of an explicitly requested rework, return ready to draft once with `pr_ready` and undo true.",
       );
-      expect(content, path).toContain(
-        "Leave the rework in draft until a new explicit user completion or review request.",
-      );
+      expect(content, path).toContain("Then finish the rework as the server instructions say.");
       expect(content, path).toContain(
         "Read Sheet values, types, and formulas with `read` and json true.",
       );
@@ -41,11 +39,10 @@ describe("MCP core Skill tool bindings", () => {
         "Read stored content with `inspect` or read-only `execute` for other Unit types",
       );
       expect(content, path).toContain(
-        "Only mark the Worktree ready with `pr_ready` when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+        "Mark the Worktree ready with `pr_ready` and merge it only as the server instructions say.",
       );
-      expect(content, path).toContain(
-        "Read it with `pr_view` and confirm draft, or ready if explicitly requested.",
-      );
+      expect(content, path).toContain("Read it with `pr_view` and confirm its state.");
+      expect(content, path).not.toMatch(/leave merging to the user|explicitly says the work is finished/u);
       expect(content, path).toContain(
         "Return the review URL, pull request number, Worktree id and Unit id to the user.",
       );
@@ -60,36 +57,30 @@ describe("MCP core Skill tool bindings", () => {
     );
     expect(description).toContain("Read-only code does not require reopening");
     expect(description).toContain("Read back with inspect to verify changes");
-    expect(description).toContain(
-      "leave them in draft unless the user explicitly requests completion or review",
-    );
+    expect(description).toContain("the server instructions say what happens to the pull request next");
     expect(description).not.toContain("Read back with inspect before marking ready.");
   });
 
-  it("binds share and defers its merge rules to the server instructions for an agent identity", async () => {
+  it("binds share and defers readiness and merging to the server instructions", async () => {
     const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     expect(tools.find(({ name }) => name === "share")!.description).toContain(
       "To read a drop, pass its url as unit with trunk: true",
     );
     expect(content).toContain(
-      "When the server instructions say the connection is an agent identity, they override every rule here that leaves readiness, merging or the link to the user.",
+      "The server instructions say when to mark a pull request ready, whether to merge it and which link to return.",
     );
-    expect(tools.find(({ name }) => name === "pr_merge")!.description).toContain(
-      "For an agent identity, follow the server instructions instead for merging its own work",
-    );
-    expect(content).toContain("unless explicitly asked or the server instructions say otherwise.");
-    expect(content).toContain("An agent identity follows the server instructions instead");
+    expect(content).toContain("Leave the Issue open, and finish the pull request as the server instructions say.");
+    expect(content).toContain("Do not discard unless explicitly requested. Discard is irreversible.");
   });
 
-  it("keeps claim, readiness, merge and irreversible discard rules in tool descriptions", () => {
+  it("keeps claim and irreversible discard rules in tool descriptions and defers readiness and merging", () => {
     expect(tools.find(({ name }) => name === "claim")!.description).toContain("For an unclaimed agent only");
     const ready = tools.find(({ name }) => name === "pr_ready")!.description;
-    expect(ready).toContain("only when the user explicitly says the work is finished or requests review");
     expect(ready).toContain("With undo true, move a ready pull request back to draft before an explicitly requested write");
-    expect(ready).toContain("For an agent identity, follow the server instructions instead");
+    expect(ready).toContain("The server instructions say when to mark it ready, whether to merge and which link to return.");
     const merge = tools.find(({ name }) => name === "pr_merge")!.description;
-    expect(merge).toContain("Unless the user explicitly asked you to merge");
-    expect(merge).toContain("For an agent identity, follow the server instructions instead");
+    expect(merge).toContain("The server instructions say when to merge and which link to return.");
+    for (const description of [ready, merge]) expect(description).not.toMatch(/explicitly says|explicitly asked|stays with the user/u);
     const discard = tools.find(({ name }) => name === "pr_discard")!.description;
     expect(discard).toContain("This cannot be undone");
     expect(discard).toContain("Unless the user explicitly asked you to discard it");

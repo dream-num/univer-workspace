@@ -46,7 +46,7 @@ describe("handToAgentPrompt", () => {
     const order = ["`repo_list`", "`pr_create`", "`unit_create`", "the link as `from`", "`pr_ready`", "`pr_merge`", "`claim`"].map((step) => prompt.indexOf(step));
     expect(order.every((at, index) => at > 0 && (index === 0 || at > order[index - 1]!))).toBe(true);
     expect(prompt).toContain("You do not need `read` for this.");
-    expect(prompt).toContain("If you have no `pr_merge`, give me the pull request link to merge.");
+    expect(prompt).toContain("If you have no `pr_merge` or it is refused, give me the pull request link to merge.");
     const links = ["give me the claim link", "Tell me to open the claim link first", `give me the copy's link too: ${origin}/nodes/<nodeId>`]
       .map((step) => prompt.indexOf(step));
     expect(links.every((at, index) => at > 0 && (index === 0 || at > links[index - 1]!))).toBe(true);

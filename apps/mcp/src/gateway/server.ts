@@ -165,6 +165,7 @@ export function createGateway(
           state.operations,
           state.executorRestricted,
           toolPrincipal(state.context.user),
+          state.context.scopes,
         ),
       },
     );

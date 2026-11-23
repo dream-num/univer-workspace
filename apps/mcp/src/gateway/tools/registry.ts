@@ -36,6 +36,7 @@ import { prViewTool } from "./core/pr-view.js";
 import { prCreateTool } from "./core/pr-create.js";
 import { prEditTool } from "./core/pr-edit.js";
 import { prReadyTool } from "./core/pr-ready.js";
+import { prMergeTool } from "./core/pr-merge.js";
 import { searchTool } from "./core/search.js";
 import { browseTool } from "./core/browse.js";
 import { spaceBrowseTool } from "./core/space-browse.js";
@@ -57,7 +58,6 @@ import { repoEditTool } from "./admin/repo-edit.js";
 import { labelListTool } from "./admin/label-list.js";
 import { labelWriteTool } from "./admin/label-write.js";
 import { spaceNodeTool } from "./admin/space-node.js";
-import { prMergeTool } from "./admin/pr-merge.js";
 import { prDiscardTool } from "./admin/pr-discard.js";
 import { resourcesRegistriesTool } from "./admin/resources-registries.js";
 import { resourcesFindTool } from "./admin/resources-find.js";
@@ -80,6 +80,7 @@ export const tools: readonly ToolDefinition[] = [
   prCreateTool,
   prEditTool,
   prReadyTool,
+  prMergeTool,
   searchTool,
   browseTool,
   spaceBrowseTool,
@@ -126,7 +127,6 @@ export const tools: readonly ToolDefinition[] = [
   labelListTool,
   labelWriteTool,
   spaceNodeTool,
-  prMergeTool,
   prDiscardTool,
   resourcesRegistriesTool,
   resourcesFindTool,

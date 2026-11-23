@@ -202,9 +202,9 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","pr_merge","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
-ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
+ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
 jq -e --argjson want "$ADMIN" 'map(.name) == $want' "$EVIDENCE/mcp-tools-admin.out"
@@ -218,9 +218,10 @@ for label in core files admin core-admin all; do
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:42]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:43]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
-jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
+jq -e '.[] | select(.name == "pr_discard") | .description | contains("Unless the user explicitly asked")' "$EVIDENCE/mcp-tools-admin.out"
+jq -e '.[] | select(.name == "pr_merge") | .description | contains("The server instructions say when to merge")' "$EVIDENCE/mcp-tools-core.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
 jq -e 'all(.[]; .description | test("\\buvw\\b") | not)' "$EVIDENCE/mcp-tools-all.out"
 jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 12 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
@@ -229,7 +230,8 @@ jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.pro
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 42 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; no tool description
+first 43 tools of `all`; the immediate-effect descriptions, the leave-to-the-user `pr_discard` description and the
+`pr_merge` description that defers to the server instructions are present; no tool description
 names `uvw`; the 12 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
@@ -1098,10 +1100,10 @@ Pass when the extension declares twelve static Skills, the resource entry points
 $V mcp-instructions mcp-instructions
 $V mcp-instructions --protocol 2025-11-25 mcp-instructions-legacy
 diff "$EVIDENCE/mcp-instructions.out" "$EVIDENCE/mcp-instructions-legacy.out"
-jq -e '.instructions | contains("pull request") and contains("pr_create") and contains("pr_ready") and contains("api_find") and contains("skills_read") and contains("review") and contains("Leave merging") and contains("Generate a new random value, such as a UUID, for each new operation.")' "$EVIDENCE/mcp-instructions.out"
+jq -e '.instructions | contains("pull request") and contains("pr_create") and contains("pr_ready") and contains("api_find") and contains("skills_read") and contains("review") and contains("The user granted this connection the worktree:merge scope") and contains("Otherwise, merge it with pr_merge.") and contains("Generate a new random value, such as a UUID, for each new operation.")' "$EVIDENCE/mcp-instructions.out"
 ```
 
-Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, hand over the review link, leave merging to the user) and tell the agent to generate a new idempotency key for each new operation.
+Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, then merge, or hand over the review link when the user asked to review) and tell the agent to generate a new idempotency key for each new operation. The default PAT holds `worktree:merge`; MA7 checks the instructions of a PAT without it.
 
 **MR7. Truncation with cursors.** `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` resource paging is covered by the gateway tests. MR1 covers `workspace-result-too-large` with `html-view` full.
 
@@ -1462,8 +1464,10 @@ $V mcp-token --scopes read,write,publish > "$EVIDENCE/mcp-token-nomerge.id"
 $V mcp --toolsets all mcp-pat-nomerge-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"PAT merge scope\"}"
 NM=$(jq -r '.number' "$EVIDENCE/mcp-pat-nomerge-pr.out")
 $V mcp --toolsets all mcp-pat-nomerge-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$NM\"}"
-$V mcp --toolsets all mcp-pat-nomerge-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NM\"}"
+$V mcp mcp-pat-nomerge-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NM\"}"
 test $? -eq 1
+$V mcp-instructions mcp-pat-nomerge-instructions
+jq -e '.instructions | contains("Leave merging and discarding to the user in the browser") and (contains("merge it with pr_merge") | not)' "$EVIDENCE/mcp-pat-nomerge-instructions.out"
 jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-pat-nomerge-merge.out"
 jq -e '.auth_kind == "pat" and .outcome == "tool_error" and .error_code == "workspace-scope-required"' "$EVIDENCE/mcp-pat-nomerge-merge.event.json"
 $V cli mcp-pat-nomerge-pr-cli pr view "$NM" -R "$O/verify-team" --json
@@ -1473,8 +1477,9 @@ $V mcp --toolsets all mcp-pat-nomerge-discard pr_discard "{\"repo\":\"$O/verify-
 jq -e '.state == "discarded"' "$EVIDENCE/mcp-pat-nomerge-discard.out"
 ```
 
-Pass when `pr_merge` exits 1 with `workspace-scope-required` and a matching `pat` usage event, the
-CLI still shows the pull request `ready`, and the discard with the restored full-scope PAT succeeds.
+Pass when `pr_merge`, listed in the default `core`, exits 1 with `workspace-scope-required` and a matching `pat`
+usage event, the instructions leave merging to the user, the CLI still shows the pull request `ready`, and the
+discard with the restored full-scope PAT succeeds.
 
 **MO2. Scripted OAuth: scope withheld, refresh and revocation.** Run after MA7. MO1 proves a real
 client; this drives the same endpoints from `verify-uvw mcp-oauth`, so it needs no model and can
@@ -2938,18 +2943,17 @@ $V mcp-instructions --as bot1 mh-bot1-instructions
 $V mcp --as bot1 mh-bot1-claim claim '{}'
 ```
 
-- **MH1. Unclaimed agent.** `mh-bot1.out` lists 46 tools: the 44 `core` tools, `claim` right after `share`, and
-  `pr_merge` last. A person's default list has 44 and no `claim`. The instructions say the agent
+- **MH1. Unclaimed agent.** `mh-bot1.out` lists 44 tools: the 43 `core` tools, with `claim` right after `share`.
+  A person's default list has 43 and no `claim`. The instructions say the agent
   `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
   `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
   `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
 - **MH2. Claimed agent.** Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
-  gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 45 tools (no `claim`, `pr_merge` stays),
+  gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 43 tools (no `claim`),
   and the instructions start `This connection is an agent identity that a person has claimed.`
 - **MH3. Claimer decisions.** bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
   `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
-  `$V mcp --toolsets core,admin <label> pr_merge '{"repo":…,"number":…,"idempotency_key":…}'` merges it (`pr_merge`
-  is not in a person's default `core`). The run user's `pr_create` there fails with
+  `$V mcp <label> pr_merge '{"repo":…,"number":…,"idempotency_key":…}'` merges it. The run user's `pr_create` there fails with
   `Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
   Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
   [pull requests](./pull-requests.md) for that refusal in a Team Space).

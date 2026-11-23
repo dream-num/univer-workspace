@@ -16,7 +16,7 @@ const CLAIM_FIRST = "Tell me to open the claim link first: the copy is mine to e
 
 const mcpCopySteps = (origin: string) => `1. Call \`repo_list\` to find your Personal Space repository, then \`pr_create\` in it with the title "My copy".
 2. Call \`unit_create\` with that pull request's id as \`worktree\`, the repository as \`space\`, \`type\` sheet, the name "My copy" and the link as \`from\`. If the file is a Doc or a Slide, the error says so: use \`type\` doc or slide.
-3. Call \`pr_ready\`, then \`pr_merge\`. If you have no \`pr_merge\`, give me the pull request link to merge.
+3. Call \`pr_ready\`, then \`pr_merge\`. If you have no \`pr_merge\` or it is refused, give me the pull request link to merge.
 4. If you have a \`claim\` tool, call it and give me the claim link. ${CLAIM_FIRST}
 5. Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned. I open it to edit the copy in the browser.
 You do not need \`read\` for this. If \`unit_create\` has no \`from\`, tell me to use the Command line (uvw) option of Hand to my agent.`;

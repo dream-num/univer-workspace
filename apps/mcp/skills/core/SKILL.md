@@ -32,8 +32,8 @@ corresponding pr operations. When a tool named here is not in your tool list, th
 step is unavailable in this connection. Tell the user instead of guessing.
 Admin tools require ?toolsets=admin or ?toolsets=all. Files tools require the files
 toolset. An executor restriction can hide content tools even with all selected.
-When the server instructions say the connection is an agent identity, they override
-every rule here that leaves readiness, merging or the link to the user.
+The server instructions say when to mark a pull request ready, whether to merge it
+and which link to return.
 
 Replace spaces and hyphens in an operation name with underscores to get the MCP
 tool: a b or a-b becomes a_b. Single-word names stay unchanged. Replace the
@@ -52,7 +52,7 @@ Exceptions:
 
 Toolsets:
 
-- admin: `repo_create`, `repo_edit`, `space_node`, `label_list`, `label_write`, `pr_merge`, `pr_discard`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, `pr_merge` is also in core.
+- admin: `repo_create`, `repo_edit`, `space_node`, `label_list`, `label_write`, `pr_discard`, `resources_registries`, `resources_find`, `resources_export`.
 - files: `blob_get`, `blob_upload`, `blob_download`, `blob_replace`, `asset_download`, `compile_markdown`, `export_markdown`, `compile_svg`, `compile_typst`, `print_pdf`, `lint`.
 
 Unavailable operations:
@@ -107,8 +107,8 @@ rework, and its state is draft or ready. If identity is uncertain, start a new o
 Continue draft directly. Only writes need draft: reading tools such as `inspect`,
 read-only `execute`, `screenshot`, `export`, `export_markdown` and `print_pdf` work
 on a ready Worktree unchanged. Before the first write of an explicitly requested
-rework, return ready to draft once with `pr_ready` and undo true. Leave the rework
-in draft until a new explicit user completion or review request.
+rework, return ready to draft once with `pr_ready` and undo true. Then finish the
+rework as the server instructions say.
 Never reuse merged or discarded Worktrees; stage the current file anew.
 
 ## Manage Space Nodes
@@ -138,8 +138,7 @@ tool is available here.
    The title ties the task to the Issue; no automatic Issue link is created.
 4. Verify and hand off. Post the review URL and a concise account with
    `issue_comment`, identifying the comment as posted on the user's behalf.
-5. Leave the Issue open and leave merging to the user unless explicitly asked
-   or the server instructions say otherwise.
+5. Leave the Issue open, and finish the pull request as the server instructions say.
 
 Issue creation and comments are not idempotent. After an unknown write result,
 read the discussion before repeating it. Labels and assignees require triage
@@ -276,9 +275,9 @@ admin tools return SVG source for incorporation in the page or document.
 
 1. Read Sheet values, types, and formulas with `read` and json true. Read stored content with `inspect` or read-only `execute` for other Unit types or raw cell metadata.
 2. Capture screenshots for Sheet layout, Doc pagination and every Slide page.
-3. Only mark the Worktree ready with `pr_ready` when the user explicitly says the
-   work is finished or requests review. Otherwise, leave the verified changes in draft.
-4. Read it with `pr_view` and confirm draft, or ready if explicitly requested.
+3. Mark the Worktree ready with `pr_ready` and merge it only as the server
+   instructions say.
+4. Read it with `pr_view` and confirm its state.
 5. Generate the edited Unit's review URL with `browse`.
 6. Return the review URL, pull request number, Worktree id and Unit id to the user.
 
@@ -286,13 +285,10 @@ A pull request has one author. People and agents collaborate on trunk, each thro
 their own pull requests; only the author, or the person who claimed the authoring
 agent, merges one. When `pr_merge` fails partway and the pull request stays
 `merging` or `merged`, call `pr_merge` again to finish it.
-Do not merge or discard unless explicitly requested. Discard is irreversible.
-An agent identity follows the server instructions instead: it marks its verified
-pull request ready, merges it with `pr_merge` and returns the `share` url with
-who can open it, from `access`. While unclaimed, it also gives the user the
-`claimUrl` from `share`, or from `claim`.
-Once claimed, it returns the review URL instead of merging when the person who
-claimed it asked to review the work or the change needs a person's decision.
+Do not discard unless explicitly requested. Discard is irreversible.
+An agent identity that returns a `share` url also says who can open it, from
+`access`. While unclaimed, it also gives the user the `claimUrl` from `share`, or
+from `claim`.
 To resume same-task rework, continue draft directly; return ready to draft with
 `pr_ready` and undo true only before an explicitly requested write.
 There is no separate close or reopen tool for a pull request.
