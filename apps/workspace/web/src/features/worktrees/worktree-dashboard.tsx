@@ -27,6 +27,7 @@ import {
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { spaceQueryOptions } from "../spaces/spaces.queries";
+import { UnitFreshnessBadge, unitFreshnessText } from "./unit-freshness";
 import { WorktreeOnboarding } from "./worktree-onboarding";
 import {
   UnitChangeIcon,
@@ -371,7 +372,7 @@ export function WorktreeDashboard({
                                 key={unit.unitId}
                                 type="button"
                                 className={cn(
-                                  "grid w-full cursor-pointer grid-cols-[20px_minmax(0,1fr)_20px] items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] transition-colors outline-none",
+                                  "grid w-full cursor-pointer grid-cols-[20px_minmax(0,1fr)_auto_20px] items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] transition-colors outline-none",
                                   selected
                                     ? "bg-brand-50 font-medium text-brand-700"
                                     : "text-secondary-foreground hover:bg-accent",
@@ -396,6 +397,9 @@ export function WorktreeDashboard({
                                 />
                                 <span className="truncate">
                                   {unit.name}
+                                </span>
+                                <span>
+                                  <UnitFreshnessBadge freshness={unit.freshness} />
                                 </span>
                                 <UnitChangeIcon
                                   change={unit.change}
@@ -556,7 +560,8 @@ export function WorktreeDashboard({
                       unit.unitId
                     );
                     const selected = key === selectedDocument.key;
-                    const changeStatus = unitChangeStatus(unit);
+                    const freshness = unitFreshnessText(unit.freshness, t)?.label;
+                    const changeStatus = [unitChangeStatus(unit), freshness].filter(Boolean).join(" · ");
                     const taskStatus = worktreeStateLabel(
                       selectedDocument.worktree.state,
                       t

@@ -157,6 +157,7 @@ WorktreeUnit:
     - change
     - mergeResult
     - activationState
+    - freshness
   properties:
     unitId:
       type: string
@@ -185,6 +186,34 @@ WorktreeUnit:
       $ref: "#/MergeResult"
     activationState:
       $ref: "#/ActivationState"
+    freshness:
+      description: Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, and once the Worktree leaves draft and ready.
+      oneOf:
+        - $ref: "#/WorktreeUnitFreshness"
+        - type: "null"
+
+WorktreeUnitFreshness:
+  type: object
+  additionalProperties: false
+  description: How far Trunk has moved since this Trunk Unit joined the Worktree. Advice only; it never blocks a merge.
+  required: [label, baselineTrunkRevision, revisionsBehind, addedAt]
+  properties:
+    label:
+      type: string
+      enum: [current, behind, stale]
+      description: current when Trunk has not moved. stale when Trunk is more than 100 revisions ahead or the Unit joined more than 7 days ago. behind otherwise.
+    baselineTrunkRevision:
+      type: integer
+      minimum: 1
+      description: The Trunk revision the Worktree copy started from.
+    revisionsBehind:
+      type: integer
+      minimum: 0
+      description: Trunk revisions committed since the baseline.
+    addedAt:
+      type: string
+      format: date-time
+      description: When the Unit joined the Worktree.
 
 WorktreeDetail:
   allOf:

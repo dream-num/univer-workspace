@@ -41,6 +41,17 @@ describe("Workspace Worktree model and workflow", () => {
     ).toThrowError(expect.objectContaining({ code: "workspace-invalid-response" }));
   });
 
+  it("keeps a Trunk Unit's freshness, reads an absent one as none, and rejects a malformed one", () => {
+    const freshness = { label: "behind", baselineTrunkRevision: 4, revisionsBehind: 3, addedAt: "2026-11-23T00:00:00.000Z" };
+    expect(parseUnit({ ...rawUnit(), freshness }, "wt-1").freshness).toEqual(freshness);
+    expect(parseUnit(rawUnit(), "wt-1").freshness).toBeNull();
+    for (const invalid of [{ ...freshness, label: "old" }, { ...freshness, revisionsBehind: -1 }, "behind"]) {
+      expect(() => parseUnit({ ...rawUnit(), freshness: invalid }, "wt-1")).toThrowError(
+        expect.objectContaining({ code: "workspace-invalid-response" }),
+      );
+    }
+  });
+
   it.each([
     [{ view: "active" } as const, "/api/worktrees?scope=active"],
     [

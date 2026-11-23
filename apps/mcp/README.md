@@ -52,6 +52,9 @@ repository, the Owner, an Admin or an Editor. A member with read access only can
 and mark it ready, which makes it visible to the repository. A Team member who calls `pr_merge` on someone else's private
 pull request gets `FORBIDDEN` with a message naming the author, and the person who claimed an agent author; a caller
 without edit access gets `FORBIDDEN` with a message saying so.
+Each Unit in a pull request carries `freshness` from the server: `current`, `behind` or `stale` for a file from trunk while the
+pull request is draft or ready, otherwise null. When `pr_view` is listed, the instructions say what each label means and tell
+the caller to redo a stale pull request in a new one and then discard the stale one. Freshness never blocks a merge.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and

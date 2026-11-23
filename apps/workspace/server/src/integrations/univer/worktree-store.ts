@@ -1,3 +1,4 @@
+import type { UniverCollabService } from "@univerjs-pro/collaboration-service";
 import type { UniverCollabWorktreeService } from "@univerjs-pro/collaboration-worktree-service";
 import {
   collaborationCallOptions,
@@ -7,7 +8,10 @@ import type {
   WorktreeBackend,
 } from "../../modules/worktrees/worktrees.types.js";
 
-export function createWorktreeBackend(service: UniverCollabWorktreeService): WorktreeBackend {
+export function createWorktreeBackend(
+  service: UniverCollabWorktreeService,
+  trunk: UniverCollabService,
+): WorktreeBackend {
   return {
     async createWorktree(worktreeId, userId) {
       return (
@@ -141,6 +145,14 @@ export function createWorktreeBackend(service: UniverCollabWorktreeService): Wor
             : { details: result.error.details }),
         },
       };
+    },
+    async trunkRevision(unitId, userId) {
+      // One Unit record read. Loading the Unit would also read its snapshot and changesets.
+      const unit = await trunk.dbAdapter.getUnit(
+        { userID: userId, customData: { source: "product-api" }, request: {} },
+        unitId,
+      );
+      return unit?.headRevision ?? null;
     },
   };
 }

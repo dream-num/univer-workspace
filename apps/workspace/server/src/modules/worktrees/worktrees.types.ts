@@ -81,6 +81,14 @@ export interface WorktreeUnit {
   readonly change: WorktreeUnitChange;
   readonly mergeResult: MergeResult;
   readonly activationState: ActivationState;
+  readonly freshness: WorktreeUnitFreshness | null;
+}
+
+export interface WorktreeUnitFreshness {
+  readonly label: "current" | "behind" | "stale";
+  readonly baselineTrunkRevision: number;
+  readonly revisionsBehind: number;
+  readonly addedAt: string;
 }
 
 export interface WorktreeDetail extends WorktreeSummary {
@@ -157,6 +165,8 @@ export interface WorktreeBackend {
     changeset: IChangeset,
     userId: string
   ): Promise<WorktreeChangesetSubmitResult>;
+  /** Null when Trunk has no such Unit. */
+  trunkRevision(unitId: string, userId: string): Promise<number | null>;
 }
 
 export type WorktreeChangesetSubmitResult =

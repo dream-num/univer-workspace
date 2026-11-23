@@ -541,6 +541,22 @@ describe("Personal pull request Browser URLs", () => {
     }
   });
 
+  it("shows how far Trunk moved past each Trunk file in pr view", async () => {
+    const file = (unitId: string, freshness: object | null) =>
+      ({ change: "modified", name: unitId, type: "sheet", unitId, target: null, source: "trunk", freshness });
+    const { pr } = personalCommands({ units: [
+      file("a", { label: "current", revisionsBehind: 0 }),
+      file("b", { label: "behind", revisionsBehind: 3 }),
+      file("c", { label: "stale", revisionsBehind: 120 }),
+      file("d", { label: "stale", revisionsBehind: 0 }),
+      { ...file("e", null), change: "added", source: "worktree" },
+    ] });
+    const rows = (await run(pr, ["view", "wt-1"])).split("\n").filter((line) => line.startsWith("modified") || line.startsWith("added"));
+    expect(rows.map((row) => row.split(/ {2,}/).slice(3))).toEqual([
+      ["unit a", "current"], ["unit b", "behind by 3"], ["unit c", "stale, behind by 120"], ["unit d", "stale"], ["unit e"],
+    ]);
+  });
+
   it("browses numbered Personal PRs through every addressing form and preserves --unit", async () => {
     for (const [reference, target] of references) {
       const fixture = personalCommands();

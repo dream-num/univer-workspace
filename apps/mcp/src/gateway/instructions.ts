@@ -88,6 +88,11 @@ export function buildServerInstructions(
         ]
       : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
+    ...(has("pr_view")
+      ? [
+          "pr_view gives each file that came from trunk a freshness label. current: trunk has not moved; continue as the workflow says. behind: trunk changed the file after it joined, and the two merge without conflict, but a result you verified on the draft can still be wrong once merged. stale: redo the work in a new pull request, then discard the stale one; this is the one discard you do without being asked. Freshness never blocks a merge.",
+        ]
+      : []),
     has("html_view_save")
       ? "For a page sharing or presenting Workspace data, use an HTML View and read the html-view-creator Skill."
       : "This connection cannot draft pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.",

@@ -582,6 +582,10 @@ export const messages = {
     documentAdded: "新建",
     documentDeleted: "已删除",
     documentUnchanged: "未改动",
+    unitBehind: "落后 {count}",
+    unitBehindHint: "加入之后，正式版本又更新了 {count} 次。合入前请在合入预览里检查结果。",
+    unitStale: "已过期",
+    unitStaleHint: "加入之后，正式版本已更新超过 100 次，或者已过去 7 天以上。建议在新的 Pull request 里重做。仍然可以合入。",
     deletedDocumentPreview: "该文档将在合入后删除，没有可预览的 Agent 版本。",
     documentPreviewTitle: "{name} 预览",
     modifyExisting: "修改已有文档",
@@ -1495,6 +1499,12 @@ export const messages = {
     documentAdded: "Added",
     documentDeleted: "Deleted",
     documentUnchanged: "Unchanged",
+    unitBehind: "{count} behind",
+    unitBehindHint:
+      "The official version changed {count} times since this file was added. Check the merge preview before merging.",
+    unitStale: "Stale",
+    unitStaleHint:
+      "The official version changed more than 100 times since this file was added, or it was added more than 7 days ago. Redo the work in a new pull request. Merging is still allowed.",
     deletedDocumentPreview:
       "This document will be deleted after merge. There is no agent version to preview.",
     documentPreviewTitle: "{name} preview",
@@ -1841,6 +1851,7 @@ export type MessageKey = keyof (typeof messages)["zh-CN"];
 const englishSingularMessages: Partial<Record<MessageKey, string>> = {
   repositoryHomePullDescription: "{name}'s Pull request contains {count} file in {repository}.",
   repositoryActivityDays: "{count} day",
+  unitBehindHint: "The official version changed once since this file was added. Check the merge preview before merging.",
   dashboardResults: "{count} repository found",
   repositoryPagesSummary: "{count} page. Choose it as the default page.",
   repositoryWorktreeUnits: "{count} file",

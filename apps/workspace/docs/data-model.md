@@ -431,7 +431,12 @@ User Worktree 在 `owner/personal` 下的归属用于编号与列表；该 Perso
 | `resource_id` | 稳定产品内容身份 |
 | `source` | `trunk | worktree` |
 | `ordinal` | Worktree 内顺序 |
-| `added_at` | 加入时间 |
+| `added_at` | 加入时间；Trunk Unit 的 `freshness.addedAt` 取自这里 |
+
+`freshness` 不落库。Worktree 处于 `draft` 或 `ready` 时，服务端在每次读取 Worktree 视图时
+用协同服务的 `baselineTrunkRevision`、Trunk Unit 记录的 `headRevision` 和 `added_at` 现算：
+落后距离为 `headRevision - baselineTrunkRevision`；落后超过 100 个修订或加入超过 7 天为 `stale`，
+落后为零为 `current`，其余为 `behind`。阈值是服务端常量，标签只是提示，不拦截合入。
 
 `resource_id` 对 Trunk Unit 只允许指向已有 Univer Resource；Blob 第一版不进入 Worktree。
 对尚未激活的 Worktree-local Unit，它是预留 Resource ID，此时核心 `resources` 表中还没有

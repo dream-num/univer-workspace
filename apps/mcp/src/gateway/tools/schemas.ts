@@ -102,6 +102,17 @@ export const unitSchema = z.object({
   ]),
   change: z.enum(["modified", "added", "deleted", "unchanged"]),
   draftHeadRevision: z.number(),
+  freshness: z
+    .object({
+      addedAt: z.string(),
+      baselineTrunkRevision: z.number(),
+      label: z.enum(["current", "behind", "stale"]),
+      revisionsBehind: z.number(),
+    })
+    .nullable()
+    .describe(
+      "How far trunk moved since this trunk file joined the pull request. Null for a new file and once the pull request is no longer draft or ready. current: trunk has not moved. behind: trunk changed the file since, within the limits. stale: more than 100 revisions behind, or added more than 7 days ago. The server instructions say what to do with each; none of them blocks a merge.",
+    ),
   mergeResult: z.enum(["pending", "merged", "unchanged", "conflict", "failed"]),
   name: z.string(),
   nodeId: z.string(),
