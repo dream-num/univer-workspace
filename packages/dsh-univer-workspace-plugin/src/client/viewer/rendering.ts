@@ -16,7 +16,7 @@ import {
   UniverInstanceType,
   type Univer,
 } from "@univerjs/core";
-import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
+import { IAttachmentIoService } from "@univerjs-pro/resources";
 import { BoardToolType, UniverBoardsPlugin } from "@univerjs-pro/boards";
 import { UniverBoardsChartPlugin } from "@univerjs-pro/boards-chart";
 import { UniverBoardsChartUIPlugin } from "@univerjs-pro/boards-chart-ui";

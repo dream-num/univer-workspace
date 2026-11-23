@@ -1,6 +1,6 @@
 import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import { UniverBasesMobileUIPlugin } from "@univerjs-pro/bases-ui";
-import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
+import { IAttachmentIoService } from "@univerjs-pro/resources";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
 import { IImageIoService } from "@univerjs/core";
 import { UniverDocsPlugin } from "@univerjs/docs";

@@ -1,8 +1,8 @@
 /**
  * ResourceRef providers used by the browser viewer.
  *
- * These are deliberately local to the viewer composition.  Embed owns the
- * ResourceRef protocol; the providers only resolve an opaque file/unit
+ * These are deliberately local to the viewer composition. The SDK owns
+ * the ResourceRef format; the providers only resolve an opaque file/unit
  * descriptor through the adapter supplied by the host and expose values from
  * the already-materialized Univer model.
  */
@@ -20,12 +20,11 @@ import type { ISetFormulaCalculationResultMutation } from "@univerjs/engine-form
 import { deserializeRangeWithSheet } from "@univerjs/engine-formula";
 import { ensureBaseTableCellLayout, getBaseCellFormulaValue } from "@univerjs-pro/bases";
 import {
-  isResourceRefRangePart,
-  isResourceRefTablePart,
   ReferencedUnitDataType,
   type IEmbedResourceRefDataProviderRegistration,
   type IReferencedUnitManagerService,
 } from "@univerjs-pro/embed";
+import { isResourceRefRangePart, isResourceRefTablePart } from "@univerjs-pro/resources";
 
 const VIEW_BASE_RESOURCE_REF_DATA_PROVIDER_ID = "univer-view-base-resource-ref-data-provider";
 export const COLLABORATION_SHEET_RESOURCE_REF_DATA_PROVIDER_ID =

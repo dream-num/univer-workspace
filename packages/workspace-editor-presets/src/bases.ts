@@ -11,7 +11,7 @@ import BasesThreadCommentUIZhCN from "@univerjs-pro/bases-thread-comment-ui/loca
 import { UniverBasesUIPlugin } from "@univerjs-pro/bases-ui";
 import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
-import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
+import { IAttachmentIoService } from "@univerjs-pro/resources";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
 import { IImageIoService, type ILanguagePack } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";

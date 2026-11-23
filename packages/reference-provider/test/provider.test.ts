@@ -1,5 +1,5 @@
 import type { ILogContext } from "@univerjs-pro/collaboration";
-import type { IResourceRef } from "@univerjs-pro/embed";
+import type { IResourceRef } from "@univerjs-pro/resources";
 import { UniverInstanceType } from "@univerjs/core";
 import {
   WORKSPACE_REFERENCED_UNIT_PROVIDER_ID,

@@ -38,7 +38,7 @@ describe("embedded product preset integration", () => {
       await import("../../web/src/features/editor/units/base/base-editor");
     const { UniverBasesUIPlugin } = await import("@univerjs-pro/bases-ui");
     const { UniverDrawingPlugin } = await import("@univerjs/drawing");
-    const { IAttachmentIoService } = await import("@univerjs-pro/collaboration-client");
+    const { IAttachmentIoService } = await import("@univerjs-pro/resources");
     const { IImageIoService, Injector, mergeOverrideWithDependencies, registerDependencies } =
       await import("@univerjs/core");
     const presets = createBaseComparisonPresets({} as HTMLElement, {

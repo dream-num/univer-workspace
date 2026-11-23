@@ -29,7 +29,7 @@ import { UniverSheetsThreadCommentPreset } from "@univerjs/preset-sheets-thread-
 import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
 import { UniverBasesUIPlugin } from "@univerjs-pro/bases-ui";
-import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
+import { IAttachmentIoService } from "@univerjs-pro/resources";
 import { BoardToolType, UniverBoardsPlugin } from "@univerjs-pro/boards";
 import { UniverBoardsChartPlugin } from "@univerjs-pro/boards-chart";
 import { UniverBoardsChartUIPlugin } from "@univerjs-pro/boards-chart-ui";
