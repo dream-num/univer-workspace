@@ -127,6 +127,20 @@ export function WorktreeReviewPanel({
       onError,
     });
 
+  const authorSide = me === worktree.creator.id || me === worktree.claimer?.id;
+  const mergeHint =
+    worktree.kind !== "team" || worktree.state !== "ready" || me === undefined
+      ? null
+      : worktree.visibility === "space"
+        ? t(authorSide ? "memberWithEditAccessMerges" : "mergeNeedsEditAccess")
+        : authorSide
+          ? null
+          : worktree.claimer
+            ? t("onlyAuthorOrClaimerMerges", {
+                name: worktree.creator.displayName,
+                claimer: worktree.claimer.displayName,
+              })
+            : t("onlyAuthorMerges", { name: worktree.creator.displayName });
   const lifecycleActions = (
     <>
       {worktree.capabilities.reopen ? (
@@ -173,21 +187,8 @@ export function WorktreeReviewPanel({
             </Button>
           }
         />
-      ) : worktree.kind === "team" &&
-        worktree.state === "ready" &&
-        me !== undefined &&
-        me !== worktree.creator.id &&
-        me !== worktree.claimer?.id ? (
-        <span className="text-sm text-muted-foreground">
-          {worktree.visibility === "space"
-            ? t("mergeNeedsEditAccess")
-            : worktree.claimer
-              ? t("onlyAuthorOrClaimerMerges", {
-                  name: worktree.creator.displayName,
-                  claimer: worktree.claimer.displayName,
-                })
-              : t("onlyAuthorMerges", { name: worktree.creator.displayName })}
-        </span>
+      ) : mergeHint ? (
+        <span className="text-sm text-muted-foreground">{mergeHint}</span>
       ) : null}
       {worktree.capabilities.discard ? (
         <ConfirmDialog

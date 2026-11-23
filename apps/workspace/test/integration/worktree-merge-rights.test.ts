@@ -456,6 +456,65 @@ describe("a proposal from a member who can only read the Team Space", () => {
     expect((await post(origin, admin, `/api/worktrees/${pull}/discard`)).status).toBe(200);
     expect(await remove()).toBe(204);
   }, 30_000);
+
+  it("keeps a ready proposal visible to the Space while its author cannot merge it", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { admin, editor, viewer } = s;
+    const pull = await openPull(origin, viewer, s.id, "private");
+    await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    await transition(origin, pull, "ready", viewer);
+    const hide = async (actor: Actor, id = pull) => {
+      const response = await send(origin, "PATCH", `/api/worktrees/${id}`, { visibility: "private" }, actor.cookie);
+      const body = (await response.json()) as { worktree: { visibility: string }; error: object };
+      return response.ok ? body.worktree.visibility : { status: response.status, ...body.error };
+    };
+    const refused = {
+      status: 403,
+      code: "FORBIDDEN",
+      message: "This pull request is ready and its author cannot merge it, so it stays visible to the Space for a member with edit access to merge. Move it back to draft before making it private.",
+    };
+
+    expect(await hide(viewer)).toEqual(refused);
+    expect(await hide(admin)).toEqual(refused);
+    expect(await granted(origin, pull, editor)).toBe("review merge");
+    expect((await send(origin, "PATCH", `/api/worktrees/${pull}`, { name: "Renamed" }, viewer.cookie)).status).toBe(200);
+
+    expect((await post(origin, viewer, `/api/worktrees/${pull}/reopen`)).status).toBe(200);
+    expect(await hide(viewer), "a draft proposal can still be private").toBe("private");
+    const own = await openPull(origin, editor, s.id, "space");
+    await addFile(origin, editor, own, { source: "trunk", resourceId: s.budget.resourceId });
+    await transition(origin, own, "ready", editor);
+    expect(await hide(editor, own), "an author who can merge still makes a ready one private").toBe("private");
+  }, 30_000);
+
+  it("places a viewer's new file only in a folder that is live in the Team Space", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, editor, viewer } = s;
+    const folder = async (spaceId: string, name: string) =>
+      (await made<{ id: string }>(await post(origin, owner, "/api/nodes", { spaceId, parentNodeId: null, name }))).id;
+    const reports = await folder(s.id, "Reports");
+    const trashed = await folder(s.id, "Old");
+    expect((await post(origin, owner, `/api/nodes/${trashed}/trash`)).status).toBe(201);
+    const elsewhere = await application.spaces.createTeamSpace(owner.id, { name: "Elsewhere" });
+    await application.permissions.upsertTeamMember(owner.id, elsewhere.id, viewer.id, { role: "viewer" });
+    const foreign = await folder(elsewhere.id, "Foreign");
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const propose = async (parentNodeId: string) =>
+      (await post(origin, viewer, `/api/worktrees/${pull}/units`, { ...newSheet(s.id), targetParentNodeId: parentNodeId })).status;
+
+    expect({
+      trashed: await propose(trashed),
+      "in another Space": await propose(foreign),
+      missing: await propose(randomUUID()),
+      live: await propose(reports),
+    }).toEqual({ trashed: 404, "in another Space": 404, missing: 404, live: 201 });
+    await transition(origin, pull, "ready", viewer);
+    expect(await transition(origin, pull, "merge", editor)).toBe("merged");
+    const { nodes } = (await (await send(origin, "GET", `/api/nodes/${reports}/children`, undefined, viewer.cookie)).json()) as { nodes: { name: string }[] };
+    expect(nodes.map((node) => node.name)).toEqual(["Forecast"]);
+  }, 30_000);
 });
 
 const members = ["author", "claimer", "owner", "admin", "editor", "viewer", "outsider"] as const;

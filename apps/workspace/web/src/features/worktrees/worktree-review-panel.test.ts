@@ -146,6 +146,19 @@ describe("Worktree merge", () => {
     expect(html({ ...shared, capabilities: { ...shared.capabilities, merge: true } })).not.toContain("mergeNeedsEditAccess");
   });
 
+  it("tells the author of a ready proposal they cannot merge that a member with edit access merges it", () => {
+    const shared: Worktree = { ...worktree(false), kind: "team", visibility: "space" };
+    const html = (value: Worktree) => renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+    state.me = "user-1";
+    expect(html(shared)).toContain("memberWithEditAccessMerges");
+    expect(html(shared)).not.toContain("mergeNeedsEditAccess");
+    expect(html({ ...shared, capabilities: { ...shared.capabilities, merge: true } })).not.toContain("memberWithEditAccessMerges");
+    expect(html({ ...shared, state: "draft" })).not.toContain("memberWithEditAccessMerges");
+    expect(html({ ...shared, visibility: "private" }), "nobody else sees a private one").not.toContain("memberWithEditAccessMerges");
+    state.me = "user-2";
+    expect(html(shared)).not.toContain("memberWithEditAccessMerges");
+  });
+
   it("names the person who claimed an agent author beside the agent, except to that person", () => {
     const html = (value: Worktree) => renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
     const person = { ...worktree(false), kind: "team" as const };

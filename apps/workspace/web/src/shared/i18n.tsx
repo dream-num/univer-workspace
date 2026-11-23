@@ -620,6 +620,7 @@ export const messages = {
     onlyAuthorMerges: "只有作者 {name} 可以合并这个 Pull request。",
     onlyAuthorOrClaimerMerges: "只有作者 {name} 或认领它的 {claimer} 可以合并这个 Pull request。",
     mergeNeedsEditAccess: "合并这个 Pull request 需要对它改动的每个文件都有编辑权限。",
+    memberWithEditAccessMerges: "这个 Pull request 由对它改动的每个文件都有编辑权限的空间成员合并。",
     mergePreviewCheckFailed: "暂时无法检查正式版本是否领先，请稍后重试。",
     checkingMergePreview: "正在检查正式版本更新…",
     readOnlyPreview: "只读预览",
@@ -1536,6 +1537,7 @@ export const messages = {
     onlyAuthorMerges: "Only the author, {name}, can merge this pull request.",
     onlyAuthorOrClaimerMerges: "Only the author, {name}, or {claimer} who claimed it, can merge this pull request.",
     mergeNeedsEditAccess: "Merging this pull request needs edit access to every file it changes.",
+    memberWithEditAccessMerges: "A Space member with edit access to every file it changes merges this pull request.",
     mergePreviewCheckFailed:
       "Could not check whether the official version is ahead. Try again later.",
     checkingMergePreview: "Checking the official version for updates…",
