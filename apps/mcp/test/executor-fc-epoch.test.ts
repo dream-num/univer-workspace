@@ -1,3 +1,4 @@
+import { Writable } from "node:stream";
 import { pino } from "pino";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -336,5 +337,50 @@ describe("executor capability discovery", () => {
       capabilities.close();
       fetcher.mockRestore();
     }
+  });
+});
+
+describe("executor capability failure logging", () => {
+  it("names the HTTP status and the network code that made discovery fail", async () => {
+    let output = "";
+    const logger = pino(
+      { level: "warn" },
+      new Writable({
+        write(chunk, _encoding, done) {
+          output += chunk.toString();
+          done();
+        },
+      }),
+    );
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: { code: "workspace-executor-unauthorized", message: "no", detail: null },
+          }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockRejectedValueOnce(
+        new TypeError("fetch failed", {
+          cause: Object.assign(new Error("refused"), { code: "ECONNREFUSED" }),
+        }),
+      );
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://one.test"], executorToken: "t".repeat(40) },
+      logger,
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      await capabilities.refresh();
+    } finally {
+      capabilities.close();
+      fetcher.mockRestore();
+    }
+    expect(output).toContain("HTTP 401");
+    expect(output).toContain("ECONNREFUSED");
+    expect(output).toContain('"executor":"http://one.test"');
   });
 });

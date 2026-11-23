@@ -6,6 +6,7 @@ import {
   type EpochStore,
 } from "../../executor-fc/index.js";
 import type { GatewayConfig } from "../../shared/config.js";
+import { safeErrorFields } from "../../shared/logging.js";
 import {
   executorCapabilitiesSchema,
   isOpName,
@@ -81,19 +82,27 @@ export class ExecutorCapabilities {
                   init,
                 });
           if (!response.ok) {
+            const status = response.status;
             await response.body?.cancel();
-            throw new Error("Executor capability request failed");
+            throw new Error(`Executor capability request failed with HTTP ${status}`);
           }
           const body = executorCapabilitiesSchema.parse(await response.json());
           if (body.v === PROTOCOL_VERSION) {
             this.replicas.set(url, new Set(body.operations.filter(isOpName)));
             this.discovered = true;
           } else this.replicas.delete(url);
-        } catch {
-          if (!this.controller.signal.aborted)
-            this.logger.warn(
-              "Executor capability refresh failed; retaining last known capabilities",
-            );
+        } catch (error) {
+          if (this.controller.signal.aborted) return;
+          // The status or network code is what tells 401 (token mismatch), 404 (not the
+          // executor) and ECONNREFUSED (wrong host or port) apart.
+          this.logger.warn(
+            {
+              executor: url,
+              ...safeErrorFields(error),
+              reason: error instanceof Error ? error.message : "unknown error",
+            },
+            "Executor capability refresh failed; retaining last known capabilities",
+          );
         }
       }),
     );
