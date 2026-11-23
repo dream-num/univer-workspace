@@ -78,7 +78,7 @@ try {
     const version = migrated.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 27);
+    assert.equal(version.user_version, 28);
     const identity = migrated.connection
       .prepare(
         "SELECT provider, provider_subject, user_id FROM external_identities"

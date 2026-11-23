@@ -190,6 +190,18 @@ CREATE TABLE recent_resources (
 CREATE INDEX recent_resources_user_opened
   ON recent_resources(user_id, last_opened_at DESC, resource_id ASC);
 
+CREATE TABLE forks (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  upstream_space_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (upstream_space_id) REFERENCES spaces(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX forks_owner_name
+  ON forks(owner_user_id, lower(name COLLATE "C"));
+
 CREATE TABLE worktrees (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -203,6 +215,8 @@ CREATE TABLE worktrees (
   updated_at BIGINT NOT NULL,
   number BIGINT,
   created_via TEXT CHECK (created_via IN ('browser', 'agent')),
+  fork_id TEXT REFERENCES forks(id) ON DELETE SET NULL,
+  CONSTRAINT worktrees_fork_team CHECK (fork_id IS NULL OR kind = 'team'),
   CHECK (
     (kind = 'user' AND team_space_id IS NULL AND visibility = 'private')
     OR
@@ -221,6 +235,9 @@ CREATE UNIQUE INDEX worktrees_team_number
 CREATE UNIQUE INDEX worktrees_user_number
   ON worktrees(creator_user_id, number)
   WHERE kind = 'user' AND number IS NOT NULL;
+CREATE UNIQUE INDEX worktrees_open_fork
+  ON worktrees(fork_id)
+  WHERE fork_id IS NOT NULL AND processed_at IS NULL;
 
 CREATE TABLE worktree_units (
   worktree_id TEXT NOT NULL,

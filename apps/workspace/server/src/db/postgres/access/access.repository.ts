@@ -120,6 +120,15 @@ export async function assertTeamSpaceQuota(client: PoolClient, userId: string): 
   assertCeiling(requesterCategory(row!), "createTeamSpace", { held: row!.held });
 }
 
+/** Read the principal and its forks in the transaction that creates the next one. */
+export async function assertForkQuota(client: PoolClient, userId: string): Promise<void> {
+  const { rows: [row] } = await client.query<Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly held: number }>(`
+    SELECT (SELECT kind FROM users WHERE id = $1) AS requester_kind,
+           (SELECT (owner_user_id IS NOT NULL)::integer FROM agents WHERE user_id = $1) AS requester_claimed,
+           (SELECT COUNT(*)::integer FROM forks WHERE owner_user_id = $1) AS held`, [userId]);
+  assertCeiling(requesterCategory(row!), "createFork", { held: row!.held });
+}
+
 export class PostgresAccessRepository implements AccessRepository {
   // Reuse SQL compilation, not authorization results. Every execution binds
   // the current actor and reads current data on this repository's connection.

@@ -1,0 +1,131 @@
+/api/forks:
+  post:
+    tags: [Forks]
+    operationId: createFork
+    summary: Fork a Team Space the current User can propose in.
+    description: |
+      Writes one product row and nothing else: no Node, Resource, Unit, Blob or Collaboration data.
+      Repeating the request with the same `name` and `upstreamSpaceId` returns the existing fork with
+      `200`. A name that one of the owner's forks of another upstream, or one of the owner's Team Space
+      slugs, already uses returns `409 SPACE_SLUG_TAKEN`. An upstream the caller cannot read, and a
+      Personal Space, return `404`. A caller who can read the upstream but is not its owner, the human
+      who claimed its agent owner, or one of its Space Members gets `403 FORBIDDEN`, because a fork
+      needs membership to propose. An unclaimed agent owns at most 3 forks (`403 AGENT_QUOTA_EXCEEDED`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/forks.yaml#/CreateFork
+    responses:
+      "200":
+        description: The caller's existing fork of this name and upstream.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkView
+      "201":
+        description: Created fork.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkView
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  get:
+    tags: [Forks]
+    operationId: listForks
+    summary: List the current User's forks by name.
+    description: Only a fork's owner sees it.
+    responses:
+      "200":
+        description: The caller's forks.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/forks/lookup:
+  get:
+    tags: [Forks]
+    operationId: lookupFork
+    summary: Resolve `<owner>/<name>` to one of the current User's forks.
+    description: |
+      `owner` is a username and `name` a fork name, both case-insensitive. Another User's fork and a
+      missing fork both return 404. `GET /api/spaces/lookup` never resolves a fork address.
+    parameters:
+      - name: owner
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: The fork.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkView
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/forks/{forkId}:
+  parameters:
+    - name: forkId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Forks]
+    operationId: getFork
+    summary: Read one of the current User's forks.
+    description: Another User's fork returns 404. The fork stays readable after the owner loses the upstream, with `upstream` null.
+    responses:
+      "200":
+        description: The fork.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkView
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  delete:
+    tags: [Forks]
+    operationId: deleteFork
+    summary: Delete one of the current User's forks.
+    description: |
+      Deletes the fork row only. The upstream does not change, and every Worktree the fork had keeps its
+      history and becomes an ordinary Team Worktree of the upstream. Another User's fork returns 404.
+    responses:
+      "200":
+        description: The fork is gone. The response names the open Worktree it leaves behind.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkDeletion
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound

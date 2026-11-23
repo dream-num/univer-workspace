@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -83,6 +83,25 @@ ALTER TABLE html_view_drafts ADD COLUMN revises_draft_id TEXT;
 ALTER TABLE html_view_drafts DROP CONSTRAINT html_view_drafts_state_check;
 ALTER TABLE html_view_drafts ADD CONSTRAINT html_view_drafts_state_check
   CHECK (state IN ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted', 'superseded'));`);
+}
+
+async function addForks(client: PoolClient): Promise<void> {
+  await client.query(`CREATE TABLE forks (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  upstream_space_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (upstream_space_id) REFERENCES spaces(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX forks_owner_name
+  ON forks(owner_user_id, lower(name COLLATE "C"));
+ALTER TABLE worktrees ADD COLUMN fork_id TEXT REFERENCES forks(id) ON DELETE SET NULL;
+ALTER TABLE worktrees ADD CONSTRAINT worktrees_fork_team CHECK (fork_id IS NULL OR kind = 'team');
+CREATE UNIQUE INDEX worktrees_open_fork
+  ON worktrees(fork_id)
+  WHERE fork_id IS NOT NULL AND processed_at IS NULL;`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

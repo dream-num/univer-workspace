@@ -118,7 +118,7 @@ that creates a Team Space owns it, and the human who claimed the agent owns it t
 An unclaimed agent cannot create or update a Space with `publicRead: true`, cannot be
 added as a Team Space member and cannot add one. A claimed agent can be added or
 changed to viewer or editor, and to admin only in a Team Space an agent owns
-(`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces, keeps at most
+(`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and 3 forks, keeps at most
 20 files across all its Spaces, counting files still pending in a pull request, and
 stores no file above 10 MiB (`AGENT_QUOTA_EXCEEDED`). A human's session issued for a personal access
 token or an OAuth grant cannot create or update a Space with `publicRead: true`
@@ -326,6 +326,25 @@ Other Members cannot discover it. A space-visible Team Worktree can be discovere
 reviewed read-only by current Space Members, and marked ready and merged by the Team Space
 Owner, Admins and Editors with edit access to every target.
 
+## Forks
+
+A fork is one User's named view of a whole Team Space, its upstream. Creating one with
+`POST /api/forks` writes one product row and copies no Node, Resource, Unit, Blob or
+Collaboration data. Only the caller who can propose in the upstream today may fork it: its
+owner, the human who claimed its agent owner, or a Space Member of any role. Any other reader
+of the upstream gets `403 FORBIDDEN`, and a caller who cannot read it, or names a Personal
+Space, gets `404`. One owner may fork one upstream several times under different names.
+Repeating a create with the same name and upstream returns the existing fork with `200`.
+
+Only a fork's owner lists, reads, looks up and deletes it; anyone else gets `404`. A fork
+stays readable after its owner loses the upstream, with `upstream: null`, so the owner can
+still delete it. A fork's `state` is derived from its open Worktree, the one Team Worktree
+of the upstream that links to the fork and is not yet merged or discarded, and is never
+stored. Nothing opens a fork's Worktree yet, so every fork reads `clean` with
+`worktree: null`. Deleting a fork removes only its row. The upstream does not change, and
+any Worktree that linked to the fork keeps its history as an ordinary Team Worktree of the
+upstream, which the delete response names.
+
 ## Repository names and numbers
 
 A Team Space may carry a `slug`, unique per owner and compared case-insensitively. Together with the owner's
@@ -333,6 +352,11 @@ username it forms the full name `<owner>/<slug>` (`SpaceView.fullName`), resolve
 Every Personal Space, including those that predate slugs, is `<owner>/personal`; `personal` cannot be used as a Team
 Space slug. Team Spaces created before slugs existed have `slug: null` until an administrator sets one. Renaming a
 username or slug invalidates the old full name; there is no redirect.
+
+A fork's `name` shares the owner's namespace with Team Space slugs, so `<owner>/<name>` names either one Team
+Space or one fork, never both. Creating or renaming either one to a name the other uses returns
+`409 SPACE_SLUG_TAKEN`; a Team Space created without a `slug` skips names its owner's forks use. A fork address
+resolves only through `GET /api/forks/lookup`, and `GET /api/spaces/lookup` returns `404` for it.
 
 A Team Worktree shares its Space's number sequence with Issues, so `#12` names one object per Space
 (`GET /api/spaces/{spaceId}/worktrees/{number}`). A User Worktree is numbered per creator and addressed through

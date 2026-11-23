@@ -1341,6 +1341,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current User's forks by name.
+         * @description Only a fork's owner sees it.
+         */
+        get: operations["listForks"];
+        put?: never;
+        /**
+         * Fork a Team Space the current User can propose in.
+         * @description Writes one product row and nothing else: no Node, Resource, Unit, Blob or Collaboration data.
+         *     Repeating the request with the same `name` and `upstreamSpaceId` returns the existing fork with
+         *     `200`. A name that one of the owner's forks of another upstream, or one of the owner's Team Space
+         *     slugs, already uses returns `409 SPACE_SLUG_TAKEN`. An upstream the caller cannot read, and a
+         *     Personal Space, return `404`. A caller who can read the upstream but is not its owner, the human
+         *     who claimed its agent owner, or one of its Space Members gets `403 FORBIDDEN`, because a fork
+         *     needs membership to propose. An unclaimed agent owns at most 3 forks (`403 AGENT_QUOTA_EXCEEDED`).
+         */
+        post: operations["createFork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/forks/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve `<owner>/<name>` to one of the current User's forks.
+         * @description `owner` is a username and `name` a fork name, both case-insensitive. Another User's fork and a
+         *     missing fork both return 404. `GET /api/spaces/lookup` never resolves a fork address.
+         */
+        get: operations["lookupFork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/forks/{forkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one of the current User's forks.
+         * @description Another User's fork returns 404. The fork stays readable after the owner loses the upstream, with `upstream` null.
+         */
+        get: operations["getFork"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete one of the current User's forks.
+         * @description Deletes the fork row only. The upstream does not change, and every Worktree the fork had keeps its
+         *     history and becomes an ordinary Team Worktree of the upstream. Another User's fork returns 404.
+         */
+        delete: operations["deleteFork"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces/{spaceId}/nodes": {
         parameters: {
             query?: never;
@@ -2601,6 +2679,24 @@ export interface components {
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
             units: components["schemas"]["WorktreeUnit"][];
         };
+        ForkView: {
+            id: string;
+            /** @description Unique among the owner's forks and Team Space slugs (case-insensitive). `personal` is reserved. */
+            name: components["schemas"]["SpaceSlug"];
+            /** @description `<owner.username>/<name>`. Computed by the server; it changes when the owner renames their username. */
+            fullName: string;
+            owner: {
+                id: string;
+                username: string;
+            };
+            /** @description The Team Space the fork views, as the owner sees it. Null once the owner can no longer read it. */
+            upstream: components["schemas"]["SpaceView"] | null;
+            state: components["schemas"]["ForkState"];
+            /** @description The fork's Team Worktree in the upstream that is not yet merged or discarded. Null when the fork is `clean`, including when its owner can no longer read that Worktree. */
+            worktree: components["schemas"]["WorktreeSummary"] | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
         ResolvedSkillSource: {
             /** @constant */
             kind: "git";
@@ -3436,6 +3532,29 @@ export interface components {
         WorktreeEnvelope: {
             worktree: components["schemas"]["WorktreeDetail"];
         };
+        /**
+         * @description Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
+         *     `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
+         *     an interrupted merge or discard still has to finish. Nothing opens a fork's Worktree yet, so every
+         *     fork reads `clean`.
+         * @enum {string}
+         */
+        ForkState: "clean" | "drafting" | "proposed" | "merging";
+        ForkList: {
+            forks: components["schemas"]["ForkView"][];
+        };
+        CreateFork: {
+            /** @description The Team Space to fork. The caller must be its owner, the human who claimed its agent owner, or a Space Member of any role. */
+            upstreamSpaceId: string;
+            name: components["schemas"]["SpaceSlug"];
+        };
+        ForkDeletion: {
+            /**
+             * @description The fork's open Worktree, which stays an ordinary Team Worktree of the upstream with its history,
+             *     and which its author can still ready, reopen or discard. Null when the fork had none, or its owner cannot read it.
+             */
+            worktree: components["schemas"]["WorktreeSummary"] | null;
+        };
         ResourceCapabilities: {
             openContent: boolean;
             editContent: boolean;
@@ -4087,8 +4206,9 @@ export interface components {
          *     insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
          *     unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
          *     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
-         *     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces, keep more than 20
-         *     files across its Spaces, pending pull-request files included, or store one file above 10 MiB) and
+         *     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
+         *     keep more than 20 files across its Spaces, pending pull-request files included, or store one file
+         *     above 10 MiB) and
          *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
          *     or updates a Space with `publicRead: true`).
          */
@@ -6515,6 +6635,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpaceStar"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listForks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's forks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createFork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFork"];
+            };
+        };
+        responses: {
+            /** @description The caller's existing fork of this name and upstream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkView"];
+                };
+            };
+            /** @description Created fork. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    lookupFork: {
+        parameters: {
+            query: {
+                owner: string;
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fork. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getFork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fork. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkView"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteFork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fork is gone. The response names the open Worktree it leaves behind. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkDeletion"];
                 };
             };
             401: components["responses"]["Unauthorized"];

@@ -51,7 +51,8 @@ export class PostgresSpacesRepository implements SpacesRepository {
       for (let attempt = 2; ; attempt += 1) {
         const inserted = await client.query(`
           INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
-          VALUES ($1, 'team', $2, $3, $4, $5, $6, $6)
+          SELECT $1, 'team', $2, $3::text, $4, $5, $6, $6
+          WHERE NOT EXISTS (SELECT 1 FROM forks WHERE owner_user_id = $5 AND lower(name COLLATE "C") = lower($3::text COLLATE "C"))
           ON CONFLICT (owner_user_id, lower(slug COLLATE "C")) WHERE slug IS NOT NULL DO NOTHING`,
           [input.id, input.name, slug, input.publicRead, input.ownerUserId, input.createdAt],
         );
@@ -74,6 +75,10 @@ export class PostgresSpacesRepository implements SpacesRepository {
         const before = await findSpaceView(client, userId, { spaceId });
         if (!before) throw spaceNotFound();
         if (!resolveStoredSpaceAccess(userId, before)?.capabilities.renameSpace) throw spaceUpdateForbidden();
+        if (settings.slug !== undefined && (await client.query(
+          `SELECT 1 FROM forks WHERE owner_user_id = $1 AND lower(name COLLATE "C") = lower($2::text COLLATE "C")`,
+          [before.ownerUserId, settings.slug],
+        )).rowCount) return null;
 
         const assignments = ["updated_at = $2"];
         const values: (string | number | boolean)[] = [spaceId, updatedAt];

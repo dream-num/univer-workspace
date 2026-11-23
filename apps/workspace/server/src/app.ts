@@ -91,6 +91,11 @@ import {
   type CopiesModule,
 } from "./modules/copies/index.js";
 import {
+  createForksModule,
+  createForksRouter,
+  type ForksModule,
+} from "./modules/forks/index.js";
+import {
   createSpacesModule,
   createSpacesRouter,
   type SpacesModule,
@@ -146,6 +151,7 @@ export interface WorkspaceApplication {
   readonly worktrees: WorktreesModule;
   readonly operations: OperationsModule;
   readonly copies: CopiesModule;
+  readonly forks: ForksModule;
   readonly blobs: BlobsModule;
   readonly skillDrafts: SkillDraftsModule;
   readonly htmlViewDrafts: HtmlViewDraftsModule;
@@ -308,6 +314,7 @@ export function createWorkspaceApplication(
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
   const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees });
+  const forks = createForksModule({ repository: repositories.forks, access, spaces, worktrees });
   const activity = createActivityModule({ access, worktrees, issues });
   const univerAssets = createUniverAssetsModule({
     repository: univerAssetsRepository,
@@ -461,6 +468,7 @@ export function createWorkspaceApplication(
     createOperationsRouter({ identity, operations })
   );
   app.use("/api", createCopiesRouter({ identity, copies }));
+  app.use("/api", createForksRouter({ identity, forks }));
   app.use(
     "/api",
     createWorktreesRouter({ identity, worktrees })
@@ -502,6 +510,7 @@ export function createWorkspaceApplication(
     worktrees,
     operations,
     copies,
+    forks,
     blobs,
     htmlViewDrafts,
     skillDrafts,

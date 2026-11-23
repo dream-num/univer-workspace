@@ -1,0 +1,80 @@
+ForkState:
+  type: string
+  enum: [clean, drafting, proposed, merging]
+  description: |
+    Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
+    `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
+    an interrupted merge or discard still has to finish. Nothing opens a fork's Worktree yet, so every
+    fork reads `clean`.
+
+ForkView:
+  type: object
+  additionalProperties: false
+  required: [id, name, fullName, owner, upstream, state, worktree, createdAt]
+  properties:
+    id:
+      type: string
+    name:
+      $ref: ./spaces.yaml#/SpaceSlug
+      description: Unique among the owner's forks and Team Space slugs (case-insensitive). `personal` is reserved.
+    fullName:
+      type: string
+      description: "`<owner.username>/<name>`. Computed by the server; it changes when the owner renames their username."
+    owner:
+      type: object
+      additionalProperties: false
+      required: [id, username]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+    upstream:
+      description: The Team Space the fork views, as the owner sees it. Null once the owner can no longer read it.
+      oneOf:
+        - $ref: ./spaces.yaml#/SpaceView
+        - type: "null"
+    state:
+      $ref: "#/ForkState"
+    worktree:
+      description: The fork's Team Worktree in the upstream that is not yet merged or discarded. Null when the fork is `clean`, including when its owner can no longer read that Worktree.
+      oneOf:
+        - $ref: ./worktrees.yaml#/WorktreeSummary
+        - type: "null"
+    createdAt:
+      type: string
+      format: date-time
+
+ForkList:
+  type: object
+  additionalProperties: false
+  required: [forks]
+  properties:
+    forks:
+      type: array
+      items:
+        $ref: "#/ForkView"
+
+CreateFork:
+  type: object
+  additionalProperties: false
+  required: [upstreamSpaceId, name]
+  properties:
+    upstreamSpaceId:
+      type: string
+      description: The Team Space to fork. The caller must be its owner, the human who claimed its agent owner, or a Space Member of any role.
+    name:
+      $ref: ./spaces.yaml#/SpaceSlug
+
+ForkDeletion:
+  type: object
+  additionalProperties: false
+  required: [worktree]
+  properties:
+    worktree:
+      description: |
+        The fork's open Worktree, which stays an ordinary Team Worktree of the upstream with its history,
+        and which its author can still ready, reopen or discard. Null when the fork had none, or its owner cannot read it.
+      oneOf:
+        - $ref: ./worktrees.yaml#/WorktreeSummary
+        - type: "null"

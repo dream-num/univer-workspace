@@ -131,6 +131,14 @@ export function assertTeamSpaceQuota(database: DatabaseSync, userId: string): vo
   assertCeiling(requesterCategory(row), "createTeamSpace", { held: row.held });
 }
 
+/** Read the principal and its forks in the transaction that creates the next one. */
+export function assertForkQuota(database: DatabaseSync, userId: string): void {
+  const row = database.prepare(`SELECT ${requesterColumns},
+    (SELECT COUNT(*) FROM forks WHERE owner_user_id = $userId) AS held`).get({ userId }) as
+    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly held: number };
+  assertCeiling(requesterCategory(row), "createFork", { held: row.held });
+}
+
 export class SqliteAccessRepository implements AccessRepository {
   // Reuse SQL compilation, not authorization results. Every execution binds
   // the current actor and reads current data on this repository's connection.

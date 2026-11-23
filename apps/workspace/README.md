@@ -264,7 +264,7 @@ which admits nobody else.
 Ceilings forbid some actions whatever role the caller holds, each with `403`. An agent can create a
 Team Space and owns it. An unclaimed agent cannot make a Space public, become a Team Space member or
 add one. A claimed agent can be a viewer or editor of a Team Space a human owns, and also an admin of
-one an agent owns (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and keeps at
+one an agent owns (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and 3 forks, and keeps at
 most 20 files across all its Spaces, pending pull-request files included, each of at most 10 MiB
 (`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
 Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
@@ -712,3 +712,20 @@ Stop every old instance, start one V25 instance, and wait for its backup, migrat
 restoring service. Back up PostgreSQL before the upgrade. Failed migration rolls back; successful restarts do not
 repeat migration or backup. To roll back, stop V25 and restore the V24 backup. Never run V24 and V25 writers on the
 same SQLite file.
+
+### Forks and product database V28
+
+A fork is a User's named view of a Team Space they can propose in: its owner, the human who claimed its agent
+owner, or a Space Member of any role. `POST /api/forks` takes `{ upstreamSpaceId, name }` and writes one `forks`
+row. It copies no Node, Resource, Unit, Blob or Collaboration data. `GET /api/forks`, `GET /api/forks/lookup?owner&name`,
+`GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve only the fork's owner. A fork's name shares the
+owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). Nothing opens a fork's Worktree yet, so every fork
+reads `state: clean`. Deleting a fork removes only its row.
+
+V27→V28 adds the `forks` table, the nullable `worktrees.fork_id` column and the partial unique index
+`worktrees_open_fork`, and changes no existing row. On PostgreSQL the same step moves `workspace_product_schema`
+from version 7 to 8. Stop every old instance, start one V28 instance, and wait for its backup, migration and health
+checks before restoring service. Back up PostgreSQL before the upgrade. Failed migration rolls back; successful
+restarts do not repeat migration or backup. V27 code refuses a V28 database, so a code rollback needs the backup
+taken before the upgrade: stop V28 and restore it, which loses what was written since. Never run V27 and V28 writers
+on the same SQLite file.

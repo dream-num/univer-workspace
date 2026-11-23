@@ -47,12 +47,15 @@ export class SqliteSpacesRepository implements SpacesRepository {
       assertTeamSpaceQuota(database, input.ownerUserId);
       const insert = database.prepare(`
         INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
-        VALUES (?, 'team', ?, ?, ?, ?, ?, ?)
+        SELECT $id, 'team', $name, $slug, $publicRead, $ownerUserId, $createdAt, $createdAt
+        WHERE NOT EXISTS (SELECT 1 FROM forks WHERE owner_user_id = $ownerUserId AND name = $slug)
         ON CONFLICT (owner_user_id, slug) WHERE slug IS NOT NULL DO NOTHING
       `);
       let slug = input.slug ?? input.slugBase;
       for (let attempt = 2; ; attempt += 1) {
-        const result = insert.run(input.id, input.name, slug, Number(input.publicRead), input.ownerUserId, input.createdAt, input.createdAt);
+        const result = insert.run({
+          id: input.id, name: input.name, slug, publicRead: Number(input.publicRead), ownerUserId: input.ownerUserId, createdAt: input.createdAt,
+        });
         if (result.changes) break;
         if (input.slugBase === undefined) return null;
         const suffix = `-${attempt}`;
@@ -70,8 +73,9 @@ export class SqliteSpacesRepository implements SpacesRepository {
       if (!before) throw spaceNotFound();
       if (!resolveStoredSpaceAccess(userId, before)?.capabilities.renameSpace) throw spaceUpdateForbidden();
       if (settings.slug !== undefined && database.prepare(`
-        SELECT 1 FROM spaces WHERE owner_user_id = ? AND slug = ? AND id <> ?
-      `).get(before.ownerUserId, settings.slug, spaceId)) return null;
+        SELECT 1 FROM spaces WHERE owner_user_id = $owner AND slug = $slug AND id <> $spaceId
+        UNION ALL SELECT 1 FROM forks WHERE owner_user_id = $owner AND name = $slug
+      `).get({ owner: before.ownerUserId, slug: settings.slug, spaceId })) return null;
 
       const assignments = ["updated_at = ?"];
       const values: (string | number)[] = [updatedAt];

@@ -159,6 +159,15 @@ change the visibility of a Team Worktree, without gaining access to the draft
 content of a private one, and do not merge a private one someone else created.
 _Avoid_: Space-scoped Worktree, Team branch
 
+**Fork**:
+A User's named view of a whole Team Space, its upstream. It is one product record
+that copies no Node, Resource or Unit, and only its owner sees it. Its name shares
+the owner's namespace with Team Space slugs. Only someone who can propose in the
+upstream (its owner, the human who claimed its agent owner, or a Space Member) may
+fork it. A fork's state is derived from its one open Team Worktree in the upstream.
+Deleting a fork leaves that Worktree and its history as an ordinary Team Worktree.
+_Avoid_: Copy, clone, branch
+
 **Worktree Unit**:
 A Unit participating in a Worktree, either trunk-backed or Worktree-local.
 _Avoid_: Draft Resource

@@ -16,7 +16,7 @@ import { importProduct } from "../../server/src/storage-migration/product.js";
 import { prepareSource } from "../../server/src/storage-migration/source.js";
 import { createPostgresTestDatabase, createPostgresTestSchema } from "../support/postgres/schema.js";
 
-async function v27Source(resources: AsyncDisposableStack) {
+async function v28Source(resources: AsyncDisposableStack) {
   const directory = mkdtempSync(join(tmpdir(), "cutover-test-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
   const productFile = join(directory, "old-product");
@@ -68,15 +68,15 @@ async function v27Source(resources: AsyncDisposableStack) {
   return source;
 }
 
-it("reads committed V27 WAL rows without modifying the source files", async () => {
+it("reads committed V28 WAL rows without modifying the source files", async () => {
   await using resources = new AsyncDisposableStack();
-  const source = await v27Source(resources);
+  const source = await v28Source(resources);
   await source.checkSourceStopped();
-  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(27);
+  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(28);
   expect(source.product.prepare("SELECT kind FROM users WHERE id='u'").get()?.kind).toBe("human");
 });
 
-it.each([24, 25, 26, 28])("rejects product V%i before opening the collaboration database", async (version) => {
+it.each([24, 25, 26, 27, 29])("rejects product V%i before opening the collaboration database", async (version) => {
   await using resources = new AsyncDisposableStack();
   const directory = mkdtempSync(join(tmpdir(), "cutover-version-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
@@ -87,7 +87,7 @@ it.each([24, 25, 26, 28])("rejects product V%i before opening the collaboration 
   const before = readFileSync(path);
 
   await expect(prepareSource(directory, path, join(directory, "missing"), resources))
-    .rejects.toThrow(`Expected a V27 SQLite product database, got V${version}`);
+    .rejects.toThrow(`Expected a V28 SQLite product database, got V${version}`);
   expect(readFileSync(path)).toEqual(before);
 });
 
@@ -96,7 +96,7 @@ it.skipIf(!url)(
   "preserves Sheet blocks, snapshot references, Worktree baselines, seeds and comments",
   async () => {
     await using resources = new AsyncDisposableStack();
-    const source = await v27Source(resources);
+    const source = await v28Source(resources);
     const target = await createPostgresTestDatabase(url!);
     resources.defer(target.close);
     const storage = await createTestBucket(resources);
@@ -168,6 +168,33 @@ it.skipIf(!url)("imports executor access and nullable HTML View draft Worktree s
   expect((await client.query("SELECT user_id, granted_at FROM executor_access")).rows).toEqual([
     { user_id: "u", granted_at: "1794900000000" },
   ]);
+});
+
+it.skipIf(!url)("imports forks before the Worktrees that link to them", async () => {
+  await using resources = new AsyncDisposableStack();
+  const product = new DatabaseSync(":memory:");
+  resources.defer(() => product.close());
+  product.exec(
+    readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8"),
+  );
+  product.exec(`
+    INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
+    INSERT INTO spaces (id, type, name, slug, owner_user_id, created_at, updated_at) VALUES ('t', 'team', 'Team', 'team', 'u', 1, 1);
+    INSERT INTO forks (id, owner_user_id, upstream_space_id, name, created_at) VALUES ('f', 'u', 't', 'fix-totals', 2);
+    INSERT INTO worktrees (id, name, creator_user_id, kind, team_space_id, visibility, created_at, updated_at, fork_id) VALUES ('w', 'fix-totals', 'u', 'team', 't', 'private', 3, 3, 'f');
+  `);
+  const target = await createPostgresTestSchema(url!);
+  resources.defer(target.close);
+  await initializePostgresSchema(target.pool);
+  const client = await target.pool.connect();
+  resources.defer(() => client.release());
+  const { rows: [{ schema }] } = await client.query("SELECT current_schema() AS schema");
+
+  expect(await importProduct(product, client, schema)).toBe(4);
+  expect((await client.query("SELECT id, owner_user_id, upstream_space_id, name, created_at FROM forks")).rows).toEqual([
+    { id: "f", owner_user_id: "u", upstream_space_id: "t", name: "fix-totals", created_at: "2" },
+  ]);
+  expect((await client.query("SELECT id, fork_id FROM worktrees")).rows).toEqual([{ id: "w", fork_id: "f" }]);
 });
 
 it.skipIf(!url)("imports the V24 copy source and Link Sharing columns, also for a copy stored above its source", async () => {

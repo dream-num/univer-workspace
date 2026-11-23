@@ -213,7 +213,7 @@ function fullNameOf(
 }
 
 function slugTaken(): ApplicationError {
-  return new ApplicationError("SPACE_SLUG_TAKEN", 409, "The slug is already used by another Space of this owner.", "slug");
+  return new ApplicationError("SPACE_SLUG_TAKEN", 409, "The slug is already used by another Team Space or fork of this owner.", "slug");
 }
 
 function validBoolean(value: unknown, field: string): boolean {
