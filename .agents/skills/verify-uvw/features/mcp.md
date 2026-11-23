@@ -3060,7 +3060,7 @@ The memory margin, job reserve, and recommended counts are planning assumptions.
 Summarize an existing run without starting Docker or verify-uvw:
 
 ```bash
-export EVIDENCE=.poteto-agent/cx-d8-measure
+export EVIDENCE=/tmp/verify-uvw/<run-id>/evidence
 python3 .agents/skills/verify-uvw/bin/mcp-bench-summary.py "$EVIDENCE/bench-repeat.json" --markdown
 ```
 

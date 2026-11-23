@@ -13,6 +13,7 @@ $V up        # start server :3920 + web :5973 on a fresh temp data dir
 $V doctor    # is this instance ours and worth driving?
 $V user      # register a throwaway password user and sign uvw in as it
 $V env       # print exports for agent-browser / uvw in the current shell
+$V brief <feature> [journey-id...]   # print the brief for an agent that drives this run
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V principal <name> [label]    # create an agent principal; its token stays private in the run
@@ -219,6 +220,31 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   providers are absent by design. Workspace acting as the MCP OAuth authorization server
   is covered by MO1 in [the MCP journeys](features/mcp.md).
 - In the report, give the run id, launch HEAD (`run.env`), feature IDs, and artifact paths.
+
+## Hand the driving to another agent
+
+Following a journey in `features/` does not need your strongest model. When your harness can start a
+subagent, give it the journey and keep your own turns for choosing what to verify and for judging the result.
+
+1. Start the instance yourself with `$V up`, `$V user` and `$V doctor`.
+2. Run `$V brief <feature> [journey-id...]`, for example `$V brief link-sharing LS1 LS2 LS3`. It prints the
+   whole brief: the line that selects this run, the files to read, the report format and the limits. Give
+   the subagent that text unchanged, with no hint about the change under review.
+3. Treat the report as a claim. Before you repeat a `PASS` or a `FAIL`, open the evidence files it names.
+   The subagent reports where the product differed from the recipe. You decide whether a difference is a
+   defect.
+4. Stop the instance yourself with `$V down`.
+
+Drive it yourself when no journey covers the behavior. A subagent follows a recipe and does not design checks.
+
+This skill names no model, harness or host for the verifier. Use the subagents and models of the harness
+you run in. The developer chooses the model in their own configuration, outside this repository. When the
+session carries no such choice, use the harness default. The models that `story` names are the subject of
+those journeys, not the verifier.
+
+The subagent runs on the instance's host, because the instance listens only on `127.0.0.1` and the helper
+reads the run directory. `up`, `user`, `doctor`, `cli` and `down` also run on Linux. MCP mode and `uvw`
+stories need macOS, and browser journeys need `agent-browser` on that machine.
 
 ## Cleanup
 
