@@ -206,7 +206,7 @@ it("saves one validated creation draft per call with its key and identity previe
   const input = { kind: "create" as const, html, name: "Dashboard", spaceId: "space", parentNodeId: "folder", idempotencyKey: key };
   const first = await htmlViewDraft(f.ctx, input);
   expect(first.output).toEqual({ draft: {
-    id: "draft-1", kind: "create", state: "pending", name: "Dashboard.univer.html", space: "space",
+    id: "draft-1", kind: "create", state: "pending", publishWhen: "publish", name: "Dashboard.univer.html", space: "space",
     previewUrl: "https://workspace.test/drafts/draft-1", expiresAt: "2026-11-19T00:00:00Z",
     repositoryVisibility: "private", privateSourceUnitIds: ["unit"],
   }, bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] });
@@ -528,12 +528,27 @@ it.each(["create", "replace"] as const)("reads every %s draft state over HTTP wi
     if (state === "superseded") expect(result.output).toMatchObject({ draft: { supersededBy: "draft-2", successorUrl: "https://workspace.test/drafts/draft-2" } });
     const output = htmlViewDraftGetTool.outputSchema.parse(result.output);
     expect(output).toEqual(result.output);
+    if (state === "pending") expect(result.output).toHaveProperty("draft.publishWhen", "publish");
+    else expect(result.output).not.toHaveProperty("draft.publishWhen");
     if (state === "published") expect(result.output).toMatchObject({ draft: {
       resource: "resource", node: "node/1", etag: '"v2"', shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
     } });
     else for (const key of ["shareUrl", "node", "resource", "etag"]) expect(result.output).not.toHaveProperty(`draft.${key}`);
     expect(fetcher).toHaveBeenCalledOnce();
   }
+});
+
+it.each([
+  { sourceWorktreeId: null, publishWhen: "publish" },
+  { sourceWorktreeId: "wt-1", publishWhen: "merge" },
+])("reports $publishWhen for a pending draft with sourceWorktreeId $sourceWorktreeId", async ({ sourceWorktreeId, publishWhen }) => {
+  const { context } = uploadContext();
+  const http = new WorkspaceHttp({ origin: context.identityOrigin, role: "client", cookie: "session=test",
+    fetcher: async () => Response.json({ draft: { ...draftView(), sourceWorktreeId } }),
+  });
+  const result = await htmlViewDraftGetTool.run({ ...context, http }, { draft: "draft-1" });
+  expect(result.output).toMatchObject({ draft: { state: "pending", sourceWorktreeId, publishWhen } });
+  expect(htmlViewDraftGetTool.outputSchema.parse(result.output)).toEqual(result.output);
 });
 
 it("rejects mismatched drafts and malformed publication results", async () => {
@@ -581,7 +596,7 @@ it.each(["create", "replace"] as const)("%s resolves source PR arguments into ex
   });
   for (const pr of [12, "#12", "https://workspace.test/spaces/space/pulls/12", "wt-1"]) {
     const result = await htmlViewSaveTool.run({ ...context, http: f.ctx.http() }, { ...(mode === "replace" ? replaceArgs : { ...createArgs, html }), repo: "space", pr });
-    expect(result.output).toMatchObject({ draft: { sourceWorktreeId: "wt-1" } });
+    expect(result.output).toMatchObject({ draft: { sourceWorktreeId: "wt-1", publishWhen: "merge" } });
   }
   expect(f.exportUnitData.mock.calls.every(([{ target }]) => target.scope.kind === "worktree" && target.scope.worktreeId === "wt-1")).toBe(true);
   for (const body of f.draftPosts) expect(body).toMatchObject({ sourceWorktreeId: "wt-1" });

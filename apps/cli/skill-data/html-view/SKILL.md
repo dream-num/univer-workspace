@@ -68,11 +68,11 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 Through MCP, check with `html_view_save` and `dryRun: true`, then save once as a draft.
 Revise pending drafts with `draft`. Save an existing local file with bindings as a draft too,
 unless the user explicitly requested a file.
-For a PR-linked draft, say the page goes live when the user merges the pull request in
-Workspace. Only drafts without a PR use **Publish** in the preview.
+Explain draft.publishWhen: `merge` goes live when the user merges the pull request in
+Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**.
 
-With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot
-read, offer the user a live local preview after saving. When they accept, follow
+Dry runs do not run scripts; say render checks did not run and, with a local shell and `node` and not as an agent identity, offer a live preview after saving to check rendering.
+When they accept, follow
 [local preview](references/local-preview.md); it opens the page in their browser.
 
 With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview
