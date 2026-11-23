@@ -501,7 +501,7 @@ function memoryWorktreeBackend(): WorktreeBackend {
 }
 
 describe("GET /api/users/search", () => {
-  it("returns humans and claimed agents, by name and by exact id", async () => {
+  it("returns humans and claimed agents that are not stopped, by name and by exact id", async () => {
     const { origin, application } = await start();
     const alice = await register(origin, "alice");
     const bob = await register(origin, "bobby");
@@ -519,6 +519,10 @@ describe("GET /api/users/search", () => {
     claim(application, agent.agent.id, bob.id);
     expect(await search("bobb")).toEqual([agent.agent.id, bob.id]);
     expect(await search(agent.agent.id)).toEqual([agent.agent.id]);
+
+    expect((await fetch(`${origin}/api/agents/${agent.agent.id}/stop`, { method: "POST", headers: { cookie: bob.cookie } })).status).toBe(204);
+    expect(await search("bobb")).toEqual([bob.id]);
+    expect(await search(agent.agent.id)).toEqual([]);
   });
 
   it("refuses an unclaimed agent, which anyone can create", async () => {

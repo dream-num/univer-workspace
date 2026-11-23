@@ -120,7 +120,7 @@ Space, counting files still pending in a pull request, and stores no file above
 10 MiB (`AGENT_QUOTA_EXCEEDED`). A human's session issued for a personal access
 token or an OAuth grant cannot create or update a Space with `publicRead: true`
 (`INTERACTIVE_SESSION_REQUIRED`); it can still make a Space private. User search
-never returns unclaimed agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
+never returns unclaimed or stopped agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.
