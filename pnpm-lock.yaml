@@ -6360,41 +6360,41 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-arm64@1.3.0':
-    resolution: {integrity: sha512-0OB8IOJ7xWrAbM5NKetZGkwJ22wdKz6HnN9YuZCXjFpnbPMrN/B64oxmWb1aBssSCNjIXGmqZ3qGrt/mDudeNA==}
+    resolution: {integrity: sha512-0OB8IOJ7xWrAbM5NKetZGkwJ22wdKz6HnN9YuZCXjFpnbPMrN/B64oxmWb1aBssSCNjIXGmqZ3qGrt/mDudeNA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-arm64/-/engine-formula-rust-binding-darwin-arm64-1.3.0.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-x64@1.3.0':
-    resolution: {integrity: sha512-lyA2Tus6jGLl5RK3tQywWhvpNNY3FVnmASkR9+YiAlWB+fYcqhDBPpHZFVxFlMSPslvnAAx0ebvX+703MqYx8g==}
+    resolution: {integrity: sha512-lyA2Tus6jGLl5RK3tQywWhvpNNY3FVnmASkR9+YiAlWB+fYcqhDBPpHZFVxFlMSPslvnAAx0ebvX+703MqYx8g==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-x64/-/engine-formula-rust-binding-darwin-x64-1.3.0.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu@1.3.0':
-    resolution: {integrity: sha512-0NuLxgB8aNbv/kBc8PhTef7OQ/fXhcD7kTcFohB8yFeTfaLTiZpHYiZpcLJY594HgF+Lc6MwezjxpSUfPoF25Q==}
+    resolution: {integrity: sha512-0NuLxgB8aNbv/kBc8PhTef7OQ/fXhcD7kTcFohB8yFeTfaLTiZpHYiZpcLJY594HgF+Lc6MwezjxpSUfPoF25Q==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu/-/engine-formula-rust-binding-linux-arm64-gnu-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-musl@1.3.0':
-    resolution: {integrity: sha512-HMvXAqjYvIjvEScSe7JYskBixomtmGg5Mdj6BT3ZJcBANlDqvEahTf+UC0yj0OjgvVvoi3Yhp0ZvRkRl6w8cCA==}
+    resolution: {integrity: sha512-HMvXAqjYvIjvEScSe7JYskBixomtmGg5Mdj6BT3ZJcBANlDqvEahTf+UC0yj0OjgvVvoi3Yhp0ZvRkRl6w8cCA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-musl/-/engine-formula-rust-binding-linux-arm64-musl-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu@1.3.0':
-    resolution: {integrity: sha512-27M+DbrcqTohgFpFS05UrxFRyrPx4cYGU5r4o1CxLilSuxQ2z51QjhK2tiEiwOjtVeKAY8Ws2l3F1dblifC3GA==}
+    resolution: {integrity: sha512-27M+DbrcqTohgFpFS05UrxFRyrPx4cYGU5r4o1CxLilSuxQ2z51QjhK2tiEiwOjtVeKAY8Ws2l3F1dblifC3GA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu/-/engine-formula-rust-binding-linux-x64-gnu-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-musl@1.3.0':
-    resolution: {integrity: sha512-Lf8rFQGB5O4gABBFt7LSnD/84h978bnV9y5Ucnz4rd8YXjrRvRx53v08DlfjqlYfbA673hxyHXOdQuBEKg0IEA==}
+    resolution: {integrity: sha512-Lf8rFQGB5O4gABBFt7LSnD/84h978bnV9y5Ucnz4rd8YXjrRvRx53v08DlfjqlYfbA673hxyHXOdQuBEKg0IEA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-musl/-/engine-formula-rust-binding-linux-x64-musl-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc@1.3.0':
-    resolution: {integrity: sha512-iYd09HEa//LogxzxhQOYN6W9mg9g2qGUY93kCQBp9tF31Ve/NpHeByZ1Kej/c+B08hgHzwDx0aacwgZCNJugeA==}
+    resolution: {integrity: sha512-iYd09HEa//LogxzxhQOYN6W9mg9g2qGUY93kCQBp9tF31Ve/NpHeByZ1Kej/c+B08hgHzwDx0aacwgZCNJugeA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/-/engine-formula-rust-binding-win32-x64-msvc-1.3.0.tgz}
     cpu: [x64]
     os: [win32]
 
@@ -6402,7 +6402,7 @@ packages:
     resolution: {integrity: sha512-kanuZITcHyXpy/luTSyhA6zBUiyZ6ZdI0hWwyzkAxRho67vP3R3T/DZaTxJdUm/0tBDeHGaKt02rxRtZJqLtWw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding/-/engine-formula-rust-binding-1.3.0.tgz}
 
   '@univerjs-pro/engine-formula-rust@1.6.1':
-    resolution: {integrity: sha512-7x9PYKJbvOXvj3jSEhodIhi+VEDiwgObkOOM7AR+7+V3gqj4LBZ1HFo7UYBtUA9ItevLNRUwjVlzGQvXSaL0+w==}
+    resolution: {integrity: sha512-7x9PYKJbvOXvj3jSEhodIhi+VEDiwgObkOOM7AR+7+V3gqj4LBZ1HFo7UYBtUA9ItevLNRUwjVlzGQvXSaL0+w==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust/-/engine-formula-rust-1.6.1.tgz}
     peerDependencies:
       rxjs: '>=7.0.0'
 
@@ -6422,41 +6422,41 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/exchange-node-binding-darwin-arm64@1.3.0':
-    resolution: {integrity: sha512-FCGbZz5SGzcE9xBR8AOmvkDbHfyLitQBFO71HXgO0L9GVzwCOgBqU5tJmBSEYQUa/CITbHRyIZEr9HiuBNHTAw==}
+    resolution: {integrity: sha512-FCGbZz5SGzcE9xBR8AOmvkDbHfyLitQBFO71HXgO0L9GVzwCOgBqU5tJmBSEYQUa/CITbHRyIZEr9HiuBNHTAw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-arm64/-/exchange-node-binding-darwin-arm64-1.3.0.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-darwin-x64@1.3.0':
-    resolution: {integrity: sha512-2uSbpNoobayyLYhb3Bkz57qb+1aH7B8jPzTp/xNtIQL2H3JbUxqow+ZhwHCALjzS9vTQReoEN84+UXWh5v6tAQ==}
+    resolution: {integrity: sha512-2uSbpNoobayyLYhb3Bkz57qb+1aH7B8jPzTp/xNtIQL2H3JbUxqow+ZhwHCALjzS9vTQReoEN84+UXWh5v6tAQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-x64/-/exchange-node-binding-darwin-x64-1.3.0.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-gnu@1.3.0':
-    resolution: {integrity: sha512-G50psHcJigRGDlFvlOtDL+9Yt1x7Gur7XfMZiPo8gZcd5tqSzZ38zYGyuPp6SaYgDoTwCz7SUtLlXdE8b5NSlw==}
+    resolution: {integrity: sha512-G50psHcJigRGDlFvlOtDL+9Yt1x7Gur7XfMZiPo8gZcd5tqSzZ38zYGyuPp6SaYgDoTwCz7SUtLlXdE8b5NSlw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-gnu/-/exchange-node-binding-linux-arm64-gnu-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-musl@1.3.0':
-    resolution: {integrity: sha512-M6NN+RiRXd0dhlLCfIGRfvdW4R4u5lTn8zAS5GalS0BtcJ2P/p4UrazJMnm/viPnu7/vt5wb1vLL6UVZoEI6zA==}
+    resolution: {integrity: sha512-M6NN+RiRXd0dhlLCfIGRfvdW4R4u5lTn8zAS5GalS0BtcJ2P/p4UrazJMnm/viPnu7/vt5wb1vLL6UVZoEI6zA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-musl/-/exchange-node-binding-linux-arm64-musl-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-gnu@1.3.0':
-    resolution: {integrity: sha512-dXlOI795mSEQBvlhuEMNtid7vNYcSakJlE4/3Qo0lKqUrCKm0i1UiSweIKy6tnTFqhwFgGYWui+8h5ZYTClYbA==}
+    resolution: {integrity: sha512-dXlOI795mSEQBvlhuEMNtid7vNYcSakJlE4/3Qo0lKqUrCKm0i1UiSweIKy6tnTFqhwFgGYWui+8h5ZYTClYbA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-gnu/-/exchange-node-binding-linux-x64-gnu-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-musl@1.3.0':
-    resolution: {integrity: sha512-TPZKHT4JSbNKBWJPGcEa+txHoL512UWj2BVKZYFs70YwE600lNDYuvRNi+7nb0iEj81ZnSQZ8nbjicAum39g+g==}
+    resolution: {integrity: sha512-TPZKHT4JSbNKBWJPGcEa+txHoL512UWj2BVKZYFs70YwE600lNDYuvRNi+7nb0iEj81ZnSQZ8nbjicAum39g+g==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-musl/-/exchange-node-binding-linux-x64-musl-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/exchange-node-binding-win32-x64-msvc@1.3.0':
-    resolution: {integrity: sha512-uacRt4rMoDv8OBVSIcy4fwF/tOUPb1RKOvUtgQiQbBb68sOuPO9lF9Y/LFUhKGJcvWyopI3ZqX9XBCHRKSVL8A==}
+    resolution: {integrity: sha512-uacRt4rMoDv8OBVSIcy4fwF/tOUPb1RKOvUtgQiQbBb68sOuPO9lF9Y/LFUhKGJcvWyopI3ZqX9XBCHRKSVL8A==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-win32-x64-msvc/-/exchange-node-binding-win32-x64-msvc-1.3.0.tgz}
     cpu: [x64]
     os: [win32]
 
@@ -6464,7 +6464,7 @@ packages:
     resolution: {integrity: sha512-/nqg7Lw8rxalckgFGyna3qwwljEmll+Cl7klMxIdvE+F+b1iBXQPc6PsEnHZRNx1HHdwmqnQM+ayRPRw0jOPUw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding/-/exchange-node-binding-1.3.0.tgz}
 
   '@univerjs-pro/exchange-node@1.6.1':
-    resolution: {integrity: sha512-gCAGPYvgFKn5mjt6Be/EBDdC4neo/6MKZ0/6UzSsdDHjM/uenoRnFd7805TyOqkz9f2FjKjeISWxI3IQChgr/w==}
+    resolution: {integrity: sha512-gCAGPYvgFKn5mjt6Be/EBDdC4neo/6MKZ0/6UzSsdDHjM/uenoRnFd7805TyOqkz9f2FjKjeISWxI3IQChgr/w==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node/-/exchange-node-1.6.1.tgz}
     peerDependencies:
       '@univerjs-pro/exchange-pdf-node-binding': ~1.2.0
     peerDependenciesMeta:
