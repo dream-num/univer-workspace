@@ -1,41 +1,62 @@
 # Workspace MCP
 
-Read the root `AGENTS.md` and [MCP design](../../docs/design/workspace-mcp/README.zh-CN.md) before changing this application.
-The [local verification specification](../../docs/design/workspace-mcp/local-verification.zh-CN.md) binds Stage A behavior.
+This private application is the remote MCP gateway, a Node-hosted Workspace client built on Client
+Core. `README.md` describes its roles, tools, and configuration. The design is in
+[the MCP design](../../docs/design/workspace-mcp/README.zh-CN.md), and
+[the local verification specification](../../docs/design/workspace-mcp/local-verification.zh-CN.md)
+defines how to verify it.
 
-- This private application is not published to npm. It is the third Node-hosted Workspace client, built on Client Core.
-- Connect through Workspace HTTP APIs and collaboration protocols. Never connect to a database.
-- Never import `apps/cli`. Tools map arguments and results onto the public Client Core exports.
-- Keep tools in the ordered registry, with one file per tool under its toolset. Every tool declares input and output schemas and all three annotations.
-- Keep identity origin separate from transport origin. Display and resolve references against the identity origin.
-- Keep the Dockerfile COPY inputs and the verify-uvw build-input list in specification section 3.1 synchronized.
-  The inputs are root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `patches/`, `tsconfig*.json`,
-  all non-ignored files under `apps/mcp/` and `packages/client-core/`, including `render-runtime/`, and `apps/cli/skill-data/`
-  (the build assembles its nine domain Skills with `apps/mcp/skills/core` into `dist/skill-data`;
-  the CLI core is CLI-only and the gateway never reads `apps/cli` at runtime).
-- Serve that static catalog through the official MCP Skills extension (`io.modelcontextprotocol/skills`)
-  and the `skills_read` fallback. Keep both paths on the same snapshot and use
-  `skill://univer-workspace/<name>/` URIs. This snapshot rule covers built-ins only.
-  `skills_read` also discovers live custom Skills from `.agents/skills` in the caller's Personal Space
-  and optional member repository (`repo`); custom Skills never enter the Skills extension.
-  MCP core owns tool bindings and remote file handling.
-- Development session passthrough must never reach SaaS. Production refuses any non-empty `MCP_DEV_SESSION_PASSTHROUGH`.
-- In production, the shared executor serves only allowlisted trusted users through `MCP_EXECUTOR_ALLOWED_USER_IDS`.
-  Public executor access still requires Stage G.
-- Treat the `mcp.tool_call` event in `README.md` as a stable versioned contract. Do not log credentials, document contents, or raw tool arguments.
+## Boundaries
 
-Run `pnpm --filter @univerjs/univer-workspace-mcp typecheck`, `test`, and `build` for gateway changes.
-Validate Docker changes against the built image and `docker compose config`.
+- Reach Workspace only through its HTTP APIs and collaboration protocols. Never connect to a
+  database. Workspace stays the authority for identity and permissions.
+- `test/import-boundaries.test.ts` enforces the role split. The gateway and shared code never load
+  headless or native packages and never import `apps/cli`. Only the `executorTool` helper opens
+  `ToolContext.executor`, and only `src/executor/credentials.ts` reads grant secrets. `src/renderer`
+  has no route to Workspace. It imports nothing from the gateway, Client Core, `@univerjs-pro/*`, or
+  the executor except the generated `src/executor/license.ts`, and never handles Workspace origins,
+  grants, or sessions. Keep new code inside these rules instead of loosening the test.
+- Keep identity origin separate from transport origin. Display and resolve references against the
+  identity origin.
 
-- Executor-backed tools use `executorTool`; only that helper opens `ToolContext.executor`.
-- `shared/executor-protocol.ts` owns the operation list. Executor handlers satisfy its mapped type.
-- Gateway/shared code must not load headless or native packages. The import-boundary test enforces the role split.
-- Required caller IDs enter every worker key. In production, session grants on the shared executor require
-  allowlisted trusted users; public executor access still requires Stage G.
-  Grant secrets are read only by `executor/credentials.ts`.
-- Worker environments are explicit and exclude `MCP_EXECUTOR_TOKEN`, `MCP_RENDERER_TOKEN`, metrics tokens, license keys and OAuth secrets.
-- Every process the executor starts gets `EXECUTOR_CHILD_NODE_OPTIONS` (`--disable-sigusr1`) in its explicit environment, and the image starts
-  the roles with the same flag. The production executor refuses Node inspector flags. A new child process keeps both rules.
-- `renderer/` has no route to Workspace: it must not import the gateway, Client Core, `@univerjs-pro/*` or the executor (except the generated `executor/license.ts`), and must not mention Workspace origins, grants or sessions. The import-boundary test enforces it.
-- `shared/renderer-protocol.ts` owns the renderer operation list and its schemas; the executor imports it later. The render page ships in `dist/render-runtime` (copied from Client Core at build).
-- The renderer pool reuses runtimes across requests and users. That deviates from architecture 7.1 until Stage G; keep it local and single-user.
+## Tools and protocols
+
+- Keep tools in the ordered registry, one file per tool under its toolset. Each tool declares input
+  and output schemas and all three annotations, and maps arguments and results onto public Client
+  Core exports.
+- `src/shared/executor-protocol.ts` owns the executor operation list, and executor handlers satisfy
+  its mapped type. `src/shared/renderer-protocol.ts` owns the renderer operation list and schemas.
+  The build copies the render page from Client Core into `dist/render-runtime`.
+- `scripts/assemble-skills.mjs` builds the static Skill catalog in `dist/skill-data` from fixed
+  lists of Skills in `skills/` and `apps/cli/skill-data`, so add a new Skill to its list. The MCP
+  `core` Skill owns tool bindings and remote file handling. The gateway never reads `apps/cli` at
+  runtime. Serve the catalog through the MCP Skills extension (`io.modelcontextprotocol/skills`) and
+  the `skills_read` fallback from the same snapshot, with `skill://univer-workspace/<name>/` URIs.
+  `skills_read` also finds live custom Skills in `.agents/skills` of the caller's Personal Space and
+  optional member repository. Custom Skills never enter the Skills extension.
+- Treat the `mcp.tool_call` event in `README.md` as a stable, versioned contract. Never log
+  credentials, document contents, or raw tool arguments.
+
+## Executor and renderer
+
+- The executor has no isolation between users. In production it serves only the trusted users that
+  `MCP_EXECUTOR_ALLOWED_USER_IDS` admits, and public executor access needs Stage G, which is
+  shelved. Every worker key includes the required caller IDs.
+- The renderer pool reuses runtimes across requests and users, which departs from section 7.1 of
+  the MCP architecture. Until per-task isolation returns, keep the renderer to local and internal
+  single-user environments.
+- Worker environments are explicit and exclude `MCP_EXECUTOR_TOKEN`, `MCP_RENDERER_TOKEN`, metrics
+  tokens, license keys, and OAuth secrets.
+- Every process the executor starts gets `EXECUTOR_CHILD_NODE_OPTIONS` (`--disable-sigusr1`) in its
+  environment, and the image starts each role with the same flag. The production executor refuses
+  Node inspector flags. A new child process keeps both rules.
+- Development session passthrough never reaches SaaS. Production refuses a non-empty
+  `MCP_DEV_SESSION_PASSTHROUGH`.
+
+## Verification
+
+- For gateway changes, run `pnpm --filter @univerjs/univer-workspace-mcp typecheck`, `test`, and
+  `build`.
+- Validate Docker changes against the built image and `docker compose config`. When you change the
+  `COPY` inputs in `Dockerfile`, change the build-input list in section 3.1 of the local
+  verification specification to match. `verify-uvw` hashes the same list.

@@ -1,288 +1,184 @@
-# Univer Workspace 仓库指南
+# Univer Workspace
 
-本文件适用于整个仓库。修改前先阅读根 `README.md`、目标目录的 README 和相关设计文档。
-`apps/workspace/AGENTS.md` 对 `apps/workspace/**` 提供更具体的数据库与部署约束。
-`apps/cli/AGENTS.md` 对 `apps/cli/**` 提供 CLI 与 Client Core 的职责边界，以及从用户 README
-移出的 Skills、渲染副本、PDF 打印和运行时许可证约束。两者同时适用，冲突时以更具体且更严格的规则为准。
+This repository composes Univer, Univer Pro, the Univer Collaboration SDK, and the
+Univer CLI SDK into the Workspace product. It ships the Workspace Browser and Server,
+the `uvw` CLI, a remote MCP gateway, and the Workspace Agent. `README.md` describes
+the layout and how to run each application. `DREAMNUM.md` records cross-repository
+ownership and handoffs.
 
-## 项目目标
+## Nested instructions
 
-本仓库拥有 Univer Workspace 产品及其配套 CLI。它将 Univer、Univer Pro、Univer Collaboration
-SDK 和 Univer CLI SDK 组装成以下应用：
+Read the nested file before you change anything under its directory. Some tools load
+instructions only from the working directory upward and never see these files.
 
-- Univer Workspace：可部署的 Browser、产品 HTTP API、协同入口和后台任务。
-- Univer Workspace CLI：面向 Agent 的远程 Workspace 自动化应用。
-- Univer Workspace MCP：基于 Client Core 的 private 远程 MCP 应用，阶段 A 只提供开发认证和身份、仓库只读工具。
+| File                                               | Read before changing                                                   |
+| -------------------------------------------------- | ---------------------------------------------------------------------- |
+| `apps/workspace/AGENTS.md`                         | Product database schema, migrations, startup, or deployment            |
+| `apps/workspace/web/src/features/agents/AGENTS.md` | Browser Agents prompt assembly, message conversion, or session records |
+| `apps/cli/AGENTS.md`                               | CLI commands, startup imports, or packaging                            |
+| `apps/mcp/AGENTS.md`                               | The MCP gateway, executor, renderer, or their Docker inputs            |
+| `apps/space-plugin/AGENTS.md`                      | The Space plugin for DSH Desktop                                       |
 
-本仓库还包含供 Browser 或 Node-hosted Workspace Agent Client 使用的 private packages。它们是内部
-实现，不是额外的对外应用或跨仓库公共 SDK。
+## Language Settings
 
-## 仓库结构与职责
+- Write `AGENTS.md` and `AGENTS.override.md` in English. Keep shared project
+  principles and language settings in sync; local workflows belong only in the
+  Git-ignored `AGENTS.override.md`.
+- Write narrative content in RFCs, research notes, and other project documents
+  primarily in Chinese, unless the user requests another language.
+- Use English for all code, including example code, pseudocode, and comments.
+- Use English for key terms in all documents. Preserve required headings,
+  identifiers, and paths.
+- Issues: English title (Conventional Commits style), Chinese body with English key terms.
+- PRs: English title (Conventional Commits style) and English body. Put review-only details in
+  Chinese (decisions for the maintainer, deviations, verification notes, known limits) in the first
+  PR comment, posted right after `gh pr create`.
+- Commit messages (subject and body) are always English
 
-```text
-apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
-apps/cli                       Univer Workspace CLI
-apps/mcp                       Private Workspace MCP gateway（阶段 A 开发认证）
-apps/agent                   Univer Workspace Agent（DSH 定制服务 + 两个预装插件）
-packages/client-core           Node-hosted Workspace Agent Client 共享能力
-packages/reference-provider   Browser 专用的 private referenced-Unit policy
-packages/dsh-univer-workspace-plugin        能力插件（远程 Unit 工具集 + headless runtime）
-packages/dsh-univer-workspace-skin-plugin   皮肤插件（workspace 品牌与 logo）
-scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
-```
+## Ownership
 
-- `apps/workspace` 拥有 Workspace 产品模型，包括 Identity、Space、Node、Resource、ACL、Trash、
-  Recent、Blob、Asset、Operation 和 Worktree 的产品级组织。
-- `apps/cli` 拥有 Workspace origin、登录 Session、Commander composition 和面向 Agent 的 CLI 交付体验。
-- `apps/mcp` 是基于 Client Core 的第三个 Node-hosted Workspace Client，拥有远程 MCP 协议、工具映射、认证边界和用量事件；不连接数据库，不依赖 CLI 应用。阶段 A 仅供本地和内部单用户开发验证。
-- `packages/client-core` 拥有 Node-hosted Workspace Agent Client 共享的 HTTP、错误、storage-neutral 认证协议、
-  远程产品 workflow 与 worker-backed content runtime；Client Shell 注入 origin、凭据、license 与 packaged
-  worker entry，package 不读取 CLI Session 或配置。
-- `apps/agent` 拥有 Workspace Agent 服务：DSH（DeepSeek Harness）定制组装，以 Workspace OAuth
-  授权用户身份提供 agent 操作远程 Workspace 文档（Unit）的能力。它预装两个仓库内开发的插件，
-  本身不发布为公共 SDK。
-- `packages/reference-provider` 只服务于 Workspace Browser。CLI 在自身 application 内维护独立
-  Provider；两者共享 persisted identity 和行为语义，但不为消除代码重复而制造跨应用公共合同。
-- `packages/dsh-univer-workspace-plugin` 提供 agent 操作远程 Workspace 文档的能力（工具集、空间对账、
-  headless 协同 runtime、导入导出）。代码与维护独立，通过 harness profile 预装，不发布到 npm。
-- `packages/dsh-univer-workspace-skin-plugin` 只提供 DSH 浏览器面的 workspace 外观（主题令牌与品牌）。
-- `apps/*` 可以组合 SDK 能力；private packages 不得反向依赖 application。`packages/dsh-univer-workspace-plugin`
-  依赖 `apps/agent` 暴露的 `workspaceAuth`/`workspaceSession` 服务，通过 cordis 服务组合而非 npm 依赖。
+- Upstream SDKs own their contracts. Univer and Univer Pro own the Unit model, Facade API,
+  mutations, rendering, and Office exchange. The Collaboration SDK owns snapshots, changesets,
+  revisions, OT, Worktrees, and its database adapters. The CLI SDK owns the target-neutral
+  headless runtime. This repository owns the product model, authentication, the resource
+  catalog, remote workflows, and deployment. Compose upstream public capabilities directly at the
+  application boundary, without pass-through wrappers or local copies of upstream contracts.
+  Before you fix a cross-SDK bug, decide which side owns it and tell the user why.
+- Use other SDKs only through the public exports of published packages. No code, build, test,
+  or generator may depend on a neighboring checkout, an absolute path into another repository,
+  or unpublished source.
+- `apps/*` compose packages. Packages under `packages/*` never import an application, and no
+  package imports another package's `src` or `dist` internals. Private packages have no release,
+  version, or external consumer contract of their own.
+- `packages/client-core` takes the origin, credentials, license, and worker entry from the client
+  that hosts it, and never reads CLI sessions or configuration.
+- `packages/reference-provider` serves only the Workspace Browser, and the CLI keeps its own
+  provider. They share persisted identity and behavior. Do not create a shared contract only to
+  remove the duplicated code.
+- `packages/dsh-univer-workspace-plugin` gets the `workspaceAuth` and `workspaceSession` services
+  from `apps/agent` through cordis service composition, not through an npm dependency.
+- DSH is an external product. Use it only through published `@deepseek-ai/*` packages, and never
+  fork or patch its source.
+- `packages/unit-comparison-viewer` also has a copy in the `dream-num/univer-cli` repository.
+  When you change it here, tell the user the other copy needs the same change.
 
-## SDK 与仓库边界
+## Data and trust
 
-本仓库是 product/application composition root，不重新拥有上游 SDK 的合同：
+- Product data and collaboration data live in separate stores. The product database never stores
+  snapshots, changesets, or revisions. The Collaboration adapter never owns Spaces, Nodes,
+  Resources, or ACLs. `BlobStore` holds Blob and embedded Asset bytes, and the product database
+  holds only their identity, metadata, and recovery state.
+- No transaction spans the product database, the Collaboration Service, and `BlobStore`.
+  Cross-boundary writes converge through persisted Operations, idempotency, and recovery.
+- The server derives the user, role, Resource, Unit, Worktree, and confirmed revision from the
+  authenticated session and product data. It never accepts them from a Browser or CLI client.
+- An HTML View is a small app bound to live Sheet data. Rendering, sharing, and preview always
+  read live data, so never add snapshots, static export, or inlined data copies. A user with edit
+  permission writes page edits to the source Sheet in real time, and trial mode must never weaken
+  that. A user without it follows the
+  repository's document permission. When the host enables trial mode, that user's edits run
+  through the real formula engine in their own browser and are never saved or sent.
 
-- Univer / Univer Pro SDK 拥有 Unit 数据模型、Facade API、mutation、render、Office exchange 和内容能力。
-- Univer Collaboration SDK 拥有 snapshot、changeset、revision、OT、协同 Service、Worktree、
-  Database Adapter、Endpoint 和 Transport 合同。
-- Univer CLI SDK 拥有 target-neutral 的 headless runtime、execution、inspection、render、daemon 和可选
-  Commander preset。
-- Workspace 产品模型、认证、资源目录、远程 workflow 和 deployment 留在本仓库。
+## SDK versions
 
-只通过已发布 package 的公开 exports 使用其他 SDK。代码、构建、测试和生成流程不得依赖相邻仓库
-checkout、其他仓库的绝对路径或未发布源码目录。
-
-`apps/agent` 与两个 dsh 插件包通过公开 npm 的 `@deepseek-ai/*` 包使用 DSH（dsh 是外部产品，本仓库
-不 fork、不修改其源码）。dsh CLI 运行时图由 `packages/dsh-runtime` 声明——它是独立嵌套 workspace
-（`packages/*` glob 显式排除），自带 committed `pnpm-lock.yaml`，以精确 pin 锁定完整闭包；桌面产物
-与 agent 镜像在构建时先 `pnpm install --frozen-lockfile` 再 `pnpm deploy --prod
---config.node-linker=hoisted` 把它物化为 workspace 安装之外的自包含目录，不在构建时浮动解析。
-该闭包不得并入根 workspace 图：共享解析域会重解析消费者 optional peers，使同一 dsh 包产生多个
-实例并分裂跨包品牌类型（SessionId、Context）。物化同时使 dsh client 的 react 18 树与 Univer SDK
-的 react 19 图保持分离，不分裂 `@wendellhu/redi` 实例。
-
-所有 version-coupled `@univer-cli/*`、`@univerjs/*` 和 `@univerjs-pro/*` 依赖使用同一个精确
-SDK release。升级时运行：
-
-```bash
-pnpm update:univer-sdk --sdk_version <exact-sdk-version>
-```
-
-`@univerjs/icons`、`@univerjs-pro/cli-assets` 和 `@univerjs-pro/doc-typst-native-binding` 按自身
-发布节奏独立发版：声明保持精确版本，不跟随 SDK baseline。原生绑定
-`@univerjs-pro/engine-formula-rust-binding` 和 `@univerjs-pro/exchange-node-binding` 由 wrapper 包
-`@univerjs-pro/engine-formula-rust`、`@univerjs-pro/exchange-node` 声明，manifest 只声明 wrapper；
-CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时依赖。`pnpm-workspace.yaml` 的
-`overrides` 只承载 dev 版本探索与 insiders 修复回移：顶层 SDK 条目必须是 dev 或 insiders 版本，
-`父包@版本>子包` 形式的 scoped 条目只约束一条边，可持任意版本形式。升级时清空其中的全部 SDK 条目。
-
-必须同时提交所有受影响的 manifest 和 `pnpm-lock.yaml`，不得手工只更新其中一部分。
-
-应用内置的 runtime 开发 license 与 license key 由 `pnpm update:univer-license --license <file>
---license-key <file>` 生成到各应用的 `license.ts`，轮换时只运行该脚本，不手工编辑这些文件。
-
-## 标准能力与临时代码
-
-- 优先在应用边界直接组合上游公开能力；只有承担了新的职责或生命周期时才增加抽象，不为简单转发制造
-  包装层，也不在本仓库复制上游合同。
-- 历史数据兼容、迁移和补偿逻辑必须与常态业务路径隔离，集中在单一入口和明确的生命周期阶段执行；实现
-  应幂等，并说明适用范围、失败语义和退出条件。
-- Workaround 必须集中隔离，避免临时分支散落到正常代码中；注明原因、影响范围和删除条件，并在上游
-  问题消失时及时移除。
-
-## Workspace 数据与运行边界
-
-- 产品数据与 Univer 协同数据分别存储。产品数据库不得保存 snapshot、changeset 或 revision；
-  Collaboration Database Adapter 不拥有 Space、Node、Resource 或 ACL 产品模型。
-- Blob 与内嵌 Univer Asset 的字节由 `BlobStore` 保存，产品数据库只保存身份、元数据和恢复状态。
-- 产品数据库、Collaboration Service 与 BlobStore 之间不存在伪造的跨系统事务。跨边界写入使用
-  持久化 Operation、idempotency 和 recovery 明确收敛。
-- Browser 和 CLI 都不能信任客户端提供的 User、Role、Resource、Unit、Worktree 或 confirmed
-  revision；服务端从认证 Session 与产品数据解析权威身份和权限。
-- `apps/workspace/**` 的 schema、迁移、备份、升级和部署操作必须遵守
-  `apps/workspace/AGENTS.md`。正常启动、升级和生产恢复必须保留持久化数据。
-
-## HTML View
-
-- HTML View 是绑定实时 Sheet 数据的小型应用，不是静态页面。渲染、分享和预览都基于实时数据，
-  不引入快照、静态导出或内联数据副本。
-- 有编辑权限的用户在页面上的操作实时协同写入来源 Sheet，这是 HTML View 的核心能力，试算不得削弱它。
-- 没有编辑权限的用户（匿名访客，或已登录但只读）跟随 repository 的文档权限，不能更改源数据；宿主
-  启用试算时，他们的页面编辑只在自己的浏览器中由真实公式引擎试算，不保存也不发送。
-
-## Workspace Agents 提示缓存
-
-浏览器 Agents（`apps/workspace/web/src/features/agents`）每一步都会重发完整请求。模型服务商按前缀匹配缓存，前缀中任一 token 变化，其后的内容都要重新计算。
-
-- 会话首次运行时，将完整系统消息和发给模型的工具定义保存为 IndexedDB 会话记录的可选 `modelSnapshot`，之后只复用，不重写；旧记录在首次缺少快照的运行中补写一次。工具调用仍按名称交给实时 MCP 网关，网关删除的工具通过工具错误结果告知模型。
-- 一次会话内，工具列表、系统提示词和已发出的历史必须逐字不变。系统提示词只放会话创建时已确定的内容；运行中产生的状态（Worktree ID、计数、时间戳）留在历史的工具结果里，不写进系统提示词。
-- 历史消息只追加，不改写、截断或重排。工具集合保持不变。用户可以在两轮之间切换 mode、scope、模型和 thinking 参数；系统提示词与已发出的历史保持不变。mode 与 scope 的变化只通过追加在该轮用户消息末尾的 `<system-reminder>` 文本 part 告知模型；切换模型或 thinking 参数会产生一次缓存未命中，由用户自行选择。
-- `runtime/runner.test.ts` 断言新 PR 出现后系统提示词不变。修改提示词组装或消息转换时，保持该测试通过，并在会话页核对缓存命中率没有下降。缓存命中可通过 Trajectory 的 Context sent 和 history rewrite 计数核对。
-
-## HTTP contract 与生成物
-
-- `apps/workspace/contracts/http` 是产品 HTTP contract 的源码。
-- `apps/workspace/generated/http` 由 Redocly 和 `openapi-typescript` 生成，不得手工修改。
-- Express 路由实现、OpenAPI 源文件、生成类型和调用方必须描述同一行为。
-- 修改 HTTP contract 时运行 `pnpm --filter @univerjs/univer-workspace api:verify`，并同步更新受影响
-  的 Server、Browser、CLI、测试和文档。
-- TanStack Router 生成文件同样通过现有 script 生成，不手工维护生成结果。
-
-## Package 与发布边界
-
-- `apps/workspace`、`apps/mcp`、`packages/client-core`、`packages/reference-provider` 和
-  `packages/unit-comparison-viewer` 是 private workspace package，不发布为公共 SDK。
-- `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
-  manifest 的 `private` 状态误当成公共 npm SDK 合同。
-- `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
-  insiders 版本由 release workflow 的完整 `X.Y.Z-insider.<suffix>` 输入提供，发布过程不得改写 source
-  manifest。
-- CLI 只有 `latest`、`insiders` 和 `dev` 三个发布通道。`latest` 只由手动 CI 在默认分支包含的稳定 tag 上
-  触发，`insiders` 只由默认分支手动 CI 触发，`dev` 只允许本地触发。`latest` 和 `insiders`
-  发布前必须检查整个 workspace 的单一 SDK baseline；`dev` 明确跳过该检查。
-- CLI package artifact 必须只包含运行所需代码、资源和版本匹配的 Skills，不得依赖当前 checkout。
-- CLI package workflow 必须先构建 Client Core，并把其运行时代码内联到自包含 artifact；不得把 private
-  Core 变成安装时依赖。
-- `packages/reference-provider` 不增加独立发布、版本或外部 consumer 合同。
-- `packages/client-core` 不增加独立发布、版本或外部 consumer 合同。
-- `packages/unit-comparison-viewer` 不拥有数据请求、wire payload 解码或 Univer Runtime 装配；宿主只向其
-  传入已解码 UnitData、comparison result 和 Univer factory。
-- 稳定 `vX.Y.Z` tag 在被选择时是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push
-  不触发 CI 或发布；CLI 发布必须单独手动触发 workflow。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
-  `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
-- `release-cli-manual.yml` 只写 insider-npm；公开 npm Promotion 使用独立的
-  `promote-cli-public.yml`。后者默认仅校验，只有默认分支手动明确选择 `dry_run=false` 才发布
-  下拉选定包的精确版本原包（当前选项为 `univer-workspace-cli`）；`latest=false` 的新版本显式使用
-  `promoted` 标签，`latest=true` 按需提交 latest 更新；公开回读不属于提升命令或工作流，提交成功不等于已公开。不重建、不重打包、不自动提升依赖、
-  不删除内部版本。脚本不硬编码仓库或包名，复制到其他仓库只需调整 workflow 的包名选项。
-
-## 文档维护
-
-- 根 `README.md` 记录仓库目的、布局、开发入口和仓库级验证方式。
-- `apps/workspace/README.md` 记录运行配置、认证、数据位置、Docker 和升级方式。
-- `apps/workspace/docs/architecture.md` 记录代码与技术架构。
-- `apps/workspace/docs/application-design.md` 记录产品模块和跨系统边界。
-- `apps/workspace/docs/data-model.md` 是产品数据模型、状态和持久化语义的权威说明。
-- `apps/workspace/docs/adr` 只记录已经接受的架构决策，不把临时计划写成既成事实。
-- `apps/cli/README.md` 记录 CLI 的用户能力、安装方式与对外交付合同。
-- `docs/releases/cli.md` 记录内部 CLI 构建、校验和发布操作；不把维护者发布流程写入用户 README。
-- Package README 必须明确该 package 的职责、非职责和 consumer 边界。
-
-仅当变更影响 `DREAMNUM.md` 已记录的事实时才更新该文件。其他任务无需读取、重写或顺手整理它。
-仓库职责、对外应用、跨仓库依赖、公开合同、部署交接或数据分类发生变化时，必须在同一变更中更新
-`DREAMNUM.md`。
-
-## 开发与验证
-
-仓库使用 TypeScript、strict ESM、pnpm workspace 和 Vitest。遵循目标目录的既有代码风格；优先
-使用 named exports，保持应用模块依赖方向，不跨 package 导入 `src` 或 `dist` 内部路径。
-
-常用仓库级验证：
-
-```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm --filter @univerjs/univer-workspace test:production-import
-pnpm package:workspace-cli
-```
-
-- 根据变更范围先运行最小相关测试，再在宣称完整实现前运行适当的仓库级验证。
-- 修改 Workspace HTTP contract 时增加 `api:verify`。
-- 修改数据库 schema、迁移或部署行为时执行 `apps/workspace/AGENTS.md` 要求的完整迁移矩阵。
-- 修改 CLI packaging、runtime assets 或 bundled Skills 时验证实际 package artifact，而不只验证源码。
-- 纯文档变更至少检查链接、命令、路径和 `git diff --check`。
-
-## 变更纪律
-
-- 保留 dirty worktree 中与当前任务无关的用户改动，不覆盖、清理或重新格式化无关文件。
-- 不直接修改生成文件或 Git 忽略的本地产物；修改其 source 或生成脚本后重新生成。
-- 不把尚未实现的能力写成当前事实。
-- 修复跨 SDK 问题前先判断所有权位于本仓库还是上游 SDK，并向用户说明判断依据。
-- 不自行发布 artifact、推送 image 或触发部署；只有用户明确要求时才执行。
-
-## Unit Comparison Viewer 同步
-
-目前没有适合放置应用级共享组件的统一位置。临时方案是 `univer-workspace`、`univer-cli` 与 DSH plugin
-各自保留 `packages/unit-comparison-viewer`；修改该 package 时必须同步所有副本。
+- Every version-coupled `@univer-cli/*`, `@univerjs/*`, and `@univerjs-pro/*` dependency in the
+  pnpm workspace uses one exact SDK release. Change it only with
+  `pnpm update:univer-sdk --sdk_version <exact-version>`, and commit every changed manifest with
+  `pnpm-lock.yaml`. `apps/space-plugin` has its own npm graph outside the pnpm workspace, and the
+  command does not touch it.
+- `scripts/update-sdk-dependencies.mjs` lists the packages that keep their own exact versions and
+  the native bindings that only their wrapper packages declare. It also rejects any SDK entry in
+  `pnpm-workspace.yaml` `overrides` that is not a dev or insiders version.
+- Rotate the bundled runtime license only with
+  `pnpm update:univer-license --license <file> --license-key <file>`. Never edit the generated
+  `license.ts` files.
 
 ## React and Redi dependency boundaries
 
-Workspace Browser uses React 19; the published DSH browser packages consumed by
-Workspace Agent use React 18. This is intentional application isolation, not a
-request to deduplicate React across the repository. Shared private UI components
-run with the consuming application's React runtime. The DSH CLI runtime graph is
-declared by `packages/dsh-runtime`, a standalone nested workspace whose committed
-lockfile pins the whole cohort; it is materialized only at build time with
-`pnpm deploy` into a detached, self-contained tree. Nothing imports that package
-and it must not join the root workspace graph: sharing one resolution domain
-re-resolves consumers' optional peers and splits branded types (SessionId,
-Context) across the workspace. Never add `@deepseek-ai/*` React-18 dependencies
-to another manifest, resolve browser React from a neighboring application, or
-add a second React runtime to an application bundle.
+- Workspace Browser uses React 19. The published DSH browser packages that Workspace Agent uses
+  run React 18. Keep the split. Never add a `@deepseek-ai/*` package that brings React 18 to
+  another application's manifest, resolve React from a neighboring application, or bundle a second
+  React runtime into one application.
+- `packages/dsh-runtime` pins the DSH CLI runtime in its own nested workspace and lockfile, and
+  the build materializes it with `pnpm deploy`. Keep it out of the root workspace graph. A shared
+  graph re-resolves optional peers and splits branded DSH types such as `SessionId`.
+- Get DI APIs and types from `@univerjs/core`, which owns the `@wendellhu/redi` dependency. Do not
+  add direct Redi imports or dependencies. The install holds one Redi instance per React peer
+  context, all with the same version number, so a matching version does not prove a shared
+  instance.
+- `pnpm test:sdk-dependencies` runs `scripts/sdk-type-identity.test.mjs`, which type-checks DI
+  identity in the Browser and Agent graphs. If an SDK release fails it with an undeclared Redi
+  reference, treat that as an upstream defect. Add a version-scoped `packageExtensions` entry with
+  its evidence and removal condition, and verify it after a clean install. Do not force one React
+  version, add broad overrides, patch installed packages, or weaken typechecking.
+- Data-only code imports `@univer-cli/doc-markdown-facade/files`, not `/node`, which brings headless
+  runtime types into the TypeScript graph. The same test asserts this only for the Client Core
+  `/markdown` and `/document-materialize` entries. Clear TypeScript build state
+  before you recheck a dependency metadata change, because incremental builds can keep the old
+  graph.
 
-Univer consumers should obtain DI APIs and types through `@univerjs/core`, which
-owns the Redi dependency. Some published SDK `.d.ts` files nevertheless emit
-inferred `import("@wendellhu/redi").IdentifierDecorator` references even though
-runtime code imports from Core. With both React peer contexts installed, an
-undeclared Redi reference can resolve through pnpm's hoisted directory to the
-other application's Redi instance. A single-React installation can hide this
-problem. The same Redi version number does not prove the peer contexts match.
+## Generated files
 
-The exact-version Redi `packageExtensions` in `pnpm-workspace.yaml` keep declaration
-resolution in the consuming application's dependency graph. They are temporary
-package-metadata repairs, not dev SDK version overrides. Prefer an upstream fix
-that keeps emitted DI types imported from Core; do not routinely add direct Redi
-imports or dependencies to SDK consumers.
+- Never edit generated files or Git-ignored local output, such as `apps/workspace/generated/http`
+  or the TanStack Router route tree. Change the source or the generator, then regenerate.
+- `apps/workspace/contracts/http` is the source of the product HTTP contract. After you change it,
+  run `pnpm --filter @univerjs/univer-workspace api:verify`, and update the server routes, Browser,
+  CLI, MCP tools, tests, and docs that use it in the same change.
 
-Keep shared data-only entry declarations independent of headless runtime types.
-The Markdown file writer uses the SDK's `/files` entry; `/node` also exposes
-materialization and brings its runtime types into TypeScript's dependency graph.
-The SDK type-identity regression checks each application independently and guards
-the Markdown contract boundary. After changing dependency metadata, clean TypeScript
-build state before checking; incremental diagnostics can retain an old graph.
+## Compatibility code and workarounds
 
-When upgrading the SDK, inspect the published declarations and manifests before
-changing these extensions. The SDK update script does not rewrite packageExtensions;
-review the exact version keys for each release instead of mechanically carrying them forward.
-Remove obsolete entries only after an isolated clean
-install verifies both Workspace and Agent typechecks and browser startup. Check
-actual resolved Redi peer contexts; `skipLibCheck`, a successful single-app build,
-or an already-populated `node_modules` is insufficient evidence. Do not force a
-single React version, add broad overrides, patch installed SDK files, or weaken
-typechecking to mask the mismatch. Keep any remaining workaround version-scoped
-and document its evidence and removal condition.
+Keep data compatibility, migration, and compensation logic out of normal paths, in one idempotent
+entry point that states its scope, failure behavior, and exit condition. Isolate each workaround
+in one place with its reason, impact, and removal condition. Delete it when upstream fixes the
+cause.
 
-## 多 PR 任务与 PR stack
+## Verification
 
-任务拆成多个 PR，且后一个 PR 建立在前一个之上（例如 schema、Server、Browser 依次叠加）时，用 GitHub
-原生 Stacked PRs 组织。互不依赖的 PR 各自从 `main` 开分支，不组成 stack。
+- `pnpm verify` runs the stages of the CI `verify` job. `pnpm verify --stage <name>` runs one of `static`,
+  `test-workspace`, `test-cli`, `test-mcp`, `test-rest`, or `package`. `pnpm check` is the short
+  typecheck and test loop. These cover the pnpm workspace only. `apps/space-plugin` has its own
+  npm scripts.
+- To prove a Workspace or CLI change in the real app, use the `verify-uvw` skill. For any change
+  under `apps/workspace/server/src/db` or to the SDK baseline, use the `verify-db-migration` skill.
+- When you change CLI packaging, runtime assets, or bundled Skills, verify the built artifact from
+  `pnpm package:workspace-cli`, not only the source.
+- `pnpm check:agents-md` checks that the paths and scripts named in every `AGENTS.md` exist. Use
+  the `maintain-agentsmd` skill when you add to or revise these files.
 
-- 开 stack 前先 rebase 到最新 `main`。每层一个分支，PR 的 base 是下一层分支，每层单独评审。
-- 用 `gh stack`（`gh extension install github/gh-stack`）管理。新 stack 用 `gh stack init`、`gh stack add`、
-  `gh stack submit --open` 创建；已有 PR 用 `gh stack link <下层> <上层>` 关联。修改下层后运行
-  `gh stack rebase --upstack` 和 `gh stack push`。
-- 用 `gh stack merge <顶层 PR> --merge -y` 一次合入顶层及其下所有层。stack 只用 merge commit 合入，
-  下层原始提交原样进入 `main`，上层无需 rebase。squash 和 rebase 方式会改写下层提交，使上层出现重复改动和假冲突。
-- 只合入部分下层后，运行 `gh stack sync` 同步剩余各层。手工维护时用
-  `git rebase --onto origin/main <下层原 head>` 移动上层，不把 `main` merge 进上层分支。
-- 对自己的 stack 分支执行 `git push --force-with-lease` 是正常步骤。被权限拦截时停下请用户放行，不改用 merge。
-- stack 内每个提交都会进入 `main` 历史，提交信息同样遵循下文的 Conventional Commits。
+## Documentation
 
-## PR 标题与 Commit Message
+- `apps/workspace/docs/data-model.md` is the authority on product data, states, and persistence.
+  `apps/workspace/docs/adr` records only accepted decisions.
+- Maintainer release steps belong in `docs/releases/cli.md`, not in a user README. A package
+  README states the package's responsibilities, non-responsibilities, and consumers.
+- Describe only what exists. Never write an unbuilt capability as current fact.
+- Update `DREAMNUM.md` in the same change when repository responsibilities, external applications,
+  cross-repository dependencies, public contracts, deployment handoffs, or data classification
+  change. Otherwise leave it alone.
 
-PR 标题与 commit message 遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
-使用英文，格式为 `type(scope): description`，其中 scope 可省略。
-常用 type 包括 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci` 和 `chore`。
-不兼容变更使用 `!` 或正文中的 `BREAKING CHANGE:` 标记；合并时的 squash commit 和 merge commit 标题也遵循此格式，仓库设置让 merge commit 标题取自 PR 标题。
+## Releases and deployment
+
+Do not publish artifacts, push images, or trigger deployments unless the user asks. A tag push
+starts nothing. A source manifest's `private` flag does not mean the application is unreleased.
+`univer-workspace-cli` ships through the packaging workflow. `docs/releases/cli.md` describes CLI release and promotion, and
+`apps/workspace/README.md` describes deployment. `scripts/release/policy.mjs` enforces the release
+channels and version formats.
+
+## Commits and pull requests
+
+- PR titles and commit messages follow Conventional Commits, `type(scope): description`. Mark a
+  breaking change with `!` or a `BREAKING CHANGE:` footer. The repository takes merge commit
+  titles from the PR title.
+- When later PRs build on earlier ones, organize them as a GitHub stacked PR chain with `gh stack`
+  (`gh extension install github/gh-stack`). Each layer is one branch whose PR targets the layer
+  below, and each layer is reviewed on its own. Independent PRs each branch from `main`. Rebase on
+  the latest `main` before you open a stack.
+- Create a stack with `gh stack init`, `gh stack add`, and `gh stack submit --open`, or connect
+  existing PRs with `gh stack link <lower> <upper>`. After you change a lower layer, run
+  `gh stack rebase --upstack` and `gh stack push`.
+- Land a stack with `gh stack merge <top-pr> --merge -y`. Use merge commits only, because squash
+  and rebase rewrite lower layers and create duplicate changes and false conflicts above them.
+  After only some lower layers land, run `gh stack sync`. To move upper layers by hand, run
+  `git rebase --onto origin/main <old-lower-head>`, and never merge `main` into them.
+- `git push --force-with-lease` on your own stack branches is normal. If a permission check blocks
+  it, stop and ask the user. Do not switch to merging instead.

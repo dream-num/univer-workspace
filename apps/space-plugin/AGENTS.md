@@ -2,13 +2,17 @@
 
 ## Contribution guidelines
 
-Agent 的职责是实现已经确定的产品契约，而不是通过改变产品契约让代码变得容易实现。
+The agent implements the agreed product contract. Never change the contract to make the code
+easier to write.
 
-对于有成熟参考实现的功能，优先复用现有实现；对于有真实产品参考的交互，优先忠实执行参考设计。
+When a feature has a mature reference implementation, reuse it. When an interaction has a real
+product reference, follow the reference design faithfully.
 
-技术约束可以触发产品决策讨论，但不能自动授权 Agent 改变产品行为。
+A technical constraint can start a product decision discussion. It never authorizes the agent to
+change product behavior on its own.
 
-交付完成的依据是用户可观察的功能和交互通过验收，而不是代码编译通过、测试数量增加，或 Agent 自己宣布完成。
+Work is done when the user-observable features and interactions pass acceptance. Compiling code,
+a growing test count, or the agent's own claim of completion is not acceptance.
 
 ## Engineering rules
 

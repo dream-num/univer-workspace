@@ -350,9 +350,19 @@ uvw auth login --complete
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       面向 Agent 的远程 Workspace 自动化应用
+apps/mcp                       私有的远程 MCP gateway、executor 与 renderer
 apps/agent                     用于文档对话与 Worktree 审查的 Workspace Agent 应用
+apps/space-plugin              DSH Desktop 的 Space 内容工作区插件（独立 npm 依赖图）
 packages/client-core           私有的 Node-hosted Workspace Agent Client 能力
 packages/reference-provider   仅供 Browser 使用的私有 referenced-Unit policy
+packages/workspace-agent-runtime   Agent 宿主共享的私有内容执行层
+packages/workspace-editor-presets  Web 与 Space 共享的私有 Univer 编辑器插件组合
+packages/workspace-file-browser    私有的 Workspace 文件导航 UI
+packages/workspace-html-viewer 私有的共享 HTML View sandbox 与 binding host
+packages/workspace-markdown-viewer 私有的共享只读 Markdown 预览
+packages/workspace-ui          私有的共享 Workspace UI 基础组件
+packages/unit-comparison-viewer    私有的只读 Unit 对比视图
+packages/dsh-runtime           锁定的 DSH CLI runtime 依赖集，用 pnpm deploy 物化
 packages/dsh-univer-workspace-plugin        Workspace Agent 的 Workspace 能力与浏览器 UI
 packages/dsh-univer-workspace-skin-plugin   Workspace Agent 的 Workspace 视觉皮肤
 scripts                       SDK 版本与 CLI 本地发布工具

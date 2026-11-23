@@ -1,31 +1,41 @@
-# Univer Workspace 协作约定
+# Univer Workspace application
 
-本文件适用于 `apps/workspace/**`。该应用存在部署实例和需要保留的持久化数据，不按可随时
-重建的一次性 Demo 处理。
+`apps/workspace` runs as deployed instances with persistent data. Treat every schema, migration,
+startup, and deployment change as an upgrade of live databases, not of a disposable demo. Normal
+start, restart, upgrade, and production recovery keep the database. Disposable instances use a
+separate temporary data directory or volume.
 
-## 数据库与部署
+## Product database
 
-- 修改产品数据库 schema 前，先阅读 `docs/data-model.md`、`server/src/db/sqlite/schema.sql` 和
-  `server/src/db/sqlite/migrations/prepare-current-database.ts`，确认当前版本与已支持的升级路径。
-- 已发布 schema 的结构或约束发生变化时，必须提升 `PRAGMA user_version` 并提供版本化迁移；
-  不得只修改 `schema.sql`，不得假设线上数据库为空。
-- 迁移必须在业务 Repository 初始化前运行，并包含迁移前一致性备份、事务失败回滚、Schema
-  指纹校验、`foreign_key_check` 和 `integrity_check`。
-- 迁移必须保留已有业务数据、对象存储身份和恢复状态。删除或改写字段时，要明确旧数据到新
-  语义的映射；不能静默丢弃仍可能被启动恢复流程使用的数据。
-- 部署升级不得让不兼容的旧、新版本进程同时写同一个 SQLite 文件。发布说明应明确停旧实例、
-  启动单个新实例完成迁移、确认成功后再恢复服务的顺序。
-- 普通启动、重启和升级必须保留数据库。可丢弃的测试实例使用独立的临时数据目录或卷。
+The product database has a SQLite backend and a PostgreSQL backend with separate schema versions.
+Read `docs/data-model.md` before a schema change. It is the authority on both.
 
-## 迁移验证
+- SQLite. `server/src/db/sqlite/schema.sql` defines the current schema and `PRAGMA user_version`
+  its version. `server/src/db/sqlite/migrations/prepare-current-database.ts` owns the upgrade path.
+  A change to the structure or constraints of a released schema bumps `user_version` and adds a
+  versioned migration. Never change only `schema.sql`, and never assume a deployed database is
+  empty.
+- PostgreSQL. `server/src/db/postgres/schema.sql` defines the current schema, and the
+  `workspace_product_schema` table stores its version and structure fingerprint. A structural
+  change appends an upgrade to `UPGRADES` in `server/src/db/postgres/initialize.ts`, and the
+  upgrade must leave the structure that `schema.sql` creates.
+- Migrations run before any business Repository initializes. SQLite migrations take a consistent
+  backup first, roll back on failure, and check the schema fingerprint, `foreign_key_check`, and
+  `integrity_check`.
+- Keep existing business data, object storage identity, and recovery state. When a migration drops
+  or rewrites a field, map the old data to the new meaning explicitly. Never discard data that
+  startup recovery may still read.
+- Never let incompatible old and new processes write the same SQLite file. Release notes state the
+  order. Stop the old instance, start one new instance to migrate, confirm success, then resume
+  service.
 
-数据库变更至少验证：
+## Verification
 
-- 从当前线上版本迁移到目标版本，覆盖空表、已发布数据和未完成恢复状态；
-- 迁移失败时事务回滚，原版本仍可识别，备份文件完整可读；
-- 迁移后再次启动不会重复迁移或重复创建备份；
-- 使用生产构建产物执行迁移，而不只在 TypeScript 源码测试环境运行；
-- `pnpm typecheck`、`pnpm test` 和 `pnpm build` 全部通过。
-
-涉及数据库版本、迁移路径或部署行为时，同步更新 `README.md`、`docs/data-model.md`、
-`docs/application-design.md` 和相关 proposal；代码、测试、当前 Schema 与文档必须描述同一版本。
+- For SQLite, run the `verify-db-migration` skill. It replays released schemas through current
+  startup, then runs the data, backup, rollback, and restart matrix against the source and the
+  production build.
+- For PostgreSQL, run `pnpm --filter @univerjs/univer-workspace test:postgres` with
+  `WORKSPACE_TEST_POSTGRES_URL` set to a disposable database. CI runs it in the `postgres` job.
+- When the database version, a migration path, or deployment behavior changes, update `README.md`,
+  `docs/data-model.md`, `docs/application-design.md`, and the related proposal in the same change.
+  The code, tests, current schema, and docs must name the same version.
