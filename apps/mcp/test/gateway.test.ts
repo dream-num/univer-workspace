@@ -55,6 +55,7 @@ const observedSchema = z
     trace_id: z.string().nullable(),
     user_id: z.string().min(1),
     principal_kind: z.enum(["human", "agent"]),
+    principal_category: z.enum(["human", "agent_claimed", "agent_unclaimed"]),
     auth_kind: z.literal("dev"),
     client_id: z.literal("dev"),
     client_name: z.string().nullable(),
@@ -691,7 +692,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     },
   );
 
-  it("records the principal kind on every usage event and the shared file on a share event", async () => {
+  it("records the principal kind and category on every usage event and the shared file on a share event", async () => {
     await (await connect()).callTool({ name: "whoami", arguments: {} });
     principal = { kind: "agent", claimed: false };
     const shared = await (await connect()).callTool({
@@ -699,9 +700,14 @@ describe("gateway over real HTTP and the MCP client", () => {
       arguments: { node: `${identityOrigin}/nodes/node-1`, link: "viewer" },
     });
     expect(shared.isError).not.toBe(true);
-    expect(events().map(({ tool, principal_kind, node_id }) => ({ tool, principal_kind, node_id }))).toEqual([
-      { tool: "whoami", principal_kind: "human", node_id: undefined },
-      { tool: "share", principal_kind: "agent", node_id: "node-1" },
+    principal = { kind: "agent", claimed: true };
+    await (await connect()).callTool({ name: "whoami", arguments: {} });
+    expect(
+      events().map(({ tool, principal_kind, principal_category, node_id }) => ({ tool, principal_kind, principal_category, node_id })),
+    ).toEqual([
+      { tool: "whoami", principal_kind: "human", principal_category: "human", node_id: undefined },
+      { tool: "share", principal_kind: "agent", principal_category: "agent_unclaimed", node_id: "node-1" },
+      { tool: "whoami", principal_kind: "agent", principal_category: "agent_claimed", node_id: undefined },
     ]);
   });
 

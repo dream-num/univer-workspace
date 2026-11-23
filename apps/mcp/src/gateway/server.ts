@@ -501,6 +501,7 @@ export function createGateway(
                   : null,
               user_id: user.id,
               principal_kind: user.kind ?? "human",
+              principal_category: toolPrincipal(user),
               auth_kind: authentication.authKind,
               client_id: authentication.clientId,
               client_name: client?.success ? client.data.name : null,

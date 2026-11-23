@@ -393,8 +393,10 @@ Set `METRICS_TOKEN` to serve Prometheus metrics at `GET /metrics` with
 [observability/README.md](../../observability/README.md) describes scraping and the dashboards.
 
 Besides `http_request_duration_seconds`, four counters measure the growth loop: a file is
-shared, its page is opened, and a reader signs up or connects an agent. Labels stay
-low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line of each count.
+shared, its page is opened, and a reader signs up or connects an agent. A fifth,
+`workspace_ceiling_denials_total`, counts actions that an access ceiling refused. Labels stay
+low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line of each growth
+loop count.
 
 | Counter | Counts | Labels |
 | --- | --- | --- |
@@ -402,6 +404,7 @@ low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line 
 | `workspace_share_page_views_total` | A `GET` page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open, including a `304` revalidation, which is a real open. `HEAD` and in-app navigation do not count | `session` (`signed_in`, `signed_out`), `owner_category` |
 | `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
+| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an agent creating a Team Space. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `INTERACTIVE_SESSION_REQUIRED`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
 `source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
