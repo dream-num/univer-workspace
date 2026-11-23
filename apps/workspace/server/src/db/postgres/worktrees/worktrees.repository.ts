@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
 import { checkCreateTarget, checkProposalTarget } from "../access/resource-target.js";
-import { type PostgresAccessRepository, assertFileQuota, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
+import { type PostgresAccessRepository, assertFileQuota, ownerSuspendedSql, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -49,7 +49,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
            FROM worktrees AS worktree
            JOIN space_members AS membership
              ON membership.space_id = worktree.team_space_id
+           JOIN spaces AS team ON team.id = worktree.team_space_id
            WHERE worktree.id = ?
+             AND NOT ${ownerSuspendedSql("team.owner_user_id")}
              AND (
                worktree.visibility = 'space'
                OR membership.role = 'admin'
@@ -246,8 +248,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       WHERE id = $id AND (
         creator_user_id = $actorId OR
         EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND ${ownsSpaceSql("spaces.owner_user_id", "$actorId")}) OR
-        EXISTS (SELECT 1 FROM space_members
-                WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin')
+        EXISTS (SELECT 1 FROM space_members JOIN spaces ON spaces.id = space_members.space_id
+                WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin'
+                  AND NOT ${ownerSuspendedSql("spaces.owner_user_id")})
       )
     `).run({
       id: input.id,
@@ -685,5 +688,6 @@ function worktreeSelect(): string {
           LEFT JOIN spaces AS team ON team.id = worktree.team_space_id
           LEFT JOIN space_members AS member
             ON member.space_id = worktree.team_space_id
-           AND member.user_id = $userId`;
+           AND member.user_id = $userId
+           AND NOT ${ownerSuspendedSql("team.owner_user_id")}`;
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SpaceAccess } from "../../../modules/access/index.js";
-import type { PostgresAccessRepository } from "../access/access.repository.js";
+import { type PostgresAccessRepository, ownerSuspendedSql, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import { assigneeEvent, checkCommentWrite, checkCreateRelations, checkLabelCapacity, requireIssueSpace, labelEvent, planIssueUpdate, referenceEvent, relationDelta } from "../../../modules/issues/issue-changes.js";
 import { forbidden, labelNameTaken, notFound } from "../../../modules/issues/issues.errors.js";
 import type { QueryValue } from "../connection.js";
@@ -27,6 +27,11 @@ import type {
 
 const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
   FROM issues JOIN spaces ON spaces.id = issues.space_id`;
+
+/** Binds the User three times. Owners always take part in a Space, its members only while it is not suspended. */
+const participantSql = `(${ownsSpaceSql("spaces.owner_user_id", "?")} OR (
+  NOT ${ownerSuspendedSql("spaces.owner_user_id")}
+  AND EXISTS (SELECT 1 FROM space_members WHERE space_id = spaces.id AND user_id = ?)))`;
 
 export class PostgresIssuesRepository implements IssuesRepository {
   constructor(
@@ -425,17 +430,18 @@ export class PostgresIssuesRepository implements IssuesRepository {
 
   private async isSpaceParticipant(spaceId: string, userId: string): Promise<boolean> {
     return Boolean(await this._get(
-      `SELECT 1 FROM spaces WHERE id = ? AND type = 'team' AND (
-         owner_user_id = ? OR EXISTS (SELECT 1 FROM space_members WHERE space_id = spaces.id AND user_id = ?))`,
-      spaceId, userId, userId,
+      `SELECT 1 FROM spaces WHERE id = ? AND type = 'team' AND ${participantSql}`,
+      spaceId, userId, userId, userId,
     ));
   }
 
   async audience(spaceId: string): Promise<string[]> {
     return (await this._all(
-      `SELECT owner_user_id AS user_id FROM spaces WHERE id = ?
-       UNION SELECT user_id FROM space_members WHERE space_id = ? ORDER BY user_id`,
-      spaceId, spaceId,
+      `${spaceOwnerIdsSql("SELECT owner_user_id AS user_id FROM spaces WHERE id = ?")}
+       UNION SELECT space_members.user_id FROM space_members JOIN spaces ON spaces.id = space_members.space_id
+       WHERE space_members.space_id = ? AND NOT ${ownerSuspendedSql("spaces.owner_user_id")}
+       ORDER BY user_id`,
+      spaceId, spaceId, spaceId,
     ) as unknown as Array<{ user_id: string }>).map((row) => row.user_id);
   }
 
@@ -541,10 +547,8 @@ function filterClause(filter: IssueFilter, includeState: boolean): { sql: string
     clauses.push("issues.space_id = ?");
     params.push(filter.scope.spaceId);
   } else {
-    clauses.push(`issues.space_id IN (
-      SELECT id FROM spaces WHERE type = 'team' AND (
-        owner_user_id = ? OR EXISTS (SELECT 1 FROM space_members WHERE space_id = spaces.id AND user_id = ?)))`);
-    params.push(filter.scope.userId, filter.scope.userId);
+    clauses.push(`issues.space_id IN (SELECT id FROM spaces WHERE type = 'team' AND ${participantSql})`);
+    params.push(filter.scope.userId, filter.scope.userId, filter.scope.userId);
   }
   if (includeState && filter.state !== "all") {
     clauses.push("issues.state = ?");

@@ -5,8 +5,10 @@ import { createProductTestApplication, type ProductTestApplication } from "../su
 
 const applications: ProductTestApplication[] = [];
 const servers: Server[] = [];
+const sockets: WebSocket[] = [];
 
 afterEach(async () => {
+  for (const socket of sockets.splice(0)) socket.close();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
@@ -95,7 +97,7 @@ describe("a Team Space an agent owns", () => {
     }
   }, 60_000);
 
-  it("is suspended for its members once the claimer stops the agent (A3.6)", async () => {
+  it("is suspended for its members once the claimer stops the agent, Team Worktrees and Issues included (A3.6)", async () => {
     const { origin } = await start();
     const [claimer, peerClaimer] = await Promise.all(["claimer", "peer-claimer"].map((name) => person(origin, name)));
     const agent = await claimedAgent(origin, claimer);
@@ -103,16 +105,37 @@ describe("a Team Space an agent owns", () => {
     const repo = await createRepo(origin, agent, "Research");
     const file = await createFile(origin, agent, repo, "Budget");
     expect((await setRole(origin, repo, agent, peer.id, "admin")).status).toBe(200);
+    const pull = await createPull(origin, agent, repo);
+    const [peerEvents, claimerEvents] = await Promise.all([events(origin, peer), events(origin, claimer)]);
+    const issue = await createIssue(origin, agent, repo, "Secret plan");
+    expect(await Promise.all([peerEvents.next(), claimerEvents.next()])).toEqual([issuesChanged(repo), issuesChanged(repo)]);
     expect((await send(origin, "GET", `/api/nodes/${file}`, undefined, peer.cookie)).status).toBe(200);
     expect((await mine(origin, peer)).map((space) => space.id)).toContain(repo);
+    expect(await reach(origin, repo, pull, peer)).toEqual(reachesAll);
+    expect(await reach(origin, repo, pull, claimer)).toEqual(reachesAll);
 
     expect((await send(origin, "POST", `/api/agents/${agent.id}/stop`, undefined, claimer.cookie)).status).toBe(204);
 
     expect((await send(origin, "GET", `/api/spaces/${repo}`, undefined, peer.cookie)).status).toBe(404);
     expect((await send(origin, "GET", `/api/nodes/${file}`, undefined, peer.cookie)).status).toBe(404);
     expect((await mine(origin, peer)).map((space) => space.id)).not.toContain(repo);
+    expect(await reach(origin, repo, pull, peer)).toEqual(reachesNothing);
+    expect(await refusals(origin, pull, peer)).toEqual([404, 404, 404]);
+
     expect(await spaceAccess(origin, repo, claimer)).toMatchObject({ accessRole: "owner" });
-  });
+    expect(await reach(origin, repo, pull, claimer)).toEqual(reachesAll);
+    const claimerEvent = claimerEvents.next();
+    const label = await send(origin, "POST", `/api/spaces/${repo}/issue-labels`, { name: "triage", color: "red" }, claimer.cookie);
+    expect(label.status).toBe(201);
+    expect(await claimerEvent).toEqual(issuesChanged(repo));
+    const { id: labelId } = (await label.json()) as { id: string };
+    const triaged = await send(origin, "PATCH", `/api/spaces/${repo}/issues/${issue}`,
+      { labelIds: [labelId], assigneeUserIds: [claimer.id] }, claimer.cookie);
+    expect({ status: triaged.status, body: await triaged.json() })
+      .toMatchObject({ status: 200, body: { labels: [{ id: labelId }], assignees: [{ id: claimer.id }] } });
+    expect((await send(origin, "PATCH", `/api/worktrees/${pull}`, { name: "Renamed" }, claimer.cookie)).status).toBe(200);
+    expect(await peerEvents.none()).toBe(true);
+  }, 30_000);
 });
 
 describe("agent membership ceilings", () => {
@@ -192,11 +215,20 @@ describe("unclaimed agent quotas", () => {
       await repositories.spaces.updateSettings(unclaimed.id, spaceId, { publicRead: true }, Date.now());
       expect((await send(origin, "GET", `/api/spaces/${spaceId}/nodes`)).status).toBe(200);
     }
+    // Likewise only the repository can give this Space a member, so the member path can be seen to close.
+    const member = await person(origin, "member");
+    await repositories.permissions.upsertMember({ spaceId: repo, userId: member.id, role: "admin", grantedBy: unclaimed.id, now: Date.now() });
+    const pull = await createPull(origin, unclaimed, repo);
+    await createIssue(origin, unclaimed, repo, "Secret plan");
+    expect(await reach(origin, repo, pull, member)).toEqual(reachesAll);
+
     await repositories.identity.touchAgent({ userId: unclaimed.id }, Date.now(), Date.now() + 1, Date.now() - 1);
     for (const spaceId of [repo, unclaimed.spaceId]) {
       expect((await send(origin, "GET", `/api/spaces/${spaceId}/nodes`)).status).toBe(404);
     }
-  });
+    expect(await reach(origin, repo, pull, member)).toEqual(reachesNothing);
+    expect(await refusals(origin, pull, member)).toEqual([404, 404, 404]);
+  }, 30_000);
 });
 
 async function start() {
@@ -211,6 +243,7 @@ async function start() {
   });
   applications.push(application);
   const server = createServer(application.app);
+  application.attachWebSocket(server);
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -322,4 +355,78 @@ async function transition(origin: string, worktreeId: string, action: "ready" | 
 async function expectRefused(request: Promise<Response>, code: string): Promise<void> {
   const response = await request;
   expect({ status: response.status, body: await response.json() }).toMatchObject({ status: 403, body: { error: { code } } });
+}
+
+async function createIssue(origin: string, actor: Actor, spaceId: string, title: string): Promise<number> {
+  const response = await send(origin, "POST", `/api/spaces/${spaceId}/issues`, { title }, actor.cookie);
+  if (response.status !== 201) throw new Error(`Issue creation failed with ${response.status}: ${await response.text()}`);
+  return ((await response.json()) as { number: number }).number;
+}
+
+const reachesAll = { listed: true, listedInRepo: true, get: 200, getByNumber: 200, issues: ["Secret plan"] };
+const reachesNothing = { listed: false, listedInRepo: false, get: 404, getByNumber: 404, issues: [] };
+
+/** What the actor sees of the Space's pull request, which is its first numbered item, and of its Issues. */
+async function reach(origin: string, spaceId: string, worktreeId: string, actor: Actor) {
+  const listed = async (query: string) => {
+    const { items } = (await (await send(origin, "GET", `/api/worktrees?${query}`, undefined, actor.cookie)).json()) as { items: { id: string }[] };
+    return items.some((item) => item.id === worktreeId);
+  };
+  const { items } = (await (await send(origin, "GET", "/api/issues", undefined, actor.cookie)).json()) as { items: { title: string; space: { id: string } }[] };
+  return {
+    listed: await listed("scope=all"),
+    listedInRepo: await listed(`kind=team&teamSpaceId=${spaceId}`),
+    get: (await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, actor.cookie)).status,
+    getByNumber: (await send(origin, "GET", `/api/spaces/${spaceId}/worktrees/1`, undefined, actor.cookie)).status,
+    issues: items.filter((item) => item.space.id === spaceId).map((item) => item.title),
+  };
+}
+
+/** Renaming, hiding and discarding the pull request, each of which an admin may do while the Space is live. */
+async function refusals(origin: string, worktreeId: string, actor: Actor): Promise<number[]> {
+  return [
+    (await send(origin, "PATCH", `/api/worktrees/${worktreeId}`, { name: "Renamed" }, actor.cookie)).status,
+    (await send(origin, "PATCH", `/api/worktrees/${worktreeId}`, { visibility: "private" }, actor.cookie)).status,
+    (await send(origin, "POST", `/api/worktrees/${worktreeId}/discard`, undefined, actor.cookie, { "idempotency-key": randomUUID() })).status,
+  ];
+}
+
+function issuesChanged(spaceId: string) {
+  return { event: "issuesChanged", spaceId };
+}
+
+/** The live product events the actor's Browser receives. */
+async function events(origin: string, actor: Actor) {
+  const { ticket } = (await (await send(origin, "GET", "/universer-api/user/session-ticket", undefined, actor.cookie)).json()) as { ticket: string };
+  const socket = new WebSocket(`${origin.replace("http:", "ws:")}/api/worktree-events?sessionTicket=${encodeURIComponent(ticket)}`);
+  sockets.push(socket);
+  const queue: unknown[] = [];
+  const waiting: ((message: unknown) => void)[] = [];
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(String(event.data)) as unknown;
+    const resolve = waiting.shift();
+    if (resolve) resolve(message);
+    else queue.push(message);
+  });
+  // A message that never comes reads as null after a few seconds, so the assertion names it.
+  const next = () => queue.length ? Promise.resolve(queue.shift()) : new Promise<unknown>((resolve) => {
+    const deliver = (message: unknown) => {
+      clearTimeout(timer);
+      resolve(message);
+    };
+    const timer = setTimeout(() => {
+      waiting.splice(waiting.indexOf(deliver), 1);
+      resolve(null);
+    }, 3_000);
+    waiting.push(deliver);
+  });
+  expect(await next()).toEqual({ event: "worktreeChangeFeedReady" });
+  return {
+    next,
+    /** Waits out messages still in flight, then reports whether none arrived. */
+    none: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return queue.length === 0;
+    },
+  };
 }
