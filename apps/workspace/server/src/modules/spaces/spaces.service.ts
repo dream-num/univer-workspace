@@ -91,12 +91,12 @@ export function createSpacesModule(options: {
     },
 
     async createTeamSpace(userId, input) {
-      assertCeiling(await options.access.principalCategory(userId), "createTeamSpace", {});
       const id = randomUUID();
       const name = validName(input.name);
       const publicRead = input.publicRead === undefined
         ? false
         : validBoolean(input.publicRead, "publicRead");
+      assertCeiling(await options.access.principalCategory(userId), "updateSpace", { publicRead });
       const row = await options.repository.createTeamSpace({
         id,
         name,

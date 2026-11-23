@@ -9021,10 +9021,10 @@ components:
       description: |
         The current User cannot perform this action. The code is `FORBIDDEN` when its role is
         insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
-        agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
-        an unclaimed agent or an agent given admin), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would
-        keep more than 20 files in its Personal Space, pending pull-request files included, or store
-        one file above 10 MiB) and
+        unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
+        Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
+        `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces, keep more than 20
+        files across its Spaces, pending pull-request files included, or store one file above 10 MiB) and
         `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
         or updates a Space with `publicRead: true`).
       content:

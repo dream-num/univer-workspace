@@ -1,4 +1,5 @@
 import { assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import type { PoolClient } from "pg";
 import type { PostgresDatabase, PostgresStatement } from "../connection.js";
 import type {
   ResolvedNodeRow,
@@ -63,11 +64,11 @@ async function readRequester(database: PostgresDatabase, userId: string) {
 }
 
 /**
- * Files the User's Personal Space holds or is about to hold: Nodes with a Resource outside Trash,
+ * Files the User's Spaces hold or are about to hold: Nodes with a Resource outside Trash,
  * new-file intents of open pull requests, and creations still in flight. A file that
  * `operationId` already accounts for is left out, so replaying an operation adds nothing.
  */
-async function countPersonalFiles(database: PostgresDatabase, userId: string, operationId: string | null): Promise<number> {
+async function countOwnedFiles(database: PostgresDatabase, userId: string, operationId: string | null): Promise<number> {
   const row = await database
     .prepare(
       `SELECT
@@ -75,14 +76,12 @@ async function countPersonalFiles(database: PostgresDatabase, userId: string, op
           FROM resources
           JOIN nodes ON nodes.id = resources.node_id
           JOIN spaces ON spaces.id = nodes.space_id
-          WHERE spaces.type = 'personal'
-            AND spaces.owner_user_id = $userId
+          WHERE spaces.owner_user_id = $userId
             AND nodes.trash_batch_id IS NULL)
          + (SELECT COUNT(*)
             FROM worktree_node_intents AS intent
             JOIN spaces ON spaces.id = intent.target_space_id
-            WHERE spaces.type = 'personal'
-              AND spaces.owner_user_id = $userId
+            WHERE spaces.owner_user_id = $userId
               AND intent.activated_at IS NULL
               AND intent.discarded_at IS NULL)
          + (SELECT COUNT(*)
@@ -108,8 +107,17 @@ export async function assertFileQuota(
 ): Promise<void> {
   const principal = requesterCategory(await readRequester(database, userId));
   if (principal === "agent_unclaimed") {
-    assertCeiling(principal, "createFiles", { held: await countPersonalFiles(database, userId, operationId), adding });
+    assertCeiling(principal, "createFiles", { held: await countOwnedFiles(database, userId, operationId), adding });
   }
+}
+
+/** Read the principal and its Team Spaces in the transaction that creates the next one. */
+export async function assertTeamSpaceQuota(client: PoolClient, userId: string): Promise<void> {
+  const { rows: [row] } = await client.query<Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly held: number }>(`
+    SELECT (SELECT kind FROM users WHERE id = $1) AS requester_kind,
+           (SELECT (owner_user_id IS NOT NULL)::integer FROM agents WHERE user_id = $1) AS requester_claimed,
+           (SELECT COUNT(*)::integer FROM spaces WHERE type = 'team' AND owner_user_id = $1) AS held`, [userId]);
+  assertCeiling(requesterCategory(row!), "createTeamSpace", { held: row!.held });
 }
 
 export class PostgresAccessRepository implements AccessRepository {
@@ -185,8 +193,8 @@ export class PostgresAccessRepository implements AccessRepository {
     return await readRequester(this._database, userId);
   }
 
-  async countPersonalFiles(userId: string, operationId: string | null): Promise<number> {
-    return await countPersonalFiles(this._database, userId, operationId);
+  async countOwnedFiles(userId: string, operationId: string | null): Promise<number> {
+    return await countOwnedFiles(this._database, userId, operationId);
   }
 
   async resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null> {

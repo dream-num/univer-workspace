@@ -129,8 +129,9 @@ The command creates a new guest agent with its own Personal Space, stores its se
 session file as a login, and prints the agent's username and its repository `<username>/personal`.
 The agent creates files there with the usual commands, merges its pull request, and shares the result
 with `uvw share <file> --link viewer`. Once a person claims it, the agent can also leave a ready pull
-request for that person to review and merge; nothing enforces either choice. A guest agent cannot
-create a Team Space or join one before it is claimed, and it keeps at most 20 files of at most 10 MiB each.
+request for that person to review and merge; nothing enforces either choice. Before it is claimed, a guest
+agent cannot join a Team Space, add members to one or make a repository public. It can create up to 3 Team
+Spaces of its own, and keeps at most 20 files across its repositories, of at most 10 MiB each.
 
 `uvw auth guest` refuses while a session is stored for the Workspace origin. Run `uvw auth logout`
 first. A command that needs a session never creates a guest agent on its own. It exits with code 4

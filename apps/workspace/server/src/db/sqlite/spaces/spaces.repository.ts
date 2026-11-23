@@ -4,7 +4,7 @@ import type {
   CreateTeamSpaceInput, SpaceListEntry, SpaceListScope, SpaceSettingsPatch, SpacesRepository,
 } from "../../../modules/spaces/spaces.repository.js";
 import type { SpaceStar } from "../../../modules/spaces/spaces.types.js";
-import { spaceMemberJoin, visibleSpaceSql } from "../access/access.repository.js";
+import { assertTeamSpaceQuota, spaceMemberJoin, visibleSpaceSql } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import { findSpaceView, listSpaceViews } from "./space-views.js";
 
@@ -44,6 +44,7 @@ export class SqliteSpacesRepository implements SpacesRepository {
 
   async createTeamSpace(input: CreateTeamSpaceInput): Promise<SpaceListEntry | null> {
     return this._database.transaction((database) => {
+      assertTeamSpaceQuota(database, input.ownerUserId);
       const insert = database.prepare(`
         INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
         VALUES (?, 'team', ?, ?, ?, ?, ?, ?)

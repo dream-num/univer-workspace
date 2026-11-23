@@ -177,14 +177,15 @@ it("counts a ceiling denial by action, code and the category of the principal it
   const refused = await fetch(`${origin}/api/team-spaces`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ name: "Agent team" }),
+    body: JSON.stringify({ name: "Agent team", publicRead: true }),
   });
   expect(refused.status).toBe(403);
 
   const metrics = await (await fetch(`${origin}/metrics`, { headers: { authorization: `Bearer ${METRICS_TOKEN}` } })).text();
   const denials = (category: string) =>
-    value(metrics, `workspace_ceiling_denials_total{action="createTeamSpace",code="AGENT_NOT_ALLOWED",principal_category="${category}"}`);
+    value(metrics, `workspace_ceiling_denials_total{action="updateSpace",code="AGENT_NOT_ALLOWED",principal_category="${category}"}`);
   expect({ unclaimed: denials("agent_unclaimed"), human: denials("human") }).toEqual({ unclaimed: 1, human: 0 });
+  expect(value(metrics, `workspace_ceiling_denials_total{action="createTeamSpace",code="AGENT_QUOTA_EXCEEDED",principal_category="agent_unclaimed"}`)).toBe(0);
 });
 
 function value(metrics: string, series: string): number {

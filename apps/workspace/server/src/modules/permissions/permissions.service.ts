@@ -107,6 +107,7 @@ export function createPermissionsModule(options: {
       assertCeiling(await options.access.principalCategory(actorUserId), "addTeamMember", {
         member: await options.access.principalCategory(userId),
         role,
+        owner: await options.access.principalCategory(space.ownerUserId),
       });
       const row = await options.repository.upsertMember({
         spaceId,

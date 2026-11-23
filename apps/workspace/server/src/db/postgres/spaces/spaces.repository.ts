@@ -5,6 +5,7 @@ import type {
   CreateTeamSpaceInput, SpaceListEntry, SpaceListScope, SpaceSettingsPatch, SpacesRepository,
 } from "../../../modules/spaces/spaces.repository.js";
 import type { SpaceStar } from "../../../modules/spaces/spaces.types.js";
+import { assertTeamSpaceQuota } from "../access/access.repository.js";
 import { withPostgresTransaction } from "../transaction.js";
 import { findSpaceView, listSpaceViews, readSpaceStar } from "./space-views.js";
 
@@ -45,6 +46,7 @@ export class PostgresSpacesRepository implements SpacesRepository {
 
   createTeamSpace(input: CreateTeamSpaceInput): Promise<SpaceListEntry | null> {
     return withPostgresTransaction(this.pool, async (client) => {
+      await assertTeamSpaceQuota(client, input.ownerUserId);
       let slug = input.slug ?? input.slugBase;
       for (let attempt = 2; ; attempt += 1) {
         const inserted = await client.query(`

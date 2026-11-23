@@ -217,22 +217,20 @@ describe("access rules for agents", () => {
 });
 
 describe("ceilings", () => {
-  it("keeps an agent from creating a Team Space or a public Space, whether or not a human claimed it", async () => {
+  it("keeps an unclaimed agent from making a Space public, and lets it once a human claims it", async () => {
     const { origin, application } = await start();
     const human = await register(origin, "owner");
     const agent = await createAgent(origin);
     const team = (await (await post(origin, "/api/team-spaces", { name: "Team", publicRead: true }, { cookie: human.cookie })).json()) as { id: string };
     const personal = await personalSpaceId(origin, agent.cookie);
 
-    for (const claimed of [false, true]) {
-      if (claimed) claim(application, agent.id, human.id);
-      await expectRefused(post(origin, "/api/team-spaces", { name: "Agent team" }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
-      await expectRefused(send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
-    }
+    await expectRefused(send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
     expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { name: "Renamed" }, { cookie: agent.cookie })).status).toBe(200);
     expect(await (await fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } })).json()).toMatchObject({
       spaces: [{ type: "personal", name: "Renamed", publicRead: false }],
     });
+    claim(application, agent.id, human.id);
+    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie })).status).toBe(200);
 
     const other = await register(origin, "member");
     expect((await put(origin, `/api/team-spaces/${team.id}/members/${other.id}`, { role: "viewer" }, human.cookie)).status).toBe(200);

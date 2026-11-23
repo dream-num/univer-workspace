@@ -32,10 +32,10 @@ export interface AccessResolver {
   /** Who the User is, for the ceilings: a service holds a user id, not a session. */
   principalCategory(userId: string): Promise<PrincipalCategory>;
   /**
-   * Files the User's Personal Space holds or is about to hold, for the quota ceiling. Pass the
+   * Files the User's Spaces hold or are about to hold, for the quota ceiling. Pass the
    * operation being served so that replaying it does not count its own file a second time.
    */
-  countPersonalFiles(userId: string, operationId?: string): Promise<number>;
+  countOwnedFiles(userId: string, operationId?: string): Promise<number>;
 }
 
 export function createAccessResolver(repository: AccessRepository): AccessResolver {
@@ -89,8 +89,8 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     async principalCategory(userId) {
       return requesterCategory(await repository.findRequester(userId));
     },
-    countPersonalFiles(userId, operationId) {
-      return repository.countPersonalFiles(userId, operationId ?? null);
+    countOwnedFiles(userId, operationId) {
+      return repository.countOwnedFiles(userId, operationId ?? null);
     },
   };
 }
