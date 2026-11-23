@@ -922,6 +922,9 @@ importers:
       '@univerjs-pro/pdfs-ui':
         specifier: 1.6.1
         version: 1.6.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/resources':
+        specifier: 1.6.1
+        version: 1.6.1(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/shape-editor':
         specifier: 1.6.1
         version: 1.6.1(react@19.2.8)(rxjs@7.8.2)
@@ -1388,6 +1391,9 @@ importers:
       '@univerjs-pro/exchange-node':
         specifier: 1.6.1
         version: 1.6.1(@univerjs-pro/resources@1.6.1(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/resources':
+        specifier: 1.6.1
+        version: 1.6.1(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
         specifier: 1.6.1
         version: 1.6.1(react@19.3.0)(rxjs@7.8.2)
@@ -1774,6 +1780,9 @@ importers:
       '@univerjs-pro/range-preprocess':
         specifier: 1.6.1
         version: 1.6.1(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/resources':
+        specifier: 1.6.1
+        version: 1.6.1(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/shape-editor':
         specifier: 1.6.1
         version: 1.6.1(react@18.3.1)(rxjs@7.8.2)
@@ -2119,6 +2128,9 @@ importers:
       '@univerjs-pro/embed':
         specifier: 1.6.1
         version: 1.6.1(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/resources':
+        specifier: 1.6.1
+        version: 1.6.1(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
         specifier: 1.6.1
         version: 1.6.1(react@19.3.0)(rxjs@7.8.2)
@@ -2424,6 +2436,9 @@ importers:
       '@univerjs-pro/ink-ui':
         specifier: 1.6.1
         version: 1.6.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/resources':
+        specifier: 1.6.1
+        version: 1.6.1(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/shape-editor-ui':
         specifier: 1.6.1
         version: 1.6.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)

@@ -21,6 +21,7 @@
   "peerDependencies": {
     "@univerjs-pro/chart-ui": "1.6.1",
     "@univerjs-pro/engine-chart": "1.6.1",
+    "@univerjs-pro/resources": "1.6.1",
     "@univerjs/core": "1.6.1",
     "@univerjs/preset-sheets-advanced": "1.6.1",
     "@univerjs/preset-sheets-collaboration": "1.6.1",

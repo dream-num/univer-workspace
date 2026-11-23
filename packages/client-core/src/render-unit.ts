@@ -7,7 +7,7 @@ import type {
   UniverRenderFormulaReferenceUnit,
   UniverRenderUnit,
 } from "@univer-cli/univer-render-runtime";
-import { parseResourceRef } from "@univerjs-pro/embed";
+import { parseResourceRef } from "@univerjs-pro/resources";
 import { workspaceError } from "./errors.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import type { WorkspaceContentSource } from "./runtime-source.js";

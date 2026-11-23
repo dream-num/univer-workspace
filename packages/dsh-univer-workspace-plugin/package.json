@@ -156,6 +156,7 @@
     "@univerjs-pro/ink-ui": "1.6.1",
     "@univerjs-pro/license": "1.6.1",
     "@univerjs-pro/range-preprocess": "1.6.1",
+    "@univerjs-pro/resources": "1.6.1",
     "@univerjs-pro/shape-editor": "1.6.1",
     "@univerjs-pro/shape-editor-ui": "1.6.1",
     "@univerjs-pro/sheets-chart": "1.6.1",

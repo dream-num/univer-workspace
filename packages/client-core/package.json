@@ -58,6 +58,7 @@
     "@univerjs-pro/collaboration": "1.6.1",
     "@univerjs-pro/embed": "1.6.1",
     "@univerjs-pro/exchange-node": "1.6.1",
+    "@univerjs-pro/resources": "1.6.1",
     "@univerjs/core": "1.6.1",
     "@univerjs/protocol": "1.6.1"
   },

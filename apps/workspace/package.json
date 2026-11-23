@@ -130,6 +130,7 @@
     "@univerjs-pro/pdfs-exchange-client": "1.6.1",
     "@univerjs-pro/pdfs-print": "1.6.1",
     "@univerjs-pro/pdfs-ui": "1.6.1",
+    "@univerjs-pro/resources": "1.6.1",
     "@univerjs-pro/shape-editor": "1.6.1",
     "@univerjs-pro/shape-editor-ui": "1.6.1",
     "@univerjs-pro/sheets-chart": "1.6.1",

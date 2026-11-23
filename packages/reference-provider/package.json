@@ -28,6 +28,7 @@
   "devDependencies": {
     "@univerjs-pro/collaboration": "1.6.1",
     "@univerjs-pro/embed": "1.6.1",
+    "@univerjs-pro/resources": "1.6.1",
     "@univerjs/core": "1.6.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
