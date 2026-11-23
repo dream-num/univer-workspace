@@ -54,8 +54,8 @@ and worksheet IDs; Resource IDs and worksheet names are different identities.
 Use `html-view validate --worktree <id>` to read a pull request's data. Sources mapped in
 that pull request read its current changes; other sources read merged data. A merged pull
 request reads merged data. `html-view create` publishes immediately and still needs merged
-sources, so defer creation until review and merge are complete. Do not automatically merge
-or substitute older merged data. Creating an HTML View does not authorize changing its
+sources, so defer creation until review and merge are complete. Merge only as the `core`
+Skill says, and do not substitute older merged data. Creating an HTML View does not authorize changing its
 source cells or formulas. `workspace-html-view-source-unavailable` means a merged source
 may not exist, may not be readable by you, or may exist only in an unmerged pull request.
 

@@ -701,7 +701,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(expiresAt - Date.now()).toBeLessThanOrEqual(600_000);
   });
 
-  it("states immediate effect, the slug warning and the leave-it-to-the-user rule in the descriptions", async () => {
+  it("states immediate effect, the slug warning, the irreversible discard rule and the merge pointer in the descriptions", async () => {
     const tools = (await (await connect()).listTools()).tools;
     const description = (name: string) => tools.find((tool) => tool.name === name)!.description!;
     for (const name of ["repo_create", "repo_edit", "space_node", "label_write"]) {
@@ -709,10 +709,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
     }
     expect(description("repo_edit")).toContain("breaks");
     expect(description("label_write")).toContain("removes the label from every Issue");
-    for (const name of ["pr_merge", "pr_discard"]) {
-      expect(description(name)).toContain("Unless the user explicitly asked");
-      expect(description(name)).toContain("leave");
-    }
+    expect(description("pr_discard")).toContain("Unless the user explicitly asked you to discard it");
+    expect(description("pr_merge")).toContain("The server instructions say when to merge");
+    expect(description("pr_merge")).not.toContain("Unless the user");
   });
 
   it("rejects every write, publish and merge tool under read-only scopes before any request", async () => {

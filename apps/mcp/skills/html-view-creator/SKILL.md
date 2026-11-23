@@ -12,8 +12,8 @@ user-invocable: true
   Controls write input cells; subscriptions show recalculated results.
 - Only a person publishes. Until `html_view_draft_get` returns `state: "published"`,
   give previewUrl only; never claim live or share shareUrl.
-- For sources new/changed in a pull request, pass `repo` and `pr` when saving. IDs survive merge. Never merge or ask to merge on
-  their behalf, or use older merged data instead.
+- For sources new/changed in a pull request, pass `repo` and `pr` when saving. IDs survive merge. Merge only as the server
+  instructions say, and never use older merged data instead.
 - If `html_view_save` is unavailable, say this connection cannot draft pages and
   stop. Never substitute a Slide, Board or other Unit.
 - Ask mode cannot save. Read/describe; ask the user to switch to Auto and say "save it". Then save.

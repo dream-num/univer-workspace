@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 export const expectedTools = {
   'core': [
     'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'search',
+    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
@@ -23,12 +23,12 @@ export const expectedTools = {
     'export_markdown', 'compile_typst', 'compile_svg'
   ],
   'admin': [
-    'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node', 'pr_merge', 'pr_discard',
+    'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node', 'pr_discard',
     'resources_registries', 'resources_find', 'resources_export'
   ],
   'core,files': [
     'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'search',
+    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
@@ -38,41 +38,41 @@ export const expectedTools = {
   ],
   'core,admin': [
     'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'search',
+    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
     'html_view_styles', 'html_view_save', 'html_view_read',
-    'html_view_draft_get', 'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node', 'pr_merge',
+    'html_view_draft_get', 'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node',
     'pr_discard', 'resources_registries', 'resources_find', 'resources_export'
   ],
   'files,admin': [
     'blob_get', 'blob_upload', 'blob_download', 'blob_replace', 'asset_download', 'compile_markdown',
     'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit', 'label_list',
-    'label_write', 'space_node', 'pr_merge', 'pr_discard', 'resources_registries', 'resources_find',
+    'label_write', 'space_node', 'pr_discard', 'resources_registries', 'resources_find',
     'resources_export'
   ],
   'all': [
     'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'search',
+    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
     'html_view_styles', 'html_view_save', 'html_view_read',
     'html_view_draft_get', 'blob_get', 'blob_upload', 'blob_download', 'blob_replace', 'asset_download',
     'compile_markdown', 'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit',
-    'label_list', 'label_write', 'space_node', 'pr_merge', 'pr_discard', 'resources_registries',
+    'label_list', 'label_write', 'space_node', 'pr_discard', 'resources_registries',
     'resources_find', 'resources_export'
   ],
 };
 export const restrictedTools = [
   'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-  'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'search',
+  'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
   'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
   'file_upload_create', 'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create',
   'skill_draft_get', 'html_view_styles', 'html_view_read', 'html_view_draft_get', 'blob_get', 'blob_upload',
   'blob_download', 'blob_replace', 'asset_download', 'repo_create', 'repo_edit', 'label_list', 'label_write',
-  'space_node', 'pr_merge', 'pr_discard', 'resources_registries', 'resources_find', 'resources_export'
+  'space_node', 'pr_discard', 'resources_registries', 'resources_find', 'resources_export'
 ];
 
 async function main() {

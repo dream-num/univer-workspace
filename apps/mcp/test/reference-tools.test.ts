@@ -660,11 +660,8 @@ describe("API reference, Skills, resources and server instructions", () => {
       for (const word of ["pull request", "ready", "review", "merg", "api_find", "skills_read"]) {
         expect(instructions).toContain(word);
       }
-      expect(instructions).toContain(
-        "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review.",
-      );
-      expect(instructions).toContain("Otherwise, leave the verified changes in draft.");
-      expect(instructions).toContain("Give the user the pull request link so they can review it.");
+      expect(instructions).toContain("Once the result is verified, mark the pull request ready with pr_ready.");
+      expect(instructions).toContain("Otherwise, merge it with pr_merge.");
       expect(instructions).not.toContain("Mark the pull request ready with pr_ready.");
       expect(instructions).toContain("not in this connection's tool list");
       expect(instructions).not.toMatch(/\buvw\b/u);

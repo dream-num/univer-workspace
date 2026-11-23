@@ -40,16 +40,16 @@ succeeds no executor operations are available. Protocol-incompatible replicas ar
 visible tools use the intersection of compatible replicas' operations, in registry order.
 Instructions follow each connection's visible tools and direct callers to `?toolsets=files` for available
 file capabilities outside their selected toolsets.
-They also follow the principal kind. A person is told to hand over the pull request link and leave merging to the user.
-An agent that has `pr_merge` in its list is told to mark the verified pull request ready, merge it, call `share` and give
-that link to the user. A claimed agent is told to give the pull request link to the person who claimed it instead, and stop,
-when that person asked to review the work or the change needs a person's decision; nothing enforces either choice.
-The core Skill is one text for both and defers to these instructions for an agent identity.
+The granted scopes choose the merge workflow. A connection that has `worktree:merge` and `pr_merge` in its list is told
+to mark the verified pull request ready, merge it, and give the user the pull request link, or for an agent the `share` link.
+A person, and a claimed agent, are told instead to give the pull request link to the user, or to the person who claimed the
+agent, and stop, when that person asked to review the work or the change needs a person's decision; nothing enforces either
+choice. Any other connection is told to hand over the pull request link and leave merging to the user. The core Skill and the
+tool descriptions defer readiness and merging to these instructions.
 A pull request has one author; only the author, or the person who claimed the authoring agent, can merge it. A Team member
 who calls `pr_merge` on someone else's gets `FORBIDDEN` with a message naming the author, and the person who claimed an
 agent author.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
-A person's tool list and instructions stay byte for byte what they were before claiming existed.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -259,8 +259,8 @@ Docker Desktop without changing those identities.
 `/mcp` defaults to `core`. Use `?toolsets=core,files,admin` to select groups or
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
-The principal kind also selects tools. The token exchange and `/api/session` report it. For an agent User, `pr_merge` is
-listed with `core` as well as `admin`, at its place in the order, and `repo_create` is never listed. A person's list does not change.
+The principal kind also selects tools. The token exchange and `/api/session` report it. For an agent User, `repo_create` is
+never listed.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.
@@ -282,7 +282,8 @@ and the matching owner/slug candidates when available.
 | `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) |
 | `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
 | `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
-| `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`). Merging stays with the user |
+| `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`) |
+| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Only the author, or the person who claimed the authoring agent. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, the author or that person |
 | `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |
@@ -369,7 +370,6 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
-| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only the author, or the person who claimed the authoring agent. Only when the user asked, or by an agent for its own work. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, the author or that person |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
@@ -454,8 +454,8 @@ If a named tool is absent from the connection's tool list, that step is unavaila
 instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`.
 
 The server `instructions` carry the `core` Skill's workflow rules for clients without Skill support (ChatGPT,
-WorkBuddy): find the file, open a pull request, write, read back to verify, mark ready, hand the review link to
-the user, and leave merging to the user.
+WorkBuddy): find the file, open a pull request, write, read back to verify, then mark ready and merge, or hand the
+review link to the user, as the granted scopes decide.
 
 Result size: a tool result whose `structuredContent` would exceed 100,000 characters is never sent whole.
 `api_show` pages a long class member by member, and `skills_read` pages a long `resource` by characters. A page

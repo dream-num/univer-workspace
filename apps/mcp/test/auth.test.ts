@@ -190,12 +190,31 @@ describe("gateway authentication", () => {
 
   const exchangeEnv = { MCP_OAUTH_CLIENT_ID: "univer-workspace-mcp-gateway", MCP_OAUTH_CLIENT_SECRET: clientSecret };
 
-  it("takes the principal kind from the exchange: only an agent's token lists pr_merge by default", async () => {
+  it("lets a person's worktree:merge grant, not the principal kind, decide who merges", async () => {
     const gateway = await start(exchangeEnv);
-    const names = async (bearer: string) =>
-      (await (await gateway.connect(bearer)).listTools()).tools.map(({ name }) => name);
-    expect(await names("uvw_pat_agent")).toContain("pr_merge");
-    expect(await names("uvw_pat_full")).not.toContain("pr_merge");
+    const granted = await gateway.connect("uvw_pat_full");
+    expect((await granted.listTools()).tools.map(({ name }) => name)).toContain("pr_merge");
+    const finish = granted.getInstructions()!;
+    expect(finish).toContain("The user granted this connection the worktree:merge scope");
+    expect(finish).toContain("Otherwise, merge it with pr_merge.");
+    expect(finish).not.toContain("Leave merging and discarding to the user");
+
+    const ungranted = await gateway.connect("uvw_at_oauth");
+    expect((await ungranted.listTools()).tools.map(({ name }) => name)).toContain("pr_merge");
+    const leave = ungranted.getInstructions()!;
+    for (const sentence of [
+      "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+      "Give the user the pull request link so they can review it.",
+      "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
+    ]) {
+      expect(leave).toContain(sentence);
+    }
+    expect(leave).not.toContain("worktree:merge scope");
+    expect(leave).not.toContain("merge it with pr_merge");
+    expect(toolError(await ungranted.callTool({ name: "pr_merge", arguments: { repo: "a/b", number: 1 } }))).toMatchObject({
+      code: "workspace-scope-required",
+      detail: { required: "worktree:merge" },
+    });
   });
 
   it("in Workspace mode lists executor tools only when the exchange reports the operator's grant", async () => {
@@ -254,7 +273,7 @@ describe("gateway authentication", () => {
     const gateway = await start({ ...exchangeEnv, METRICS_TOKEN: "metrics-secret" });
     await (await gateway.connect("uvw_at_oauth")).callTool({ name: "whoami", arguments: {} });
     expect(gateway.events()).toMatchObject([{ auth_kind: "oauth", client_id: "chatgpt" }]);
-    const write = await (await gateway.connect("uvw_at_oauth", "?toolsets=admin")).callTool({
+    const write = await (await gateway.connect("uvw_at_oauth")).callTool({
       name: "pr_merge",
       arguments: { repo: "a/b", number: 1 },
     });

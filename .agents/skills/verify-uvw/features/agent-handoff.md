@@ -93,8 +93,8 @@ Preconditions:
 - Claim codes live in server memory: a restart drops them. Each `claim`, and each `share` by an unclaimed owner,
   mints a new one.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
-- The MCP tool lists change with the claim after the gateway's cache (about 30 s): unclaimed agents have `claim`
-  and `pr_merge`, claimed agents keep `pr_merge` only. See [the MCP journeys](./mcp.md).
+- The MCP tool lists change with the claim after the gateway's cache (about 30 s): unclaimed agents have `claim`,
+  claimed agents do not. See [the MCP journeys](./mcp.md).
 - Prompts are English whatever the interface language.
 - The dialog keeps the tab you last chose until the page reloads. Click `MCP (recommended)` before reading the
   MCP tab on a second opening.

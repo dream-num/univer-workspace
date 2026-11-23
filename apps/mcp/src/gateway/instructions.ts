@@ -1,5 +1,5 @@
 import type { OpName } from "../shared/executor-protocol.js";
-import type { ToolDefinition, ToolPrincipal } from "./tools/definition.js";
+import type { ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "./tools/schemas.js";
 
@@ -9,12 +9,26 @@ export function buildServerInstructions(
   operations: ReadonlySet<OpName>,
   executorRestricted: boolean,
   principal: ToolPrincipal,
+  scopes: ReadonlySet<ToolScope>,
 ): string {
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
-  // An unclaimed agent has no reviewer, so it finishes its own pull requests; a claimed one may hand one to its owner.
-  const agentFinishes = principal !== "human" && has("pr_merge");
-  const claimed = principal === "agent_claimed";
+  const finishes = scopes.has("worktree:merge") && has("pr_merge");
+  // An unclaimed agent has nobody to hand a pull request to, so it always finishes its own.
+  const { reviewer, intro } = {
+    human: {
+      reviewer: "the user",
+      intro: "The user granted this connection the worktree:merge scope, so finish your own pull requests as the workflow says.",
+    },
+    agent_claimed: {
+      reviewer: "the person who claimed this agent",
+      intro: "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person, as the workflow says.",
+    },
+    agent_unclaimed: {
+      reviewer: null,
+      intro: "This connection is an agent identity that works in its own Personal Space, where nobody else reviews or merges. Finish your own pull requests as the workflow says.",
+    },
+  }[principal];
   const find = ["space_find", "space_browse"].filter(has);
   const workflow = [
     ...(find.length ? [`Find the file with ${find.join(" or ")}.`] : []),
@@ -27,25 +41,29 @@ export function buildServerInstructions(
     ...(has("unit_create") ? ["Create new Units inside the pull request with unit_create."] : []),
     "Make the change inside the pull request.",
     "Read the result back to verify it before you report success.",
-    ...(agentFinishes
+    ...(finishes
       ? [
-          ...(claimed
+          ...(reviewer
             ? [
                 ...(has("pr_ready")
                   ? ["Once the result is verified, mark the pull request ready with pr_ready."]
                   : []),
-                "If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser.",
+                `If ${reviewer} asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser.`,
                 "Otherwise, merge it with pr_merge.",
               ]
             : [
                 `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
               ]),
-          ...(has("share")
-            ? [
-                "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
-              ]
-            : []),
-          "An agent identity cannot create a Team Space or make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it.",
+          ...(principal === "human"
+            ? ["Then give the user the pull request link."]
+            : [
+                ...(has("share")
+                  ? [
+                      "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
+                    ]
+                  : []),
+                "An agent identity cannot create a Team Space or make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it.",
+              ]),
         ]
       : [
           ...(has("pr_ready")
@@ -59,17 +77,11 @@ export function buildServerInstructions(
   ];
   const instructions = [
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
-    ...(agentFinishes
-      ? [
-          claimed
-            ? "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person, as the workflow says, even where a tool description or a Skill leaves readiness, merging or the link to the user."
-            : "This connection is an agent identity that works in its own Personal Space, where nobody else reviews or merges. Finish your own pull requests as the workflow says, even where a tool description or a Skill leaves readiness, merging or the link to the user.",
-        ]
-      : []),
+    ...(finishes ? [intro] : []),
     ...(executorRestricted
       ? [
           `Editing document contents is not enabled for this account; ask the user to edit in the browser.${
-            agentFinishes && has("claim") && has("unit_create")
+            finishes && has("claim") && has("unit_create")
               ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim, then give the user the claim link and the copy's link. Tell them to open the claim link first: the copy is theirs to edit once they claim it there. Until then, its link may open read-only or not at all."
               : ""
           }`,

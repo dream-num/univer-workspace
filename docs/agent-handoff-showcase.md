@@ -176,14 +176,15 @@ A signed-in person makes a copy of their own with **Remix** on the share page.
 
 ```mermaid
 flowchart LR
-    Asst["🤖 Your AI<br/>assistant"] -- Pull request link --> You(["🧑 You<br/>review<br/>and merge"])
+    Asst["🤖 Your AI<br/>assistant"] -- Without<br/>worktree:merge,<br/>or you ask<br/>to review --> You(["🧑 You<br/>review<br/>and merge"])
+    Asst -- Otherwise --> Self
     Guest["🤖 Guest agent"] -- Always --> Self["🤖 Merges itself<br/>with pr_merge"]
     Claimed["🤖 Claimed agent"] -- Otherwise --> Self
     Claimed -- The claimer<br/>asks to review<br/>or a person<br/>must decide --> Claimer(["🧑 The claimer<br/>reviews<br/>and merges"])
 ```
 
-- Your AI assistant has no `pr_merge` unless you add `?toolsets=admin` or `all`.
-- The MCP server's instructions tell an agent when to merge its own work, and nothing enforces them.
+- Your AI assistant merges its own verified work only when you granted it the `worktree:merge` scope. Without that scope, `pr_merge` refuses with `workspace-scope-required`.
+- The MCP server's instructions tell an assistant or agent when to merge its own work, and nothing enforces them.
 - Anyone else on the Team who tries to merge gets an error that names the author and, for a claimed agent, the person who claimed it.
 
 The person who claimed an agent can merge its work in the browser, or with the CLI:
