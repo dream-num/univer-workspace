@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'n
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const usage = `Usage: node .claude/skills/verify-uvw/bin/html-view-style-thumbnails.mjs [--self-test | --help]
+const usage = `Usage: node .agents/skills/verify-uvw/bin/html-view-style-thumbnails.mjs [--self-test | --help]
 Run from the repository root after verify-uvw up, user, and eval "$($V env)".
 Uses source-built uvw, agent-browser, and cwebp (quality 80, 640x400).
 Creates four disposable source Sheets and publishes each discovered template.
@@ -15,7 +15,7 @@ Run verify-uvw down afterwards. Never use a production instance.`;
 if (process.argv.includes('--help')) { console.log(usage); process.exit(0); }
 assert(process.argv.length === 2 || process.argv.slice(2).join() === '--self-test', usage);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const helper = join(root, '.claude/skills/verify-uvw/bin/verify-uvw');
+const helper = join(root, '.agents/skills/verify-uvw/bin/verify-uvw');
 const templates = join(root, 'apps/cli/skill-data/html-view/templates');
 const output = join(root, 'apps/workspace/web/src/features/html-views/style-thumbnails');
 const normalize = text => text.replace(/revenueGrowth/g, 'revenue growth').replace(/\s+/g, ' ').trim();
