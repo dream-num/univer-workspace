@@ -67,7 +67,7 @@ function setup(page = html, publicRead = false, privateUnits: readonly string[] 
       const body = await request.json();
       expect(body.html).toBe(page);
       draftPosts.push(body);
-      return Response.json({ draft: { ...draftView(body.kind === "revise" ? "create" : body.kind), ...(body.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: body.sourceWorktreeId }) } }, { status: draftPosts.length === 1 ? 201 : 200 });
+      return Response.json({ draft: { ...draftView(body.kind === "revise" ? "create" : body.kind), ...(body.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: body.sourceWorktreeId, publishWhen: "merge" }) } }, { status: draftPosts.length === 1 ? 201 : 200 });
     }
     if (request.url.endsWith("/resources/resource")) return Response.json({ node, resource });
     throw new Error(`Unexpected Workspace request ${request.method} ${request.url}`);
@@ -506,7 +506,7 @@ it("returns the recorded replacement for a repeated key, including the access su
 });
 
 function draftView(kind: "create" | "replace" = "create", state = "pending") {
-  return { id: "draft-1", kind, state, supersededBy: state === "superseded" ? "draft-2" : null, spaceId: "space", parentNodeId: null,
+  return { id: "draft-1", kind, state, ...(state === "pending" ? { publishWhen: "publish" } : {}), supersededBy: state === "superseded" ? "draft-2" : null, spaceId: "space", parentNodeId: null,
     name: "Dashboard.univer.html", targetResourceId: kind === "replace" ? "resource" : null,
     baseEtag: kind === "replace" ? '"v1"' : null, byteSize: Buffer.byteLength(html),
     createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null,
@@ -541,10 +541,11 @@ it.each(["create", "replace"] as const)("reads every %s draft state over HTTP wi
 it.each([
   { sourceWorktreeId: null, publishWhen: "publish" },
   { sourceWorktreeId: "wt-1", publishWhen: "merge" },
+  { sourceWorktreeId: "wt-1", publishWhen: "publish" },
 ])("reports $publishWhen for a pending draft with sourceWorktreeId $sourceWorktreeId", async ({ sourceWorktreeId, publishWhen }) => {
   const { context } = uploadContext();
   const http = new WorkspaceHttp({ origin: context.identityOrigin, role: "client", cookie: "session=test",
-    fetcher: async () => Response.json({ draft: { ...draftView(), sourceWorktreeId } }),
+    fetcher: async () => Response.json({ draft: { ...draftView(), sourceWorktreeId, publishWhen } }),
   });
   const result = await htmlViewDraftGetTool.run({ ...context, http }, { draft: "draft-1" });
   expect(result.output).toMatchObject({ draft: { state: "pending", sourceWorktreeId, publishWhen } });
@@ -708,13 +709,28 @@ it("dryRun reads source pull request data", async () => {
   expect(f.draftPosts).toEqual([]);
 });
 
-it("revises a pending draft through save and reads its HTML without an etag", async () => {
+it.each(["ready", "merged"] as const)("revises a pending draft with a %s source through save and reads its HTML without an etag", async (state) => {
   const f = setup();
+  const original = f.fetcher.getMockImplementation();
+  if (!original) throw new Error("Expected product fetcher");
+  const publishWhen = state === "merged" ? "publish" : "merge";
+  f.fetcher.mockImplementation(async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/worktrees/wt-1") return Response.json({ worktree: { id: "wt-1", name: "Source", state,
+      units: [{ unitId: "unit", unitType: "sheet", name: "Sheet", nodeId: "node", resourceId: "resource",
+        source: "trunk", target: null, draftHeadRevision: 7, change: "modified", mergeResult: "pending", activationState: "notApplicable" }] } });
+    const response = await original(url, init);
+    if (path === "/api/html-view-drafts/draft-1" || path === "/api/html-view-drafts") {
+      const body = await response.json();
+      return Response.json({ draft: { ...body.draft, sourceWorktreeId: "wt-1", publishWhen } }, { status: response.status });
+    }
+    return response;
+  });
   const { context } = uploadContext();
   connectReplacement(f.ctx);
   const result = await htmlViewSaveTool.run(context, { draft: "draft-1", html, idempotency_key: key });
-  expect(result.output).toMatchObject({ draft: { kind: "create", state: "pending" } });
-  expect(f.draftPosts).toEqual([{ kind: "revise", draftId: "draft-1", html }]);
+  expect(result.output).toMatchObject({ draft: { kind: "create", state: "pending", sourceWorktreeId: "wt-1", publishWhen } });
+  expect(f.draftPosts).toEqual([{ kind: "revise", draftId: "draft-1", html, sourceWorktreeId: "wt-1" }]);
   const read = await htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { draft: "draft-1" });
   expect(read.output).toMatchObject({ draft: "draft-1", html, space: "space", previewUrl: "https://workspace.test/drafts/draft-1" });
   expect(read.output).not.toHaveProperty("etag");

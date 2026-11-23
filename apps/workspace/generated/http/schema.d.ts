@@ -2817,6 +2817,11 @@ export interface components {
             kind: "create" | "replace";
             /** @enum {string} */
             state: "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
+            /**
+             * @description Present only for pending drafts. Merge the source pull request while it is open; otherwise publish manually.
+             * @enum {string}
+             */
+            publishWhen?: "merge" | "publish";
             /** @description Successor draft ID when superseded. */
             supersededBy: string | null;
             spaceId: string;

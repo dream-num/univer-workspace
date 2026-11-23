@@ -76,9 +76,9 @@ export function createHtmlViewDraftsModule(options: {
   async function view(row: DraftRow): Promise<HtmlViewDraftView> {
     if (row.state === "receiving") throw draftConflict("Draft content is still receiving.");
     let state: HtmlViewDraftView["state"] = row.state;
-    if (state === "pending" && row.source_worktree_id !== null &&
-        (await sourceWorktree(row.author_user_id, row.source_worktree_id)).state === "discarded")
-      state = "conflicted";
+    const source = state === "pending" && row.source_worktree_id !== null
+      ? await sourceWorktree(row.author_user_id, row.source_worktree_id) : undefined;
+    if (source?.state === "discarded") state = "conflicted";
     if (state === "pending" && row.expires_at <= now()) state = "expired";
     else if (state === "pending" && row.kind === "replace") {
       const etag = await repository.currentEtag(row.target_resource_id!);
@@ -88,6 +88,7 @@ export function createHtmlViewDraftsModule(options: {
       id: row.id,
       kind: row.kind,
       state,
+      ...(state === "pending" ? { publishWhen: source && source.state !== "merged" ? "merge" as const : "publish" as const } : {}),
       supersededBy: row.superseded_by,
       spaceId: row.space_id,
       sourceWorktreeId: row.source_worktree_id,

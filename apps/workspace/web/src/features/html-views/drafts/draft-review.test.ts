@@ -51,7 +51,7 @@ beforeEach(() => {
   window.localStorage.setItem("univer-workspace-language", "en-US");
   vi.clearAllMocks(); requests.length = 0;
   draft = {
-    id: "draft-1", kind: "create", state: "pending", spaceId: "sales", parentNodeId: "folder-1",
+    id: "draft-1", kind: "create", state: "pending", publishWhen: "publish", spaceId: "sales", parentNodeId: "folder-1",
     name: "Sales.univer.html", targetResourceId: null, baseEtag: null, byteSize: 100,
     createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, supersededBy: null, published: null,
   };
@@ -354,7 +354,7 @@ it("lists bound source Sheet names through the shared source loader", async () =
 
 
 it.each(["page", "card"] as const)("previews PR sources and waits for merge in the %s", async (presentation) => {
-  draft.sourceWorktreeId = "pr-3";
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge";
   html = '<p data-univer-cell-text="source-unit:sheet-1:B2"></p>';
   await render(presentation);
   await waitFor(() => expect(container.textContent).toContain("Publishes automatically when PR #3 merges."));
@@ -372,7 +372,7 @@ it.each(["page", "card"] as const)("previews PR sources and waits for merge in t
 });
 
 it("unlocks a pending draft after a token merge without automatic publication", async () => {
-  draft.sourceWorktreeId = "pr-3"; sourceState = "merged";
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "publish"; sourceState = "merged";
   await render();
   await waitFor(() => expect(button("Publish").disabled).toBe(false));
   expect(container.textContent).not.toContain("Publishes automatically");
@@ -381,7 +381,7 @@ it("unlocks a pending draft after a token merge without automatic publication", 
 });
 
 it("says the source PR was discarded", async () => {
-  draft.sourceWorktreeId = "pr-3"; sourceState = "discarded";
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge"; sourceState = "discarded";
   await render();
   await waitFor(() => expect(container.textContent).toContain("The source PR was discarded"));
   expect(container.querySelector("button")).toBeNull();
@@ -389,7 +389,7 @@ it("says the source PR was discarded", async () => {
 });
 
 it("shows the waiting message in Chinese", async () => {
-  draft.sourceWorktreeId = "pr-3";
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge";
   window.localStorage.setItem("univer-workspace-language", "zh-CN");
   await render();
   await waitFor(() => expect(container.textContent).toContain("等待 PR #3 合并，合并后自动发布页面。"));
@@ -398,7 +398,7 @@ it("shows the waiting message in Chinese", async () => {
 
 
 it("links legacy source PRs through the existing review route", async () => {
-  draft.sourceWorktreeId = "pr-3"; sourceNumber = null;
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge"; sourceNumber = null;
   await render();
   await waitFor(() => expect(container.textContent).toContain("Publishes automatically when the source PR merges."));
   expect(container.querySelector('a[href="/worktrees?worktree=pr-3"]')).not.toBeNull();
@@ -413,4 +413,27 @@ it("shows superseded with a successor link and no publish controls", async () =>
   expect(container.textContent).toContain("Open newer draft");
   expect(container.querySelector("button")).toBeNull();
   expect(requests.some((request) => new URL(request.url).pathname.endsWith("/content"))).toBe(false);
+});
+
+it("uses the draft publication hint even before the source query catches up", async () => {
+  draft.sourceWorktreeId = "pr-3";
+  draft.publishWhen = "publish";
+  sourceState = "ready";
+  await render();
+  await waitFor(() => expect(button("Publish").disabled).toBe(false));
+  expect(container.textContent).not.toContain("Publishes automatically");
+  await click("Publish");
+  await waitFor(() => expect(container.textContent).toContain("Published"));
+});
+
+it("refreshes the publication hint when the source PR merges in another session", async () => {
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge";
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("Publishes automatically"));
+  expect(button("Publish").disabled).toBe(true);
+  sourceState = "merged";
+  draft = { ...draft, publishWhen: "publish" };
+  await act(async () => { await queries.invalidateQueries({ queryKey: ["worktrees"] }); });
+  await waitFor(() => expect(button("Publish").disabled).toBe(false));
+  expect(container.textContent).not.toContain("Publishes automatically");
 });

@@ -25,7 +25,7 @@ export function htmlViewDraftResult(draft: WorkspaceHtmlViewDraft) {
   return {
     id: draft.id, kind: draft.kind, state: draft.status.state, name: draft.name, space: draft.spaceId,
     previewUrl: draft.previewUrl, expiresAt: draft.expiresAt,
-    ...(draft.status.state === "pending" ? { publishWhen: draft.sourceWorktreeId == null ? "publish" : "merge" } : {}),
+    ...(draft.publishWhen === undefined ? {} : { publishWhen: draft.publishWhen }),
     ...(draft.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: draft.sourceWorktreeId }),
     ...(draft.status.state === "superseded" ? { supersededBy: draft.status.supersededBy, successorUrl: draft.status.successorUrl } : {}),
     ...(draft.status.state === "published" ? {
