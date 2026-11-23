@@ -71,7 +71,7 @@ export interface AccessRepository {
   findResourceByUnitId(unitId: string): Promise<ResourceMappingRow | null>;
   findResource(resourceId: string): Promise<ResourceMappingRow | null>;
   findRequester(userId: string): Promise<Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">>;
-  countPersonalFiles(userId: string, operationId: string | null): Promise<number>;
+  countOwnedFiles(userId: string, operationId: string | null): Promise<number>;
   resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null>;
   resolveNode(userId: string, nodeId: string): Promise<ResolvedNodeRow | null>;
   resolveNodeAuthorization(userId: string, nodeId: string): Promise<NodeAuthorizationRow | null>;

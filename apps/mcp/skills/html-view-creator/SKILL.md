@@ -134,7 +134,7 @@ Workspace; never tell them to press Publish. `publish` means open the preview an
 Explain access from `repositoryVisibility` and `privateSourceUnitIds`: public with no
 private sources means anyone with the link once published; otherwise permission is needed.
 Page access does not grant source access. Never change sharing without permission.
-This connection cannot make a repository public. For public links, give the repository `url` and ask the user to make it public
+A person's connection and an unclaimed agent cannot make a repository public. For public links, give the repository `url` and ask the user to make it public
 in browser settings. Explain that this publishes everything in it.
 With a local shell and `node`, and not as an agent identity, end the reply with exactly
 this sentence, translated into the user's language:

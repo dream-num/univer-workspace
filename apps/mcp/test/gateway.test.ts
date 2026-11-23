@@ -667,14 +667,14 @@ describe("gateway over real HTTP and the MCP client", () => {
   });
 
   it.each([false, true])(
-    "never lists repo_create for an agent (claimed: %s)",
+    "lists the same admin tools for an agent as for a person (claimed: %s)",
     async (claimed) => {
       principal = { kind: "agent", claimed };
       const names = async (suffix: string) =>
         (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map(
           (tool) => tool.name,
         );
-      const agentAdmin = adminNames.filter((name) => name !== "repo_create");
+      const agentAdmin = adminNames;
       const agentCore = claimed ? coreNames : coreNames.flatMap((name) => (name === "share" ? [name, "claim"] : [name]));
       expect(await names("")).toEqual(agentCore);
       expect(await names("?toolsets=core")).toEqual(agentCore);
@@ -752,7 +752,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(agent).toContain(
       "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
     );
-    const limits = "An agent identity cannot create a Team Space or make a repository public";
+    const limits = "An unclaimed agent identity cannot make a repository public";
     expect(agent).toContain(limits);
     expect(human).not.toContain(limits);
     for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
@@ -771,8 +771,8 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(claimed).toContain(
       "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Call share with node set to the merged file's nodeId",
     );
-    expect(claimed).toContain(limits);
-    for (const sentence of ["nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
+    expect(claimed).toContain("A file link from someone else gives an agent identity read access only.");
+    for (const sentence of [limits, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(claimed).not.toContain(sentence);
     }
   });

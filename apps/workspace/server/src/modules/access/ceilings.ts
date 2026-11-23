@@ -4,15 +4,17 @@ import type { PrincipalCategory } from "../identity/index.js";
 import type { AccessRole } from "./access.types.js";
 
 const UNCLAIMED_AGENT_MAX_FILES = 20;
+const UNCLAIMED_AGENT_MAX_TEAM_SPACES = 3;
 const UNCLAIMED_AGENT_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 /** What each action tells the ceilings about its target and its session. */
 export interface CeilingContexts {
-  readonly createTeamSpace: Readonly<Record<never, never>>;
+  /** `held` counts the Team Spaces the principal already owns. */
+  readonly createTeamSpace: { readonly held: number };
   readonly updateSpace: { readonly publicRead: boolean };
-  readonly addTeamMember: { readonly member: PrincipalCategory; readonly role: AccessRole };
+  readonly addTeamMember: { readonly member: PrincipalCategory; readonly role: AccessRole; readonly owner: PrincipalCategory };
   readonly searchUsers: Readonly<Record<never, never>>;
-  /** `held` counts the files the principal's Personal Space already has or is about to get. */
+  /** `held` counts the files the principal's Spaces already have or are about to get. */
   readonly createFiles: { readonly held: number; readonly adding: number };
   readonly storeFile: { readonly byteSize: number };
   /** `tokenIssued` is true for a session issued for a personal access token or an OAuth grant. */
@@ -32,24 +34,26 @@ const isAgent = (category: PrincipalCategory): boolean =>
   category === "agent_unclaimed" || category === "agent_claimed";
 
 // An agent identity costs nothing, so it gets no organisation-wide reach and, until a human claims
-// it, a small storage budget. A human's token session reads all of that human's private files, so
-// it may not publish one without the human present; an agent's token session reads only the agent's
-// own Space, where the role check already confines it.
+// it, a small storage budget and no one else in its Spaces. A human's token session reads all of
+// that human's private files, so it may not publish one without the human present; an agent's token
+// session reads only the agent's own Space, where the role check already confines it.
 const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   createTeamSpace: {
-    code: "AGENT_NOT_ALLOWED",
-    message: "An agent cannot create a Team Space.",
-    forbids: isAgent,
+    code: "AGENT_QUOTA_EXCEEDED",
+    message: `An unclaimed agent can own at most ${UNCLAIMED_AGENT_MAX_TEAM_SPACES} Team Spaces.`,
+    forbids: (principal, { held }) => principal === "agent_unclaimed" && held >= UNCLAIMED_AGENT_MAX_TEAM_SPACES,
   },
   updateSpace: {
     code: "AGENT_NOT_ALLOWED",
-    message: "An agent cannot make a Space public.",
-    forbids: (principal, { publicRead }) => isAgent(principal) && publicRead,
+    message: "An unclaimed agent cannot make a Space public.",
+    forbids: (principal, { publicRead }) => principal === "agent_unclaimed" && publicRead,
   },
+  // A Team Space an agent owns reaches only the agent and its claimer, so an agent may be its admin.
   addTeamMember: {
     code: "AGENT_NOT_ALLOWED",
-    message: "An unclaimed agent cannot be a Team Space member, and an agent cannot be an admin.",
-    forbids: (_principal, { member, role }) => member === "agent_unclaimed" || (isAgent(member) && role === "admin"),
+    message: "An unclaimed agent cannot add or be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.",
+    forbids: (principal, { member, role, owner }) =>
+      principal === "agent_unclaimed" || member === "agent_unclaimed" || (isAgent(member) && role === "admin" && owner === "human"),
   },
   // Anyone can create an agent, so an unclaimed one must not read the User directory.
   searchUsers: {

@@ -76,11 +76,11 @@ function readRequester(database: DatabaseSync, userId: string) {
 }
 
 /**
- * Files the User's Personal Space holds or is about to hold: Nodes with a Resource outside Trash,
+ * Files the User's Spaces hold or are about to hold: Nodes with a Resource outside Trash,
  * new-file intents of open pull requests, and creations still in flight. A file that
  * `operationId` already accounts for is left out, so replaying an operation adds nothing.
  */
-function countPersonalFiles(database: DatabaseSync, userId: string, operationId: string | null): number {
+function countOwnedFiles(database: DatabaseSync, userId: string, operationId: string | null): number {
   const row = database
     .prepare(
       `SELECT
@@ -88,14 +88,12 @@ function countPersonalFiles(database: DatabaseSync, userId: string, operationId:
           FROM resources
           JOIN nodes ON nodes.id = resources.node_id
           JOIN spaces ON spaces.id = nodes.space_id
-          WHERE spaces.type = 'personal'
-            AND spaces.owner_user_id = $userId
+          WHERE spaces.owner_user_id = $userId
             AND nodes.trash_batch_id IS NULL)
          + (SELECT COUNT(*)
             FROM worktree_node_intents AS intent
             JOIN spaces ON spaces.id = intent.target_space_id
-            WHERE spaces.type = 'personal'
-              AND spaces.owner_user_id = $userId
+            WHERE spaces.owner_user_id = $userId
               AND intent.activated_at IS NULL
               AND intent.discarded_at IS NULL)
          + (SELECT COUNT(*)
@@ -121,8 +119,16 @@ export function assertFileQuota(
 ): void {
   const principal = requesterCategory(readRequester(database, userId));
   if (principal === "agent_unclaimed") {
-    assertCeiling(principal, "createFiles", { held: countPersonalFiles(database, userId, operationId), adding });
+    assertCeiling(principal, "createFiles", { held: countOwnedFiles(database, userId, operationId), adding });
   }
+}
+
+/** Read the principal and its Team Spaces in the transaction that creates the next one. */
+export function assertTeamSpaceQuota(database: DatabaseSync, userId: string): void {
+  const row = database.prepare(`SELECT ${requesterColumns},
+    (SELECT COUNT(*) FROM spaces WHERE type = 'team' AND owner_user_id = $userId) AS held`).get({ userId }) as
+    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly held: number };
+  assertCeiling(requesterCategory(row), "createTeamSpace", { held: row.held });
 }
 
 export class SqliteAccessRepository implements AccessRepository {
@@ -198,8 +204,8 @@ export class SqliteAccessRepository implements AccessRepository {
     return readRequester(this._database.connection, userId);
   }
 
-  async countPersonalFiles(userId: string, operationId: string | null): Promise<number> {
-    return countPersonalFiles(this._database.connection, userId, operationId);
+  async countOwnedFiles(userId: string, operationId: string | null): Promise<number> {
+    return countOwnedFiles(this._database.connection, userId, operationId);
   }
 
   async resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null> {

@@ -2959,8 +2959,9 @@ $V mcp --as bot1 mh-bot1-claim claim '{}'
   [pull requests](./pull-requests.md) for that refusal in a Team Space).
 - **MH4. Public Spaces.** `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
   with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
-  and `detail.url` ending in `/spaces/<id>/settings`. The same call as bot1 fails with `AGENT_NOT_ALLOWED`
-  (`An agent cannot make a Space public.`). A uvw password session is interactive and may publish.
+  and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
+  the same call on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
+  `AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
 - **MH5. Copy a shared file.** With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
   `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
   `The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only

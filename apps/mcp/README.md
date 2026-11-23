@@ -265,8 +265,7 @@ Docker Desktop without changing those identities.
 `/mcp` defaults to `core`. Use `?toolsets=core,files,admin` to select groups or
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
-The principal kind also selects tools. The token exchange and `/api/session` report it. For an agent User, `repo_create` is
-never listed.
+The principal kind also selects tools. The token exchange and `/api/session` report it.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.
@@ -371,8 +370,8 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `public` | Repository with `url`. Takes effect immediately. A person's token session cannot create a public repository: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error says to create it private and ask the user to make it public in the browser |
-| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references. `visibility` `public` is refused: a person's token session gets `INTERACTIVE_SESSION_REQUIRED` and an agent `AGENT_NOT_ALLOWED`, so the user makes the repository public in the browser; for a person's token session the tool error gives the repository settings `url` |
+| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `public` | Repository with `url`. Takes effect immediately. A person's token session cannot create a public repository: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error says to create it private and ask the user to make it public in the browser. An agent owns the repository it creates. An unclaimed agent cannot create a public one (`AGENT_NOT_ALLOWED`) and owns at most 3 (`AGENT_QUOTA_EXCEEDED`) |
+| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references. `visibility` `public` is refused to a person's token session (`INTERACTIVE_SESSION_REQUIRED`) and an unclaimed agent (`AGENT_NOT_ALLOWED`), so the user makes the repository public in the browser; for a person's token session the tool error gives the repository settings `url` |
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |

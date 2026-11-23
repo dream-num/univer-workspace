@@ -369,7 +369,7 @@ export function createExchangeModule(options: {
       assertCeiling(principal, "storeFile", { byteSize: source.byteSize });
       // Refused here for an answer the caller can read; resources.create holds the limit itself.
       await assertCreateFilesCeiling(principal, {
-        held: () => options.access.countPersonalFiles(userId),
+        held: () => options.access.countOwnedFiles(userId),
         adding: input.outputType === 2 ? 0 : 1,
       });
       const taskID = startTask(userId, "import", async () => {

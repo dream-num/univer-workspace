@@ -211,8 +211,8 @@ interface AccessResolver {
 Space 的 Owner 关系有两种来源：`spaces.owner_user_id`，以及认领了该 Space 所有者 agent 的人
 （`agents.owner_user_id`）。两者都得到 `owner` 角色。这个关系是单向的，agent 不因此得到主人的任何权限。
 它只写在 Access Repository 的 `ownsSpaceSql` 里，可见性和角色都从这里读；Space 列表、Owned by me、
-Activity、Worktree 的发现、Review、决定与 Merge 也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
-（内容权限候选人、Worktree 实时推送对象）用同一处的 `spaceOwnerIdsSql`。
+Activity、Worktree 的发现、Review、决定与 Merge、跨 Space 的 Issue 列表与指派也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
+（内容权限候选人、Worktree 与 Issue 实时推送对象）用同一处的 `spaceOwnerIdsSql`。
 
 一个 Pull request 只有一个作者，即创建者，草稿只由作者编辑。人和 agent 在 Trunk 上协作，各自开自己的 Pull request，不在同一个
 Pull request 里协作。Merge 要求对每个目标有编辑权限，并且具备两种身份之一：创建者 Personal Space 的 Owner，即作者本人和认领了
@@ -246,7 +246,8 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
 
 - Space 所有者是暂停中的 agent（`banned_at` 非空或 `expires_at` 已过）时，Owner 以外的请求者得不到任何角色，
-  Space 与其中的 Node 对他们不可发现。暂停每次查询时推出，不落库；
+  Space 与其中的 Node、Team Worktree、Issue 对他们不可发现，Worktree 与 Issue 的实时推送也不再发给他们。
+  Team Worktree 的作者和被移出 Space 时一样仍能看到自己的 Pull request，但读不到其中的 Unit。暂停每次查询时推出，不落库；
 - 请求者是 `agent_unclaimed` 时，Link Sharing 给出的角色是 `viewer`，与匿名读者相同。
 
 `modules/access/ceilings.ts` 是权限判定的第三层。角色与 Capability 说明主体能做什么，上限只说明无论角色如何都不能做什么，
@@ -254,17 +255,17 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 
 | 动作 | 禁止条件 | 错误码 |
 | --- | --- | --- |
-| `createTeamSpace` | 主体是 agent | `AGENT_NOT_ALLOWED` |
-| `updateSpace` | 主体是 agent 且把 Space 设为公开可读 | `AGENT_NOT_ALLOWED` |
-| `addTeamMember` | 被加入或改角色的 User 是未认领 agent，或是 agent 且角色为 admin | `AGENT_NOT_ALLOWED` |
+| `createTeamSpace` | 主体是未认领 agent，已持有 3 个 Team Space | `AGENT_QUOTA_EXCEEDED` |
+| `updateSpace` | 主体是未认领 agent，且创建或更新 Space 时请求 `publicRead: true` | `AGENT_NOT_ALLOWED` |
+| `addTeamMember` | 主体是未认领 agent；或被加入或改角色的 User 是未认领 agent；或被加入的 User 是 agent，角色为 admin，而 Space 的所有者是人 | `AGENT_NOT_ALLOWED` |
 | `searchUsers` | 主体是未认领 agent | `AGENT_NOT_ALLOWED` |
-| `createFiles` | 主体是未认领 agent，Personal Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
+| `createFiles` | 主体是未认领 agent，它持有的全部 Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
 | `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
 | `publishSpace` | 主体是人，Session 由个人访问令牌或 OAuth Grant 换出，且创建或更新 Space 时请求 `publicRead: true` | `INTERACTIVE_SESSION_REQUIRED` |
 
 文件数包括 Trash 之外有 Resource 的 Node、未完成 Pull request 中的新建文件和仍在进行的创建 Operation；
-重放同一个 Operation 不重复计数。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
+重放同一个 Operation 不重复计数。Team Space 的数量在创建它的同一个事务里读取，并发的创建不会越过上限。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
 Personal Space 的 Node，因为分享 Capability 只给 Personal Space 的 Owner。用户搜索只返回人。
 
 `POST /api/nodes/{nodeId}/reports` 接受对请求者可读 Node 的举报，登录与否均可，按来源 IP 每小时最多 10 次，

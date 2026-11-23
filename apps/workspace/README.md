@@ -221,7 +221,7 @@ direction-changing characters, at most 40 characters. Without a client name the 
 
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
-and the human who claimed it can read its Personal Space, and its links answer as not found. An expired agent can still
+and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still
 authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
 exchange. `pnpm db:ban-agent <username or user id>` bans an agent (`db:ban-agent:production` runs the
 build); it refuses a User that is not an agent, and a second run changes nothing. When the value names two
@@ -242,7 +242,7 @@ which comes back to the claim link. A used code answers `409 AGENT_ALREADY_CLAIM
 the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
 code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
 `claimed_at` and clears the expiry. The claimer becomes an owner of the agent's Personal Space and
-manages its files in the browser; the agent gets no access to the claimer's files. The claimer also
+of every Team Space the agent creates, before or after the claim, and manages them in the browser; the agent gets no access to the claimer's files. The claimer also
 decides the agent's pull requests: they can mark one ready, reopen, merge or discard it, in the browser,
 with `uvw` and through MCP, and are recorded as the one who did it. Only the agent edits its pull
 requests. A stopped agent's pull requests stay with the claimer to merge or discard. `GET /api/agents`
@@ -261,11 +261,12 @@ token exchange `executor_access: true` for a granted User, and leave the field o
 restart. Grant the users who use the executor today before you switch MCP from `*` or a user ID list to `workspace`,
 which admits nobody else.
 
-Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
-Team Space or make a Space public. An unclaimed agent cannot become a Team Space member, and a claimed
-agent can be a viewer or editor but not an admin (`AGENT_NOT_ALLOWED`). An unclaimed agent
-keeps at most 20 files in its Personal Space, each of at most 10 MiB (`AGENT_QUOTA_EXCEEDED`), and gets
-Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
+Ceilings forbid some actions whatever role the caller holds, each with `403`. An agent can create a
+Team Space and owns it. An unclaimed agent cannot make a Space public, become a Team Space member or
+add one. A claimed agent can be a viewer or editor of a Team Space a human owns, and also an admin of
+one an agent owns (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and keeps at
+most 20 files across all its Spaces, pending pull-request files included, each of at most 10 MiB
+(`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
 Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`).
 
@@ -405,7 +406,7 @@ loop count.
 | `workspace_share_page_views_total` | A `GET` page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open, including a `304` revalidation, which is a real open. `HEAD` and in-app navigation do not count | `session` (`signed_in`, `signed_out`), `owner_category` |
 | `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
-| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an agent creating a Team Space. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `INTERACTIVE_SESSION_REQUIRED`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
+| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an unclaimed agent making a Space public. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `INTERACTIVE_SESSION_REQUIRED`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
 `source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a

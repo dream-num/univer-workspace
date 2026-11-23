@@ -31,7 +31,7 @@ export interface WorktreeRow {
   readonly claimer_display_name: string | null;
   readonly claimer_avatar_url: string | null;
   readonly team_space_name: string | null;
-  readonly team_owner_user_id: string | null;
+  readonly actor_owns_team_space: 0 | 1 | null;
   readonly actor_member_role: "admin" | "editor" | "viewer" | null;
   readonly actor_owns_creator_space: 0 | 1;
   readonly unit_count: number;
