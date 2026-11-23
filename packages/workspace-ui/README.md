@@ -117,13 +117,10 @@ for Workspace Browser. Each application's build must resolve one matching React
 and React DOM pair. Do not force one React version across both applications or
 bundle a second runtime to make a shared component compile.
 
-The repository also has version-scoped Redi `packageExtensions` that repair
-published SDK declaration metadata in these separate dependency graphs. They are
-not dev SDK version overrides and are not a reason to add DI or direct Redi
-imports to UI primitives. Univer consumers obtain DI APIs and types through
-`@univerjs/core`. Follow the [React and Redi guidance](../../AGENTS.md#react-and-redi-dependency-boundaries)
-when changing dependency versions or removing an extension; a successful build
-with an existing `node_modules` tree is insufficient evidence.
+Univer consumers obtain DI APIs and types through `@univerjs/core`. Do not add DI
+or direct Redi imports to UI primitives. Follow the
+[React and Redi guidance](../../AGENTS.md#react-and-redi-dependency-boundaries)
+when changing dependency versions.
 
 ## Verification when changing shared controls
 
