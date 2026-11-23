@@ -76,6 +76,15 @@ describe("a Team Space an agent owns", () => {
       expect((await setRole(origin, repo, claimer, member.id, "editor")).status).toBe(200);
       expect((await setRole(origin, repo, claimer, peer.id, "admin")).status).toBe(200);
       expect(await members(origin, repo, claimer)).toEqual([[member.id, "editor"], [peer.id, "admin"]].sort());
+
+      const memberPull = await createPull(origin, member, repo);
+      expect(await transition(origin, memberPull, "ready", member)).toBe("ready");
+      expect(await transition(origin, memberPull, "reopen", claimer)).toBe("draft");
+      expect(await transition(origin, memberPull, "discard", claimer)).toBe("discarded");
+      const claimerPull = await createPull(origin, claimer, repo);
+      expect(await transition(origin, claimerPull, "ready", claimer)).toBe("ready");
+      expect(await transition(origin, claimerPull, "merge", claimer)).toBe("merged");
+
       expect((await send(origin, "DELETE", `/api/team-spaces/${repo}/members/${member.id}`, undefined, claimer.cookie)).status).toBe(204);
       expect(await members(origin, repo, claimer)).toEqual([[peer.id, "admin"]]);
 
@@ -84,7 +93,7 @@ describe("a Team Space an agent owns", () => {
       expect((await send(origin, "PATCH", `/api/spaces/${repo}`, { publicRead: false }, claimer.cookie)).status).toBe(200);
       expect((await send(origin, "GET", `/api/spaces/${repo}/nodes`)).status).toBe(404);
     }
-  });
+  }, 60_000);
 
   it("is suspended for its members once the claimer stops the agent (A3.6)", async () => {
     const { origin } = await start();
@@ -304,7 +313,7 @@ async function createPull(origin: string, actor: Actor, spaceId: string): Promis
   return id;
 }
 
-async function transition(origin: string, worktreeId: string, action: "ready" | "merge", actor: Actor): Promise<string> {
+async function transition(origin: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard", actor: Actor): Promise<string> {
   const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/${action}`, undefined, actor.cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 200) throw new Error(`${action} failed with ${response.status}: ${await response.text()}`);
   return ((await response.json()) as { worktree: { state: string } }).worktree.state;

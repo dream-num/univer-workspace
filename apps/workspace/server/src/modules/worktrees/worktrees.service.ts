@@ -90,7 +90,7 @@ export function createWorktreesModule(options: {
 
   async function context(userId: string, worktreeId: string): Promise<WorktreeContext> {
     const row = await options.repository.get(worktreeId, userId);
-    if (!row || !isDiscoverable(userId, row)) throw notFound();
+    if (!row || !isDiscoverable(row)) throw notFound();
     const data = await backendCall(() =>
       options.backend.getWorktree(worktreeId, userId)
     );
@@ -187,7 +187,7 @@ export function createWorktreesModule(options: {
         ...(scope.kind === "user" ? { creatorUserId: scope.creatorUserId } : {}),
         search: "", order: "createdAtDesc", cursor: null, limit: MAX_ACTIVITY_ROWS + 1, touchedSince: since,
       });
-      const visible = rows.slice(0, MAX_ACTIVITY_ROWS).filter((row) => isDiscoverable(userId, row));
+      const visible = rows.slice(0, MAX_ACTIVITY_ROWS).filter((row) => isDiscoverable(row));
       let complete = rows.length <= MAX_ACTIVITY_ROWS;
       const processed = visible.filter((row) => row.processed_at !== null && row.processed_at >= since)
         .sort((a, b) => b.processed_at! - a.processed_at! || a.id.localeCompare(b.id));
@@ -275,7 +275,7 @@ export function createWorktreesModule(options: {
         const batch = rows.slice(0, limit);
         const loaded = [];
         for (const row of batch) {
-          if (!isDiscoverable(userId, row)) continue;
+          if (!isDiscoverable(row)) continue;
           const data = await backendCall(() =>
             options.backend.getWorktree(row.id, userId)
           );
@@ -969,7 +969,7 @@ async function worktreeCapabilities(
     author: row.creator_user_id === userId,
     // A claimer owns the agent's Space, so decides the agent's pull requests; only the author edits them.
     authorOrClaimer: Boolean(row.actor_owns_creator_space),
-    role: row.team_owner_user_id === userId ? "owner" : row.actor_member_role,
+    role: row.actor_owns_team_space ? "owner" : row.actor_member_role,
     readsAll,
     editsAll,
   };
@@ -1123,13 +1123,10 @@ async function validateTarget(
   if (!parent.capabilities.createChildren) throw forbidden();
 }
 
-function isDiscoverable(userId: string, row: WorktreeRow): boolean {
+function isDiscoverable(row: WorktreeRow): boolean {
   if (row.actor_owns_creator_space) return true;
   if (row.kind === "user") return false;
-  const teamRole =
-    row.team_owner_user_id === userId
-      ? "owner"
-      : row.actor_member_role;
+  const teamRole = row.actor_owns_team_space ? "owner" : row.actor_member_role;
   if (teamRole === null) return false;
   if (row.visibility === "space") return true;
   return teamRole === "owner" || teamRole === "admin";
@@ -1139,7 +1136,7 @@ function canManageSummary(userId: string, row: WorktreeRow): boolean {
   if (row.creator_user_id === userId) return true;
   return (
     row.kind === "team" &&
-    (row.team_owner_user_id === userId ||
+    (Boolean(row.actor_owns_team_space) ||
       row.actor_member_role === "admin")
   );
 }

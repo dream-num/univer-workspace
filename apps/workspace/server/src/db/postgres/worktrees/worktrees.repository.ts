@@ -38,10 +38,10 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
 
            UNION
 
-           SELECT team.owner_user_id AS user_id
+           ${spaceOwnerIdsSql(`SELECT team.owner_user_id AS user_id
            FROM worktrees AS worktree
            JOIN spaces AS team ON team.id = worktree.team_space_id
-           WHERE worktree.id = ?
+           WHERE worktree.id = ?`)}
 
            UNION
 
@@ -57,7 +57,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
          ) AS audience
          ORDER BY audience.user_id`
       )
-      .all(worktreeId, worktreeId, worktreeId, worktreeId) as unknown as Array<{
+      .all(worktreeId, worktreeId, worktreeId, worktreeId, worktreeId) as unknown as Array<{
       readonly user_id: string;
     }>;
     return rows.map((row) => row.user_id);
@@ -124,7 +124,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
          WHERE (
            ${ownsSpaceSql("worktree.creator_user_id")}
            OR (worktree.kind = 'team' AND (
-             team.owner_user_id = $userId
+             ${ownsSpaceSql("team.owner_user_id")}
              OR (member.user_id IS NOT NULL AND (
                worktree.visibility = 'space' OR member.role = 'admin'
              ))
@@ -245,7 +245,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           updated_at = $updatedAt
       WHERE id = $id AND (
         creator_user_id = $actorId OR
-        EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND owner_user_id = $actorId) OR
+        EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND ${ownsSpaceSql("spaces.owner_user_id", "$actorId")}) OR
         EXISTS (SELECT 1 FROM space_members
                 WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin')
       )
@@ -666,7 +666,7 @@ function worktreeSelect(): string {
             claimer.display_name AS claimer_display_name,
             claimer.avatar_url AS claimer_avatar_url,
             team.name AS team_space_name,
-            team.owner_user_id AS team_owner_user_id,
+            ${ownsSpaceSql("team.owner_user_id")}::integer AS actor_owns_team_space,
             member.role AS actor_member_role,
             (
               SELECT COUNT(*)

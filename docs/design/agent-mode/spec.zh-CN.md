@@ -81,7 +81,7 @@ upstream repo (someone else's Team Space)        agent
 | R2a  | agent 在它持有的仓库里有 owner 的全部能力，包括管理成员、管理 Issue 标签、reopen 和 discard 别人的 Worktree、合入别人的提议 | 已有。agent 是 `owner_user_id`，在 Space 和 Team Worktree 上都按 owner 判定。合入别人的提议由 5.4 的“能合入”决定 | 3    |
 | R2b  | 在 agent 持有的仓库里，已认领的 agent 可以被加为 viewer、editor 或 admin。在人持有的仓库里，agent 最高是 editor             | 已有。`addTeamMember` 上限按仓库所有者的类别判定 admin | 2、3 |
 | R2c  | 未认领的 agent 可以持有自己的仓库。它不能成为任何仓库的成员，也不能添加成员                                                 | 已有。未认领的 agent 可以创建仓库，不能成为成员，也不能添加成员（`addTeamMember` 上限） | 3    |
-| R2d  | 认领 agent 的人对它持有的每个仓库有 owner 的能力。agent 过期或被封禁时，它持有的仓库被暂停                                  | 部分。Space 一级已有：认领人经 `ownsSpaceSql` 是 owner，`ownerSuspendedSql` 暂停它，集成测试在 agent 持有的 Team Space 上运行过。Team Worktree 一级没有：`worktrees.service.ts` 按 `team_owner_user_id` 等于行为者判定 owner，认领人不能 reopen 或 discard 别人的 Worktree | 3    |
+| R2d  | 认领 agent 的人对它持有的每个仓库有 owner 的能力。agent 过期或被封禁时，它持有的仓库被暂停                                  | 与目标一致。认领人经 `ownsSpaceSql` 是 Space 和其中 Team Worktree 的 owner，能 reopen、discard 别人的 Worktree；`ownerSuspendedSql` 暂停它 | 3    |
 | R3   | 人在头部授予的 scope 在中途算数。授予了 `worktree:merge`，agent 验证后就自己合入                                            | 不算数。人的 token 会话的说明文字要求把合入留给用户，`pr_merge` 需要 `?toolsets=admin`                      | 1    |
 
 ### 4.2 参与别人的仓库
@@ -559,5 +559,5 @@ A 和 B 是两个已认领的 agent。A 创建仓库 R，把 B 加为 viewer。B
 | `capabilities` 是否已经把 scope 和上限算进去                                                   | R6 要做多少                                                                 | 阶段 2，已确认没有。它只看用户、角色、可见性、状态和每个 Unit 的访问。scope 在 MCP 网关按工具执行，Worktree 模块不调用上限 |
 | 在 Worktree 里，跨 Unit 的公式读另一个也在这个 Worktree 里的 Unit 时，读的是草稿还是 Trunk     | fork 里几个改过的 Sheet 互相引用时是否一致                                  | 阶段 0，已确认读草稿 |
 | 现有工具带上 pull request 参数写入一个 Trunk 的 Unit 时，是否已经自动把它加进 Worktree         | 5.5 写路径的第 3 步是新增还是已有                                           | 阶段 4 开工          |
-| 认领人对 agent 持有的 Team Space 有 owner 的能力。agent 过期或被封禁时，这个 Team Space 被暂停 | R2d。规则按 Space 的所有者写，读代码推出                                    | 阶段 3，部分成立。Space 一级成立，Team Worktree 一级不成立，见 R2d |
+| 认领人对 agent 持有的 Team Space 有 owner 的能力。agent 过期或被封禁时，这个 Team Space 被暂停 | R2d。规则按 Space 的所有者写，读代码推出                                    | 阶段 3，原来部分成立：Team Worktree 按 `team_owner_user_id` 判定 owner，认领人没有。阶段 3 改为 `ownsSpaceSql` 后成立 |
 | Space 的所有权不能转移                                                                         | 5.4 的角色表假设仓库的所有者是人还是 agent 不会变。没有找到转移所有权的代码 | 阶段 3，已确认。没有代码修改 `spaces.owner_user_id`，认领也不改它 |
