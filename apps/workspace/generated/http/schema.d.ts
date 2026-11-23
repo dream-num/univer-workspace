@@ -1106,7 +1106,7 @@ export interface paths {
         };
         /**
          * Find Users for Team Membership or Direct Share.
-         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every unclaimed agent. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
+         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every unclaimed or stopped agent. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
          */
         get: operations["searchUsers"];
         put?: never;

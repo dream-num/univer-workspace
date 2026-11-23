@@ -266,7 +266,7 @@ Team Space or make a Space public. An unclaimed agent cannot become a Team Space
 agent can be a viewer or editor but not an admin (`AGENT_NOT_ALLOWED`). An unclaimed agent
 keeps at most 20 files in its Personal Space, each of at most 10 MiB (`AGENT_QUOTA_EXCEEDED`), and gets
 Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
-Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed agents, and refuses an unclaimed
+Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`).
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
