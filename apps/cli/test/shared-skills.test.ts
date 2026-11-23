@@ -90,17 +90,20 @@ it("keeps the design reference focused on the catalog and design floor", async (
   expect(content).not.toMatch(/ask at most one question|otherwise choose from the catalog/iu);
 });
 
-it("saves after a dry run and offers the live preview in an optional reference", async () => {
+it("pairs the dry-run caveat with the after-save preview offer and explains publication", async () => {
   const content = (await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")).replace(/\s+/gu, " ");
   for (const term of ["`html_view_save` and `dryRun: true`, then save once as a draft", "Revise pending drafts with `draft`",
-    "With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, offer the user a live local preview after saving",
+    "Dry runs do not run scripts; say render checks did not run and, with a local shell and `node` and not as an agent identity, offer a live preview after saving to check rendering.",
     "[local preview](references/local-preview.md); it opens the page in their browser",
     "With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview before `html-view create`",
     "Save an existing local file with bindings as a draft too",
     "why it fits the request or data in one clause",
-    "For a PR-linked draft, say the page goes live when the user merges the pull request in Workspace",
-    "Only drafts without a PR use **Publish**"])
+    "Explain draft.publishWhen: `merge` goes live when the user merges the pull request in Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**."])
     expect(content).toContain(term);
+  expect([...await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")].length).toBeLessThanOrEqual(10000);
+  expect(content).not.toContain("For a PR-linked draft");
+  expect(content).not.toContain("Only drafts without a PR use **Publish**");
+  expect(content).not.toContain("With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, offer the user a live local preview after saving");
   const reference = (await readFile(join(skillRoot, "html-view/references/local-preview.md"), "utf8")).replace(/\s+/gu, " ");
   for (const term of ['skills_read {"name":"html-view","resource":"scripts/preview.mjs"}',
     "complete returned content to a local file", "installed html-view Skill directory",

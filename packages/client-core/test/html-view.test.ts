@@ -504,7 +504,8 @@ it.each((["draft", "ready", "merged", "discarded"] as const).flatMap((state) => 
     if (path === "/api/html-view-drafts") {
       posts.push(options?.body);
       return { draft: { id: "draft", kind: "create", state: "pending", spaceId: "space", name: "Page.univer.html",
-        targetResourceId: null, sourceWorktreeId: state === "merged" && kind === "create" ? null : "wt-1", published: null, expiresAt: "later" } };
+        targetResourceId: null, sourceWorktreeId: state === "merged" && kind === "create" ? null : "wt-1",
+        publishWhen: state === "merged" ? "publish" : "merge", published: null, expiresAt: "later" } };
     }
     if (path.includes("/snapshot/")) return { snapshot: { unitID: "other", type: 2, rev: 3,
       workbook: { originalMeta: "", sheets: {} } }, changesets: [] };
@@ -541,6 +542,7 @@ it.each((["draft", "ready", "merged", "discarded"] as const).flatMap((state) => 
   ]);
   const result = await feature.draft(draft);
   expect(result.sourceWorktreeId).toBe(state === "merged" && kind === "create" ? null : "wt-1");
+  expect(result.publishWhen).toBe(state === "merged" ? "publish" : "merge");
   expect(posts).toEqual([{ ...(kind === "revise" ? { kind, draftId: "old" } : { kind, name: "Page.univer.html", spaceId: "space" }), html: source.bytes.toString(),
     ...(state === "merged" && kind === "create" ? {} : { sourceWorktreeId: "wt-1" }) }]);
   expect(result.privateSourceUnitIds).toEqual(state === "merged" ? [] : ["unit"]);

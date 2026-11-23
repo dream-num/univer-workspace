@@ -10,6 +10,7 @@ export const htmlViewDraftSchema = z.object({
   name: z.string(),
   space: z.string(),
   sourceWorktreeId: z.string().min(1).nullable().optional(),
+  publishWhen: z.enum(["merge", "publish"]).optional(),
   resource: z.string().optional(),
   node: z.string().optional(),
   etag: z.string().regex(/^"[^"\r\n]+"$/).optional(),
@@ -24,6 +25,7 @@ export function htmlViewDraftResult(draft: WorkspaceHtmlViewDraft) {
   return {
     id: draft.id, kind: draft.kind, state: draft.status.state, name: draft.name, space: draft.spaceId,
     previewUrl: draft.previewUrl, expiresAt: draft.expiresAt,
+    ...(draft.publishWhen === undefined ? {} : { publishWhen: draft.publishWhen }),
     ...(draft.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: draft.sourceWorktreeId }),
     ...(draft.status.state === "superseded" ? { supersededBy: draft.status.supersededBy, successorUrl: draft.status.successorUrl } : {}),
     ...(draft.status.state === "published" ? {

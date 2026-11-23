@@ -10,6 +10,10 @@ HtmlViewDraft:
     state:
       type: string
       enum: [pending, published, rejected, expired, conflicted, superseded]
+    publishWhen:
+      type: string
+      enum: [merge, publish]
+      description: Present only for pending drafts. Merge the source pull request while it is open; otherwise publish manually.
     supersededBy:
       type: [string, "null"]
       description: Successor draft ID when superseded.

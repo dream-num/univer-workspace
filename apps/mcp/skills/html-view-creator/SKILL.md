@@ -117,8 +117,8 @@ private media stays empty, so provide a visible fallback.
 ## 3. Save and reply
 
 Call `html_view_save` with `dryRun: true`. Use these samples as the self-check. Fix empty samples, headers as numbers, writable
-formulas, date serials. Dry runs do not run scripts; say render checks did not run.
-Then save the checked HTML once as a draft. Save existing local files with bindings
+formulas, date serials. Dry runs do not run scripts; say render checks did not run and, with a local shell and `node` and not as an agent identity, offer a live preview after saving to check rendering.
+Then save the HTML once as a draft. Save local files with bindings
 as drafts too; never hand off local files unless requested.
 
 New: `html_view_save` with `space` (source repository by default), `name` and UUID
@@ -128,10 +128,9 @@ Pass inline `html` by default; use html_upload_id for oversized HTML.
 Reuse keys only for identical retries.
 
 Reply with purpose, sources, cells controls change, previewUrl, and style.
-Explain in one clause why the style fits the request or data. Offer to change it.
-With a local shell and `node`, not as an agent identity, offer a live preview.
-For a PR-linked draft, say the page goes live when the user merges the pull request in
-Workspace. Only for a draft without a PR, open preview and press **Publish**.
+Say why the style fits in one clause.
+Explain draft.publishWhen: `merge` goes live when the user merges the pull request in
+Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**.
 Explain access from `repositoryVisibility` and `privateSourceUnitIds`: public with no
 private sources means anyone with the link once published; otherwise permission is needed.
 Page access does not grant source access. Never change sharing without permission.
