@@ -1,3 +1,4 @@
+import client from "prom-client";
 import { ApplicationError, type ApplicationErrorCode } from "../../middleware/errors.js";
 import type { PrincipalCategory } from "../identity/index.js";
 
@@ -79,6 +80,18 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   },
 };
 
+const denials = new client.Counter({
+  name: "workspace_ceiling_denials_total",
+  help: "Actions refused by a ceiling",
+  labelNames: ["action", "code", "principal_category"],
+});
+// A series that starts at zero lets increase() count the first denial after a restart.
+for (const [action, { code }] of Object.entries(ceilings)) {
+  for (const category of ["human", "agent_claimed", "agent_unclaimed"] as const) {
+    denials.inc({ action, code, principal_category: category }, 0);
+  }
+}
+
 /**
  * The third layer of an access decision. Roles and capabilities say what a principal may do; a
  * ceiling names what it may not do whatever role it holds. A ceiling only forbids and never grants,
@@ -91,6 +104,7 @@ export function assertCeiling<A extends CeilingAction>(
 ): void {
   const ceiling = ceilings[action];
   if (ceiling.forbids(principal, context)) {
+    denials.inc({ action, code: ceiling.code, principal_category: principal });
     throw new ApplicationError(ceiling.code, 403, ceiling.message);
   }
 }

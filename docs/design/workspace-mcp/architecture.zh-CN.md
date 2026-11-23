@@ -472,6 +472,7 @@ MCP 不连数据库（D12），所以第一版的“统计接口”由两部分�
 | `ts`、`request_id`、`trace_id` | 时间、请求 ID、追踪 ID（来自 `_meta` 的 `traceparent`，如有） |
 | `user_id` | 用户 |
 | `principal_kind` | 用户的主体类型，`human` 或 `agent` |
+| `principal_category` | 用户的主体分类，`human`、`agent_claimed` 或 `agent_unclaimed`，用来区分已被人认领的 agent 和未被认领的 agent |
 | `auth_kind` | `oauth`、`pat`、`dev` |
 | `client_id` | OAuth 客户端 ID 或 PAT 的 ID |
 | `client_name`、`client_version` | 请求里的 `clientInfo` |

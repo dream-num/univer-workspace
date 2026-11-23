@@ -598,6 +598,7 @@ The version 1 event has these fields:
 | `trace_id` | Request `_meta.traceparent`, or null |
 | `user_id` | Authenticated Workspace user ID |
 | `principal_kind` | `"human"` or `"agent"`, the kind of that user |
+| `principal_category` | `"human"`, `"agent_claimed"` or `"agent_unclaimed"`; separates an agent a person has claimed from one nobody has |
 | `auth_kind` | `"pat"`, `"oauth"` or `"dev"` |
 | `client_id` | The PAT ID for `pat`, the OAuth `client_id` for `oauth`, `"dev"` for `dev` |
 | `client_name`, `client_version` | Request clientInfo in 2026-07-28. Both null in stateless 2025-11-25 |
