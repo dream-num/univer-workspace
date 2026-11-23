@@ -39,8 +39,8 @@ FC（阿里云函数计算）HeaderField 会话亲和。设计依据
   放进 `ExecutorConnection`；未显式传 store 时默认进程内实现。
 - [`gateway/executor/epochs.ts`](../gateway/executor/epochs.ts)：按配置创建 memory 或 Redis store，
   由 `gateway/server.ts` 在关闭时 `close()`。
-- [`shared/config.ts`](../shared/config.ts)：解析 `MCP_EXECUTOR_EPOCH_STORE`、`MCP_EXECUTOR_REDIS_URL`、
-  `MCP_EXECUTOR_REDIS_KEY_PREFIX`。
+- [`shared/config.ts`](../shared/config.ts)：解析 `MCP_GATEWAY_EPOCH_STORE`、`MCP_GATEWAY_REDIS_MODE`、
+  `MCP_GATEWAY_REDIS_URL`/`MCP_GATEWAY_REDIS_NODES` 及其拓扑参数、`MCP_GATEWAY_REDIS_KEY_PREFIX`。
 
 不是 FC 的部署：header 照常发送，常驻 executor 忽略未知请求头，行为与之前一致。
 
@@ -69,15 +69,30 @@ sid   = "k" + sha256(`${key}:${epoch}`).hex.slice(0, 32)
 
 ## epoch 存储
 
-默认 `MCP_EXECUTOR_EPOCH_STORE=memory`：
+默认 `MCP_GATEWAY_EPOCH_STORE=memory`：
 
 - 进程内 Map，`increment` 没有 await 间隙，因此按 key 原子；
 - epoch 不过期（设计 3.4），映射按 LRU 限制在 10 万键；
 - 单副本或本地开发足够；多副本会各自算出不同的 epoch，产生多个 Session。
 
-`MCP_EXECUTOR_EPOCH_STORE=redis` 时使用 `MCP_EXECUTOR_REDIS_URL`（`redis://` 或 `rediss://`）：
+`MCP_GATEWAY_EPOCH_STORE=redis` 时按 `MCP_GATEWAY_REDIS_MODE` 选择拓扑，三种模式共用一个 epoch
+键空间。这组变量只由 gateway 读取，executor 不打开该 Redis；改名前的 `MCP_EXECUTOR_EPOCH_STORE` /
+`MCP_EXECUTOR_REDIS_*` 仍作为已弃用别名可用，同一设置同时给出新旧两个名字会启动失败：
 
-- 键是 `MCP_EXECUTOR_REDIS_KEY_PREFIX`（默认 `mcp:executor-epoch:`）+ `sha256(routing key)` 的十六进制，
+- `single`（默认）：只读 `MCP_GATEWAY_REDIS_URL`（`redis://` 或 `rediss://`，可带凭据、库号和
+  `?family=`）。URL 原样交给 ioredis，TLS 由 `rediss://` 决定。
+- `sentinel`：`MCP_GATEWAY_REDIS_NODES` 是逗号分隔的 `host:port` 哨兵列表，
+  `MCP_GATEWAY_REDIS_SENTINEL_NAME` 是主库名；`MCP_GATEWAY_REDIS_URL` 必须不设。凭据用
+  `MCP_GATEWAY_REDIS_USERNAME`/`MCP_GATEWAY_REDIS_PASSWORD`，默认同时用于哨兵；哨兵凭据不同时用
+  `MCP_GATEWAY_REDIS_SENTINEL_PASSWORD`。`MCP_GATEWAY_REDIS_TLS=1` 对哨兵和数据连接同时生效。
+- `cluster`：`MCP_GATEWAY_REDIS_NODES` 是种子节点列表，客户端跟随 `MOVED`/`ASK`；读走 master
+  （`scaleReads: "master"`），避免副本上的旧 epoch。集群只有 0 号库，`MCP_GATEWAY_REDIS_DB` 非 0
+  直接启动失败。
+
+拓扑参数与模式矛盾（例如 `single` 下设了 `NODES`、`sentinel` 下留了 `URL`）一律启动失败，不会被
+静默忽略。三种模式的公共行为：
+
+- 键是 `MCP_GATEWAY_REDIS_KEY_PREFIX`（默认 `mcp:executor-epoch:`）+ `sha256(routing key)` 的十六进制，
   用户 ID、Unit ID 和 NUL 分隔符都不进入 Redis，键长固定。epoch 不设 TTL。
 - 惰性连接：第一次读、自增或 `ready` 时才建立连接并 `PING` 校验；失败不会被缓存，下一次调用会重试，
   所以短暂故障可以自愈。

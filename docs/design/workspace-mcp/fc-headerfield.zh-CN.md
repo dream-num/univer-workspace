@@ -395,7 +395,7 @@ MCP client ──Streamable HTTP──▶ gateway（长驻）
       池本身仍在 Client Core 内，只是固定为一个槽位（3.7 允许的形态）
 - [x] 实例内 FIFO：复用 `executor/dispatch.ts` 的 `createUnitQueue()`，其 key 正是 `(userId, scope, unitId)`
 - [x] gateway 请求 `MCP_EXECUTOR_URLS` 时携带亲和 key：`x-executor-key` 默认发送，多地址与 rendezvous 保留
-- [x] gateway 的确定性派生与 epoch 维护：`MCP_EXECUTOR_EPOCH_STORE=memory|redis`，默认内存
+- [x] gateway 的确定性派生与 epoch 维护：`MCP_GATEWAY_EPOCH_STORE=memory|redis`，默认内存
 - [ ] gateway 多实例时 `job_get` 的正常：`ToolJobs` 仍是进程内 Map，需要粘性会话或外置 job 记录
 
 ---

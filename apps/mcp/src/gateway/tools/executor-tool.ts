@@ -82,7 +82,7 @@ export function createExecutorLinks(
 }
 
 /**
- * Memory unless the gateway built the store from `MCP_EXECUTOR_EPOCH_STORE`. A Redis store has a
+ * Memory unless the gateway built the store from `MCP_GATEWAY_EPOCH_STORE`. A Redis store has a
  * lifecycle (connect, close), so it must come from `gateway/executor/epochs.ts`.
  */
 function defaultEpochs(config: GatewayConfig["executor"]): EpochStore {

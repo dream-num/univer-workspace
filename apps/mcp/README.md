@@ -80,7 +80,14 @@ executor's own `workspace-*` envelope) and retries once; a 429 backs off with ji
 built-in 401 is never retried, and for a `write` a failed epoch read fails as
 `workspace-executor-unavailable` with `detail.cause: "epoch-store"` — the request was never sent, so
 the call is safe to repeat. Epochs live in gateway process memory by default; several gateway replicas
-that route the same keys need `MCP_EXECUTOR_EPOCH_STORE=redis` and a shared Redis. The header is
+that route the same keys need `MCP_GATEWAY_EPOCH_STORE=redis` and a shared Redis. The epoch store is
+gateway-local: `MCP_GATEWAY_EPOCH_STORE` and the `MCP_GATEWAY_REDIS_*` variables are read only by the
+gateway, and the executor never opens that Redis. The pre-rename `MCP_EXECUTOR_EPOCH_STORE` and
+`MCP_EXECUTOR_REDIS_*` names still work as aliases; setting an old and a new name for the same
+setting fails startup. The remaining `MCP_EXECUTOR_*` variables describe the gateway-to-executor
+link itself: `MCP_EXECUTOR_URLS` and `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS` are read only by the
+gateway, while `MCP_EXECUTOR_TOKEN`, `MCP_EXECUTOR_CREDENTIALS` and `MCP_EXECUTOR_ALLOWED_USER_IDS`
+bind both roles. The header is
 always sent, so switching an executor to FC needs no gateway switch. Capability discovery is keyed too, with
 a single `mcp-gateway`/`capabilities` key shared by every replica: an unkeyed probe would open a new FC
 Session on every refresh, and session isolation turns each Session into an instance. Discovery uses a
@@ -244,9 +251,16 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_EXECUTOR_URLS`, `MCP_EXECUTOR_TOKEN` | Unset on gateway | Comma-separated executor HTTP(S) origins and the gateway-to-executor token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_ALLOWED_USER_IDS` | Unset | `workspace` alone for the users Workspace grants with `db:executor-access`, `*` alone for every user, or comma-separated Workspace user IDs, trimmed. Empty values or entries are errors. Set the same value on the gateway and executor. Required in production on the executor and on gateways with `MCP_EXECUTOR_URLS`. Unset outside production allows every user |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
-| `MCP_EXECUTOR_EPOCH_STORE` | `memory` | Epoch store behind the `x-executor-key` Session ID. `memory` is correct for one gateway replica; `redis` requires `MCP_EXECUTOR_REDIS_URL` and is required once several replicas route the same keys |
-| `MCP_EXECUTOR_REDIS_URL` | Unset | `redis://` or `rediss://` URL of the shared epoch store. Never logged. Set exactly when `MCP_EXECUTOR_EPOCH_STORE=redis`, and only with `MCP_EXECUTOR_URLS` |
-| `MCP_EXECUTOR_REDIS_KEY_PREFIX` | `mcp:executor-epoch:` | Redis key prefix. Routing keys are stored as their sha256 hex digest, so no user or Unit ID appears in Redis. Epochs never expire |
+| `MCP_GATEWAY_EPOCH_STORE` | `memory` | Epoch store behind the `x-executor-key` Session ID: gateway-local state that the executor never opens. `memory` is correct for one gateway replica; `redis` is required once several replicas route the same keys and additionally requires `MCP_EXECUTOR_URLS`. The pre-rename `MCP_EXECUTOR_EPOCH_STORE` and `MCP_EXECUTOR_REDIS_*` names remain accepted as deprecated aliases; setting an old and a new name for one setting fails startup |
+| `MCP_GATEWAY_REDIS_MODE` | `single` | Topology of the shared epoch store. `single` reads `MCP_GATEWAY_REDIS_URL`; `sentinel` asks the sentinels in `MCP_GATEWAY_REDIS_NODES` for the master named by `MCP_GATEWAY_REDIS_SENTINEL_NAME`; `cluster` follows redirections from the seeds in `MCP_GATEWAY_REDIS_NODES`. Options that contradict the mode fail startup instead of being ignored |
+| `MCP_GATEWAY_REDIS_URL` | Unset | `single` only: `redis://` or `rediss://` URL of the shared epoch store, with optional credentials, database index and `family` query. Never logged. Forbidden in `sentinel` and `cluster` mode |
+| `MCP_GATEWAY_REDIS_NODES` | Unset | `sentinel` and `cluster` only: comma-separated `host:port` endpoints, IPv6 as `[::1]:26379`. Sentinel endpoints for `sentinel`, seed nodes for `cluster` |
+| `MCP_GATEWAY_REDIS_SENTINEL_NAME` | Unset | `sentinel` only: the monitored master set name, for example `mymaster` |
+| `MCP_GATEWAY_REDIS_USERNAME`, `MCP_GATEWAY_REDIS_PASSWORD` | Unset | `sentinel` and `cluster` only: credential for the data nodes and, unless overridden, for the sentinels. Never logged. `single` mode takes credentials from `MCP_GATEWAY_REDIS_URL` |
+| `MCP_GATEWAY_REDIS_SENTINEL_PASSWORD` | `MCP_GATEWAY_REDIS_PASSWORD` | `sentinel` only: sentinel credential when it differs from the data-node one. Never logged |
+| `MCP_GATEWAY_REDIS_DB` | `0` | `sentinel` only: logical database index. Cluster nodes serve database 0 only, so a non-zero value fails startup |
+| `MCP_GATEWAY_REDIS_TLS` | `0` | `sentinel` and `cluster` only: `1` enables TLS on the sentinel and data connections. `single` mode derives TLS from the `rediss://` scheme |
+| `MCP_GATEWAY_REDIS_KEY_PREFIX` | `mcp:executor-epoch:` | Redis key prefix. Routing keys are stored as their sha256 hex digest, so no user or Unit ID appears in Redis. Epochs never expire. The default keeps its pre-rename value so an existing shared Redis keeps serving the same keys |
 | `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS` | `60000` | Periodic executor capability refresh in milliseconds, `0` through `86400000`. `0` disables polling; startup discovery, cold-start retries and the `/readyz` refresh stay. With polling off, an executor rollout or a renderer that starts later is only noticed after a gateway restart |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
 | `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |

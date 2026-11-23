@@ -8,6 +8,7 @@ import {
   RedisEpochStoreError,
   affinityKey,
   createAffinityTransport,
+  createRedisClient,
   createRedisEpochStore,
   deriveSessionId,
   redisEpochKey,
@@ -15,7 +16,7 @@ import {
 } from "../src/executor-fc/index.js";
 import { ExecutorCapabilities } from "../src/gateway/executor/capabilities.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
-import { createEpochStore } from "../src/gateway/executor/epochs.js";
+import { createEpochStore, redisEpochStoreOptions } from "../src/gateway/executor/epochs.js";
 import { ExecutorRouter } from "../src/gateway/executor/router.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { encodeFrame } from "../src/shared/frame.js";
@@ -64,15 +65,19 @@ describe("executor epoch configuration", () => {
       store: "memory",
       keyPrefix: "mcp:executor-epoch:",
     });
+    // Both names are consumed by the parser and never leak into the readonly config.
+    expect(config).not.toHaveProperty("MCP_GATEWAY_EPOCH_STORE");
+    expect(config).not.toHaveProperty("MCP_EXECUTOR_EPOCH_STORE");
+    expect(config.executor).not.toHaveProperty("MCP_GATEWAY_REDIS_URL");
     expect(config.executor).not.toHaveProperty("MCP_EXECUTOR_REDIS_URL");
   });
 
   it("selects Redis and carries the URL and prefix", () => {
     const config = parseGatewayConfig({
       ...gatewayEnv,
-      MCP_EXECUTOR_EPOCH_STORE: "redis",
-      MCP_EXECUTOR_REDIS_URL: "rediss://cache.test:6379/2",
-      MCP_EXECUTOR_REDIS_KEY_PREFIX: "gw:epoch:",
+      MCP_GATEWAY_EPOCH_STORE: "redis",
+      MCP_GATEWAY_REDIS_URL: "rediss://cache.test:6379/2",
+      MCP_GATEWAY_REDIS_KEY_PREFIX: "gw:epoch:",
     });
     expect(config.executor?.epochs).toEqual({
       store: "redis",
@@ -81,26 +86,68 @@ describe("executor epoch configuration", () => {
     });
   });
 
-  it("rejects a mismatched store or URL and a store without an executor", () => {
-    expect(() => parseGatewayConfig({ ...gatewayEnv, MCP_EXECUTOR_EPOCH_STORE: "redis" })).toThrow(
-      /MCP_EXECUTOR_REDIS_URL/u,
-    );
-    expect(() =>
-      parseGatewayConfig({ ...gatewayEnv, MCP_EXECUTOR_REDIS_URL: "redis://cache.test:6379" }),
-    ).toThrow(/MCP_EXECUTOR_REDIS_URL/u);
+  it("still accepts the pre-rename MCP_EXECUTOR_* names and refuses both at once", () => {
+    const legacy = parseGatewayConfig({
+      ...gatewayEnv,
+      MCP_EXECUTOR_EPOCH_STORE: "redis",
+      MCP_EXECUTOR_REDIS_URL: "rediss://cache.test:6379/2",
+      MCP_EXECUTOR_REDIS_KEY_PREFIX: "gw:epoch:",
+    });
+    expect(legacy.executor?.epochs).toEqual({
+      store: "redis",
+      redisUrl: "rediss://cache.test:6379/2",
+      keyPrefix: "gw:epoch:",
+    });
+    // The default key prefix keeps its pre-rename value so existing Redis epochs stay reachable.
+    expect(
+      parseGatewayConfig({
+        ...gatewayEnv,
+        MCP_GATEWAY_EPOCH_STORE: "redis",
+        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
+      }).executor?.epochs,
+    ).toEqual({
+      store: "redis",
+      redisUrl: "redis://cache.test:6379",
+      keyPrefix: "mcp:executor-epoch:",
+    });
     expect(() =>
       parseGatewayConfig({
         ...gatewayEnv,
+        MCP_GATEWAY_EPOCH_STORE: "redis",
         MCP_EXECUTOR_EPOCH_STORE: "redis",
-        MCP_EXECUTOR_REDIS_URL: "http://cache.test",
+        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
+      }),
+    ).toThrow(/MCP_EXECUTOR_EPOCH_STORE is deprecated/u);
+    expect(() =>
+      parseGatewayConfig({
+        ...gatewayEnv,
+        MCP_GATEWAY_EPOCH_STORE: "redis",
+        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
+        MCP_EXECUTOR_REDIS_URL: "redis://other.test:6379",
+      }),
+    ).toThrow(/MCP_EXECUTOR_REDIS_URL is deprecated/u);
+  });
+
+  it("rejects a mismatched store or URL and a store without an executor", () => {
+    expect(() => parseGatewayConfig({ ...gatewayEnv, MCP_GATEWAY_EPOCH_STORE: "redis" })).toThrow(
+      /MCP_GATEWAY_REDIS_URL/u,
+    );
+    expect(() =>
+      parseGatewayConfig({ ...gatewayEnv, MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379" }),
+    ).toThrow(/MCP_GATEWAY_REDIS_URL/u);
+    expect(() =>
+      parseGatewayConfig({
+        ...gatewayEnv,
+        MCP_GATEWAY_EPOCH_STORE: "redis",
+        MCP_GATEWAY_REDIS_URL: "http://cache.test",
       }),
     ).toThrow(/redis:\/\/ or rediss:\/\//u);
     const { MCP_EXECUTOR_URLS: _urls, MCP_EXECUTOR_TOKEN: _token, ...withoutExecutor } = gatewayEnv;
     expect(() =>
       parseGatewayConfig({
         ...withoutExecutor,
-        MCP_EXECUTOR_EPOCH_STORE: "redis",
-        MCP_EXECUTOR_REDIS_URL: "redis://cache.test:6379",
+        MCP_GATEWAY_EPOCH_STORE: "redis",
+        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
       }),
     ).toThrow(/MCP_EXECUTOR_URLS/u);
   });
@@ -127,7 +174,142 @@ describe("executor epoch configuration", () => {
   it("builds the configured store and refuses a Redis store without a URL", () => {
     expect(createEpochStore().store).toBeInstanceOf(MemoryEpochStore);
     expect(createEpochStore({ store: "memory" }).store).toBeInstanceOf(MemoryEpochStore);
-    expect(() => createEpochStore({ store: "redis" })).toThrow(/MCP_EXECUTOR_REDIS_URL/u);
+    expect(() => createEpochStore({ store: "redis" })).toThrow(/MCP_GATEWAY_REDIS_URL/u);
+  });
+
+  it("resolves sentinel routing from the sentinel list and the master name", () => {
+    const config = parseGatewayConfig({
+      ...gatewayEnv,
+      MCP_GATEWAY_EPOCH_STORE: "redis",
+      MCP_GATEWAY_REDIS_MODE: "sentinel",
+      MCP_GATEWAY_REDIS_NODES: "sentinel-a.test:26379, sentinel-b.test:26380",
+      MCP_GATEWAY_REDIS_SENTINEL_NAME: "mymaster",
+      MCP_GATEWAY_REDIS_USERNAME: "app",
+      MCP_GATEWAY_REDIS_PASSWORD: "data-secret",
+      MCP_GATEWAY_REDIS_SENTINEL_PASSWORD: "sentinel-secret",
+      MCP_GATEWAY_REDIS_DB: "3",
+      MCP_GATEWAY_REDIS_TLS: "1",
+    });
+    expect(config.executor?.epochs).toEqual({
+      store: "redis",
+      redisTopology: {
+        mode: "sentinel",
+        sentinels: [
+          { host: "sentinel-a.test", port: 26379 },
+          { host: "sentinel-b.test", port: 26380 },
+        ],
+        masterName: "mymaster",
+        sentinelPassword: "sentinel-secret",
+      },
+      redisUsername: "app",
+      redisPassword: "data-secret",
+      redisDb: 3,
+      redisTls: true,
+      keyPrefix: "mcp:executor-epoch:",
+    });
+  });
+
+  it("resolves cluster routing from the seed list and keeps database 0", () => {
+    const config = parseGatewayConfig({
+      ...gatewayEnv,
+      MCP_GATEWAY_EPOCH_STORE: "redis",
+      MCP_GATEWAY_REDIS_MODE: "cluster",
+      MCP_GATEWAY_REDIS_NODES: "[::1]:6379,cache-b.test:6380",
+      MCP_GATEWAY_REDIS_PASSWORD: "data-secret",
+      MCP_GATEWAY_REDIS_TLS: "true",
+    });
+    expect(config.executor?.epochs).toEqual({
+      store: "redis",
+      redisTopology: {
+        mode: "cluster",
+        nodes: [
+          { host: "::1", port: 6379 },
+          { host: "cache-b.test", port: 6380 },
+        ],
+      },
+      redisPassword: "data-secret",
+      redisTls: true,
+      keyPrefix: "mcp:executor-epoch:",
+    });
+  });
+
+  it("rejects topology options that contradict the mode", () => {
+    const sentinel = {
+      ...gatewayEnv,
+      MCP_GATEWAY_EPOCH_STORE: "redis",
+      MCP_GATEWAY_REDIS_MODE: "sentinel",
+      MCP_GATEWAY_REDIS_NODES: "sentinel-a.test:26379",
+      MCP_GATEWAY_REDIS_SENTINEL_NAME: "mymaster",
+    };
+    expect(() => parseGatewayConfig(sentinel)).not.toThrow();
+    expect(() =>
+      parseGatewayConfig({
+        ...sentinel,
+        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
+      }),
+    ).toThrow(/forbids MCP_GATEWAY_REDIS_URL/u);
+    const { MCP_GATEWAY_REDIS_SENTINEL_NAME: _name, ...withoutName } = sentinel;
+    expect(() => parseGatewayConfig(withoutName)).toThrow(/MCP_GATEWAY_REDIS_SENTINEL_NAME/u);
+    expect(() =>
+      parseGatewayConfig({ ...sentinel, MCP_GATEWAY_REDIS_NODES: "sentinel-a.test" }),
+    ).toThrow(/host:port/u);
+    expect(() => parseGatewayConfig({ ...sentinel, MCP_GATEWAY_REDIS_MODE: "cluster" })).toThrow(
+      /MCP_GATEWAY_REDIS_SENTINEL_NAME and .* require MCP_GATEWAY_REDIS_MODE=sentinel/u,
+    );
+    expect(() =>
+      parseGatewayConfig({
+        ...gatewayEnv,
+        MCP_GATEWAY_EPOCH_STORE: "redis",
+        MCP_GATEWAY_REDIS_MODE: "cluster",
+        MCP_GATEWAY_REDIS_NODES: "cache-a.test:6379",
+        MCP_GATEWAY_REDIS_DB: "2",
+      }),
+    ).toThrow(/MCP_GATEWAY_REDIS_DB must be 0/u);
+    expect(() =>
+      parseGatewayConfig({
+        ...gatewayEnv,
+        MCP_GATEWAY_EPOCH_STORE: "redis",
+        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
+        MCP_GATEWAY_REDIS_NODES: "cache-a.test:6379",
+      }),
+    ).toThrow(/MCP_GATEWAY_REDIS_MODE=single reads MCP_GATEWAY_REDIS_URL only/u);
+    expect(() => parseGatewayConfig({ ...gatewayEnv, MCP_GATEWAY_REDIS_MODE: "cluster" })).toThrow(
+      /MCP_GATEWAY_REDIS_MODE requires MCP_GATEWAY_EPOCH_STORE=redis/u,
+    );
+  });
+
+  it("normalizes sentinel and cluster settings into client options without connecting", () => {
+    expect(
+      redisEpochStoreOptions({
+        store: "redis",
+        redisTopology: {
+          mode: "sentinel",
+          sentinels: [{ host: "sentinel-a.test", port: 26379 }],
+          masterName: "mymaster",
+        },
+        redisPassword: "data-secret",
+        redisDb: 3,
+        keyPrefix: "gw:",
+      }),
+    ).toEqual({
+      topology: {
+        mode: "sentinel",
+        sentinels: [{ host: "sentinel-a.test", port: 26379 }],
+        masterName: "mymaster",
+      },
+      password: "data-secret",
+      db: 3,
+      keyPrefix: "gw:",
+    });
+    expect(
+      redisEpochStoreOptions({
+        store: "redis",
+        redisTopology: { mode: "cluster", nodes: [{ host: "cache-a.test", port: 6379 }] },
+      }),
+    ).toEqual({
+      topology: { mode: "cluster", nodes: [{ host: "cache-a.test", port: 6379 }] },
+    });
+    expect(() => redisEpochStoreOptions({ store: "redis" })).toThrow(/MCP_GATEWAY_REDIS_URL/u);
   });
 });
 
@@ -218,6 +400,160 @@ describe("Redis epoch store", () => {
     expect(await handle.store.get(key)).toBe(0);
     expect(attempts).toBe(2);
     await handle.close();
+  });
+});
+
+describe("Redis client topology", () => {
+  const timeouts = { connectTimeoutMs: 5_000, commandTimeoutMs: 2_000 };
+  const commands: RedisEpochClient = {
+    get: async () => null,
+    incr: async () => 1,
+    ping: async () => "PONG",
+    quit: async () => "OK",
+    disconnect: () => {},
+  };
+
+  // ioredis exposes cluster construction as `Redis.Cluster`; recording both call shapes is the
+  // only way to assert what the three topology branches actually hand to the driver.
+  function fakeRedis() {
+    const single: unknown[][] = [];
+    const clusters: unknown[][] = [];
+    class ClusterClient implements RedisEpochClient {
+      readonly get = commands.get;
+      readonly incr = commands.incr;
+      readonly ping = commands.ping;
+      readonly quit = commands.quit;
+      readonly disconnect = commands.disconnect;
+      constructor(nodes: unknown[], options: unknown) {
+        clusters.push([nodes, options]);
+      }
+    }
+    class FakeRedis implements RedisEpochClient {
+      static readonly Cluster = ClusterClient;
+      readonly get = commands.get;
+      readonly incr = commands.incr;
+      readonly ping = commands.ping;
+      readonly quit = commands.quit;
+      readonly disconnect = commands.disconnect;
+      constructor(...args: unknown[]) {
+        single.push(args);
+      }
+    }
+    return { Redis: FakeRedis, single, clusters };
+  }
+
+  it("passes the URL through unchanged in single-node mode", () => {
+    const { Redis, single } = fakeRedis();
+    createRedisClient(Redis, { url: "rediss://:pw@cache.test:6380/2" }, timeouts);
+    expect(single).toEqual([
+      [
+        "rediss://:pw@cache.test:6380/2",
+        { connectTimeout: 5_000, commandTimeout: 2_000, maxRetriesPerRequest: 1 },
+      ],
+    ]);
+  });
+
+  it("builds a sentinel client and reuses the data credential for the sentinels", () => {
+    const { Redis, single } = fakeRedis();
+    createRedisClient(
+      Redis,
+      {
+        topology: {
+          mode: "sentinel",
+          sentinels: [
+            { host: "sentinel-a.test", port: 26379 },
+            { host: "sentinel-b.test", port: 26380 },
+          ],
+          masterName: "mymaster",
+        },
+        username: "app",
+        password: "data-secret",
+        db: 3,
+        tls: true,
+      },
+      timeouts,
+    );
+    expect(single).toEqual([
+      [
+        {
+          connectTimeout: 5_000,
+          commandTimeout: 2_000,
+          maxRetriesPerRequest: 1,
+          sentinels: [
+            { host: "sentinel-a.test", port: 26379 },
+            { host: "sentinel-b.test", port: 26380 },
+          ],
+          name: "mymaster",
+          username: "app",
+          password: "data-secret",
+          sentinelPassword: "data-secret",
+          sentinelUsername: "app",
+          db: 3,
+          tls: {},
+          sentinelTLS: {},
+          enableTLSForSentinelMode: true,
+        },
+      ],
+    ]);
+  });
+
+  it("builds a cluster client across the seeds and reads only from masters", () => {
+    const { Redis, clusters } = fakeRedis();
+    createRedisClient(
+      Redis,
+      {
+        topology: {
+          mode: "cluster",
+          nodes: [
+            { host: "cache-a.test", port: 6379 },
+            { host: "cache-b.test", port: 6380 },
+          ],
+        },
+        password: "data-secret",
+        tls: true,
+      },
+      timeouts,
+    );
+    expect(clusters).toEqual([
+      [
+        [
+          { host: "cache-a.test", port: 6379 },
+          { host: "cache-b.test", port: 6380 },
+        ],
+        {
+          scaleReads: "master",
+          redisOptions: {
+            connectTimeout: 5_000,
+            commandTimeout: 2_000,
+            maxRetriesPerRequest: 1,
+            password: "data-secret",
+            tls: {},
+          },
+        },
+      ],
+    ]);
+  });
+
+  it("refuses contradictory connection settings before any I/O", () => {
+    expect(() => createRedisEpochStore({})).toThrow(/MCP_GATEWAY_REDIS_URL/u);
+    expect(() =>
+      createRedisEpochStore({
+        url: "redis://cache.test:6379",
+        topology: { mode: "cluster", nodes: [{ host: "cache.test", port: 6379 }] },
+      }),
+    ).toThrow(/never both/u);
+    expect(() => createRedisEpochStore({ topology: { mode: "cluster", nodes: [] } })).toThrow(
+      /at least one node/u,
+    );
+    expect(() =>
+      createRedisEpochStore({
+        topology: { mode: "cluster", nodes: [{ host: "cache.test", port: 6379 }] },
+        db: 1,
+      }),
+    ).toThrow(/database 0 only/u);
+    expect(() =>
+      createRedisEpochStore({ topology: { mode: "sentinel", sentinels: [], masterName: "m" } }),
+    ).toThrow(/at least one sentinel/u);
   });
 });
 

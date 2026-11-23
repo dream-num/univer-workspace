@@ -10,14 +10,50 @@ export interface EpochStore {
   increment(key: string): Promise<number>;
 }
 
+/** One Redis server address. An IPv6 host appears without brackets, as `node:net` reports it. */
+export interface RedisEndpoint {
+  readonly host: string;
+  readonly port: number;
+}
+
+/** Sentinel topology: the client asks the sentinels which node is the current master. */
+export interface RedisSentinelTopology {
+  readonly mode: "sentinel";
+  readonly sentinels: readonly RedisEndpoint[];
+  readonly masterName: string;
+  /** Credential for the sentinels; defaults to the data-node password. Never logged. */
+  readonly sentinelPassword?: string;
+}
+
+/** Cluster topology: the client follows `MOVED`/`ASK` redirections across the seed nodes. */
+export interface RedisClusterTopology {
+  readonly mode: "cluster";
+  readonly nodes: readonly RedisEndpoint[];
+}
+
+/** How the epoch store reaches Redis. Absent means a single node reached through `redisUrl`. */
+export type RedisTopology = RedisSentinelTopology | RedisClusterTopology;
+
 /**
  * Deployment choice for the epoch store. `memory` is correct for one gateway replica or local
  * development; `redis` is required once several replicas route the same keys.
  */
 export interface EpochStoreSettings {
   readonly store: "memory" | "redis";
-  /** `redis://` or `rediss://`. Present exactly when `store` is `redis`. Never logged. */
+  /**
+   * `redis://` or `rediss://` for one node. Required when `redisTopology` is absent, and absent
+   * when it is present. Never logged: it can carry a password.
+   */
   readonly redisUrl?: string;
+  /** Sentinel or cluster routing; single-node mode reaches the one node through `redisUrl`. */
+  readonly redisTopology?: RedisTopology;
+  /** Sentinel/cluster credential; single-node mode takes it from `redisUrl`. Never logged. */
+  readonly redisUsername?: string;
+  readonly redisPassword?: string;
+  /** Sentinel only: logical database index. Cluster mode always uses database 0. */
+  readonly redisDb?: number;
+  /** Sentinel/cluster TLS; single-node mode derives it from the `rediss://` scheme. */
+  readonly redisTls?: boolean;
   /** Redis key prefix; ignored by the memory store. */
   readonly keyPrefix?: string;
 }
