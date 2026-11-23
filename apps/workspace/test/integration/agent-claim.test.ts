@@ -31,10 +31,14 @@ describe("claiming an agent", () => {
     const alice = await register(origin, "alice");
     const preview = await send(origin, "GET", `/api/agents/claim?code=${code}`, undefined, alice.cookie);
     expect(await preview.json()).toMatchObject({ claimed: false, agent: { id: agent.id, username: agent.username, files: 1, stopped: false } });
+    const searchAgent = async () =>
+      ((await (await send(origin, "GET", `/api/users/search?query=${agent.username}`, undefined, alice.cookie)).json()) as { users: { id: string }[] }).users;
+    expect(await searchAgent()).toEqual([]);
 
     const claimed = await send(origin, "POST", "/api/agents/claim", { code }, alice.cookie);
     expect(claimed.status).toBe(200);
     expect(await claimed.json()).toMatchObject({ agent: { id: agent.id, files: 1 } });
+    expect(await searchAgent()).toMatchObject([{ id: agent.id, username: agent.username }]);
     expect(await sessionUser(origin, agent.cookie)).toMatchObject({ kind: "agent", claimed: true });
     const sharing = (await (await send(origin, "GET", `/api/nodes/${nodeId}/link-sharing`, undefined, alice.cookie)).json()) as { owner: unknown; expiresAt: unknown };
     expect(sharing).toMatchObject({ owner: { kind: "agent", claimed: true }, expiresAt: null });
