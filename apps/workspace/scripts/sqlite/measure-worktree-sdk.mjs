@@ -10,7 +10,9 @@ import { cpus, loadavg, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setTimeout as sleep } from "node:timers/promises";
-import { transformSnapshotToWorkbookData } from "@univerjs-pro/collaboration";
+import { isDeepStrictEqual } from "node:util";
+import { RevertRevisionMutation, transformSnapshotToDocumentData, transformSnapshotToWorkbookData } from "@univerjs-pro/collaboration";
+import { JSONX, TextXActionType } from "@univerjs/core";
 import { UniverType } from "@univerjs/protocol";
 import { InsertRowMutation, RemoveRowMutation, SetRangeValuesMutation } from "@univerjs/sheets";
 import { createWorkspaceApplication } from "../../server/src/app.ts";
@@ -20,10 +22,11 @@ import { openCollaborationDatabase } from "../../server/src/integrations/univer/
 import { blankUnitData, collaborationCallOptions } from "../../server/src/integrations/univer/unit-store.ts";
 
 const help = `Usage: LOG_LEVEL=silent node --expose-gc --import tsx scripts/sqlite/measure-worktree-sdk.mjs --output PATH [flags]
-Measures the Collaboration SDK Worktree for Agent Mode phase 0 (spec 6.1, A0.1 to A0.4).
+Measures the Collaboration SDK Worktree for Agent Mode phase 0 (spec 6.1, A0.1 to A0.4), and
+Trunk restore for phase 6 (P6-8a, docs/design/agent-mode/phase-6-restore-probe.zh-CN.md).
 Each scenario boots the real application with the real SDK and /universer-api gateway on new
 temporary SQLite databases, deletes them afterwards, and never opens an existing database.
-  --scenario claims|behind|coldload|memory|all  Default all
+  --scenario claims|behind|coldload|memory|restore|all  Default all
   --output PATH         Required. JSON report, rewritten after every scenario and checkpoint
   --quick               Smoke sizes: distances 0,10, 2 trials, loads 0,10, populations 0,1,5
   --trials N            behind: trials per distance and workload, default 5
@@ -36,7 +39,7 @@ temporary SQLite databases, deletes them afterwards, and never opens an existing
   --help                Show this text
 UNIVER_LICENSE and UNIVER_LICENSE_KEY are read through loadConfig as the server reads them.
 Without them the bundled license applies. Progress goes to stderr and the report to stdout.
-Expected refusals in claims are observations. errors counts everything else that did not succeed,
+Expected refusals in claims and restore are observations. errors counts everything else that did not succeed,
 including a merge reported as merged whose draft value is missing from Trunk.`;
 const defaults = { scenario: "all", trials: 5, "draft-edits": 20, distances: "0,10,100,1000", "structural-p": 0.02, "idle-wait": 0, seed: 1 };
 const switches = new Set(), given = {};
@@ -53,7 +56,7 @@ if (switches.has("help")) { console.log(help); process.exit(0); }
 const quick = switches.has("quick");
 const flags = { ...defaults, ...(quick ? { trials: 2, distances: "0,10" } : {}), ...given, quick };
 
-const SHEET = UniverType.UNIVER_SHEET;
+const SHEET = UniverType.UNIVER_SHEET, DOC = UniverType.UNIVER_DOC;
 const ROWS = 100, COLS = 5, DRAFT_ROW = 50, DRAFT_ROWS = 10, DRAFT_COL = 2;
 function stats(values) {
   const v = values.toSorted((a, b) => a - b), n = v.length;
@@ -76,6 +79,17 @@ function random(seed) {
 }
 const tally = values => values.reduce((counts, value) => ({ ...counts, [value]: (counts[value] ?? 0) + 1 }), {});
 const cell = (sheet, row, col, v) => ({ id: SetRangeValuesMutation.id, data: JSON.stringify({ unitId: sheet.unitId, subUnitId: sheet.sheetId, cellValue: { [row]: { [col]: { v } } } }) });
+const restoreTo = (target, revision) => ({ id: RevertRevisionMutation.id, data: JSON.stringify({ unitId: target.unitId, revision }) });
+const docInsert = (doc, text) => ({ id: "doc.mutation.rich-text-editing", data: JSON.stringify({ unitId: doc.unitId, actions: JSONX.getInstance().editOp([{ t: TextXActionType.INSERT, len: text.length, body: { dataStream: text } }]) }) });
+function differences(a, b, path = "", out = []) {
+  if (out.length >= 20 || isDeepStrictEqual(a, b)) return out;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") out.push({ path: path || "/", a: JSON.stringify(a)?.slice(0, 300), b: JSON.stringify(b)?.slice(0, 300) });
+  else for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) differences(a[key], b[key], `${path}/${key}`, out);
+  return out;
+}
+// A restore re-serializes an empty plugin resource as "{}" where the stored snapshot had "".
+const empty = ['""', '"{}"'];
+const material = list => list.filter(({ path, a, b }) => !(path.startsWith("/resources/") && empty.includes(a) && empty.includes(b)));
 const rowMutation = (sheet, mutation, row) => ({ id: mutation.id, data: JSON.stringify({ unitId: sheet.unitId, subUnitId: sheet.sheetId, range: { startRow: row, endRow: row, startColumn: 0, endColumn: COLS - 1 } }) });
 function trunkEdit(next, workload, structuralShare, sheet, index) {
   if (workload === "structural" && next() < structuralShare) {
@@ -106,10 +120,15 @@ if (switches.has("self-test")) {
   assert(values.every(edit => edit.kind.startsWith("value") && edit.row >= 0 && edit.row < ROWS));
   const inDraft = values.filter(edit => edit.kind === "value-in-draft-region").length / values.length;
   assert(inDraft > 0.07 && inDraft < 0.13, `draft-region share ${inDraft}`);
-  console.log("PASS statistics, slope, seeded workload and mutation shape self-check");
+  assert.deepEqual(restoreTo(sheet, 4), { id: "univer.mutation.revert-version", data: JSON.stringify({ unitId: "u", revision: 4 }) });
+  assert.deepEqual(JSON.parse(docInsert(sheet, "ab").data).actions, ["body", { et: "text-x", e: [{ t: "i", len: 2, body: { dataStream: "ab" } }] }]);
+  assert.deepEqual(differences({ a: 1, b: { c: [1, 2] } }, { a: 1, b: { c: [1, 3] }, d: 0 }), [{ path: "/b/c/1", a: "2", b: "3" }, { path: "/d", a: undefined, b: "0" }]);
+  assert.deepEqual(differences({ a: 1 }, { a: 1 }), []);
+  assert.deepEqual(material(differences({ resources: { X: "" }, v: 1 }, { resources: { X: "{}" }, v: 2 })), [{ path: "/v", a: "1", b: "2" }]);
+  console.log("PASS statistics, slope, seeded workload, mutation shape and difference self-check");
   process.exit(0);
 }
-assert(["claims", "behind", "coldload", "memory", "all"].includes(flags.scenario), `Unknown scenario ${flags.scenario}`);
+assert(["claims", "behind", "coldload", "memory", "restore", "all"].includes(flags.scenario), `Unknown scenario ${flags.scenario}`);
 for (const key of ["trials", "draft-edits", "seed"]) assert(Number.isInteger(flags[key]) && flags[key] > 0, `--${key} must be a positive integer`);
 assert(Number.isInteger(flags["idle-wait"]) && flags["idle-wait"] >= 0, "--idle-wait must be a non-negative integer");
 assert(flags["structural-p"] >= 0 && flags["structural-p"] <= 1, "--structural-p must be between 0 and 1");
@@ -124,7 +143,7 @@ const log = message => console.error(`${new Date().toISOString().slice(11, 19)} 
 const require = createRequire(import.meta.url);
 const { UnitSnapshotMaterializer } = require("@univerjs-pro/collaboration-service");
 const captured = {};
-let bypassProductMiddleware = false, productMiddleware = 0;
+let bypassProductMiddleware = false, productMiddleware = 0, requiredPermissions = [];
 // The gateway's middleware answers before the SDK's own checks, so probes can switch it off to reach the SDK.
 for (const [name, pkg, className] of [
   ["trunk", "collaboration-service", "UniverCollabService"],
@@ -138,7 +157,10 @@ for (const [name, pkg, className] of [
     (captured[name] ??= new Set()).add(this);
     if (!new Error().stack.includes("collaboration-gateway")) return use.call(this, action, middleware);
     productMiddleware++;
-    return use.call(this, action, (context, next) => (bypassProductMiddleware ? next() : middleware(context, next)));
+    return use.call(this, action, (context, next) => {
+      if (action === "commitChangeset") requiredPermissions.push({ service: name, unitID: context.request.changeset.unitID, attempt: context.attempt, revision: context.changeset.revision, required: context.requiredUnitPermissions });
+      return bypassProductMiddleware ? next() : middleware(context, next);
+    });
   };
 }
 
@@ -229,8 +251,8 @@ async function team() {
   for (const [user, role] of [[E1, "editor"], [E2, "editor"], [V, "viewer"]]) await app.application.permissions.upsertTeamMember(H.id, space.id, user.id, { role });
   return { H, E1, E2, V, S: space.id };
 }
-const changeset = (actor, target, mutations) => ({ unitID: target.unitId, type: SHEET, baseRev: target.head, revision: target.head + 1, sid: actor.sid, reqId: ++actor.reqId, mutations });
-const head = async unitId => (await sdk.trunk.getUnitLoadData({ unitID: unitId, type: SHEET, revision: 0 }, collaborationCallOptions("measure-worktree-sdk"))).targetRevision;
+const changeset = (actor, target, mutations) => ({ unitID: target.unitId, type: target.type ?? SHEET, baseRev: target.head, revision: target.head + 1, sid: actor.sid, reqId: ++actor.reqId, mutations });
+const head = async (unitId, type = SHEET) => (await sdk.trunk.getUnitLoadData({ unitID: unitId, type, revision: 0 }, collaborationCallOptions("measure-worktree-sdk"))).targetRevision;
 async function sheet(actor, spaceId, name) {
   const data = blankUnitData({ unitId: randomUUID(), unitType: "sheet", name }).data;
   const sheetId = data.sheetOrder[0];
@@ -239,6 +261,18 @@ async function sheet(actor, spaceId, name) {
   assert.notEqual(created.status, 202, "Sheet creation stayed pending");
   const { id: resourceId, unitId } = created.body.node.resource;
   return { resourceId, unitId, sheetId, head: await head(unitId) };
+}
+async function doc(actor, spaceId, name) {
+  const data = blankUnitData({ unitId: randomUUID(), unitType: "doc", name }).data;
+  data.body = { dataStream: "One\rTwo\r\n", paragraphs: [{ startIndex: 3, paragraphId: "para_1" }, { startIndex: 7, paragraphId: "para_2" }], sectionBreaks: [{ startIndex: 8, sectionId: "s1" }] };
+  const created = await ok("POST", "/api/resources", actor, { kind: "univer", spaceId, parentNodeId: null, name, unitType: "doc", initialData: data });
+  assert.notEqual(created.status, 202, "Doc creation stayed pending");
+  const { id: resourceId, unitId } = created.body.node.resource;
+  return { resourceId, unitId, type: DOC, head: await head(unitId, DOC) };
+}
+async function submitTrunk(actor, value) {
+  const options = collaborationCallOptions(actor.id);
+  return submitResult(await settle(() => sdk.trunk.submitChangeset({ changeset: { ...value, userID: actor.id, memberID: options.memberID } }, options)));
 }
 async function trunk(actor, target, mutations) {
   const options = collaborationCallOptions(actor.id);
@@ -249,7 +283,7 @@ async function trunk(actor, target, mutations) {
 const teamWorktree = async (actor, spaceId) => (await ok("POST", "/api/worktrees", actor, { kind: "team", teamSpaceId: spaceId, visibility: "space", name: "Measurement", summary: null })).body.id;
 async function addTrunkUnit(actor, worktreeId, target) {
   const added = await ok("POST", `/api/worktrees/${worktreeId}/units`, actor, { source: "trunk", resourceId: target.resourceId });
-  return { unitId: added.body.unit.unitId, head: added.body.unit.draftHeadRevision };
+  return { unitId: added.body.unit.unitId, head: added.body.unit.draftHeadRevision, type: target.type };
 }
 async function draft(actor, worktreeId, unit, mutations) {
   const response = await ok("POST", `/api/worktrees/${worktreeId}/units/${unit.unitId}/changesets`, actor, { changeset: changeset(actor, unit, mutations) });
@@ -276,6 +310,30 @@ async function trunkHas(target, value) {
   }
   return null;
 }
+async function trunkData(target, revision = 0) {
+  const type = target.type ?? SHEET;
+  const loaded = await sdk.trunk.getUnitLoadDataWithBlocks({ unitID: target.unitId, type, revision }, collaborationCallOptions("measure-worktree-sdk"));
+  const { snapshot, sheetBlocks } = await (materializer ??= new UnitSnapshotMaterializer({ execution: { mode: "in-process" } })).materializeSnapshot(loaded);
+  const { rev, resources = [], ...data } = type === DOC ? transformSnapshotToDocumentData(snapshot) : await transformSnapshotToWorkbookData(snapshot, structuredClone(sheetBlocks));
+  return { revision: loaded.targetRevision, rev, data: { ...data, resources: Object.fromEntries(resources.map(resource => [resource.name, resource.data])) } };
+}
+async function trunkHistory(target, after) {
+  const to = await head(target.unitId, target.type);
+  const { changesets } = await sdk.trunk.getChangesets({ unitID: target.unitId, type: target.type ?? SHEET, from: after, to }, collaborationCallOptions("measure-worktree-sdk"));
+  return changesets.filter(record => record.revision > after).map(({ revision, baseRev, userID, memberID, sid, reqId, mutations }) => ({ revision, baseRev, userID, memberID, sid, reqId, mutations: mutations.map(mutation => mutation.id) }));
+}
+async function landed(author, spaceId, target, mutations) {
+  const worktreeId = await teamWorktree(author, spaceId);
+  const unit = await addTrunkUnit(author, worktreeId, target);
+  for (const mutation of mutations) await draft(author, worktreeId, unit, [mutation]);
+  await ok("POST", `/api/worktrees/${worktreeId}/ready`, author);
+  const preMergeHead = await head(target.unitId, target.type);
+  await ok("POST", `/api/worktrees/${worktreeId}/merge`, author);
+  const sdkResult = (await sdkUnit(worktreeId, target.unitId))?.mergeResult;
+  assert.equal(sdkResult?.status, "merged", `setup merge of ${worktreeId} did not merge: ${JSON.stringify(sdkResult)}`);
+  target.head = await head(target.unitId, target.type);
+  return { worktreeId, author: author.id, draftChangesets: mutations.length, preMergeHead, sdkResult, productResult: (await productView(author, worktreeId)).units[0]?.mergeResult };
+}
 function draftRows(worktreeId, unitId) {
   const db = new DatabaseSync(app.collaborationFile, { readOnly: true });
   try {
@@ -298,11 +356,10 @@ async function directMerge(actor, worktreeId) {
   return result.ok ? { status: result.value.worktree.status, units: result.value.worktree.units.map(unit => unit.mergeResult) } : { threw: true, code: result.code, message: result.message };
 }
 
-async function claims({ directory, fail, result }) {
-  result.capturedAtInitialize = await boot(directory);
-  const { H, E1, E2, V, S } = await team();
+const verdict = holds => (holds ? "CONFIRMED" : "REFUTED");
+function recorder(result, fail) {
   result.records = [];
-  const claim = async (id, statement, check) => {
+  return async (id, statement, check) => {
     log(`claim ${id}`);
     try {
       result.records.push({ id, statement, ...(await check()) });
@@ -311,7 +368,12 @@ async function claims({ directory, fail, result }) {
       result.records.push({ id, statement, verdict: "INCONCLUSIVE", reason: `harness error: ${error.message}` });
     }
   };
-  const verdict = holds => (holds ? "CONFIRMED" : "REFUTED");
+}
+
+async function claims({ directory, fail, result }) {
+  result.capturedAtInitialize = await boot(directory);
+  const { H, E1, E2, V, S } = await team();
+  const claim = recorder(result, fail);
   const teamInput = { kind: "team", teamSpaceId: S, visibility: "space" };
 
   const shallow = await sheet(H, S, "Shallow");
@@ -610,6 +672,190 @@ async function memory({ directory, result, save }) {
   }
 }
 
+async function restore({ directory, fail, result }) {
+  result.capturedAtInitialize = await boot(directory);
+  const { H, E1, E2, V, S } = await team();
+  const claim = recorder(result, fail);
+  const restoreAt = (actor, target, revision, base) => ({ ...changeset(actor, target, [restoreTo(target, revision)]), baseRev: base, revision: base + 1 });
+  async function restored(actor, target, revision, base) {
+    const value = restoreAt(actor, target, revision, base ?? await head(target.unitId, target.type));
+    requiredPermissions = [];
+    const submitted = await submitTrunk(actor, value);
+    const requiredUnitPermissions = requiredPermissions.splice(0);
+    target.head = await head(target.unitId, target.type);
+    return { restoreTo: revision, baseRev: value.baseRev, submitted, headAfter: target.head, requiredUnitPermissions };
+  }
+
+  const A = await sheet(H, S, "Restore after merge");
+  const mergeA = await landed(E1, S, A, [cell(A, 10, 1, "merged-1"), cell(A, 11, 1, "merged-2")]);
+  await claim("restore-after-merge", "A Sheet restore to the revision before a Worktree merge appends one Trunk revision whose content equals the pre-merge content, and Trunk history keeps the merge and the restore (plan 2.1, spec 6.7)", async () => {
+    const preMerge = await trunkData(A, mergeA.preMergeHead), before = await trunkData(A);
+    const restore = await restored(E2, A, mergeA.preMergeHead);
+    const after = await trunkData(A), history = await trunkHistory(A, mergeA.preMergeHead);
+    const observed = { merge: mergeA, restore, revisions: { preMerge: preMerge.revision, beforeRestore: before.revision, afterRestore: after.revision }, mergedValueAfter: await trunkHas(A, "merged-2"), differencesFromPreMerge: differences(preMerge.data, after.data), differencesFromBeforeRestore: differences(before.data, after.data), history };
+    return { verdict: verdict(restore.submitted.status === "committed" && after.revision === before.revision + 1 && material(observed.differencesFromPreMerge).length === 0 && history.length === 2 && history[0].memberID === "worktree-merge" && history[1].mutations.join() === RevertRevisionMutation.id), observed };
+  });
+
+  const B = await sheet(H, S, "Restore over a later edit");
+  const mergeB = await landed(E1, S, B, [cell(B, 10, 1, "merged")]);
+  await trunk(E2, B, [cell(B, 20, 2, "later-edit")]);
+  await claim("restore-overwrites-later-edit", "Restoring to the pre-merge revision after another member edited the Unit also removes that later edit, because a restore replaces the whole Unit (plan 2.4)", async () => {
+    const preMerge = await trunkData(B, mergeB.preMergeHead);
+    const restore = await restored(H, B, mergeB.preMergeHead);
+    const observed = { merge: mergeB, restore, laterEditAfter: await trunkHas(B, "later-edit"), mergedValueAfter: await trunkHas(B, "merged"), differencesFromPreMerge: differences(preMerge.data, (await trunkData(B)).data), history: await trunkHistory(B, mergeB.preMergeHead) };
+    return { verdict: verdict(restore.submitted.status === "committed" && observed.laterEditAfter === null && observed.mergedValueAfter === null && material(observed.differencesFromPreMerge).length === 0), observed };
+  });
+
+  for (const [kind, make, edit] of [["sheet", sheet, (target, value, row) => cell(target, row, 0, value)], ["doc", doc, (target, value) => docInsert(target, value)]]) {
+    const T = await make(H, S, `Concurrent ${kind}`);
+    await trunk(H, T, [edit(T, "first ", 3)]);
+    const goal = T.head;
+    await trunk(H, T, [edit(T, "second ", 4)]);
+    const stale = T.head;
+    await trunk(E1, T, [edit(T, "concurrent ", 5)]);
+    await claim(`restore-stale-base-${kind}`, kind === "sheet"
+      ? "A Sheet restore submitted at a stale base revision, after another edit landed, is transformed and commits like an ordinary edit at the same base (plan 2.1: Sheets have a restore transform)"
+      : "A Doc restore submitted at a stale base revision, after another edit landed, does not commit, and the same restore resubmitted at head commits (plan 2.4: no Doc restore transform, submit at head and retry)", async () => {
+      const ordinaryAtStaleBase = await submitTrunk(E2, { ...changeset(E2, T, [edit(T, "ordinary ", 8)]), baseRev: stale, revision: stale + 1 });
+      const goalData = await trunkData(T, goal), headData = await trunkData(T);
+      const restore = await restored(E2, T, goal, stale);
+      const afterStale = await trunkData(T);
+      const atHead = restore.submitted.status === "committed" ? null : await restored(E2, T, goal);
+      const after = await trunkData(T);
+      const observed = { goal, staleBase: stale, ordinaryAtStaleBase, headBefore: headData.revision, restore, differencesFromGoalAfterStale: differences(goalData.data, afterStale.data), differencesFromHeadBeforeAfterStale: differences(headData.data, afterStale.data), atHead, differencesFromGoalAfterAll: differences(goalData.data, after.data), history: await trunkHistory(T, goal) };
+      if (ordinaryAtStaleBase.status !== "committed") return { verdict: "INCONCLUSIVE", reason: "an ordinary edit at the same stale base did not commit either", observed };
+      return { verdict: verdict(kind === "sheet" ? restore.submitted.status === "committed" : restore.submitted.status !== "committed" && afterStale.revision === headData.revision && atHead?.submitted.status === "committed"), observed };
+    });
+    await trunk(H, T, [edit(T, "third ", 6)]);
+    const base = T.head;
+    await claim(`stale-edit-over-restore-${kind}`, `An ordinary ${kind} edit submitted at the base revision a restore just replaced commits on top of the restored content`, async () => {
+      const goalData = await trunkData(T, goal);
+      const restore = await restored(H, T, goal, base);
+      const late = await submitTrunk(E1, { ...changeset(E1, T, [edit(T, "late ", 7)]), baseRev: base, revision: base + 1 });
+      const after = await trunkData(T);
+      const observed = { goal, base, restore, late, headAfter: after.revision, differencesFromGoal: differences(goalData.data, after.data), history: await trunkHistory(T, base) };
+      return { verdict: verdict(restore.submitted.status === "committed" && late.status === "committed"), observed };
+    });
+  }
+
+  const R = await sheet(H, S, "Resubmit a restore");
+  await trunk(H, R, [cell(R, 0, 0, "kept")]);
+  const goalR = R.head;
+  await trunk(H, R, [cell(R, 1, 0, "restored away")]);
+  await claim("restore-resubmit", "Resubmitting a restore changeset with the same sid and reqId after it applied does not apply it again (plan 2.3: deduplicated or refused)", async () => {
+    const value = { ...restoreAt(E2, R, goalR, await head(R.unitId)), sid: `revert-operation-${randomUUID()}`, reqId: 1 };
+    const first = await submitTrunk(E2, value);
+    const afterFirst = await head(R.unitId);
+    const identical = await submitTrunk(E2, value);
+    const afterIdentical = await head(R.unitId);
+    R.head = afterIdentical;
+    await trunk(E1, R, [cell(R, 2, 0, "edit after the restore")]);
+    const afterLaterEdit = R.head;
+    const identicalAfterLaterEdit = await submitTrunk(E2, value);
+    const sameIdsAtHead = await submitTrunk(E2, { ...value, baseRev: afterLaterEdit, revision: afterLaterEdit + 1 });
+    await app.close();
+    app = undefined;
+    result.capturedAfterRestart = await boot(directory);
+    const identicalAfterRestart = await submitTrunk(E2, value);
+    const afterRetries = await head(R.unitId);
+    const laterEditKept = await trunkHas(R, "edit after the restore");
+    const nextReqId = await submitTrunk(E2, { ...value, reqId: 2, baseRev: afterRetries, revision: afterRetries + 1 });
+    const observed = { goal: goalR, sid: value.sid, first, afterFirst, identical, afterIdentical, afterLaterEdit, identicalAfterLaterEdit, sameIdsAtHead, identicalAfterRestart, afterRetries, laterEditKept, nextReqIdControl: { ...nextReqId, laterEditAfter: await trunkHas(R, "edit after the restore") }, history: await trunkHistory(R, goalR) };
+    return { verdict: verdict(first.status === "committed" && afterIdentical === afterFirst && identicalAfterRestart.status === "already-committed" && afterRetries === afterLaterEdit && laterEditKept !== null), observed };
+  });
+
+  const D = await doc(H, S, "Restore a Doc");
+  const mergeD = await landed(E1, S, D, [docInsert(D, "merged ")]);
+  await claim("restore-doc-after-merge", "A Doc restore to the revision before a Worktree merge appends one Trunk revision whose content equals the pre-merge content", async () => {
+    const preMerge = await trunkData(D, mergeD.preMergeHead), before = await trunkData(D);
+    const restore = await restored(E2, D, mergeD.preMergeHead);
+    const after = await trunkData(D);
+    const observed = { merge: mergeD, restore, dataStream: { preMerge: preMerge.data.body?.dataStream, beforeRestore: before.data.body?.dataStream, afterRestore: after.data.body?.dataStream }, revisions: { preMerge: preMerge.revision, beforeRestore: before.revision, afterRestore: after.revision }, differencesFromPreMerge: differences(preMerge.data, after.data), history: await trunkHistory(D, mergeD.preMergeHead) };
+    return { verdict: verdict(restore.submitted.status === "committed" && after.revision === before.revision + 1 && material(observed.differencesFromPreMerge).length === 0), observed };
+  });
+
+  const P = await sheet(H, S, "Protected range");
+  const unprotected = P.head;
+  const rule = (await ok("POST", "/universer-api/authz/3/object", H, { objectType: 3, selectRangeObject: { unitID: P.unitId, name: "B2", collaborators: [], scope: { read: 1, edit: 2 } } })).body.objectID;
+  await trunk(H, P, [{ id: "sheet.mutation.add-range-protection", data: JSON.stringify({ unitId: P.unitId, subUnitId: P.sheetId, rules: [{ id: "protected-b2", permissionId: rule, unitId: P.unitId, subUnitId: P.sheetId, unitType: 3, ranges: [{ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }], viewState: "othersCanView", editState: "onlyMe" }] }) }]);
+  const protectedAt = P.head;
+  requiredPermissions = [];
+  const directB2 = { ...(await submitTrunk(E2, changeset(E2, P, [cell(P, 1, 1, "editor-two-b2")]))), requiredUnitPermissions: requiredPermissions.splice(0) };
+  await trunk(E1, P, [cell(P, 0, 0, "unprotected-later")]);
+  await claim("restore-protected-untouched", "A restore by an editor who may not edit a protected range commits when the restored content leaves that range unchanged", async () => {
+    const restore = await restored(E2, P, protectedAt);
+    return { verdict: verdict(directB2.status !== "committed" && restore.submitted.status === "committed"), observed: { rule, protectedAt, directB2ByEditorTwo: directB2, restore, a1After: await trunkHas(P, "unprotected-later") } };
+  });
+  const restorePoint = P.head;
+  await trunk(H, P, [cell(P, 1, 1, "owner-b2")]);
+  await trunk(E1, P, [cell(P, 0, 0, "unprotected-again")]);
+  await claim("restore-protected-range", "A restore that would change a protected range the submitter may not edit is refused whole by the product's commitChangeset middleware, and the same restore by the range owner commits (plan 2.4 inference)", async () => {
+    const byViewer = await restored(V, P, restorePoint);
+    const headBefore = await head(P.unitId);
+    const byEditor = await restored(E2, P, restorePoint);
+    const afterEditor = { head: await head(P.unitId), b2: await trunkHas(P, "owner-b2"), a1: await trunkHas(P, "unprotected-again") };
+    const byOwner = await restored(H, P, restorePoint);
+    const afterOwner = { head: await head(P.unitId), b2: await trunkHas(P, "owner-b2"), a1: await trunkHas(P, "unprotected-again") };
+    const observed = { restorePoint, byViewer, headBefore, byEditor, afterEditor, byOwner, afterOwner };
+    if (byViewer.submitted.status === "committed") return { verdict: "INCONCLUSIVE", reason: "the product middleware let a viewer restore, so it did not run", observed };
+    return { verdict: verdict(byEditor.submitted.status !== "committed" && afterEditor.head === headBefore && afterEditor.a1 !== null && byOwner.submitted.status === "committed" && afterOwner.b2 === null), observed };
+  });
+  await claim("restore-removes-protection", "A restore by an editor to a revision before the range protection existed, which would remove the rule, is refused", async () => {
+    const protection = async () => Object.fromEntries(Object.entries((await trunkData(P)).data.resources).filter(([name]) => name.includes("PROTECTION")));
+    const protectionBefore = await protection();
+    const byEditor = await restored(E2, P, unprotected);
+    const protectionAfter = await protection();
+    const directB2After = await submitTrunk(E2, changeset(E2, P, [cell(P, 1, 1, "editor-two-b2-after-restore")]));
+    return { verdict: verdict(byEditor.submitted.status !== "committed"), observed: { unprotected, protectionBefore, byEditor, protectionAfter, directB2ByEditorTwoAfter: { ...directB2After, valueOnTrunk: await trunkHas(P, "editor-two-b2-after-restore") } } };
+  });
+
+  const Q = await sheet(H, S, "Find the pre-merge revision");
+  const firstMerge = await landed(E1, S, Q, [cell(Q, 10, 1, "w1-a"), cell(Q, 11, 1, "w1-b"), cell(Q, 12, 1, "w1-c")]);
+  await trunk(H, Q, [cell(Q, 0, 0, "between the merges")]);
+  const secondMerge = await landed(E2, S, Q, [cell(Q, 13, 1, "w2")]);
+  await claim("pre-merge-revision", "Public reads give, per Unit, the Trunk revision before a Worktree merge: each merge is one Trunk revision at mergeResult.trunkRevision, so the restore target is the set's first trunkRevision - 1, and the revisions after it name every later author (plan 2.3)", async () => {
+    const history = await trunkHistory(Q, firstMerge.preMergeHead);
+    const set = new Map([firstMerge, secondMerge].map(merge => [merge.sdkResult.trunkRevision, merge.worktreeId]));
+    const merges = history.filter(record => record.memberID === "worktree-merge");
+    const observed = {
+      firstMerge, secondMerge, history,
+      restoreTarget: Math.min(...set.keys()) - 1,
+      laterAuthors: history.filter(record => !set.has(record.revision)).map(({ revision, userID, memberID }) => ({ revision, userID, memberID })),
+      mergeSids: merges.map(record => ({ revision: record.revision, sid: record.sid, reqId: record.reqId, worktreeId: set.get(record.revision), sidContainsWorktreeId: Boolean(record.sid?.includes(set.get(record.revision))) })),
+    };
+    return { verdict: verdict([firstMerge, secondMerge].every(merge => merge.sdkResult.trunkRevision === merge.preMergeHead + 1) && merges.length === set.size && merges.every(record => set.has(record.revision)) && observed.restoreTarget === firstMerge.preMergeHead), observed };
+  });
+
+  const L = await sheet(H, S, "Restore limits");
+  const created = L.head;
+  await trunk(H, L, [cell(L, 0, 0, "l-1")]);
+  await trunk(H, L, [cell(L, 0, 0, "l-2")]);
+  await claim("restore-limits", "The SDK accepts a restore changeset only alone and only for a revision between 1 and its base revision (plan finding 1, read from minified code)", async () => {
+    const at = async build => {
+      const base = await head(L.unitId);
+      return { base, ...(await submitTrunk(E2, { ...changeset(E2, L, build(base)), baseRev: base, revision: base + 1 })) };
+    };
+    const mixed = await at(base => [restoreTo(L, base - 1), cell(L, 5, 0, "mixed")]);
+    const zero = await at(() => [restoreTo(L, 0)]);
+    const atBase = await at(base => [restoreTo(L, base)]);
+    const future = await at(base => [restoreTo(L, base + 1)]);
+    const createdData = await trunkData(L, created);
+    const toCreation = await restored(E2, L, created);
+    const observed = { created, mixed, zero, atBase, future, toCreation, differencesFromCreation: differences(createdData.data, (await trunkData(L)).data), history: await trunkHistory(L, created) };
+    return { verdict: verdict(mixed.status !== "committed" && zero.status !== "committed" && future.status !== "committed" && toCreation.submitted.status === "committed"), observed };
+  });
+  await claim("restore-in-worktree-draft", "A restore changeset submitted to a Worktree draft through the product HTTP route is accepted, and merging the Worktree lands the restore on Trunk", async () => {
+    const worktreeId = await teamWorktree(E1, S);
+    const unit = await addTrunkUnit(E1, worktreeId, L);
+    const response = await http("POST", `/api/worktrees/${worktreeId}/units/${L.unitId}/changesets`, E1, { changeset: changeset(E1, unit, [restoreTo(L, created + 1)]) });
+    const observed = { worktreeId, baseline: unit.head, restoreTo: created + 1, draftSubmit: { status: response.status, body: response.body } };
+    if (response.status !== 200 || response.body.status !== "committed") return { verdict: "REFUTED", observed };
+    const ready = await http("POST", `/api/worktrees/${worktreeId}/ready`, E1), merge = await http("POST", `/api/worktrees/${worktreeId}/merge`, E1);
+    Object.assign(observed, { ready: ready.status, merge: { status: merge.status, error: merge.body?.error }, sdkResult: (await sdkUnit(worktreeId, L.unitId))?.mergeResult, l1OnTrunk: await trunkHas(L, "l-1") });
+    return { verdict: verdict(observed.sdkResult?.status === "merged" && observed.l1OnTrunk !== null), observed };
+  });
+}
+
 const outputFile = resolve(flags.output);
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const report = {
@@ -620,7 +866,7 @@ const report = {
   flags, license: process.env.UNIVER_LICENSE ? "environment" : "bundled", scenarios: {},
 };
 const save = () => writeFileSync(outputFile, JSON.stringify(report, null, 2) + "\n");
-const scenarios = { claims, behind, coldload, memory };
+const scenarios = { claims, behind, coldload, memory, restore };
 for (const name of flags.scenario === "all" ? Object.keys(scenarios) : [flags.scenario]) {
   const result = { errors: 0, errorDetails: [] };
   report.scenarios[name] = result;
