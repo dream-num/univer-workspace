@@ -36,10 +36,29 @@ web build, for link previews. A recipe declares both in a one-line paragraph, su
 `Mode: mcp-same-origin. Needs: web-build.`. As the first paragraph under `Driving it with agent-browser and uvw`,
 the line covers every journey of the feature. As the first paragraph under a journey heading, it covers that
 journey: its mode replaces the feature's, and its needs add to them. A journey with no mode is `default`. A
-`Mode:` or `Needs:` line anywhere else, or an unknown value, fails the parser test. `$V up --for` starts the
+`Mode:`, `Needs:` or `Run:` line anywhere else, or an unknown value, fails the parser test. `$V up --for` starts the
 instance and checks the needs, so a recipe never starts, stops or restarts the instance for its mode. Only a
 journey that needs another instance shape, such as production MCP or a restart with other server settings, does
 that in its own text.
+
+The same line can say who runs a journey: `Run: helper.` or `Run: agent.`, with the journey's own line winning, as
+for the mode. `agent` is the default: a verifier follows the journey's text. `$V run-journeys <feature>` runs the
+`bash` blocks of `helper` journeys itself, exactly as written, and records their checks in the run's journal.
+Mark a journey `helper` only when its blocks hold every step a machine can check. Its text then keeps only what
+needs eyes or judgment, such as "open the PNG and look". A step that is only in prose, such as killing a process,
+keeps the journey `agent`. The helper runs blocks this way:
+
+- Each journey runs in its own `bash`, from the repository root, after `eval "$($V env)"`, with stdin closed and
+  without errexit or pipefail. Setup runs first, and a broken setup blocks every journey.
+- A command that fails outside a condition (`if`, `while`, `&&`, `||`) is a broken check, unless the next command
+  reads `$?`. So a command that must fail is followed by `test $? -eq 1`. A failure inside a function or a loop
+  counts, and in a pipeline only the last command's does.
+- `!`, `[[ ]]`, `(( ))` and `( )` fail the parser test in a `helper` journey, because bash does not trap their
+  failure everywhere. Write `command; test $? -eq 1`, `test` and `{ ...; }`.
+- Variables and functions carry from setup and earlier `helper` journeys of the same mode, so running one journey
+  first runs those that have not run. A `helper` journey never needs an `agent` journey's state.
+- Each journey's output goes to `evidence/<ID>.run.log`, and each broken check records its markdown line, exit
+  code and the redacted end of that output. A journey stops after 600 s.
 
 An H1, or a journey heading, that ends in ` (host only)` cannot run in
 [the runner](../SKILL.md#run-journeys-in-the-runner). The runner refuses a marked feature, leaves a

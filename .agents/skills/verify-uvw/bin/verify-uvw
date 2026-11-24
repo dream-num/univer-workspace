@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief [--own run-id] <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | runner [--jobs N] [--keep] <feature[:ID|mode,...]>... | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief [--own run-id] <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | runner [--no-model] [--jobs N] [--keep] <feature[:ID|mode,...]>... | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -787,6 +787,12 @@ cmd_verdict() { # journey-id PASS|FAIL|DRIFT|BLOCKED [note]: append this run's v
   exec node "$BIN/journeys.mjs" verdict --run "$run" "$@"
 }
 
+cmd_run_journeys() { # [--again] feature [journey-id|mode...]: run the helper journeys' blocks as written and record their checks
+  local run
+  run="$(run_dir)"
+  exec node "$BIN/journeys.mjs" run --run "$run" "$@"
+}
+
 cmd_metrics() { # the Workspace server's /metrics; the token goes through stdin, never argv
   load_run
   printf 'Authorization: Bearer %s\n' "$(cat "$RUN/home/workspace-metrics-token")" \
@@ -831,7 +837,8 @@ cmd_down() {
   done
   stop_pid "$SERVER_PID" "server/src/main.ts"
   stop_pid "$WEB_PID" "vite.js"
-  rm -rf "$RUN/data" "$RUN/home" "$RUN/user.pw"
+  # journeys/ holds the recipe variables run-journeys carries between journeys, passwords included.
+  rm -rf "$RUN/data" "$RUN/home" "$RUN/user.pw" "$RUN/journeys"
   [[ "$(readlink "$ROOT/current" 2>/dev/null)" != "$RUN" ]] || rm -f "$ROOT/current"
   echo "stopped run $RUN_ID; kept $RUN/evidence and $RUN/logs"
 }
@@ -848,6 +855,7 @@ case "${1:-}" in
   brief) shift; cmd_brief "$@" ;;
   journeys) shift; cmd_journeys "$@" ;;
   verdict) shift; cmd_verdict "$@" ;;
+  run-journeys) shift; cmd_run_journeys "$@" ;;
   runner) shift; exec node "$BIN/runner.mjs" "$@" ;;
   metrics) shift; cmd_metrics "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;

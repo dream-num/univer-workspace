@@ -86,7 +86,7 @@ test('runner --check names the key source and fingerprint, proves the key with o
     mkdirSync(join(skill, 'features'));
     mkdirSync(join(skill, 'runner'));
     copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(bin, 'runner.mjs'));
-    copyFileSync(fileURLToPath(new URL('./journeys.mjs', import.meta.url)), join(bin, 'journeys.mjs'));
+    for (const file of ['journeys.mjs', 'secrets.mjs']) copyFileSync(fileURLToPath(new URL(file, import.meta.url)), join(bin, file));
     writeFileSync(join(skill, 'runner/Dockerfile'), `FROM scratch\nENV ANTHROPIC_BASE_URL=http://127.0.0.1:${endpoint.address().port} \\\n    ANTHROPIC_MODEL='stub-model[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=other-model\n`);
     writeFileSync(join(skill, 'features/whole.md'), recipe('Whole feature (host only)', 'W1. One'));
     writeFileSync(join(skill, 'features/plain.md'), recipe('Plain feature', 'P1. One', 'P2. Two (host only)', 'P3. Three (host only)'));
@@ -184,7 +184,7 @@ test('a task with an expected journey that has no verdict is INCOMPLETE and exit
     assert.deepEqual([incomplete.status, incomplete.result], ['finished', 'INCOMPLETE']);
     assert.deepEqual(incomplete.journeys.map((j) => j.verdict), ['PASS', 'FAIL', 'PASS', 'BLOCKED', 'MISSING'], 'the later FAIL from another run wins');
     assert.equal(exitCode([incomplete]), 4);
-    assert.deepEqual(JSON.parse(readFileSync(join(out, 'result.json'), 'utf8')).journeys[4], { id: 'IS5', verdict: 'MISSING', note: '' });
+    assert.deepEqual(JSON.parse(readFileSync(join(out, 'result.json'), 'utf8')).journeys[4], { id: 'IS5', verdict: 'MISSING', note: '', checks: null, failure: '' });
 
     const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [incomplete], host: [], setup: [90], wallSeconds: 100 });
     assert.match(text, /^\| Task \| Mode \| Status \| Result \| Journeys \| PASS \| FAIL \| DRIFT \| BLOCKED \| MISSING \| Turns \|/m);

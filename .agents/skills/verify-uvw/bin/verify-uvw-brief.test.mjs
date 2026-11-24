@@ -42,7 +42,8 @@ test('both briefs name the run, the feature file and every expected journey id, 
     assert.match(own.stdout, /This container is disposable and yours\.\n/);
     assert.ok(own.stdout.includes(`export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
     assert.match(own.stdout, /Leave run task-1 running when you reply/);
-    assert.match(own.stdout, /Never print a cookie, token, password or environment variable/);
+    assert.match(own.stdout, /Never run `set -x`, and never print a cookie, token, password or environment variable/);
+    assert.match(some.stdout, /Never run `set -x`, and never print a cookie, token, password or environment variable, for example with `agent-browser cookies get` or `env`: your transcript is kept\. /, 'the host brief forbids it too');
     assert.ok(own.stdout.includes(`Name each evidence file by its full path, such as ${root}/task-1/evidence/<file>.`));
     assert.doesNotMatch(own.stdout + host.stdout, /RESULT: PASS/);
 
