@@ -1,4 +1,4 @@
-# Screenshots, PDF and lint over MCP
+# Screenshots, PDF and lint over MCP (host only)
 
 An agent sees a Unit through the renderer. `screenshot` returns PNG images, or download links when they are
 large, `print_pdf` returns a PDF, `lint` reports layout problems in a Slide deck, and `compile_svg` measures text

@@ -1,4 +1,4 @@
-# Read Sheet Units with outline, read and find
+# Read Sheet Units with outline, read and find (host only)
 
 An Agent reads a remote Sheet Unit without screenshots or statistics scripts. `uvw outline`
 maps sheets, regions, tables and columns with stable refs, `outline --at <ref>` zooms in,

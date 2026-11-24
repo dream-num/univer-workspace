@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief [--own run-id] <feature> [journey-id...] | runner [--jobs N] [--keep] <feature[:ID,ID]>... | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -677,6 +677,7 @@ EOF
 }
 
 cmd_brief() { # feature [journey-id...]: the text to hand an agent that drives this run
+  [[ "${1:-}" != --own ]] || { shift; cmd_brief_own "$@"; return; }
   [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id...]"
   load_run
   local feature="$1"; shift
@@ -695,6 +696,44 @@ export VERIFY_UVW_ROOT=$ROOT VERIFY_UVW_RUN=$RUN_ID; V=.agents/skills/verify-uvw
 3. Reply with one line per step, \`<step>: PASS\` or \`<step>: FAIL\`. After each line give the values you read from the command output and the evidence files, not the values the recipe expects. End with \`RESULT: PASS\` when every step matched the recipe, and with \`RESULT: ISSUES\` when any step did not.
 
 Do not run \`up\`, \`down\` or \`user\`. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next step.
+EOF
+}
+
+# The brief for an agent in a disposable runner container that starts its own instance. A feature H1 or a
+# journey's ### heading ending in " (host only)" stays on the host; exit 3 when nothing is left to run here.
+cmd_brief_own() { # run-id feature [journey-id...]
+  [[ $# -ge 2 && "$1" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "usage: verify-uvw brief --own <run-id> <feature> [journey-id...]"
+  local id="$1" feature="$2" file="$BIN/../features/$2.md"
+  shift 2
+  [[ -f "$file" ]] || die "no .agents/skills/verify-uvw/features/$feature.md"
+  if head -n1 "$file" | grep -q ' (host only)$'; then echo "verify-uvw: $feature runs only on the host" >&2; exit 3; fi
+  local marked steps="every step" run="" skip="" j
+  marked=" $(sed -nE 's/^### ([^ .]+)\.? .*\(host only\)$/\1/p' "$file" | tr '\n' ' ')"
+  for j in "$@"; do
+    if [[ "$marked" == *" $j "* ]]; then skip="${skip:+$skip, }$j"; else run="${run:+$run, }$j"; fi
+  done
+  if [[ $# -gt 0 ]]; then
+    [[ -n "$run" ]] || { echo "verify-uvw: $skip in $feature run only on the host" >&2; exit 3; }
+    steps="$run as written, and skip its other steps"
+  elif [[ "$marked" != " " ]]; then
+    skip="$(echo $marked | sed 's/ /, /g')"
+  fi
+  cat <<EOF
+Follow a written recipe against a Univer Workspace instance, and report what happened. This container is disposable and yours. Start the instance yourself.
+
+Work from $REPO. Start every shell command with this line. It selects the instance:
+
+export VERIFY_UVW_ROOT=$ROOT VERIFY_UVW_RUN=$id; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "\$(\$V env 2>/dev/null)"
+
+1. Read the Drive and Evidence sections of .agents/skills/verify-uvw/SKILL.md, then .agents/skills/verify-uvw/features/README.md.
+2. Start the instance as the preconditions of .agents/skills/verify-uvw/features/$feature.md say: \`\$V up\`, \`\$V user\` and \`\$V doctor\`, each in its own shell command. If doctor prints a \`FAIL\` line, stop and report those lines. When the recipe starts another run or restarts the instance, do that too.
+3. Follow .agents/skills/verify-uvw/features/$feature.md. Set up its preconditions, then run $steps.
+EOF
+  [[ -z "$skip" ]] || echo "   Do not run $skip. They run only on the host. Report each as \`<id>: SKIP (host only)\`."
+  cat <<EOF
+4. Reply with one line per step, \`<step>: PASS\` or \`<step>: FAIL\`. After each line give the values you read from the command output and the evidence files, not the values the recipe expects. Name each evidence file by its full path, such as $ROOT/$id/evidence/<file>. End with \`RESULT: PASS\` when every step matched the recipe, and with \`RESULT: ISSUES\` when any step did not.
+
+Leave run $id running when you reply: do not run \`down\` for it. The runner checks its evidence, then stops it. Never print a cookie, token or password, for example with \`agent-browser cookies get\`: the runner fails a task whose transcript holds one. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next step.
 EOF
 }
 
@@ -757,6 +796,7 @@ case "${1:-}" in
   open-anon) shift; cmd_open_anon "$@" ;;
   env) shift; cmd_env "$@" ;;
   brief) shift; cmd_brief "$@" ;;
+  runner) shift; exec node "$BIN/runner.mjs" "$@" ;;
   metrics) shift; cmd_metrics "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;

@@ -22,6 +22,11 @@ Each feature file starts with an H1 and one paragraph of user-visible behavior, 
 four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 `Driving it with agent-browser and uvw`, `Gotchas`.
 
+An H1, or a journey's `###` heading, that ends in ` (host only)` cannot run in
+[the runner](../SKILL.md#run-journeys-in-the-runner). The runner and `brief --own` read only this
+marker. The runner refuses a marked feature, skips a marked journey, and lists both for a host run.
+The host flow ignores the marker.
+
 ## Features
 
 - [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded

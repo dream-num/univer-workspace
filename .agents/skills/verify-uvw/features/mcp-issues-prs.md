@@ -1,4 +1,4 @@
-# Issues and pull requests over MCP
+# Issues and pull requests over MCP (host only)
 
 An agent connected to the MCP gateway creates, views, lists, edits, comments on, closes and reopens Issues, and
 creates, views, lists, edits, readies, searches and browses pull requests, and links a pull request to the Issue it serves. Each result matches what `uvw --json`

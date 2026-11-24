@@ -1,4 +1,4 @@
-# MCP gateway
+# MCP gateway (host only)
 
 An agent connects to a disposable Docker gateway with a personal access token (PAT) that the gateway exchanges
 for a short-lived Workspace session, calls its tools through either MCP protocol, and leaves correlated usage

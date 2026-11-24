@@ -1,4 +1,4 @@
-# Skills and the Facade API reference over MCP
+# Skills and the Facade API reference over MCP (host only)
 
 An agent lists and reads the built-in, personal and repository Skills, reads Skill files as MCP resources,
 searches and pages through the Facade API reference, reads the server instructions, and writes or imports Skill

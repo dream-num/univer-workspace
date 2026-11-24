@@ -1,4 +1,4 @@
-# MCP sign-in with personal access tokens
+# MCP sign-in with personal access tokens (host only)
 
 An agent calls the gateway with a personal access token (PAT). Its scopes limit what it may do, revoking it stops
 the next call, and the protected-resource metadata tells a client where to sign in. Turning on MCP OAuth leaves

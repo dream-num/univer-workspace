@@ -1,4 +1,4 @@
-# MCP production shape and per-account tools
+# MCP production shape and per-account tools (host only)
 
 In the production shape, with no renderer, PAT sign-in and an executor allowlist, each account sees only the
 tools it may use. A user outside the allowlist keeps the HTTP tools and has no `execute`, the instructions never

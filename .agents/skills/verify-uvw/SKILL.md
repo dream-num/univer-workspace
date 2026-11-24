@@ -18,6 +18,7 @@ $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
 $V brief <feature> [journey-id...]   # print the brief for an agent that drives this run
+$V runner <feature[:ID,ID]>...       # run journeys in disposable Linux containers, no instance of yours
 $V down      # stop what this run started; delete data; keep evidence + logs
 ```
 
@@ -152,10 +153,45 @@ subagent, give it the journey and keep your own turns for choosing what to verif
 4. Stop the instance yourself with `$V down`.
 
 Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
-design checks. This skill names no model, harness or host for
-the verifier. The developer chooses the model in their own configuration, outside this repository, and
-the harness default applies otherwise. The subagent runs where `up` ran, because the instance listens
-only on `127.0.0.1`. Default mode also runs on Linux. MCP mode and `uvw` stories need macOS.
+design checks. When the runner can run the feature, prefer [the runner](#run-journeys-in-the-runner): it
+needs no instance of yours and gives every developer the same Linux machine. Otherwise this section applies,
+and it names no model, harness or host for the verifier. The developer chooses the model in their own
+configuration, outside this repository, and the harness default applies otherwise. The subagent runs where
+`up` ran, because the instance listens only on `127.0.0.1`. On the host, MCP mode and `uvw` stories need
+macOS.
+
+## Run journeys in the runner
+
+`$V runner` gives each task to Claude Code in a disposable Linux container. A task is a feature, or a
+feature with some of its journeys:
+
+```bash
+$V runner link-sharing:LS1,LS2,LS3,LS4 auth   # two tasks
+$V runner --jobs 3 --keep issues auth create-document
+```
+
+- The runner image is the one exception to "names no model". It ships Claude Code pointed at DeepSeek's
+  Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high.
+- It needs Docker and `DEEPSEEK_API_KEY`, from the environment or from a `DEEPSEEK_API_KEY=` line in the
+  repository's `.env`. The key reaches each task only as a `docker exec` environment variable, never the image
+  or a file.
+- It tests your working tree as it is. Tracked changes and untracked files go into a snapshot commit that no
+  ref points at, and your index, status and refs stay as they were.
+- It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs and builds the
+  snapshot once, then takes tasks one at a time. Every task gets a new Claude Code session, which starts its
+  own instance from the brief that `$V brief --own <run-id> <feature> [journey-id...]` prints.
+- A feature or journey marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract)
+  does not run here. The runner lists it in `summary.md` for a host run. Every MCP-mode feature is marked today.
+- Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/`: `summary.md`, and for each task
+  `report.md` (its evidence paths open on the host), `transcript.jsonl`, `result.json`,
+  `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
+- Treat a report as a claim, as in the previous section. Open the evidence before you repeat a `PASS` or a
+  `FAIL`.
+- Exit codes: `0` when every task reported, `3` when Docker is missing or a task is host only, `4` when a
+  task has no report, timed out, failed in the runner or leaked a secret (it wins over `3`), and `5` with no
+  key. A task leaks a secret when its output holds the key or a run's `secret-check` fails. Its files stay
+  for you to delete.
+- The runner removes its containers at the end and on Ctrl-C. `--keep` leaves them for `docker exec`.
 
 ## Cleanup
 

@@ -1,4 +1,4 @@
-# MCP sign-in with OAuth
+# MCP sign-in with OAuth (host only)
 
 An MCP client that knows only the MCP URL signs in through the browser. It discovers the authorization server,
 registers or presents a Client ID Metadata Document, and the person consents to scopes they can narrow. Tokens

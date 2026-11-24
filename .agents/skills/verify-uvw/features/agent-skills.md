@@ -1,4 +1,4 @@
-# Browser Agent skills
+# Browser Agent skills (host only)
 
 Users teach the browser Agent with personal and repository `.agents/skills/<name>/SKILL.md`
 files. The rail shows available and used skills. A user can invoke a skill with `/name`,

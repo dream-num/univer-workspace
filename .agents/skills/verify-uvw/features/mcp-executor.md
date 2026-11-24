@@ -1,4 +1,4 @@
-# Scripts and compilers over MCP
+# Scripts and compilers over MCP (host only)
 
 An agent runs a Facade script against a Unit with `execute`, reads it with `inspect`, and compiles Typst and SVG
 into Docs and Slides. A write commits once with its revision facts, errors read like the CLI's, stale sessions
