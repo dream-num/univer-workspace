@@ -97,6 +97,7 @@ export interface WorktreeOperationRow {
 export interface WorktreesRepository {
   hasCreatedWorktree(userId: string): Promise<boolean>;
   audience(worktreeId: string): Promise<string[]>;
+  /** Includes a processed private Team Worktree for every member, since a merge shares it; the service drops the discarded ones. */
   listCandidates(input: {
     readonly userId: string;
     readonly scope: "active" | "processed" | "all";

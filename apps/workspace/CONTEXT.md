@@ -155,7 +155,8 @@ or shared with current Space Members. Anyone who may propose in the Space create
 one from the Units they can read: any Space Member, and while the Space reads
 publicly, the readers its proposals setting admits. A proposer without edit access
 proposes a change there and a Member with edit access merges it. Marking one ready shares it with the Space
-when its author cannot merge it. Space Owners and Admins may reopen, discard or
+when its author cannot merge it, and merging one shares it whatever its visibility was while it was open.
+Space Owners and Admins may reopen, discard or
 change the visibility of a Team Worktree, without gaining access to the draft
 content of a private one, and do not merge a private one someone else created.
 _Avoid_: Space-scoped Worktree, Team branch

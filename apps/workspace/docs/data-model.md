@@ -422,6 +422,10 @@ Team Worktree 可以由它的 Team Space 的任何 Space Member 创建，包括 
 `visibility` 在创建时由作者选择。Ready 时如果作者自己不能合并，即缺少某个 Unit 的编辑权限，服务把 `visibility`
 写成 `space`，让有编辑权限的成员能看到并合并它。它保持 `ready` 且作者仍不能合并时，作者、Owner 和 Admin 都不能把它改回
 `private`，要先 reopen。合并人记录在 `merge_worktree` Operation 的 `actor_user_id` 上，可以不是作者。
+合并完成的 Team Worktree，即 `processed_at` 非空而协同服务报告 `merged`，读作 `space`：每个 Space Member 都能在列表和
+Space activity 里看到它，能读到它全部 Unit 的成员可以 Review 它，Space 的非成员仍然看不到。这是读取时推导的，不改写
+`visibility` 列，列里保留作者在它未结束时的选择。Discard 的 Worktree 保持原来的可见性。列表和实时推送的 SQL 把已处理的
+私有 Team Worktree 交给每个成员作为候选，再由服务按协同服务的状态去掉 Discard 的那些。
 
 `created_via`（V16，`TEXT`，可空）保存创建 Session 的 `write_source`，取值为 `browser` 或 `agent`；
 `NULL` 表示未知，无默认值，不回填已有 Worktree。

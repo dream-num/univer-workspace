@@ -55,6 +55,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
              AND (
                worktree.visibility = 'space'
                OR membership.role = 'admin'
+               OR worktree.processed_at IS NOT NULL
              )
          ) AS audience
          ORDER BY audience.user_id`
@@ -128,7 +129,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
            OR (worktree.kind = 'team' AND (
              ${ownsSpaceSql("team.owner_user_id")}
              OR (member.user_id IS NOT NULL AND (
-               worktree.visibility = 'space' OR member.role = 'admin'
+               worktree.visibility = 'space' OR member.role = 'admin' OR worktree.processed_at IS NOT NULL
              ))
            ))
          )

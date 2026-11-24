@@ -226,7 +226,8 @@ Browser 审阅面板在不能合并私有 Pull request 的成员面前因此同�
 
 Team Space 的任何 Space Member 都能创建 Team Worktree，包括 Viewer；Space 公开读取时，`proposals` 设置接纳的非成员读者也能，由 `proposesSql` 统一判断。作者把自己能读的 Trunk Unit 加进来、新建指向这个
 Space 的 Unit、编辑草稿并 Ready，都不需要编辑权限：草稿不写 Trunk，编辑权限只向合并的人要。作者自己不能合并时，Ready
-把可见性设为 `space`，让能合并的成员看到它。标记移除一个 Trunk Unit 仍要求对它的 Node 有 `trash`，所以 Viewer 不能提议
+把可见性设为 `space`，让能合并的成员看到它。合并完成的 Team Worktree 读作 `space`，所以合并之后每个 Space Member
+都能看到它和它的合并，这在读取时推导，不写回可见性。标记移除一个 Trunk Unit 仍要求对它的 Node 有 `trash`，所以 Viewer 不能提议
 删除文件。Trunk Unit 上的内容保护在草稿里照样生效，没有编辑权限的作者改不了保护规则覆盖的内容。合并时写入 Trunk 的身份是
 合并的人，新文件的作者仍是 Pull request 的作者。
 所以认领人可以决定 agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
