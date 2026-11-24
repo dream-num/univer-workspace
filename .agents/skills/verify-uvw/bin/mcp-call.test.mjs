@@ -153,6 +153,25 @@ for (const tool of ['skill_draft_create', 'skill_draft_get']) {
   });
 }
 
+for (const tool of ['fork_view', 'fork_delete']) {
+  test(`${tool} attributes the fork's upstream without a repo argument`, () => {
+    const globals = { tool, args: { fork: 'agent/fix' } };
+    assert.equal(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: 'space-1' } }).length, 0);
+    assert.ok(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: null } }).includes('Unexpected repository or Unit identity'));
+  });
+}
+
+test('a read through a fork address records a repository only when it reads the fork\'s Worktree', () => {
+  const globals = { tool: 'read', args: { worktree: 'agent/fix', unit: 'u1' } };
+  const read = (kind, repo) => validateErrorCode('ok', undefined, null, {
+    globals, result: { structuredContent: { scope: { kind } } }, event: { tool: 'read', executor: 'warm', unit_type: 'sheet', repo },
+  });
+  assert.ok(!read('trunk', null).includes('Unexpected repository or Unit identity'));
+  assert.ok(!read('worktree', 'space-1').includes('Unexpected repository or Unit identity'));
+  assert.ok(read('worktree', null).includes('Unexpected repository or Unit identity'));
+  assert.ok(read('trunk', 'space-1').includes('Unexpected repository or Unit identity'));
+});
+
 for (const target of [{ space: 'space-1' }, { page: 'page-1', etag: '"v1"' }, { draft: 'draft-1' }]) {
   test(`HTML View saves resolve repository identity through ${Object.keys(target)[0]}`, () => {
     const globals = { tool: 'html_view_save', args: target };
