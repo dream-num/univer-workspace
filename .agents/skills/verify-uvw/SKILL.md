@@ -20,8 +20,10 @@ $V open-anon <label> <url>     # open a link with no cookies: screenshot, video,
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
 $V journeys <feature> [journey-id|mode...]   # the journeys to verify, by mode; after up, which have a verdict
 $V verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note]   # record one journey's verdict in this run
+$V run-journeys [--again] <feature> [journey-id|mode...]   # run the blocks of "Run: helper." journeys as written; record their checks
 $V brief <feature> [journey-id|mode...]   # print the brief for an agent that drives this run
 $V runner <feature[:ID|mode,...]>...      # run journeys in disposable Linux containers, no instance of yours
+$V runner --no-model <feature[:ID|mode,...]>...   # the same, with only the helper's journeys and no key
 $V runner --check [feature[:ID|mode,...]...]   # can these run in runner mode here? starts nothing
 $V down      # stop what this run started; delete data; keep evidence + logs
 ```
@@ -34,6 +36,7 @@ $V down      # stop what this run started; delete data; keep evidence + logs
 | `data/` | product SQLite, collaboration SQLite, blobs | no |
 | `home/` | `UNIVER_HOME` for uvw (origin config, session) and other run credentials | no |
 | `user.pw` | throwaway password | no |
+| `journeys/` | what `run-journeys` carries between journeys: its scripts and the recipe's variables | no |
 | `run.env`, `user.env` | ports, PIDs, launch HEAD, mode flags, username | yes |
 | `logs/` | `server.log`, `web.log`, `register.json` | yes |
 | `evidence/` | screenshots and `cli` transcripts | yes |
@@ -191,9 +194,14 @@ judge it. The run's `evidence/journeys.jsonl` keeps every verdict, and the last 
 | `DRIFT` | The recipe is wrong, such as a stale count or a renamed label. Quote the recipe and say what the product does. |
 | `BLOCKED` | The journey could not run, or ran only in part. Say why. |
 
-Every verdict but `PASS` needs a note with the values you read and the evidence files. Before you report, run
+Every verdict but `PASS` needs a note with the values you read and the evidence files. A journey marked
+`Run: helper.` ([the feature contract](features/README.md#feature-entry-contract)) is not retyped: `$V run-journeys
+<feature> [journey-id...]` runs its blocks as written and records its checks, and you judge the rest of its text.
+`verdict` refuses `PASS` for such a journey until its checks ran and held. When a check broke, record `FAIL`
+when the product is wrong, `DRIFT` when the recipe is, or `BLOCKED`. Before you report, run
 `$V journeys <feature> [journey-id...]`. It lists each journey with its verdict, or `MISSING`, and ends with
-`RESULT: PASS`, `ISSUES` or `INCOMPLETE`. `INCOMPLETE` means a journey has no verdict, and the command exits `1`.
+`RESULT: PASS`, `ISSUES` or `INCOMPLETE`, after `CHECKS: HELD` or `BROKE` when the helper ran some of them.
+`INCOMPLETE` means a journey has no verdict, and the command exits `1`.
 
 ## Hand the driving to another agent
 
@@ -201,7 +209,8 @@ Following a journey in `features/` does not need your strongest model. When your
 subagent, give it the journey and keep your own turns for choosing what to verify and for judging the result.
 
 1. Run `$V journeys <feature>` to see the journeys by mode. Take one mode, or some journeys of one mode, at a time.
-2. Start the instance yourself with `$V up --for <feature> [journey-id|mode...]`, `$V user` and `$V doctor`.
+2. Start the instance yourself with `$V up --for <feature> [journey-id|mode...]`, `$V user` and `$V doctor`. When
+   some of the journeys are `Run: helper.`, run `$V run-journeys` with the same selection. It needs no model.
 3. Run `$V brief <feature> [journey-id|mode...]` with the same selection, for example `$V brief link-sharing LS1 LS2 LS3`.
    It refuses a run whose mode differs from the journeys'. The brief lists the journey IDs that each need a verdict.
    Give the subagent that text unchanged, with no hint about the change under review.
@@ -247,10 +256,16 @@ and so on. The id is also the task's run id.
   ref points at, and your index, status and refs stay as they were.
 - It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
   builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
-  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, then gives a new
-  Claude Code session the brief that `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief
-  says the instance is already running in the journeys' mode. When the prepare fails, no session starts, the task
-  is `infra-error`, and `summary.md` quotes the `FAIL` lines of its `prepare.log`.
+  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, then
+  `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code session the brief that
+  `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief says the instance is already running
+  in the journeys' mode, and that the helper already ran its journeys, whose checks the session reads and judges.
+  When the prepare fails, no session starts, the task is `infra-error`, and `summary.md` quotes the `FAIL` lines of
+  its `prepare.log`.
+- `--no-model` stops each task after `run-journeys`, so it needs no key, starts no session and judges nothing.
+  `summary.md` then counts each task's checks that held, broke, were blocked or did not run, and the journeys the
+  agent drives, and lists every check that did not hold. It exits `1` when one did not hold, `4` when a task
+  failed in the runner or leaked, `3` when a task is host only, else `0`.
 - A task expects a verdict for each journey it selects, from the journey headings of its feature file. A journey
   marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract) does not run here,
   and neither does a marked feature. The runner lists them in `summary.md` for a host run.
@@ -264,8 +279,8 @@ and so on. The id is also the task's run id.
 - At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
   holds each expected journey's verdict and note, `MISSING` when it has none, and a result: `INCOMPLETE` when any
   journey is `MISSING`, else `PASS` when every journey is `PASS`, else `ISSUES`. `summary.md` counts the
-  verdicts per task and lists every journey that is not `PASS` with its note. The report is prose for you, and
-  the runner reads no verdict from it.
+  verdicts per task, and its Checks column the helper's checks, and lists every journey that is not `PASS` with its
+  note and its broken check. The report is prose for you, and the runner reads no verdict from it.
 - Evidence never stays in a container. `task.sh` sets `VERIFY_UVW_EVIDENCE_ROOT` to the task's `runs/`, and
   `up` then makes each run's `evidence/` and `logs/` links into it, so files reach the host as they are written.
   That covers runs a recipe starts under its own `VERIFY_UVW_ROOT`, and a batch stopped by Ctrl-C or a failed

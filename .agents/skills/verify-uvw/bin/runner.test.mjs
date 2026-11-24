@@ -34,6 +34,9 @@ test('a spec is a feature, or a feature with journey IDs or mode names', () => {
   assert.deepEqual(parseArgs(['--check']), { check: true, specs: [] });
   assert.deepEqual(parseArgs(['--check', 'auth']).specs, [{ feature: 'auth', selectors: [] }]);
   assert.throws(() => parseArgs(['--check', '--keep', 'auth']), /--check takes only tasks/);
+  assert.throws(() => parseArgs(['--check', '--no-model', 'auth']), /--check takes only tasks/);
+  assert.equal(parseArgs(['auth']).model, true);
+  assert.equal(parseArgs(['--no-model', 'auth']).model, false);
 });
 
 test('each spec becomes one task per mode, with a run id per task, and host-only journeys go to the host list', () => {
@@ -100,6 +103,11 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.equal(noKey.status, 5);
     assert.match(noKey.stdout, /^FAIL {2}DEEPSEEK_API_KEY not found/m);
     assert.match(noKey.stdout, /^FAIL {2}docker is not available$/m);
+    const keyless = await node(['plain:P1'], { VERIFY_UVW_ROOT: join(root, 'runs') });
+    assert.equal(keyless.status, 5);
+    const noModel = await node(['--no-model', 'plain:P1'], { VERIFY_UVW_ROOT: join(root, 'runs') });
+    assert.equal(noModel.status, 3, 'with no model, a batch with no key anywhere goes on to Docker');
+    assert.match(noModel.stderr, /docker is not available/);
     assert.equal(requests.length, 0);
 
     const good = await check({ DEEPSEEK_API_KEY: 'good-key' });
@@ -187,8 +195,8 @@ test('a task with an expected journey that has no verdict is INCOMPLETE and exit
     assert.deepEqual(JSON.parse(readFileSync(join(out, 'result.json'), 'utf8')).journeys[4], { id: 'IS5', verdict: 'MISSING', note: '', checks: null, failure: '' });
 
     const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [incomplete], host: [], setup: [90], wallSeconds: 100 });
-    assert.match(text, /^\| Task \| Mode \| Status \| Result \| Journeys \| PASS \| FAIL \| DRIFT \| BLOCKED \| MISSING \| Turns \|/m);
-    assert.match(text, /^\| issues \| default \| finished \| INCOMPLETE \| 5 \| 2 \| 1 \| 0 \| 1 \| 1 \| 30 \| 95 s \|/m);
+    assert.match(text, /^\| Task \| Mode \| Status \| Result \| Journeys \| PASS \| FAIL \| DRIFT \| BLOCKED \| MISSING \| Checks \| Turns \|/m);
+    assert.match(text, /^\| issues \| default \| finished \| INCOMPLETE \| 5 \| 2 \| 1 \| 0 \| 1 \| 1 \| {2}\| 30 \| 95 s \|/m);
     assert.match(text, /^Journeys that are not PASS:\n\n- issues IS2 FAIL: number is 2\n- issues IS4 BLOCKED: the Comment button never rendered\n- issues IS5 MISSING\n/m);
 
     verdicts('late', ['2026-11-24T10:00:06Z', 'IS5', 'PASS']);
@@ -218,7 +226,7 @@ test('a session that ends on an API error is an infra-error, and summary.md show
     const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'DEEPSEEK_API_KEY from .env (sha256 0123abcd)', jobs: 1, dir,
       results: [balance, quoted], host: [], setup: [90], wallSeconds: 700 });
     assert.match(text, /^Snapshot s of HEAD h, image i, DEEPSEEK_API_KEY from \.env \(sha256 0123abcd\), 1 runner/m);
-    assert.match(text, /^\| sheet-lens \| mcp \| infra-error \| INCOMPLETE \| 1 \| 0 \| 0 \| 0 \| 0 \| 1 \| 120 \|/m);
+    assert.match(text, /^\| sheet-lens \| mcp \| infra-error \| INCOMPLETE \| 1 \| 0 \| 0 \| 0 \| 0 \| 1 \| {2}\| 120 \|/m);
     assert.match(text, /^These tasks stopped on an API error:\n\n- sheet-lens: API Error: 402 Insufficient Balance \(request_id: r-1\)$/m);
     assert.doesNotMatch(text, /- auth:/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -268,4 +276,41 @@ test('the report, turns and usage come from the last result record, with run pat
   assert.equal(readTranscript(`${record('first')}\n${record('last')}\nnot json\n`, '/x').report, 'last');
   assert.equal(readTranscript(`${record('See /tmp/verify-uvw-slc/slc/evidence/a.png and /tmp/verify-uvw/t/evidence/b.png')}\n`, '/b/runs').report,
     'See /b/runs/slc/evidence/a.png and /b/runs/t/evidence/b.png');
+});
+
+test('with no model the exit code is 4 for a failed task, then 1 for checks that did not hold, then 3 for host-only, else 0', () => {
+  const r = (status, checks) => ({ status, result: null, checks });
+  const noModel = { model: false };
+  assert.equal(exitCode([r('finished', 'HELD'), r('finished', null)], noModel), 0, 'a task the agent drives has nothing to execute');
+  assert.equal(exitCode([r('finished', 'HELD'), r('finished', 'BROKE')], noModel), 1);
+  assert.equal(exitCode([r('finished', 'HELD'), r('host-only', null)], noModel), 3);
+  assert.equal(exitCode([r('finished', 'BROKE'), r('host-only', null)], noModel), 1, 'a broken check wins over host-only');
+  for (const failed of ['infra-error', 'secret-leak']) assert.equal(exitCode([r('finished', 'BROKE'), r(failed, null), r('host-only', null)], noModel), 4, failed);
+  assert.equal(exitCode([{ status: 'finished', result: 'INCOMPLETE', checks: 'HELD' }], noModel), 0, 'with no model, missing verdicts are expected');
+  assert.equal(exitCode([{ status: 'finished', result: 'INCOMPLETE', checks: 'HELD' }]), 4, 'with a model, they are not');
+});
+
+test('a no-model task is finished without a session, and summary.md counts its checks and lists those that did not hold', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-no-model-'));
+  const text = `# F\n\n## Driving it with agent-browser and uvw\n\nMode: mcp. Run: helper.\n\n### H1. One\n\n### H2. Two\n\n### H3. Three\n\n### G1. Four\n\nRun: agent.\n`;
+  const expected = parseFeature('f', text).journeys;
+  const out = join(dir, 'f');
+  try {
+    mkdirSync(join(out, 'runs/f/evidence'), { recursive: true });
+    const c = (journey, outcome, more = {}) => JSON.stringify({ kind: 'checks', at: '2026-11-24T10:00:00Z', run: 'f', feature: 'f', journey, outcome, failures: [], reason: null, ...more });
+    writeFileSync(join(out, 'runs/f/evidence/journeys.jsonl'), [c('H1', 'held'),
+      c('H2', 'broke', { failures: [{ line: 'features/f.md:9', exit: 1, command: "jq -e '.ok' \"$EVIDENCE/x.json\"", tail: 'false' }] })].join('\n'));
+    const result = finish({ id: 'f', mode: 'mcp', expected }, dir, 50, null, { model: false });
+    assert.deepEqual([result.status, result.result, result.checks], ['finished', null, 'BROKE']);
+    assert.equal(exitCode([result], { model: false }), 1);
+    const summarized = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'no model and no key', jobs: 1, dir, results: [result], host: [], setup: [80], wallSeconds: 140, model: false });
+    assert.match(summarized, /^\| Task \| Mode \| Status \| Checks \| Held \| Broke \| Blocked \| Not run \| By the agent \| Wall \|$/m);
+    assert.match(summarized, /^\| f \| mcp \| finished \| BROKE \| 1 \| 1 \| 0 \| 1 \| 1 \| 50 s \|$/m);
+    assert.ok(summarized.includes(`Checks that did not hold:\n\n- f H2 broke: features/f.md:9 exit 1: jq -e '.ok' "$EVIDENCE/x.json"\n- f H3 did not run\n`));
+    assert.doesNotMatch(summarized, /\| PASS \||report\.md/);
+    assert.ok(summarized.includes(`Each task's helper output is ${dir}/<task>/run-journeys.log`));
+    const judged = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [{ ...result, result: 'INCOMPLETE', turns: 9 }], host: [], setup: [80], wallSeconds: 140 });
+    assert.match(judged, /^\| f \| mcp \| finished \| INCOMPLETE \| 4 \| 0 \| 0 \| 0 \| 0 \| 4 \| 1 held, 1 broke, 1 not run \| 9 \|/m, 'the model summary has a Checks column');
+    assert.match(judged, /^- f H2 MISSING \(checks broke: features\/f\.md:9 exit 1: jq -e/m);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
