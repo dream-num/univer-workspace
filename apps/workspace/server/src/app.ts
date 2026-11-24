@@ -310,7 +310,12 @@ export function createWorkspaceApplication(
     async publishMergedAssets(worktreeId, unitIds) {
       await univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds);
     },
-    publishMergedPages: (worktreeId) => htmlViewDrafts.publishForWorktree(worktreeId),
+    pages: {
+      writable: (worktreeId, userId, before) => htmlViewDrafts.writable(worktreeId, userId, before),
+      foreign: (worktreeId, before) => htmlViewDrafts.foreign(worktreeId, before),
+      publish: (worktreeId, mergerId, before) => htmlViewDrafts.publishForWorktree(worktreeId, mergerId, before),
+    },
+    publicOrigin: config.publicOrigin ?? null,
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
   const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees, users: identity });

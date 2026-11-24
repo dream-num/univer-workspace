@@ -29,7 +29,7 @@ afterEach(async () => {
 
 describe("Worktrees", () => {
 
-  it("counts all pending unexpired page drafts for summary viewers and publishes as each author", async () => {
+  it("counts all pending unexpired page drafts for summary viewers and publishes them as whoever merges", async () => {
     const directory = mkdtempSync(join(tmpdir(), "worktree-pages-"));
     temporaryDirectories.push(directory);
     const backend = new MemoryWorktreeBackend();
@@ -38,19 +38,19 @@ describe("Worktrees", () => {
     const author = await register(application, "page-author");
     const viewer = await register(application, "page-viewer");
     const team = await application.spaces.createTeamSpace(merger.id, { name: "Sources" });
-    for (const user of [author, viewer]) await application.permissions.upsertTeamMember(merger.id, team.id, user.id, { role: "viewer" });
+    for (const [user, role] of [[author, "editor"], [viewer, "viewer"]] as const) await application.permissions.upsertTeamMember(merger.id, team.id, user.id, { role });
     const source = (await application.worktrees.create(merger.id, "page-source-create", {
       kind: "team", teamSpaceId: team.id, name: "Source", visibility: "space", summary: null,
     })).body;
     const space = (await application.spaces.list(author.id)).spaces.find((space) => space.type === "personal")!;
     const html = "<!doctype html><html><head><title>Page</title></head><body>Hello</body></html>";
     const submit = async (name: string, parentNodeId: string | null = null) => (await application.htmlViewDrafts.submit(author.id, crypto.randomUUID(), {
-      kind: "create", spaceId: space.id, parentNodeId, name, html, sourceWorktreeId: source.id,
+      kind: "create", spaceId: team.id, parentNodeId, name, html, sourceWorktreeId: source.id,
     })).draft;
     const good = await submit("Good");
-    const folder = await application.nodes.create(author.id, { spaceId: space.id, parentNodeId: null, name: "Destination" });
+    const folder = await application.nodes.create(merger.id, { spaceId: team.id, parentNodeId: null, name: "Destination" });
     const inaccessible = await submit("Inaccessible", folder.id);
-    await application.trash.trashNode(author.id, folder.id);
+    await application.trash.trashNode(merger.id, folder.id);
     const expired = await submit("Expired");
     application.database.connection.prepare("UPDATE html_view_drafts SET expires_at = 1 WHERE id = ?").run(expired.id);
     const rejected = await submit("Rejected");
@@ -67,12 +67,16 @@ describe("Worktrees", () => {
     expect(summary.pendingPageDrafts).toBe(2);
     await application.worktrees.update(merger.id, source.id, { visibility: "space" });
     await application.worktrees.markReady(merger.id, source.id);
+    // A page whose destination is gone is a target nobody can write, so it holds the merge as a missing folder would.
+    expect((await application.worktrees.get(merger.id, source.id)).worktree.capabilities.merge).toBe(false);
+    await expect(application.worktrees.merge(merger.id, source.id, "page-source-refused", true)).rejects.toThrow("edit access to every file");
+    await application.htmlViewDrafts.reject(author.id, inaccessible.id);
     const merged = await application.worktrees.merge(merger.id, source.id, "page-source-merge", true);
     expect(merged.worktree.state).toBe("merged");
     expect(merged.publishedPages).toEqual([{ draftId: good.id, name: good.name, nodeId: expect.any(String) }]);
     expect(application.database.connection.prepare("SELECT created_by FROM nodes WHERE id = ?").get(merged.publishedPages[0]!.nodeId)?.created_by).toBe(author.id);
-    expect(application.database.connection.prepare("SELECT decided_by FROM html_view_drafts WHERE id = ?").get(good.id)?.decided_by).toBe(author.id);
-    for (const id of [inaccessible.id, expired.id, unlinked.id]) {
+    expect(application.database.connection.prepare("SELECT decided_by FROM html_view_drafts WHERE id = ?").get(good.id)?.decided_by).toBe(merger.id);
+    for (const id of [expired.id, unlinked.id]) {
       expect(application.database.connection.prepare("SELECT state FROM html_view_drafts WHERE id = ?").get(id)?.state).toBe("pending");
     }
     expect((await application.worktrees.merge(merger.id, source.id, "page-source-merge", true)).publishedPages).toEqual([]);
@@ -88,7 +92,7 @@ describe("Worktrees", () => {
     const source = (await application.worktrees.create(author.id, "resume-page-source", { kind: "user", name: "Source", summary: null })).body;
     const draft = (await application.htmlViewDrafts.submit(author.id, crypto.randomUUID(), { kind: "create", spaceId: space.id, name: "Page", html: "<h1>Page</h1>", sourceWorktreeId: source.id })).draft;
     await application.worktrees.markReady(author.id, source.id);
-    const failure = vi.spyOn(application.repositories.htmlViewDrafts, "pendingForWorktree").mockRejectedValueOnce(new Error("Temporary draft database failure"));
+    const failure = vi.spyOn(application.repositories.htmlViewDrafts, "decide").mockRejectedValueOnce(new Error("Temporary draft database failure"));
     const merged = await application.worktrees.merge(author.id, source.id, "resume-page-merge", true);
     expect(merged.operation.state).toBe("completed");
     expect(merged.worktree.state).toBe("merged");

@@ -44,21 +44,22 @@ export function draftConflict(message: string): ApplicationError {
   return new ApplicationError("CONFLICT", 409, message);
 }
 
-export function assertDraftDestination(target: NodeAccess | SpaceAccess | null, spaceId: string): void {
+/** A proposed page needs only a destination its author can see; whoever merges it needs creation rights there. */
+export function assertDraftDestination(target: NodeAccess | SpaceAccess | null, spaceId: string, proposes = false): void {
   if (!target || ("spaceId" in target && target.spaceId !== spaceId))
     throw new ApplicationError("NOT_FOUND", 404, "Draft destination not found.");
-  const allowed =
+  const allowed = proposes || (
     "createAtRoot" in target.capabilities
       ? target.capabilities.createAtRoot
-      : target.capabilities.createChildren;
+      : target.capabilities.createChildren);
   if (!allowed)
     throw new ApplicationError("FORBIDDEN", 403, "Cannot create at the draft destination.");
 }
 
-export function requireDraftResource(target: ResourceAccess | null) {
+export function requireDraftResource(target: ResourceAccess | null, capability: "editContent" | "openContent" = "editContent") {
   if (!target || target.kind !== "blob")
     throw new ApplicationError("NOT_FOUND", 404, "Draft target not found.");
-  if (!target.capabilities.editContent)
+  if (!target.capabilities[capability])
     throw new ApplicationError("FORBIDDEN", 403, "Cannot edit draft target.");
   if (
     target.availability !== "ready" ||

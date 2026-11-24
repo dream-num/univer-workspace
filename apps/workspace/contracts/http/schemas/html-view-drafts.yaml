@@ -15,7 +15,7 @@ HtmlViewDraft:
     publishWhen:
       type: string
       enum: [merge, publish]
-      description: Present only for pending drafts. Merge the source pull request while it is open; otherwise publish manually.
+      description: Present only for pending drafts. `merge` while the source pull request is open, whose merge publishes the draft as the merger; otherwise the author publishes it.
     supersededBy:
       type: [string, "null"]
       description: Successor draft ID when superseded.

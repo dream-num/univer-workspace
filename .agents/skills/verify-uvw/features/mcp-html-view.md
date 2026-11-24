@@ -3,12 +3,15 @@
 An agent validates an HTML View against a populated Sheet, saves it as a pending draft, retries and revises the
 draft, and the owner previews and publishes it. Validation and missing-source errors match
 `uvw html-view validate`. A reviewer of the draft's pull request lists and previews its pages without
-publishing them, and the preview loads only the Sheets a page declares.
+publishing them, and the preview loads only the Sheets a page declares. A pull request's merge publishes its
+pages as the merger. A page its author could not publish alone goes live only when a person merges in the
+browser, and a page changed since its draft stays as it was while the Sheets merge.
 
 ## Sub-features
 
 - MHV1 through MHV4 compare HTML View dry runs with the CLI, preserve missing-source errors, save and retry drafts, revise pending drafts, and preview, publish and read back the revised page.
 - MHV5 through MHV7 list a pull request's pages for a reviewer, preview one read-only with an undeclared Sheet refused, and refuse page changes while the pull request is ready.
+- MHV8 through MHV10 publish a Viewer's page when an Editor merges in the browser after refusing the Editor's CLI merge, leave a page changed since its draft `conflicted` while the Sheet merges, and let an Editor agent merge its own page over MCP.
 
 ## How to get to it (user POV)
 
@@ -221,6 +224,164 @@ Pass when `mhr-ready` prints `ready`, `mhr-frozen` has `code: "CONFLICT"` and
 `Pull request #<P> is ready. Reopen it to change its pages.`, `mhr-reopen` has `state: "draft"`, and the
 same revision then saves a new pending draft that supersedes `D`. Before `$V down`, run `ur daemon stop`.
 After it, `rm -rf "$RH"`.
+
+### MHV8. A reader's page publishes when an Editor merges in the browser, and not through the CLI
+
+A holder H owns a Team Space where the run user O is a Viewer and E is an Editor. Register H and E, and sign
+each one's uvw in from its own home. Keep their passwords and cookies out of `$EVIDENCE`:
+
+```bash
+RUN=${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN
+H=$O-holder; E=$O-editor; HH="$UNIVER_HOME-holder"; EH="$UNIVER_HOME-editor"
+for who in holder editor; do
+  d="$UNIVER_HOME-$who"; mkdir -m 700 -p "$d"; openssl rand -hex 16 > "$d/pw"
+  curl --fail-with-body -sS -c "$d/cookies" -o "$d/register.json" -X POST "$ORIGIN/api/auth/password/register" -H 'content-type: application/json' \
+    -d "{\"username\":\"$O-$who\",\"displayName\":\"Page $who\",\"password\":\"$(cat "$d/pw")\"}"
+  env UNIVER_HOME="$d" node apps/cli/dist/main.js config set workspace.origin "$ORIGIN"
+  env UNIVER_HOME="$d" node apps/cli/dist/main.js auth login --username "$O-$who" --password-stdin --json < "$d/pw" > /dev/null
+done
+uh(){ env UNIVER_HOME="$HH" node apps/cli/dist/main.js "$@"; }
+ue(){ env UNIVER_HOME="$EH" node apps/cli/dist/main.js "$@"; }
+uh repo create page-merge --name "Page merge" --json id > "$EVIDENCE/mpm-team.out"; T=$(jq -r .id "$EVIDENCE/mpm-team.out")
+for pair in "$(jq -r .user.id "$RUN/logs/register.json"):viewer" "$(jq -r .user.id "$EH/register.json"):editor"; do
+  curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PUT -H 'content-type: application/json' -d "{\"role\":\"${pair#*:}\"}" "$ORIGIN/api/team-spaces/$T/members/${pair%%:*}"
+done
+$V cli mpm-role repo view "$H/page-merge" --json accessRole
+```
+
+H puts a Sheet on Trunk and publishes a page bound to its B2:
+
+```bash
+uh pr create -R "$H/page-merge" -t Budget --json > "$EVIDENCE/mpm-h-pr.out"; HW=$(jq -r .id "$EVIDENCE/mpm-h-pr.out"); HN=$(jq -r .number "$EVIDENCE/mpm-h-pr.out")
+uh unit create --worktree "$HW" --space "$H/page-merge" --type sheet --name Budget --json > "$EVIDENCE/mpm-h-unit.out"
+U=$(jq -r .unit.unitId "$EVIDENCE/mpm-h-unit.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mpm-h-unit.out")
+uh execute --worktree "$HW" --unit "$U" --json -e 'const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange("A1:B2").setValues([["Region","Total"],["North",42]]); return {sheetId: ws.getSheetId()};' > "$EVIDENCE/mpm-h-data.out"
+S=$(jq -r .value.sheetId "$EVIDENCE/mpm-h-data.out")
+uh pr ready "$HN" -R "$H/page-merge" --json state; uh pr merge "$HN" -R "$H/page-merge" --json state
+page(){ printf '<!DOCTYPE html><html><head><title>Budget</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>%s</h1><p>North: <output data-univer-cell-text="%s:%s:B2"></output></p></body></html>\n' "$1" "$U" "$S"; }
+page 'Budget by holder' > "$EVIDENCE/mpm-h.univer.html"
+uh html-view create --file "$EVIDENCE/mpm-h.univer.html" --space "$T" --name Budget --idempotency-key "mpm-h-$VERIFY_UVW_RUN-0001-abcdef" --json > "$EVIDENCE/mpm-h-page.out"
+PN=$(jq -r .nodeId "$EVIDENCE/mpm-h-page.out"); PR=$(jq -r .resourceId "$EVIDENCE/mpm-h-page.out")
+```
+
+O proposes a new B2 and a new version of H's page over MCP, then marks the pull request ready. The same save
+without `repo` and `pr` is refused, because O can only read the page:
+
+```bash
+$V mcp mpm-pr pr_create "{\"repo\":\"$H/page-merge\",\"title\":\"Raise North\"}"
+W=$(jq -r .id "$EVIDENCE/mpm-pr.out"); P=$(jq -r .number "$EVIDENCE/mpm-pr.out")
+$V mcp mpm-add unit_add "{\"worktree\":\"$W\",\"resource\":\"$RES\"}"
+$V mcp mpm-exec execute "$(jq -nc --arg w "$W" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(77); return ws.getRange(\"B2\").getValue();"}')"
+$V mcp mpm-read html_view_read "{\"resource\":\"$PR\"}"
+page 'Budget by viewer' > "$EVIDENCE/mpm-v.univer.html"
+$V mcp mpm-save html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mpm-v.univer.html" --arg page "$PR" --arg etag "$(jq -r .etag "$EVIDENCE/mpm-read.out")" --arg repo "$H/page-merge" --argjson pr "$P" --arg key "mpm-save-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,page:$page,etag:$etag,repo:$repo,pr:$pr,idempotency_key:$key}')"
+D=$(jq -r .draft.id "$EVIDENCE/mpm-save.out")
+$V mcp mpm-save-direct html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mpm-v.univer.html" --arg page "$PR" --arg etag "$(jq -r .etag "$EVIDENCE/mpm-read.out")" --arg key "mpm-direct-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,page:$page,etag:$etag,idempotency_key:$key}')"; test $? -eq 1
+$V mcp mpm-ready pr_ready "{\"repo\":\"$H/page-merge\",\"number\":$P}"
+```
+
+E's CLI session is not the browser's, so its merge is refused and nothing changes:
+
+```bash
+ue pr merge "$P" -R "$H/page-merge" --json > "$EVIDENCE/mpm-e-cli-merge.out" 2> "$EVIDENCE/mpm-e-cli-merge.err"; echo $? > "$EVIDENCE/mpm-e-cli-merge.exit"
+ue pr view "$P" -R "$H/page-merge" --json state > "$EVIDENCE/mpm-e-view.out"
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mpm-trunk-before.out"
+$V mcp mpm-page-before html_view_read "{\"resource\":\"$PR\"}"
+```
+
+In a second browser session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-editor`), set the language, view and
+onboarding as in MHV5 and sign in as E with `$EH/pw`. Open `$ORIGIN/spaces/$T/pulls/$P`, click `Confirm merge`,
+save `mpm-e-confirm.png`, then confirm in the `Merge this task?` dialog (`click 'div[role=alertdialog] button:last-of-type'`),
+`wait --text "Published 1 page"` and save `mpm-e-published-toast.png`. Read the result back:
+
+```bash
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mpm-trunk-after.out"
+$V mcp mpm-page-after html_view_read "{\"resource\":\"$PR\"}"
+jq -j .html "$EVIDENCE/mpm-page-after.out" | cmp "$EVIDENCE/mpm-v.univer.html" -
+$V mcp mpm-draft-after html_view_draft_get "{\"draft\":\"$D\"}"
+```
+
+Then open `$ORIGIN/nodes/$PN?view=immersive` in E's session, wait 6 s and save `mpm-page-published.png`.
+
+Pass when `mpm-role` says `viewer`, `mpm-save` is a pending `replace` draft with `publishWhen: "merge"`, and
+`mpm-save-direct` has `code: "FORBIDDEN"` and `Cannot edit draft target.`. `mpm-e-cli-merge` exits `1` with
+`PAGE_REVIEW_REQUIRED: A person must merge this pull request in the browser, because its author cannot publish these pages alone: Budget.univer.html. Review it at <web origin>/spaces/<T>/pulls/<P>.`
+(status 409), the pull request is still `ready`, Trunk B2 is still `42`, and the page still reads
+`Budget by holder`. The dialog says `Merging will publish 1 page.`, and the toast says `Published 1 page` with
+`Open page`. Afterwards Trunk B2 is `77`, the page HTML is O's byte for byte, the draft is `published`, and the
+page shows `Budget by viewer` and `North: 77`.
+
+### MHV9. A page someone changed since its draft stays as it was, and the Sheet still merges
+
+Continue from MHV8. O opens another pull request with B2 `88` and a new version of the page, then H replaces the
+page before the merge:
+
+```bash
+$V mcp mpc-pr pr_create "{\"repo\":\"$H/page-merge\",\"title\":\"Raise North again\"}"
+W2=$(jq -r .id "$EVIDENCE/mpc-pr.out"); P2=$(jq -r .number "$EVIDENCE/mpc-pr.out")
+$V mcp mpc-add unit_add "{\"worktree\":\"$W2\",\"resource\":\"$RES\"}"
+$V mcp mpc-exec execute "$(jq -nc --arg w "$W2" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(88); return ws.getRange(\"B2\").getValue();"}')"
+$V mcp mpc-read html_view_read "{\"resource\":\"$PR\"}"
+page 'Budget by viewer again' > "$EVIDENCE/mpc-v.univer.html"
+$V mcp mpc-save html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mpc-v.univer.html" --arg page "$PR" --arg etag "$(jq -r .etag "$EVIDENCE/mpc-read.out")" --arg repo "$H/page-merge" --argjson pr "$P2" --arg key "mpc-save-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,page:$page,etag:$etag,repo:$repo,pr:$pr,idempotency_key:$key}')"
+D2=$(jq -r .draft.id "$EVIDENCE/mpc-save.out")
+uh blob download --resource "$PR" --json "$EVIDENCE/mpc-h-before.univer.html" > "$EVIDENCE/mpc-h-download.out"
+page 'Budget by holder again' > "$EVIDENCE/mpc-h-again.univer.html"
+uh blob replace --resource "$PR" --file "$EVIDENCE/mpc-h-again.univer.html" --etag "$(jq -r .download.etag "$EVIDENCE/mpc-h-download.out")" --idempotency-key "mpc-h-replace-$VERIFY_UVW_RUN-0001" --json
+$V mcp mpc-ready pr_ready "{\"repo\":\"$H/page-merge\",\"number\":$P2}"
+```
+
+E merges `$ORIGIN/spaces/$T/pulls/$P2` in the browser as in MHV8 and waits for
+`The task was merged into the official version.`; save `mpc-e-merged.png`. Then:
+
+```bash
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mpc-trunk-after.out"
+uh blob download --resource "$PR" --force --json "$EVIDENCE/mpc-h-after.univer.html"
+cmp "$EVIDENCE/mpc-h-again.univer.html" "$EVIDENCE/mpc-h-after.univer.html"
+curl -sS -b "$EH/cookies" "$ORIGIN/api/worktrees/$W2/html-view-drafts" > "$EVIDENCE/mpc-list.json"
+$V mcp mpc-draft-after html_view_draft_get "{\"draft\":\"$D2\"}"
+```
+
+Pass when the merge succeeds without a published-page toast, Trunk B2 is `88`, the page holds H's second bytes,
+and the list, the draft and the `Pages` section of the pull request all read `conflicted` (`Conflicted` in the browser).
+
+### MHV10. An Editor agent merges its own pull request over MCP, and its page publishes
+
+Continue from MHV9 with the run browser signed in as O. A claimed agent principal becomes an Editor of H's
+Space. This `principal` counts toward the 5 agents per hour:
+
+```bash
+$V principal pagebot mpa-bot
+BOT=$(jq -r .agent.id "$EVIDENCE/principal-pagebot.json")
+$V mcp --as pagebot mpa-claim claim '{}'
+```
+
+Open the `claimUrl` from `mpa-claim.out` in the run browser and click `Claim agent`, then replace the code in
+`mpa-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. The agent then works alone:
+
+```bash
+curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PUT -H 'content-type: application/json' -d '{"role":"editor"}' "$ORIGIN/api/team-spaces/$T/members/$BOT"
+$V mcp --as pagebot mpa-role repo_view "{\"repo\":\"$H/page-merge\"}"
+$V mcp --as pagebot mpa-pr pr_create "{\"repo\":\"$H/page-merge\",\"title\":\"Agent page\"}"
+W3=$(jq -r .id "$EVIDENCE/mpa-pr.out"); P3=$(jq -r .number "$EVIDENCE/mpa-pr.out")
+$V mcp --as pagebot mpa-add unit_add "{\"worktree\":\"$W3\",\"resource\":\"$RES\"}"
+$V mcp --as pagebot mpa-exec execute "$(jq -nc --arg w "$W3" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(99); return ws.getRange(\"B2\").getValue();"}')"
+page 'Budget by agent' > "$EVIDENCE/mpa-page.univer.html"
+$V mcp --as pagebot mpa-save html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mpa-page.univer.html" --arg space "$H/page-merge" --argjson pr "$P3" --arg key "mpa-save-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,space:$space,name:"Agent budget",repo:$space,pr:$pr,idempotency_key:$key}')"
+D3=$(jq -r .draft.id "$EVIDENCE/mpa-save.out")
+$V mcp --as pagebot mpa-ready pr_ready "{\"repo\":\"$H/page-merge\",\"number\":$P3}"
+$V mcp --as pagebot mpa-merge pr_merge "{\"repo\":\"$H/page-merge\",\"number\":$P3}"
+$V mcp --as pagebot mpa-draft-after html_view_draft_get "{\"draft\":\"$D3\"}"
+$V mcp mpa-page-after html_view_read "{\"resource\":\"$(jq -r .draft.resource "$EVIDENCE/mpa-draft-after.out")\"}"
+jq -j .html "$EVIDENCE/mpa-page-after.out" | cmp "$EVIDENCE/mpa-page.univer.html" -
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mpa-trunk-after.out"
+```
+
+Pass when `mpa-role` says `editor`, `mpa-save` is a pending `create` draft with `publishWhen: "merge"`,
+`mpa-ready` keeps `visibility: "private"` because the agent can merge it, `mpa-merge` prints `state: "merged"`,
+the draft is `published` with a `shareUrl`, O reads the agent's HTML byte for byte, and Trunk B2 is `99`.
+Before `$V down`, close E's browser session and run `uh daemon stop` and `ue daemon stop`. After it,
+`rm -rf "$HH" "$EH"`.
 
 ## Gotchas
 

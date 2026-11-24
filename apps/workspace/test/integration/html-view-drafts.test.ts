@@ -151,11 +151,9 @@ describe("HTML View draft HTTP API", () => {
       method: "POST", headers: { cookie: await delegatedCookie(c), "idempotency-key": crypto.randomUUID() },
     });
     expect(merge.status).toBe(200);
-    expect((await merge.json()).publishedPages).toEqual([]);
-    expect((await (await c.send(`/${draft.id}`)).json()).draft).toMatchObject({ state: "pending", publishWhen: "publish" });
-    const published = await c.send(`/${draft.id}/publish`, {});
-    expect(published.status).toBe(200);
-    const publishedDraft = (await published.json()).draft;
+    expect((await merge.json()).publishedPages).toEqual([{ draftId: draft.id, name: draft.name, nodeId: expect.any(String) }]);
+    const publishedDraft = (await (await c.send(`/${draft.id}`)).json()).draft;
+    expect(publishedDraft.state).toBe("published");
     expect(publishedDraft).not.toHaveProperty("publishWhen");
     const first = publishedDraft.published;
     const replacement = await c.submit(crypto.randomUUID(), { kind: "replace", resourceId: first.resourceId, etag: first.etag, html, sourceWorktreeId: source.id });
@@ -226,7 +224,7 @@ describe("HTML View draft HTTP API", () => {
     });
     expect(retry.status).toBe(202);
     expect((await retry.json()).state).toBe("completed");
-    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe(tokenIssued ? "pending" : "published");
+    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe("published");
   });
 
   it("requires drafts for delegated upload names and original filenames, ignoring case", async () => {

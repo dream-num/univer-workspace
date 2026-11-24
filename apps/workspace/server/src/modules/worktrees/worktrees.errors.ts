@@ -28,6 +28,21 @@ export function mergeNeedsEditAccess(): ApplicationError {
   );
 }
 
+export function pageReviewRequired(row: {
+  readonly id: string;
+  readonly number: number | null;
+  readonly team_space_id: string | null;
+}, pages: readonly string[], publicOrigin: string | null): ApplicationError {
+  const path = row.team_space_id !== null && row.number !== null
+    ? `/spaces/${encodeURIComponent(row.team_space_id)}/pulls/${row.number}`
+    : `/worktrees?worktree=${encodeURIComponent(row.id)}`;
+  return new ApplicationError(
+    "PAGE_REVIEW_REQUIRED",
+    409,
+    `A person must merge this pull request in the browser, because its author cannot publish these pages alone: ${pages.join(", ")}. Review it at ${publicOrigin ?? ""}${path}.`,
+  );
+}
+
 export function proposalStaysShared(): ApplicationError {
   return new ApplicationError(
     "FORBIDDEN",

@@ -39,7 +39,7 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(text).not.toContain("binding-starter");
     for (const resource of ["styles/<id>.md", "templates/<id>.univer.html"])
       expect(text).toContain(`skills_read {"name":"html-view","resource":"${resource}"}`);
-    expect(text).toContain("goes live when the user merges the pull request in Workspace");
+    expect(text).toContain("goes live when its pull request merges, published as whoever merges it");
     expect(text).toContain("Merge only as the server instructions say, and never use older merged data instead.");
     expect(text).toContain("Ask mode cannot save");
     expect(text).toContain("Pass inline `html` by default");
@@ -81,7 +81,7 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("gives a style reason and distinguishes PR merge from standalone publication", async () => {
     const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     expect(creator).toContain("Say why the style fits in one clause");
-    expect(creator).toContain("Explain draft.publishWhen: `merge` goes live when the user merges the pull request in Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**.");
+    expect(creator).toContain("Explain draft.publishWhen: `merge` goes live when its pull request merges, published as whoever merges it; never tell them to press Publish. `publish` means open the preview and press **Publish**.");
     expect(creator).not.toContain("For a PR-linked draft");
     expect(creator).not.toContain("Only for a draft without a PR");
   });
@@ -161,7 +161,7 @@ describe("HTML View Creator Skill tool bindings", () => {
     const save = tools.find(({ name }) => name === "html_view_save")!;
     expect(save.description).toContain("prefer it over a local .html unless the user asks for a file");
     expect(save.description).toContain("Pass inline html by default");
-    expect(save.description).toContain("draft.publishWhen says how a pending draft goes live: merge or publish; Publish is refused until a merge draft's pull request is merged.");
+    expect(save.description).toContain("draft.publishWhen says how a pending draft goes live: merge, when whoever merges the pull request publishes it, or publish, when the user publishes it.");
     expect(save.description).toContain("bindingCount");
     expect(save.description).not.toContain("optional starting points");
     expect(tools.find(({ name }) => name === "html_view_styles")!.description).not.toContain("optional starting points");

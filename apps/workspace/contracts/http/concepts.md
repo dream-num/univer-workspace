@@ -339,10 +339,19 @@ Owner, Admins and Editors with edit access to every target.
 HTML View drafts attached to a pull request through `sourceWorktreeId` are pages its merge
 publishes. Whoever may review the pull request, which `capabilities.review` reports, lists them
 with `GET /api/worktrees/{worktreeId}/html-view-drafts`, whatever their author, and reads each
-draft and its content. Anyone else gets `404`. Only a draft's author publishes or rejects it.
-While the pull request is `ready` or `merging`, creating or revising a draft attached to it gets
-`409`; reopen it first. Every Unit a page binds must be in the pull request or readable by the
-draft's author when it is saved, otherwise `403`.
+draft and its content. Anyone else gets `404`. Only a draft's author publishes or rejects it
+by hand. While the pull request is `ready` or `merging`, creating or revising a draft attached
+to it gets `409`; reopen it first. A pull request holds at most 20 pending drafts. Every Unit a
+page binds must be in the pull request or readable by the draft's author when it is saved,
+otherwise `403`. The author of a Team pull request proposes a page in its Team Space as it
+proposes a Unit: reading the page, or its destination, is enough.
+
+Every merge publishes, as the merger, the drafts that were pending when it began. A new page
+keeps its author as creator. Whoever merges needs edit access to each page target as to each
+Unit, and `capabilities.merge` says so. A page whose target changed since its draft is left
+`conflicted`, and the Units still merge. When a page's author cannot write its target, only a
+person signed in to the browser merges the pull request. Any other session, CLI, PAT or OAuth,
+gets `409 PAGE_REVIEW_REQUIRED` naming the pages and the pull request URL, and nothing changes.
 
 ## Forks
 

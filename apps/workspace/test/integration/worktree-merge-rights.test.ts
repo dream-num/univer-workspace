@@ -709,6 +709,175 @@ describe("who sees the pages a pull request publishes", () => {
   }, 60_000);
 });
 
+describe("publishing a pull request's pages when it merges", () => {
+  it("publishes a viewer's pages as the editor who merges in the browser, and refuses a CLI, token or agent merge of them", async () => {
+    const { origin, application, repositories } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, editor, viewer } = s;
+    const agent = await guestAgent(origin);
+    await claim(origin, agent, owner);
+    await application.permissions.upsertTeamMember(owner.id, s.id, agent.id, { role: "editor" });
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    const sheet = await sheetIn(origin, viewer, pull, budget.unitId);
+    expect(await writeDraft(origin, viewer, pull, budget.unitId, sheet, "proposed")).toBe("committed");
+    const live = await trunkPage(origin, owner, s.id, boundPage(budget.unitId, sheet.sheetId, "Owner"));
+    const replace = { kind: "replace", resourceId: live.resourceId, etag: live.etag, html: boundPage(budget.unitId, sheet.sheetId, "Viewer") };
+    expect((await post(origin, viewer, "/api/html-view-drafts", replace)).status).toBe(403);
+    const replaced = await made<{ draft: { id: string } }>(await post(origin, viewer, "/api/html-view-drafts", { ...replace, sourceWorktreeId: pull }));
+    const created = await made<{ draft: { id: string } }>(await post(origin, viewer, "/api/html-view-drafts", {
+      kind: "create", spaceId: s.id, name: "Forecast page", html: boundPage(budget.unitId, sheet.sheetId, "New"), sourceWorktreeId: pull,
+    }));
+    expect(await transition(origin, pull, "ready", viewer)).toBe("ready");
+
+    const { worktree } = (await (await send(origin, "GET", `/api/worktrees/${pull}`, undefined, editor.cookie)).json()) as { worktree: { number: number } };
+    for (const session of [await cliSession(origin, editor), await patSession(origin, application, editor), agent]) {
+      const refused = await post(origin, session, `/api/worktrees/${pull}/merge`);
+      expect({ status: refused.status, error: ((await refused.json()) as { error: object }).error }).toEqual({
+        status: 409,
+        error: {
+          code: "PAGE_REVIEW_REQUIRED",
+          message: `A person must merge this pull request in the browser, because its author cannot publish these pages alone: Budget page.univer.html, Forecast page.univer.html. Review it at /spaces/${s.id}/pulls/${worktree.number}.`,
+        },
+      });
+    }
+    expect((await outcome(origin, pull, editor)).state).toBe("ready");
+    expect(await trunkA1(origin, owner, s.id, s.budget.resourceId)).toBeNull();
+    expect(await pageText(origin, owner, live.resourceId)).toContain("Owner");
+
+    const merged = await post(origin, editor, `/api/worktrees/${pull}/merge`);
+    expect(merged.status).toBe(200);
+    const { publishedPages } = (await merged.json()) as { publishedPages: { draftId: string }[] };
+    expect(publishedPages.map((page) => page.draftId).sort()).toEqual([replaced.draft.id, created.draft.id].sort());
+    expect(await trunkA1(origin, owner, s.id, s.budget.resourceId)).toBe("proposed");
+    expect(await pageText(origin, owner, live.resourceId)).toContain("Viewer");
+    for (const id of [replaced.draft.id, created.draft.id]) expect((await repositories.htmlViewDrafts.find(id))?.decided_by).toBe(editor.id);
+    expect(await filesIn(origin, editor, s.id)).toEqual(["Budget", "Budget page.univer.html", "Forecast page.univer.html"]);
+  }, 60_000);
+
+  it("merges the Sheets and leaves a page someone changed since its draft as it was, marked conflicted", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, editor, viewer } = s;
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    const sheet = await sheetIn(origin, viewer, pull, budget.unitId);
+    expect(await writeDraft(origin, viewer, pull, budget.unitId, sheet, "proposed")).toBe("committed");
+    const live = await trunkPage(origin, owner, s.id, boundPage(budget.unitId, sheet.sheetId, "Owner"));
+    await made(await post(origin, viewer, "/api/html-view-drafts", {
+      kind: "replace", resourceId: live.resourceId, etag: live.etag, html: boundPage(budget.unitId, sheet.sheetId, "Viewer"), sourceWorktreeId: pull,
+    }));
+    await replacePage(origin, owner, live, boundPage(budget.unitId, sheet.sheetId, "Owner again"));
+    expect(await transition(origin, pull, "ready", viewer)).toBe("ready");
+
+    const merged = await post(origin, editor, `/api/worktrees/${pull}/merge`);
+    expect({ status: merged.status, publishedPages: ((await merged.json()) as { publishedPages: unknown[] }).publishedPages }).toEqual({ status: 200, publishedPages: [] });
+    expect(await trunkA1(origin, owner, s.id, s.budget.resourceId)).toBe("proposed");
+    expect(await pageText(origin, owner, live.resourceId)).toContain("Owner again");
+    const { drafts } = (await (await send(origin, "GET", `/api/worktrees/${pull}/html-view-drafts`, undefined, editor.cookie)).json()) as { drafts: { state: string }[] };
+    expect(drafts.map((draft) => draft.state)).toEqual(["conflicted"]);
+  }, 60_000);
+
+  it("publishes an editor's own page on its token merge, and holds the merge from anyone who cannot write a page", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, editor, viewer } = s;
+    const pull = await openPull(origin, editor, s.id, "space");
+    const budget = await addFile(origin, editor, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    const sheet = await sheetIn(origin, editor, pull, budget.unitId);
+    expect(await writeDraft(origin, editor, pull, budget.unitId, sheet, "proposed")).toBe("committed");
+    const live = await trunkPage(origin, owner, s.id, boundPage(budget.unitId, sheet.sheetId, "Owner"));
+    const { draft } = await made<{ draft: { id: string } }>(await post(origin, editor, "/api/html-view-drafts", {
+      kind: "replace", resourceId: live.resourceId, etag: live.etag, html: boundPage(budget.unitId, sheet.sheetId, "Editor"), sourceWorktreeId: pull,
+    }));
+    const { spaces } = (await (await send(origin, "GET", "/api/spaces", undefined, editor.cookie)).json()) as { spaces: { id: string; type: string }[] };
+    const personal = await trunkPage(origin, editor, spaces.find((space) => space.type === "personal")!.id, boundPage(budget.unitId, sheet.sheetId, "Mine"));
+    const elsewhere = await made<{ draft: { id: string } }>(await post(origin, editor, "/api/html-view-drafts", {
+      kind: "replace", resourceId: personal.resourceId, etag: personal.etag, html: boundPage(budget.unitId, sheet.sheetId, "Mine again"), sourceWorktreeId: pull,
+    }));
+    expect(await transition(origin, pull, "ready", editor)).toBe("ready");
+    expect(await granted(origin, pull, owner)).not.toContain("merge");
+    expect(await mergeAs(origin, pull, owner, randomUUID())).toEqual({
+      status: 403, message: "You cannot merge this pull request without edit access to every file and folder it changes.",
+    });
+    expect((await post(origin, editor, `/api/worktrees/${pull}/reopen`)).status).toBe(200);
+    expect((await post(origin, editor, `/api/html-view-drafts/${elsewhere.draft.id}/reject`)).status).toBe(200);
+    expect(await transition(origin, pull, "ready", editor)).toBe("ready");
+    expect(await granted(origin, pull, owner)).toContain("merge");
+    expect(await granted(origin, pull, viewer)).toBe("review");
+
+    const merged = await post(origin, await patSession(origin, application, editor), `/api/worktrees/${pull}/merge`);
+    expect(merged.status).toBe(200);
+    expect(((await merged.json()) as { publishedPages: { draftId: string }[] }).publishedPages.map((page) => page.draftId)).toEqual([draft.id]);
+    expect(await pageText(origin, owner, live.resourceId)).toContain("Editor");
+  }, 60_000);
+
+  it("keeps at most 20 pending pages in a pull request and publishes only those saved before it turned ready", async () => {
+    const { origin, application, repositories } = await start();
+    const s = await budgetSpace(origin, application);
+    const { editor } = s;
+    const pull = await openPull(origin, editor, s.id, "space");
+    const html = (title: string) => `<!doctype html><html><head><title>${title}</title></head><body>${title}</body></html>`;
+    const page = (name: string) => ({ kind: "create", spaceId: s.id, name, html: html(name), sourceWorktreeId: pull });
+    const saved: { id: string }[] = [];
+    for (let index = 0; index < 20; index += 1) saved.push((await made<{ draft: { id: string } }>(await post(origin, editor, "/api/html-view-drafts", page(`Page ${index}`)))).draft);
+    const full = await post(origin, editor, "/api/html-view-drafts", page("One too many"));
+    expect({ status: full.status, message: ((await full.json()) as { error: { message: string } }).error.message })
+      .toEqual({ status: 409, message: expect.stringContaining("already has 20 pending pages") });
+    expect((await post(origin, editor, "/api/html-view-drafts", { kind: "revise", draftId: saved[0]!.id, html: html("Page 0 again") })).status).toBe(201);
+
+    // A save that overlaps marking ready finishes first, so the reviewer sees the page it adds.
+    const markPending = repositories.htmlViewDrafts.markPending.bind(repositories.htmlViewDrafts);
+    let readied: Promise<Response> | undefined;
+    vi.spyOn(repositories.htmlViewDrafts, "markPending").mockImplementationOnce(async (...args) => {
+      readied = post(origin, editor, `/api/worktrees/${pull}/ready`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect((await outcome(origin, pull, editor)).state).toBe("draft");
+      return markPending(...args);
+    });
+    const revisedDuringReady = await made<{ draft: { id: string } }>(await post(origin, editor, "/api/html-view-drafts", { kind: "revise", draftId: saved[1]!.id, html: html("Page 1 again") }));
+    expect((await readied!).status).toBe(200);
+    expect((await outcome(origin, pull, editor)).state).toBe("ready");
+
+    const key = randomUUID();
+    const merged = await send(origin, "POST", `/api/worktrees/${pull}/merge`, undefined, editor.cookie, { "idempotency-key": key });
+    const published = ((await merged.json()) as { publishedPages: { draftId: string }[] }).publishedPages.map((entry) => entry.draftId);
+    expect(published).toHaveLength(20);
+    expect(published).toContain(revisedDuringReady.draft.id);
+    const late = await made<{ draft: { id: string; publishWhen: string } }>(await post(origin, editor, "/api/html-view-drafts", page("After merge")));
+    expect(late.draft.publishWhen).toBe("publish");
+    const replay = await send(origin, "POST", `/api/worktrees/${pull}/merge`, undefined, editor.cookie, { "idempotency-key": key });
+    expect(((await replay.json()) as { publishedPages: unknown[] }).publishedPages).toEqual([]);
+    expect((await repositories.htmlViewDrafts.find(late.draft.id))?.state).toBe("pending");
+  }, 120_000);
+
+  it("refuses page changes to a pull request that is merging, and an earlier save sent again after it turned ready", async () => {
+    const stopped = stoppedBackend();
+    const { origin, application } = await start(stopped.backend);
+    const s = await budgetSpace(origin, application);
+    const { editor } = s;
+    const html = "<!doctype html><html><head><title>Page</title></head><body>Page</body></html>";
+    const ready = await createPull(origin, editor, { kind: "team", teamSpaceId: s.id, visibility: "space" }, s.id);
+    const key = randomUUID();
+    const save = { kind: "create", spaceId: s.id, name: "Page", html, sourceWorktreeId: ready };
+    expect((await send(origin, "POST", "/api/html-view-drafts", save, editor.cookie, { "idempotency-key": key })).status).toBe(201);
+    expect(await transition(origin, ready, "ready", editor)).toBe("ready");
+    const replayed = await send(origin, "POST", "/api/html-view-drafts", save, editor.cookie, { "idempotency-key": key });
+    expect({ status: replayed.status, message: ((await replayed.json()) as { error: { message: string } }).error.message })
+      .toEqual({ status: 409, message: expect.stringContaining("is ready. Reopen it to change its pages.") });
+
+    const merging = await createPull(origin, editor, { kind: "team", teamSpaceId: s.id, visibility: "space" }, s.id);
+    const { draft } = await made<{ draft: { id: string } }>(await post(origin, editor, "/api/html-view-drafts", { ...save, sourceWorktreeId: merging }));
+    expect(await transition(origin, merging, "ready", editor)).toBe("ready");
+    stopped.stop(merging, "merging");
+    for (const body of [{ ...save, sourceWorktreeId: merging }, { kind: "revise", draftId: draft.id, html }]) {
+      const refused = await post(origin, editor, "/api/html-view-drafts", body);
+      expect({ status: refused.status, message: ((await refused.json()) as { error: { message: string } }).error.message })
+        .toEqual({ status: 409, message: expect.stringContaining("is merging. Reopen it to change its pages.") });
+    }
+  }, 60_000);
+});
+
 interface Actor {
   readonly id: string;
   readonly cookie: string;
@@ -889,6 +1058,51 @@ async function trunkSheet(origin: string, actor: Actor, spaceId: string, name: s
     await post(origin, actor, "/api/resources", { kind: "univer", spaceId, parentNodeId: null, name, unitType: "sheet" }),
   );
   return { nodeId: node.id, resourceId: node.resource.id, unitId: node.resource.unitId };
+}
+
+const boundPage = (unitId: string, sheetId: string, title: string) =>
+  `<!doctype html><html><head><title>${title}</title></head><body><h1>${title}</h1><output data-univer-cell-text="${unitId}:${sheetId}:A1">-</output></body></html>`;
+
+interface PublishedPage {
+  readonly resourceId: string;
+  readonly etag: string;
+}
+
+/** A page on Trunk, saved as a draft and published by its author. */
+async function trunkPage(origin: string, actor: Actor, spaceId: string, html: string): Promise<PublishedPage> {
+  const { draft } = await made<{ draft: { id: string } }>(await post(origin, actor, "/api/html-view-drafts", { kind: "create", spaceId, name: "Budget page", html }));
+  return publishDraft(origin, actor, draft.id);
+}
+
+async function replacePage(origin: string, actor: Actor, page: PublishedPage, html: string): Promise<PublishedPage> {
+  const { draft } = await made<{ draft: { id: string } }>(await post(origin, actor, "/api/html-view-drafts", { kind: "replace", ...page, html }));
+  return publishDraft(origin, actor, draft.id);
+}
+
+async function publishDraft(origin: string, actor: Actor, draftId: string): Promise<PublishedPage> {
+  const response = await send(origin, "POST", `/api/html-view-drafts/${draftId}/publish`, undefined, actor.cookie);
+  if (response.status !== 200) throw new Error(`Publish answered ${response.status}: ${await response.text()}`);
+  const { published } = ((await response.json()) as { draft: { published: PublishedPage } }).draft;
+  return { resourceId: published.resourceId, etag: published.etag };
+}
+
+async function pageText(origin: string, reader: Actor, resourceId: string): Promise<string> {
+  return (await send(origin, "GET", `/api/blob-resources/${resourceId}/content`, undefined, reader.cookie)).text();
+}
+
+/** The same person signed in through the CLI, whose session is not the browser's. */
+async function cliSession(origin: string, actor: Actor): Promise<Actor> {
+  const response = await send(origin, "POST", "/api/auth/cli/password/login", { username: actor.username, password: "correct horse battery staple" });
+  if (response.status !== 200) throw new Error(`CLI sign-in failed with ${response.status}`);
+  return { ...actor, cookie: response.headers.get("set-cookie")!.split(";")[0]! };
+}
+
+/** The same person through a personal access token, as an MCP connection holds it. */
+async function patSession(origin: string, application: ProductTestApplication, actor: Actor): Promise<Actor> {
+  const { record } = await made<{ record: { id: string } }>(await send(origin, "POST", "/api/auth/tokens", { name: "agent" }, actor.cookie));
+  const { user } = await application.identity.requireSession(actor.cookie);
+  const issued = await application.identity.issueSession(user, "agent", { issuedFor: { kind: "pat", id: record.id } });
+  return { ...actor, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
 }
 
 const teamPull = (teamSpaceId: string, visibility: "private" | "space") => ({ kind: "team", teamSpaceId, visibility, name: "Budget", summary: null });

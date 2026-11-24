@@ -38,13 +38,14 @@ const keySchema = z
   .min(16)
   .max(200)
   .regex(/^[A-Za-z0-9_-]+$/);
+const PENDING_PAGES_PER_PULL_REQUEST = 20;
 export type HtmlViewDraftsModule = ReturnType<typeof createHtmlViewDraftsModule>;
 
 export function createHtmlViewDraftsModule(options: {
   repository: HtmlViewDraftsRepository;
   access: AccessResolver;
   store: BlobStore;
-  worktrees: Pick<WorktreesModule, "get">;
+  worktrees: Pick<WorktreesModule, "get" | "holdReady">;
   users: Pick<IdentityModule, "findUsers">;
   now?: () => number;
 }) {
@@ -75,16 +76,29 @@ export function createHtmlViewDraftsModule(options: {
       throw error;
     }
   }
-  async function validateCreate(userId: string, spaceId: string, parentNodeId: string | null) {
+  async function validateCreate(userId: string, spaceId: string, parentNodeId: string | null, proposes = false) {
     const target =
       parentNodeId === null
         ? await access.resolveSpace(userId, spaceId)
         : await access.resolveNode(userId, parentNodeId);
-    assertDraftDestination(target, spaceId);
+    assertDraftDestination(target, spaceId, proposes);
   }
-  async function validateReplace(userId: string, resourceId: string) {
+  async function validateReplace(userId: string, resourceId: string, proposes = (_spaceId: string) => false) {
     const target = await access.resolveResource(userId, resourceId);
-    return requireDraftResource(target);
+    return requireDraftResource(target, target && proposes(target.node.spaceId) ? "openContent" : "editContent");
+  }
+  async function mayWrite(userId: string, row: DraftRow): Promise<boolean> {
+    try {
+      if (row.kind === "create") await validateCreate(userId, row.space_id, row.parent_node_id);
+      else await validateReplace(userId, row.target_resource_id!);
+      return true;
+    } catch (error) {
+      if (error instanceof ApplicationError) return false;
+      throw error;
+    }
+  }
+  async function livePages(worktreeId: string, before = Infinity): Promise<DraftRow[]> {
+    return (await repository.pendingForWorktree(worktreeId)).filter((row) => row.expires_at > now() && row.updated_at <= before);
   }
   async function sourceWorktree(userId: string, worktreeId: string) {
     const worktree = await reviewable(userId, worktreeId);
@@ -170,6 +184,8 @@ export function createHtmlViewDraftsModule(options: {
               html: request.html, sourceWorktreeId: request.sourceWorktreeId ?? previous.source_worktree_id ?? undefined }
         : request;
       if (input.kind === "revise") throw new Error("Revision draft is missing.");
+      // Until this draft is pending, its pull request cannot turn ready, so a reviewer sees every page it merges.
+      using _hold = input.sourceWorktreeId === undefined ? undefined : await options.worktrees.holdReady(input.sourceWorktreeId);
       let row = await repository.findKey(userId, key.data);
       if (previous && !row) {
         requirePendingDraft(previous, now());
@@ -206,14 +222,19 @@ export function createHtmlViewDraftsModule(options: {
       let created = false;
       if (!row) {
         await requireReadableBindings(userId, document, source);
+        if (source && (await livePages(source.id)).filter((draft) => draft.id !== previous?.id).length >= PENDING_PAGES_PER_PULL_REQUEST)
+          throw draftConflict(`Pull request #${source.number ?? source.id} already has ${PENDING_PAGES_PER_PULL_REQUEST} pending pages. Revise one of them instead.`);
+        // The author of a Team pull request proposes pages in its Space as it proposes Units; whoever merges needs edit access.
+        const proposes = (spaceId: string) =>
+          source?.kind === "team" && source.teamSpace?.id === spaceId && source.capabilities.editDraft;
         let spaceId: string;
         let displayName: string;
         if (input.kind === "create") {
-          await validateCreate(userId, input.spaceId, input.parentNodeId ?? null);
+          await validateCreate(userId, input.spaceId, input.parentNodeId ?? null, proposes(input.spaceId));
           spaceId = input.spaceId;
           displayName = name!;
         } else {
-          const target = await validateReplace(userId, input.resourceId);
+          const target = await validateReplace(userId, input.resourceId, proposes);
           if (!previous && target.etag !== input.etag.slice(1, -1))
             throw new ApplicationError("PRECONDITION_FAILED", 412, "HTML View content changed.");
           spaceId = target.node.spaceId;
@@ -301,14 +322,25 @@ export function createHtmlViewDraftsModule(options: {
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
     publish,
-    async publishForWorktree(worktreeId: string): Promise<PublishedPage[]> {
+    async writable(worktreeId: string, userId: string, before?: number): Promise<boolean> {
+      for (const row of await livePages(worktreeId, before)) if (!(await mayWrite(userId, row))) return false;
+      return true;
+    },
+    async foreign(worktreeId: string, before: number): Promise<string[]> {
+      const names: string[] = [];
+      for (const row of await livePages(worktreeId, before)) if (!(await mayWrite(row.author_user_id, row))) names.push(row.name);
+      return names;
+    },
+    /** Publishes as the merger each draft that was pending before the merge began; a later one was never reviewed with it. */
+    async publishForWorktree(worktreeId: string, mergerId: string, before: number): Promise<PublishedPage[]> {
       const publishedPages: PublishedPage[] = [];
-      const rows = await repository.pendingForWorktree(worktreeId);
+      const rows = (await repository.pendingForWorktree(worktreeId)).filter((row) => row.updated_at <= before);
       for (const row of rows) {
         try {
           if (row.expires_at <= now()) throw draftConflict("Draft expired.");
-          const draft = await publish(row.author_user_id, row.id);
-          publishedPages.push({ draftId: row.id, name: row.name, nodeId: draft.published!.nodeId });
+          const draft = await repository.decide(row.id, mergerId, "publish", now());
+          if (draft.state !== "published") throw draftConflict(`Draft is ${draft.state}.`);
+          publishedPages.push({ draftId: row.id, name: row.name, nodeId: draft.result_node_id! });
         } catch (error) {
           logger.warn({ err: error, worktreeId, draftId: row.id }, "HTML View draft was not published after merge");
         }

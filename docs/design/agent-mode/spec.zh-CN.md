@@ -112,7 +112,7 @@ upstream repo (someone else's Team Space)        agent
 | R15  | 回程是现有的 Worktree Merge。fork 里的 Unit 和上游的 Unit 共享修订历史                   | 已有                                                                                | 2    |
 | R16  | 每个来自 Trunk 的 Worktree Unit 返回落后距离和加入时间。超过阈值时标记为 stale，提示重做 | SDK 暴露基线和 Trunk 的当前修订。产品不返回                                         | 2    |
 | R17  | 落后距离大于零时，验证在 merge preview 上做，不在草稿上做                                | `mergePreview` 打开方式已有。没有地方要求这样做                                     | 2    |
-| R18  | HTML View 的修改覆盖写。上游的内容在草稿创建之后变了，就不覆盖                           | 已有。`html_view_drafts` 的 `replace` 草稿带 `base_etag`，不一致时进入 `conflicted` | 5    |
+| R18  | HTML View 的修改覆盖写。上游的内容在草稿创建之后变了，就不覆盖                           | 已有。`replace` 草稿的 `base_etag` 不一致时只有这一页 `conflicted`，Sheet 照常合入  | 5    |
 | R19  | 其他 Blob 在 fork 里的修改覆盖写，规则同 R18                                             | 没有。Blob 不进 Worktree，也没有草稿                                                | 5    |
 
 ### 4.5 隔离
@@ -309,13 +309,14 @@ stale 是提示，不拦截合入。两个阈值是服务端的常量：落后�
 
 ### 5.7 HTML View 和 Blob
 
-HTML View 沿用 `html_view_drafts`。它已经满足覆盖写的规则：`replace` 草稿记下目标当时的 ETag，草稿可以挂在一个 Worktree 上，Worktree 合入后发布，目标的 ETag 变了就进入 `conflicted`，Worktree 被 discard 也进入 `conflicted`。
+HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` 草稿记下目标当时的 ETag，草稿可以挂在一个 Worktree 上，Worktree 合入后发布，目标的 ETag 变了只有这一页进入 `conflicted`，同一 Worktree 的 Sheet 照常合入，Worktree 被 discard 也进入 `conflicted`。
 
-还缺三样：
+发布跟着合入权走。每次合入，包括 token 会话的合入，都以合入者的身份发布合入开始前挂着的 pending 草稿，合入权因此包括页面：合入者要能写每份草稿的目标。Team Worktree 的作者在它的 Team Space 里提议页面，和提议 Unit 一样只要读权。草稿作者自己写不了目标时，页面代码要人看过才上线：这样的 Worktree 只能在 Browser 里合入，CLI、PAT、OAuth 的合入得到 409 `PAGE_REVIEW_REQUIRED`，什么都不改变。作者自己能写目标的草稿在任何合入中发布。每个 Worktree 最多挂 20 份 pending 草稿。
+
+还缺两样：
 
 - fork 视图读草稿（5.5）。
 - 页面运行时按 fork 的范围读数据。已发布的页面今天只读 Trunk。
-- token 会话合入时不发布挂着的草稿。Agent Mode 下，发布跟着合入权走。
 
 草稿 7 天过期。提议等待超过 7 天，页面要由 agent 重新保存。
 
@@ -480,7 +481,7 @@ HTML View 沿用 `html_view_drafts`。它已经满足覆盖写的规则：`repla
 
 - fork 视图读挂在 Worktree 上的 HTML View 草稿。
 - 页面运行时按 fork 的范围读数据。
-- token 会话合入时，草稿的发布跟着合入权走。
+- token 会话合入时，草稿的发布跟着合入权走。已做到，作者自己写不了目标的草稿仍要人在 Browser 里合入，见 5.7。
 - 其他 Blob 的覆盖写。
 
 完成标准的骨架：A 在 fork 里修改一个 HTML View 和它绑定的 Sheet，提议。E 合入后页面发布，显示新的数据。上游的页面在草稿创建之后被别人改过时，这一项的结果是 `conflicted`，上游的页面不变，同一个 Worktree 里的 Sheet 照常合入。

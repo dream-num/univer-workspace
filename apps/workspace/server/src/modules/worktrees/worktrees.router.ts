@@ -1,5 +1,5 @@
 import { json, Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { personInBrowser, type IdentityModule } from "../identity/index.js";
 import type { WorktreesModule } from "./worktrees.types.js";
 
 export function createWorktreesRouter(options: {
@@ -170,7 +170,7 @@ export function createWorktreesRouter(options: {
           actor.user.id,
           request.params.worktreeId,
           request.headers["idempotency-key"],
-          !actor.tokenIssued
+          personInBrowser(actor)
         )
       );
     }

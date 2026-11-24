@@ -98,8 +98,8 @@ The resources operations search an SVG catalog, not Workspace files.
 
 ## Worktree rule
 
-Start every new editable Unit task in a new Worktree. HTML View pages publish
-outside Worktrees. `pr_list` is diagnostic,
+Start every new editable Unit task in a new Worktree. Pages are drafts,
+not Worktree Units. `pr_list` is diagnostic,
 not permission to reuse another draft because its name or Unit looks suitable.
 Continue an existing Worktree only for rework of the same task, when this agent
 already worked in that known Worktree or the user supplies its identity for that

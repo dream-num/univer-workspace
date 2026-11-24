@@ -129,7 +129,7 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
           parentNodeId: row.parent_node_id,
           name: row.name,
           originalFilename: row.name,
-          createdBy: userId,
+          createdBy: row.author_user_id,
           objectKey: row.object_key,
           mediaType: row.media_type!,
           byteSize: row.byte_size,

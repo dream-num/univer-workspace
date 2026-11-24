@@ -130,6 +130,9 @@ export interface paths {
          * Stage an HTML View for interactive author approval.
          * @description Every Unit the page binds must be in the source pull request or readable by the author, otherwise `403`.
          *     A draft attached to a pull request that is ready or merging is refused with `409`; reopen it first.
+         *     A pull request holds at most 20 pending drafts; one more is refused with `409`, and a revision replaces its predecessor.
+         *     The author of a Team pull request who may edit its draft proposes a page in its Team Space with read access to the page or its destination.
+         *     Elsewhere the author needs edit access to the page, or may create at its destination.
          */
         post: operations["submitHtmlViewDraft"];
         delete?: never;
@@ -2475,7 +2478,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge Worktree Units and activate successful local Units. */
+        /**
+         * Merge Worktree Units and activate successful local Units.
+         * @description The merge also publishes, as the merger, every page draft that was pending when it began, so the merger
+         *     needs edit access to every Unit and page target. A page whose target changed since its draft is left
+         *     `conflicted` while the Units still merge.
+         */
         post: operations["mergeWorktree"];
         delete?: never;
         options?: never;
@@ -2978,7 +2986,7 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
             /**
-             * @description Present only for pending drafts. Merge the source pull request while it is open; otherwise publish manually.
+             * @description Present only for pending drafts. `merge` while the source pull request is open, whose merge publishes the draft as the merger; otherwise the author publishes it.
              * @enum {string}
              */
             publishWhen?: "merge" | "publish";
@@ -4226,7 +4234,7 @@ export interface components {
         WorktreeMergeResponse: {
             operation: components["schemas"]["OperationView"];
             worktree: components["schemas"]["WorktreeSummary"];
-            /** @description Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list. */
+            /** @description Pages this merge published as the merger. Already published drafts are omitted on replay. */
             publishedPages: {
                 draftId: string;
                 name: string;
@@ -8826,7 +8834,19 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /**
+             * @description The Worktree state does not allow a merge, or `PAGE_REVIEW_REQUIRED`: a pending page's author cannot
+             *     write its target, so only a person signed in to the browser may merge. The message names the pages and
+             *     the pull request URL. Nothing changes.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     discardWorktree: {
