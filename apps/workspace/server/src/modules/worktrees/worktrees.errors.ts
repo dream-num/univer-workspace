@@ -28,18 +28,32 @@ export function mergeNeedsEditAccess(): ApplicationError {
   );
 }
 
-export function pageReviewRequired(row: {
+interface PullRequestRow {
   readonly id: string;
   readonly number: number | null;
   readonly team_space_id: string | null;
-}, pages: readonly string[], publicOrigin: string | null): ApplicationError {
+}
+
+function pullRequestUrl(row: PullRequestRow, publicOrigin: string | null): string {
   const path = row.team_space_id !== null && row.number !== null
     ? `/spaces/${encodeURIComponent(row.team_space_id)}/pulls/${row.number}`
     : `/worktrees?worktree=${encodeURIComponent(row.id)}`;
+  return `${publicOrigin ?? ""}${path}`;
+}
+
+export function pageReviewRequired(row: PullRequestRow, pages: readonly string[], publicOrigin: string | null): ApplicationError {
   return new ApplicationError(
     "PAGE_REVIEW_REQUIRED",
     409,
-    `A person must merge this pull request in the browser, because its author cannot publish these pages alone: ${pages.join(", ")}. Review it at ${publicOrigin ?? ""}${path}.`,
+    `A person must merge this pull request in the browser, because its author cannot publish these pages alone: ${pages.join(", ")}. Review it at ${pullRequestUrl(row, publicOrigin)}.`,
+  );
+}
+
+export function pagesChanged(row: PullRequestRow, publicOrigin: string | null): ApplicationError {
+  return new ApplicationError(
+    "PAGES_CHANGED",
+    409,
+    `The pages of this pull request changed since you reviewed it. Review them again at ${pullRequestUrl(row, publicOrigin)}.`,
   );
 }
 

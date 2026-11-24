@@ -311,9 +311,10 @@ export function createWorkspaceApplication(
       await univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds);
     },
     pages: {
-      writable: (worktreeId, userId, before) => htmlViewDrafts.writable(worktreeId, userId, before),
-      foreign: (worktreeId, before) => htmlViewDrafts.foreign(worktreeId, before),
-      publish: (worktreeId, mergerId, before) => htmlViewDrafts.publishForWorktree(worktreeId, mergerId, before),
+      pending: (worktreeId) => htmlViewDrafts.pending(worktreeId),
+      writable: (worktreeId, userId, draftIds) => htmlViewDrafts.writable(worktreeId, userId, draftIds),
+      foreign: (worktreeId, draftIds) => htmlViewDrafts.foreign(worktreeId, draftIds),
+      publish: (worktreeId, mergerId, draftIds) => htmlViewDrafts.publishForWorktree(worktreeId, mergerId, draftIds),
     },
     publicOrigin: config.publicOrigin ?? null,
     onChanged: (change) => worktreeChangeFeed.publish(change),

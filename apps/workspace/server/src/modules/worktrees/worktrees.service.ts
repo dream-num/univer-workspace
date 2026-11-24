@@ -35,7 +35,7 @@ import type {
   WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, proposalStaysShared } from "./worktrees.errors.js";
+import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -62,11 +62,18 @@ interface WorktreeFacts {
 
 /** The pending HTML View drafts attached to a Worktree, which its merge publishes as the merger. */
 export interface WorktreePages {
-  /** Whether the user may write every page a merge begun at `before` publishes; a page attached after it waits for its author. */
-  writable(worktreeId: string, userId: string, before?: number): Promise<boolean>;
-  /** Names of those pages whose own author may not write their target. */
-  foreign(worktreeId: string, before: number): Promise<readonly string[]>;
-  publish(worktreeId: string, mergerId: string, before: number): Promise<readonly PublishedPage[]>;
+  /** IDs of the pending, unexpired drafts attached now. A merge fixes this set when it begins. */
+  pending(worktreeId: string): Promise<readonly string[]>;
+  /** Whether the user may write every pending page, or every one of `draftIds` still pending. */
+  writable(worktreeId: string, userId: string, draftIds?: readonly string[]): Promise<boolean>;
+  /** Names of the pending pages among `draftIds` whose own author may not write their target. */
+  foreign(worktreeId: string, draftIds: readonly string[]): Promise<readonly string[]>;
+  publish(worktreeId: string, mergerId: string, draftIds: readonly string[]): Promise<readonly PublishedPage[]>;
+}
+
+interface MergePayload {
+  readonly worktreeId: string;
+  readonly pageDraftIds?: readonly string[];
 }
 
 export function createWorktreesModule(options: {
@@ -84,22 +91,6 @@ export function createWorktreesModule(options: {
   readonly now?: () => number;
 }): WorktreesModule {
   const now = options.now ?? Date.now;
-  const readyHolds = new Map<string, Promise<void>>();
-
-  // shortcut: holds live in this process, like the draft upload map; record the ready time in the product database if Workspace runs more than one replica.
-  async function holdReady(worktreeId: string): Promise<Disposable> {
-    const previous = readyHolds.get(worktreeId);
-    let release!: () => void;
-    const tail = Promise.all([previous, new Promise<void>((resolve) => { release = resolve; })]).then(() => undefined);
-    readyHolds.set(worktreeId, tail);
-    await previous;
-    return {
-      [Symbol.dispose]() {
-        release();
-        if (readyHolds.get(worktreeId) === tail) readyHolds.delete(worktreeId);
-      },
-    };
-  }
 
   async function executeReserved<T>(
     operationId: string,
@@ -751,10 +742,7 @@ export function createWorktreesModule(options: {
       return result;
     },
 
-    holdReady,
-
     async markReady(userId, worktreeId) {
-      using _hold = await holdReady(worktreeId);
       const value = await context(userId, worktreeId);
       if (!value.capabilities.markReady) throw forbidden();
       // Shared before the transition, so a retry after a failed transition still leaves it shared.
@@ -790,19 +778,13 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async merge(userId, worktreeId, operationIdValue, browser = false) {
+    async merge(userId, worktreeId, operationIdValue, browser = false, inputValue) {
       const operationId = validOperationId(operationIdValue);
+      const reviewed = validReviewedPages(inputValue);
       const value = await context(userId, worktreeId);
       const existing = await options.repository.getOperation(operationId);
-      const startedAt = existing?.created_at ?? now();
-      if (existing) {
-        const input = operationPayload<{ readonly worktreeId: string }>(
-          existing,
-          "merge_worktree",
-          userId,
-        );
-        if (input.worktreeId !== worktreeId) throw idempotencyConflict();
-      }
+      const stored = existing && operationPayload<MergePayload>(existing, "merge_worktree", userId);
+      if (stored && stored.worktreeId !== worktreeId) throw idempotencyConflict();
       const resumeMerged = value.state === "merged";
       const unfinished = value.row.processed_at === null && (value.state === "merging" || resumeMerged);
       // A started merge is a decision already made, so its starter, or anyone who may merge, can finish it.
@@ -815,26 +797,33 @@ export function createWorktreesModule(options: {
         if (value.state === "ready" || unfinished) throw mergeNeedsEditAccess();
         throw forbidden();
       }
+      // A merge Operation saved before merges stored their pages replays with none; drop the default once none is unfinished.
+      const pageDraftIds = stored ? stored.pageDraftIds ?? [] : [...await options.pages.pending(worktreeId)].sort();
       if (existing?.state !== "completed" && value.row.processed_at === null) {
-        await validateAllTargets(userId, value.row, value.units, options, startedAt);
+        await validateAllTargets(userId, value.row, value.units, options, pageDraftIds);
       }
-      // Code its author could not publish alone goes live only through a person who reviewed it in the browser.
-      const foreign = browser ? [] : await options.pages.foreign(worktreeId, startedAt);
-      if (foreign.length) throw pageReviewRequired(value.row, foreign, options.publicOrigin);
-      const payload = { worktreeId };
+      // Code its author could not publish alone goes live only through a person in the browser who reviewed these pages.
+      const foreign = await options.pages.foreign(worktreeId, pageDraftIds);
+      if (foreign.length && !(browser && (reviewed !== undefined || stored !== null))) {
+        throw pageReviewRequired(value.row, foreign, options.publicOrigin);
+      }
+      if (reviewed !== undefined && canonicalJson(reviewed) !== canonicalJson(pageDraftIds)) {
+        throw pagesChanged(value.row, options.publicOrigin);
+      }
+      const payload = { worktreeId, pageDraftIds };
       const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "merge_worktree",
         actorUserId: userId,
         payload,
-        createdAt: startedAt,
+        createdAt: now(),
       });
-      const stable = operationPayload<typeof payload>(
+      const stable = operationPayload<MergePayload>(
         reserved.row,
         "merge_worktree",
         userId
       );
-      if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
+      assertJsonIntent(payload, { worktreeId: stable.worktreeId, pageDraftIds: stable.pageDraftIds ?? [] });
       let operation = reserved.row;
       if (operation.state !== "completed") {
         operation = await executeReserved(operationId, async () => {
@@ -887,7 +876,7 @@ export function createWorktreesModule(options: {
       let publishedPages: readonly PublishedPage[] = [];
       if (current.state === "merged") {
         try {
-          publishedPages = await options.pages.publish(worktreeId, userId, operation.created_at);
+          publishedPages = await options.pages.publish(worktreeId, userId, pageDraftIds);
         } catch (error) {
           logger.warn({ err: error, worktreeId }, "HTML View drafts could not be published after merge");
         }
@@ -1132,7 +1121,7 @@ async function validateAllTargets(
     readonly access: AccessResolver;
     readonly pages: WorktreePages;
   },
-  startedAt: number,
+  pageDraftIds: readonly string[],
 ): Promise<void> {
   for (const unit of await options.repository.units(row.id)) {
     if (states.find((state) => state.unitId === unit.unit_id)?.change === "deleted") {
@@ -1152,7 +1141,7 @@ async function validateAllTargets(
       throw mergeNeedsEditAccess();
     }
   }
-  if (!(await options.pages.writable(row.id, userId, startedAt))) throw mergeNeedsEditAccess();
+  if (!(await options.pages.writable(row.id, userId, pageDraftIds))) throw mergeNeedsEditAccess();
 }
 
 async function validateTarget(
@@ -1545,6 +1534,16 @@ function validAddUnit(value: unknown):
     ),
     ...(initialData === undefined ? {} : { initialData }),
   };
+}
+
+function validReviewedPages(value: unknown): readonly string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  const { pageDraftIds } = requiredRecord(value);
+  if (pageDraftIds === undefined) return undefined;
+  if (!Array.isArray(pageDraftIds) || !pageDraftIds.every((id) => typeof id === "string" && id.length > 0)) {
+    throw invalidInput("pageDraftIds must be an array of draft IDs.", "pageDraftIds");
+  }
+  return [...new Set(pageDraftIds as string[])].sort();
 }
 
 function validOpenMode(value: unknown): "draft" | "trunk" | "mergePreview" {

@@ -376,11 +376,19 @@
     operationId: mergeWorktree
     summary: Merge Worktree Units and activate successful local Units.
     description: |
-      The merge also publishes, as the merger, every page draft that was pending when it began, so the merger
-      needs edit access to every Unit and page target. A page whose target changed since its draft is left
-      `conflicted` while the Units still merge.
+      The merge also publishes, as the merger, the page drafts that were pending and unexpired when it began, so
+      the merger needs edit access to every Unit and to each of those page targets. The merge Operation records
+      their IDs, so a replay or an Operation retry publishes the same drafts, and a draft that turns pending later
+      waits for its author. A page whose target changed since its draft is left `conflicted` while the Units still
+      merge.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/worktrees.yaml#/MergeWorktree
     responses:
       "200":
         description: Merge attempt reached a stable result.
@@ -407,9 +415,12 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         description: |
-          The Worktree state does not allow a merge, or `PAGE_REVIEW_REQUIRED`: a pending page's author cannot
-          write its target, so only a person signed in to the browser may merge. The message names the pages and
-          the pull request URL. Nothing changes.
+          The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's author cannot write
+          its target, so only a person signed in to the browser who sends `pageDraftIds` may merge. The message
+          names the pages and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
+          merge would publish, so the merger must review the pages again. The message names the pull request URL.
+          A request that could get both gets `PAGE_REVIEW_REQUIRED`, which a newer review cannot clear outside the
+          browser. Nothing changes.
         content:
           application/json:
             schema:

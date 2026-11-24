@@ -311,7 +311,7 @@ stale 是提示，不拦截合入。两个阈值是服务端的常量：落后�
 
 HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` 草稿记下目标当时的 ETag，草稿可以挂在一个 Worktree 上，Worktree 合入后发布，目标的 ETag 变了只有这一页进入 `conflicted`，同一 Worktree 的 Sheet 照常合入，Worktree 被 discard 也进入 `conflicted`。
 
-发布跟着合入权走。每次合入，包括 token 会话的合入，都以合入者的身份发布合入开始前挂着的 pending 草稿，合入权因此包括页面：合入者要能写每份草稿的目标。Team Worktree 的作者在它的 Team Space 里提议页面，和提议 Unit 一样只要读权。草稿作者自己写不了目标时，页面代码要人看过才上线：这样的 Worktree 只能在 Browser 里合入，CLI、PAT、OAuth 的合入得到 409 `PAGE_REVIEW_REQUIRED`，什么都不改变。作者自己能写目标的草稿在任何合入中发布。每个 Worktree 最多挂 20 份 pending 草稿。
+发布跟着合入权走。每次合入，包括 token 会话的合入，都在开始时固定挂着的 pending 草稿，把它们的 ID 存进 merge Operation，以合入者的身份发布这一组，重放和重试也只发布这一组，合入权因此包括页面：合入者要能写每份草稿的目标。人在 Browser 里合入时带上自己评审过的草稿 ID，和固定的一组不一致就得到 409 `PAGES_CHANGED`，什么都不改变，评审 N 就合入 N。Team Worktree 的作者在它的 Team Space 里提议页面，和提议 Unit 一样只要读权。草稿作者自己写不了目标时，页面代码要人看过才上线：这样的 Worktree 只能由人在 Browser 里带着评审过的草稿 ID 合入，CLI、PAT、OAuth 的合入，以及不带草稿 ID 的 Browser 合入，得到 409 `PAGE_REVIEW_REQUIRED`，什么都不改变。作者自己能写目标的草稿在任何合入中发布。每个 Worktree 最多挂 20 份 pending 草稿。
 
 经 fork 改页面，就是把 HTML View 草稿挂在 fork 的 Worktree 上。草稿的 `source_worktree_id` 是这个 Worktree，所以草稿的预览和 dry run 按 fork 的范围读数据：在 Worktree 里的 Sheet 读 Worktree，其他读上游 Trunk。已发布的页面读 Trunk，合入之后 Trunk 里就是 fork 的修改。干净的 fork 只改页面时，`POST /api/forks/{forkId}/worktree` 打开 fork 的 Worktree。Collaboration SDK 能把没有 Unit 的 Worktree 标记 ready 并合入，这样的 pull request 合入时只发布页面。
 

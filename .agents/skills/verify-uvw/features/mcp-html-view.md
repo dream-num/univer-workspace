@@ -5,8 +5,9 @@ draft, and the owner previews and publishes it. Validation and missing-source er
 `uvw html-view validate`. A reviewer of the draft's pull request lists and previews its pages without
 publishing them, and the preview loads only the Sheets a page declares. A pull request's merge publishes its
 pages as the merger. A page its author could not publish alone goes live only when a person merges in the
-browser, and a page changed since its draft stays as it was while the Sheets merge. An agent that works through a
-fork reads, checks and saves a page with the fork's address, and its pull request carries the page.
+browser, and that person merges only the pages they reviewed. A page changed since its draft stays as it was
+while the Sheets merge. An agent that works through a fork reads, checks and saves a page with the fork's
+address, and its pull request carries the page.
 
 ## Sub-features
 
@@ -14,6 +15,7 @@ fork reads, checks and saves a page with the fork's address, and its pull reques
 - MHV5 through MHV7 list a pull request's pages for a reviewer, preview one read-only with an undeclared Sheet refused, and refuse page changes while the pull request is ready.
 - MHV8 through MHV10 publish a Viewer's page when an Editor merges in the browser after refusing the Editor's CLI merge, leave a page changed since its draft `conflicted` while the Sheet merges, and let an Editor agent merge its own page over MCP.
 - MHV11 through MHV15 change a page through a fork: a Viewer agent's Sheet and page, the conflicted variant, a non-member agent's page alone and then with its Sheet, uvw validation through a fork and its refusal to create a page there, and a real model's story.
+- MHV16 refuses an Editor's browser merge from a tab opened before the author revised the page, changes nothing, and merges the revised page after the Editor reviews it again.
 
 ## How to get to it (user POV)
 
@@ -574,6 +576,76 @@ Pass when `mfs-story/trajectory.txt` shows `execute` and `html_view_save` with `
 fork's pull request is `ready`, and no `mcp.tool_call` event holds `AGENT_NOT_ALLOWED` or
 `INTERACTIVE_SESSION_REQUIRED`. Before `$V down`, close E's browser session and run `uh daemon stop` and
 `ue daemon stop`. After it, `rm -rf "$HH" "$EH"`.
+
+### MHV16. An Editor merges only the pages they reviewed
+
+Continue from MHV8, with or without MHV9 and MHV10. O proposes B2 `55` and a new version of H's page, then marks
+the pull request ready:
+
+```bash
+$V mcp mrv-pr pr_create "{\"repo\":\"$H/page-merge\",\"title\":\"Reviewed page\"}"
+W5=$(jq -r .id "$EVIDENCE/mrv-pr.out"); P5=$(jq -r .number "$EVIDENCE/mrv-pr.out")
+$V mcp mrv-add unit_add "{\"worktree\":\"$W5\",\"resource\":\"$RES\"}"
+$V mcp mrv-exec execute "$(jq -nc --arg w "$W5" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(55); return ws.getRange(\"B2\").getValue();"}')"
+$V mcp mrv-read html_view_read "{\"resource\":\"$PR\"}"
+page 'Budget as reviewed' > "$EVIDENCE/mrv-v1.univer.html"
+$V mcp mrv-save html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mrv-v1.univer.html" --arg page "$PR" --arg etag "$(jq -r .etag "$EVIDENCE/mrv-read.out")" --arg repo "$H/page-merge" --argjson pr "$P5" --arg key "mrv-save-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,page:$page,etag:$etag,repo:$repo,pr:$pr,idempotency_key:$key}')"
+D5=$(jq -r .draft.id "$EVIDENCE/mrv-save.out")
+$V mcp mrv-ready pr_ready "{\"repo\":\"$H/page-merge\",\"number\":$P5}"
+```
+
+In E's browser session, open `$ORIGIN/spaces/$T/pulls/$P5`, run
+`agent-browser scrollintoview 'section[aria-label="Pages"]'` and save `mrv-e-review.png`. Keep this tab open and do
+not reload it. O reopens the pull request, revises the page and marks it ready again:
+
+```bash
+$V mcp mrv-reopen pr_ready "$(jq -nc --arg repo "$H/page-merge" --argjson n "$P5" '{repo:$repo,number:$n,undo:true}')"
+page 'Budget changed after review' > "$EVIDENCE/mrv-v2.univer.html"
+$V mcp mrv-revise html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mrv-v2.univer.html" --arg d "$D5" --arg key "mrv-revise-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,draft:$d,idempotency_key:$key}')"
+D6=$(jq -r .draft.id "$EVIDENCE/mrv-revise.out")
+$V mcp mrv-ready-again pr_ready "{\"repo\":\"$H/page-merge\",\"number\":$P5}"
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mrv-trunk-before.out"
+$V mcp mrv-page-before html_view_read "{\"resource\":\"$PR\"}"
+```
+
+In the tab E kept open, wait until `Confirm merge` shows again, click it and save `mrv-e-stale-confirm.png`. Confirm
+in the `Merge this task?` dialog as in MHV8, `wait --text "changed after you reviewed them"` and save
+`mrv-e-pages-changed.png`. Then check that nothing changed:
+
+```bash
+ue pr view "$P5" -R "$H/page-merge" --json state > "$EVIDENCE/mrv-e-view.out"
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mrv-trunk-refused.out"
+cmp "$EVIDENCE/mrv-trunk-before.out" "$EVIDENCE/mrv-trunk-refused.out"
+$V mcp mrv-page-refused html_view_read "{\"resource\":\"$PR\"}"
+diff <(jq -S . "$EVIDENCE/mrv-page-before.out") <(jq -S . "$EVIDENCE/mrv-page-refused.out")
+$V mcp mrv-draft-refused html_view_draft_get "{\"draft\":\"$D6\"}"
+```
+
+E reviews again in the same tab. Scroll to the `Pages` section and save `mrv-e-review-again.png`, follow `Preview`,
+wait 8 s and save `mrv-e-preview-again.png`. Go back to the pull request, click `Confirm merge`, save
+`mrv-e-confirm-again.png`, confirm, `wait --text "Published 1 page"` and save `mrv-e-published.png`. Read the
+result back:
+
+```bash
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mrv-trunk-after.out"
+$V mcp mrv-page-after html_view_read "{\"resource\":\"$PR\"}"
+jq -j .html "$EVIDENCE/mrv-page-after.out" | cmp "$EVIDENCE/mrv-v2.univer.html" -
+$V mcp mrv-old-draft html_view_draft_get "{\"draft\":\"$D5\"}"
+$V mcp mrv-draft-after html_view_draft_get "{\"draft\":\"$D6\"}"
+```
+
+Then open `$ORIGIN/nodes/$PN?view=immersive` in E's session, wait 6 s and save `mrv-page-published.png`.
+
+Pass when `mrv-save` is a pending `replace` draft with `publishWhen: "merge"` and `mrv-e-review.png` lists
+`Budget.univer.html` by O as `Pending review`. `mrv-revise` is a new pending draft `D6`. In the kept tab the dialog
+still says `Merging will publish 1 page.`, and the merge ends with the toast
+`The pages in this task changed after you reviewed them. The list is refreshed. Review them again before you merge.`
+and no published-page toast. The pull request is still `ready`, Trunk B2 and the page are as before, and `D6` is
+`pending`. After the refresh the `Pages` section lists one page, `Pending review`, and its preview shows
+`Budget changed after review` with the pull request's `North: 55`. The second merge says `Published 1 page`,
+Trunk B2 is `55`, the page is `mrv-v2.univer.html` byte for byte and shows `North: 55`, `D5` is `superseded` and
+`D6` is `published`. Before `$V down`, close E's browser session and run `uh daemon stop` and `ue daemon stop`.
+After it, `rm -rf "$HH" "$EH"`.
 
 ## Gotchas
 

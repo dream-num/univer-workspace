@@ -64,7 +64,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [HTML View drafts over MCP](./mcp-html-view.md): MHV1-MHV10 cover validation parity, missing sources, draft
   save, retry and revision, then preview and publish, a reviewer's page list, isolated preview and the
   ready freeze, and pages published by the merge: a Viewer's page through a browser merge after a refused CLI
-  merge, a conflicted page, and an Editor agent's own page merged over MCP. MHV11-MHV15 change pages through a
+  merge, a conflicted page, and an Editor agent's own page merged over MCP. MHV16 refuses a browser merge of pages
+  the author changed after the review, then merges them once reviewed again. MHV11-MHV15 change pages through a
   fork: a Viewer agent's and a non-member agent's proposals, a page-only pull request, the conflicted variant,
   uvw validation and its create refusal, and a real-model story.
 - [MCP production shape and per-account tools](./mcp-production.md): MB1-MB6 cover tool lists without a

@@ -796,8 +796,8 @@ V26 追加可空 `source_worktree_id`，旧草稿为 NULL。它与目标一样�
 目标权限按来源区分：来源是 Team Worktree、作者对它有 `editDraft`、目标在它的 Team Space 内时，作者像提议 Unit 一样提议页面，
 replace 只需要目标的 `openContent`，create 只需要能看到目的地；其他情况 replace 需要 `editContent`，create 需要目的地的创建权限。
 来源 Worktree 或被修订草稿的来源处于 `ready` 或 `merging` 时，新建和修订返回 409，重新打开后才能修改，作者仍可 reject。
-同一 Worktree 的草稿接收（从状态检查到 `pending`）与 mark ready 在进程内串行，所以 ready 之后不会出现新的 pending 草稿；
-这依赖单进程服务，多副本部署前要把 ready 时间写入产品库。
+这项检查与 mark ready 之间没有锁：一份草稿在检查时来源还是 `draft`，之后才变为 `pending`，就可能挂在已 ready 的 Worktree 上，
+多副本部署时不能排除。合并只发布开始时固定的草稿集合，所以这样的草稿不会被合并发布。
 提交时页面绑定的每个 Unit 必须在来源 Worktree 中，或作者对它有 `openContent`，否则返回 403，不区分 Unit 不存在和无权读取。
 来源未合并时手动发布返回 409 并标明 PR 编号，丢弃后 pending 草稿读取为 `conflicted`，发布拒绝。
 `pendingPageDrafts` 统计关联该 Worktree 的 pending 且未过期草稿，不按草稿作者过滤，所有可见摘要者都能读取计数。
@@ -806,15 +806,22 @@ replace 只需要目标的 `openContent`，create 只需要能看到目的地；
 Browser 预览别人写的草稿时只读，只加载页面声明的 Unit，包括其中 Sheet 引用的其他 Unit，页面请求其他 Unit 时拒绝并提示。
 发布后的页面不受这个限制，访问者能读的未声明 Unit 仍可被页面脚本请求。
 
-每次合并都在 merge Operation 完成后调用草稿模块，以合并者身份发布 Operation 创建前已 pending 的关联草稿，
-`decided_by` 记合并者，create 新建的 Node 和 Resource 的 `created_by` 仍是草稿作者。合并者的目标权限、配额和 ETag
+合并开始时读取一次关联的 pending 且未过期的草稿，把它们的 ID 排序后作为 `pageDraftIds` 写进 merge Operation 的
+`payload_json`。合并者的页面目标权限检查、foreign 检查和发布都只看这个集合，重放和 Operation 重试沿用已存的集合。
+每次合并都在 merge Operation 完成后调用草稿模块，以合并者身份发布集合里仍为 pending 的草稿，`decided_by` 记合并者，create 新建的 Node 和 Resource 的 `created_by` 仍是草稿作者。合并者的目标权限、配额和 ETag
 在发布事务里检查；ETag 不一致时只有这一页变为 `conflicted`，Sheet 照常合入。单份失败只记录日志，不影响合并，
 过期、配额或权限失败保持原行状态，作者之后可以手动发布。合并权包含页面目标：合并者必须能写每份待发布草稿的目标，
-否则 `capabilities.merge` 为 false，合并返回 403。草稿作者自己写不了目标时，该草稿是 foreign：只有
-`writeSource` 为 browser 且不是 token-issued 的 Session 能合并，CLI、PAT、OAuth 合并返回 409 `PAGE_REVIEW_REQUIRED`，
-消息列出页面名和 PR 地址，不改变任何状态。作者能写目标的草稿在任何合并中发布，包括 agent 用 token 合并。
+否则 `capabilities.merge` 为 false，合并返回 403。草稿作者自己写不了目标时，该草稿是 foreign：只有人在 Browser 里
+（`writeSource` 为 browser、不是 token-issued 的 Session，主体是人）带着 `pageDraftIds` 才能合并，或者重试这样开始的 Operation。
+CLI、PAT、OAuth 合并，以及不带 `pageDraftIds` 的 Browser 合并，返回 409 `PAGE_REVIEW_REQUIRED`，消息列出页面名和 PR 地址，
+不改变任何状态。作者能写目标的草稿在任何合并中发布，包括 agent 用 token 合并。
+合并请求的 `pageDraftIds` 是合并者评审过的草稿：Browser 发送评审面板列表里状态为 pending 或 conflicted 的草稿 ID，
+对未合并的 Worktree，这正是 pending 且未过期的关联草稿。它与固定集合不一致时返回 409 `PAGES_CHANGED`，
+消息给出 PR 地址，不改变任何状态；Browser 刷新页面列表，提示重新评审。两个 409 都适用时先返回 `PAGE_REVIEW_REQUIRED`，
+因为它来自会话类型，重新评审也消除不了。
 成功的合并响应 `publishedPages` 返回本次发布的 draftId、name、nodeId；重放不重复发布已发布草稿，
-列表不回填历史结果。中断后重放或恢复会继续尝试 Operation 创建前已 pending 的关联草稿，合并后才关联的草稿由作者发布。服务端提交时只校验绑定的 Unit 可读，
+列表不回填历史结果。中断后重放或恢复只尝试 Operation 里记下的草稿，集合固定之后才变为 pending 的草稿保持 pending，由作者发布。
+没有 `pageDraftIds` 的 merge Operation 是这条规则之前保存的，重放时不发布页面。服务端提交时只校验绑定的 Unit 可读，
 工作表与范围由客户端校验；发布时不重新校验，发布后仍连接实时 trunk。
 
 ## Skill 草稿（V20）
