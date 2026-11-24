@@ -827,7 +827,7 @@ export function createWorktreesModule(options: {
         kind: "merge_worktree",
         actorUserId: userId,
         payload,
-        createdAt: now(),
+        createdAt: startedAt,
       });
       const stable = operationPayload<typeof payload>(
         reserved.row,

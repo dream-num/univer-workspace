@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { personInBrowser, type IdentityModule } from "../identity/index.js";
 import type { OperationsModule } from "./operations.service.js";
 
 export function createOperationsRouter(options: {
@@ -24,7 +24,7 @@ export function createOperationsRouter(options: {
         await options.operations.retry(
           session.user.id,
           parameter(request.params.operationId),
-          session.writeSource === "browser" && !session.tokenIssued
+          personInBrowser(session)
         )
       );
     }

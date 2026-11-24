@@ -710,10 +710,13 @@ describe("who sees the pages a pull request publishes", () => {
 });
 
 describe("publishing a pull request's pages when it merges", () => {
-  it("publishes a viewer's pages as the editor who merges in the browser, and refuses a CLI or token merge of them", async () => {
+  it("publishes a viewer's pages as the editor who merges in the browser, and refuses a CLI, token or agent merge of them", async () => {
     const { origin, application, repositories } = await start();
     const s = await budgetSpace(origin, application);
     const { owner, editor, viewer } = s;
+    const agent = await guestAgent(origin);
+    await claim(origin, agent, owner);
+    await application.permissions.upsertTeamMember(owner.id, s.id, agent.id, { role: "editor" });
     const pull = await openPull(origin, viewer, s.id, "private");
     const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
     const sheet = await sheetIn(origin, viewer, pull, budget.unitId);
@@ -728,7 +731,7 @@ describe("publishing a pull request's pages when it merges", () => {
     expect(await transition(origin, pull, "ready", viewer)).toBe("ready");
 
     const { worktree } = (await (await send(origin, "GET", `/api/worktrees/${pull}`, undefined, editor.cookie)).json()) as { worktree: { number: number } };
-    for (const session of [await cliSession(origin, editor), await patSession(origin, application, editor)]) {
+    for (const session of [await cliSession(origin, editor), await patSession(origin, application, editor), agent]) {
       const refused = await post(origin, session, `/api/worktrees/${pull}/merge`);
       expect({ status: refused.status, error: ((await refused.json()) as { error: object }).error }).toEqual({
         status: 409,

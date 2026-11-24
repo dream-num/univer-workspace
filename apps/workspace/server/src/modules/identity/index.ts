@@ -11,7 +11,7 @@ export type {
   SessionView,
   User,
 } from "./identity.types.js";
-export { principalCategory } from "./principal-category.js";
+export { personInBrowser, principalCategory } from "./principal-category.js";
 export { createSourceRateLimiter } from "./source-rate-limiter.js";
 export type { IdentityRepository } from "./identity.repository.js";
 export { createIdentityRouter } from "./identity.router.js";
