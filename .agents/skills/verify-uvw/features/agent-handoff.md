@@ -37,6 +37,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH10 lets the claimer decide the agent's pull requests: `uvw pr list -R <agent>/personal` and MCP `pr_list`
   work, merge works, and `pr create` in the agent's Space is refused. After the claim, `share` no longer prints
   an expiry or a claim link.
+- MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
 
@@ -86,6 +87,43 @@ Preconditions:
   names it `verify-uvw g1 · <suffix>`. `$V mcp --auth oauth g1-claim claim '{}'` returns the link; opening it in
   the run browser shows `Sign out and continue`. Click it, sign in as the run user, and claim.
 
+### MH. Agent principals, claims and public Spaces
+
+Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per source IP.
+Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
+Idempotency keys need 16 to 200 URL-safe characters, so pad them for short run IDs.
+
+```bash
+$V principal bot1                                   # username agent-xxxx; its repo is <username>/personal
+$V mcp-tools --as bot1 mh-bot1
+$V mcp-instructions --as bot1 mh-bot1-instructions
+$V mcp --as bot1 mh-bot1-claim claim '{}'
+```
+
+- **MH1. Unclaimed agent.** `mh-bot1.out` lists 44 tools: the 43 `core` tools, with `claim` right after `share`.
+  A person's default list has 43 and no `claim`. The instructions say the agent
+  `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
+  `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
+  `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
+- **MH2. Claimed agent.** Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
+  gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 43 tools (no `claim`),
+  and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
+- **MH3. Claimer decisions.** bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
+  `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
+  `$V mcp <label> pr_merge '{"repo":…,"number":…}'` merges it. The run user's `pr_create` there fails with
+  `Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
+  Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
+  [pull requests](./pull-requests.md) for that refusal in a Team Space).
+- **MH4. Public Spaces.** `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
+  with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
+  and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
+  the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
+  `AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
+- **MH5. Copy a shared file.** With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
+  `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
+  `The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only
+  after its pull request merges.
+
 ## Gotchas
 
 - The claim code is a one-time credential. Evidence files from `mcp ... claim`, `share` and `uvw claim` contain it
@@ -94,7 +132,7 @@ Preconditions:
   mints a new one.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
 - The MCP tool lists change with the claim after the gateway's cache (about 30 s): unclaimed agents have `claim`,
-  claimed agents do not. See [the MCP journeys](./mcp.md).
+  claimed agents do not. See [MH1 and MH2](#mh-agent-principals-claims-and-public-spaces).
 - Prompts are English whatever the interface language.
 - The dialog keeps the tab you last chose until the page reloads. Click `MCP (recommended)` before reading the
   MCP tab on a second opening.

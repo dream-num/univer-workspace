@@ -123,19 +123,6 @@ test('gateway file transfers record only the appropriate bytes with no executor'
   assert.ok(validateErrorCode('ok', undefined, null, { event: { cost: { ...zero, export_bytes: 3 } } }).includes('Invalid cost.export_bytes'));
 });
 
-test('OAuth transcript redaction preserves JSON strings with escaped quotes', () => {
-  const doc = readFileSync(new URL('../features/mcp.md', import.meta.url), 'utf8');
-  const code = doc.match(/mo1_redact\(\) \{[\s\S]*?<<'JS'\n([\s\S]*?)\nJS/)[1];
-  const run = mkdtempSync(join(tmpdir(), 'verify-uvw-redact-'));
-  try {
-    const path = join(run, 'transcript.jsonl');
-    writeFileSync(path, JSON.stringify({ type: 'tool_use', input: { code: 'return tools["ws"].whoami();', state: 'private-state' }, output: 'ok' }) + '\n');
-    const result = spawnSync(process.execPath, ['-', run, path], { input: code, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout), { type: 'tool_use', input: { code: '[REDACTED]', state: '[REDACTED]' }, output: 'ok' });
-  } finally { rmSync(run, { recursive: true, force: true }); }
-});
-
 test('an agent principal event is matched by its user, whatever PAT id the gateway reports', () => {
   const globals = { auth: 'pat', patId: undefined, principalId: 'agent-1' };
   const event = { auth_kind: 'pat', client_id: 'pat-id-never-returned', user_id: 'agent-1' };

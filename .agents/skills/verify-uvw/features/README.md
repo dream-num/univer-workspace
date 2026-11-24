@@ -42,11 +42,29 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   recent and pages views.
 - [Issues](./issues.md): Team Space repo creation, Issue open via uvw, comment and close
   in the browser, timeline readback via uvw.
-- [MCP gateway](./mcp.md): Docker Desktop opt-in, both protocols, repository parity,
-  MO3 Claude Code/VS Code CIMD, SSRF refusals, anonymous no-fetch and the CIMD off switch,
-  authentication, idempotency keys and `inspect` input errors, the executor, files, Office, renderer and
-  compilers, agent principals and claims (MH), public-Space refusals, the G0 production shape with the `*`
-  and `workspace` allowlists, usage evidence, opencode, and cleanup.
+- [MCP gateway](./mcp.md): M1-M12 start the Docker gateway and cover both protocols, identity, repository
+  parity, tool lists, credential, Origin and production refusals, opencode, and cleanup. Every other `mcp-*`
+  file runs in this MCP mode.
+- [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull
+  request, search and browse tools with uvw, including idempotency keys and preserved errors.
+- [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
+  repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
+- [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,
+  Blobs and Assets; MX7-MX10 Office round trips and import retries; MM1-MM2 Markdown.
+- [Skills and the Facade API reference over MCP](./mcp-skills-api.md): MR1-MR8 cover Skills, resources,
+  instructions and API paging; MR13-MR15 custom Skills, drafts and pinned imports.
+- [MCP sign-in with personal access tokens](./mcp-auth.md): MA1-MA8 cover PAT scopes, revocation, metadata,
+  Browser management, and Browser, uvw and Workspace Agent sign-in with MCP OAuth enabled.
+- [MCP sign-in with OAuth](./mcp-oauth.md): MO1-MO4 cover opencode browser sign-in, scripted OAuth, Claude Code
+  and VS Code CIMD with SSRF refusals and the off switch, and Cursor's private-use callback.
+- [Scripts and compilers over MCP](./mcp-executor.md): MX1-MX6 and MX11-MX16 cover `execute` and `inspect`,
+  errors, stale sessions and concurrency; MT1, MV1 and Typst jobs cover the compilers.
+- [Screenshots, PDF and lint over MCP](./mcp-renderer.md): MR9-MR12 and MV2 cover the renderer role,
+  `screenshot`, `print_pdf`, `lint`, opencode reading an image, and real-font SVG.
+- [HTML View drafts over MCP](./mcp-html-view.md): MHV1-MHV4 cover validation parity, missing sources, draft
+  save, retry and revision, then preview and publish.
+- [MCP production shape and per-account tools](./mcp-production.md): MB1-MB6 cover tool lists without a
+  renderer, the executor allowlist with `*` and `workspace`, and `/readyz`.
 - [Read Sheet Units](./sheet-lens.md): SLC1-SLC10 cover `uvw outline`, `read` and `find` on the
   seeded sales, ledger and Doc Units: zoom, continuations, typed JSON, large-sheet notes,
   revisions, errors, trunk reads and access. SLM1-SLM10 cover the MCP tools.
@@ -59,7 +77,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [HTML View](./html-view.md): HV1-HV7 cover publishing with uvw, the `Pages` tab, owner writes to the source
   Sheet, live Sheet updates, read-only visitors, trial mode and `Save my version`.
 - [Agent handoff and claim](./agent-handoff.md): AH1-AH10 cover `Hand to my agent`, guest agents over
-  uvw and MCP, claim links and the claim page, `My agents`, and the claimer's pull request decisions.
+  uvw and MCP, claim links and the claim page, `My agents`, and the claimer's pull request decisions. MH1-MH5
+  cover agent principals over MCP: tool lists before and after a claim, public-Space refusals and copies.
 
 ## Helper scripts
 

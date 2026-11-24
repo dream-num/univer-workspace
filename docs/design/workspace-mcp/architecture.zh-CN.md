@@ -278,7 +278,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 
 测量时设置 `EXECUTOR_MAX_WORKERS=16`、`EXECUTOR_IDLE_TTL_MS=300000`，不修改产品默认值。每轮开始前要求没有其他 verify 栈，宿主一分钟 load 不超过 5。实际持续写入轮次的 preflight 一分钟 load 为 3.9 至 5.0，五分钟 load 最高 7.4；这里的 quiet 仅指通过该阈值，不表示没有背景工作。并发档按 1、2、4、8、16 顺序运行，再跑同 Unit 场景，没有交错，后期背景负载漂移落在后面的档位。因此第 3.3 节的 4、8、16 速率区间重叠结论受该顺序与负载变化限制。
 
-复跑命令与 JSON 字段见[容量测量流程](../../../.agents/skills/verify-uvw/features/mcp.md#executor-capacity-benchmark)。[汇总脚本](../../../.agents/skills/verify-uvw/bin/mcp-bench-summary.py)保留 Python 统计实现；从仓库根目录运行 `python3 .agents/skills/verify-uvw/bin/mcp-bench-summary.py <bench.json> --markdown`，可从完整运行的原始 JSON 重现第 3.3、6.2 节的五张测量与内存预算表。省略 `--markdown` 则输出含样本数和原始精度统计值的汇总 JSON。内存预算表中的余量、子进程预留与保守建议仍是策略假设。
+复跑命令与 JSON 字段见[容量测量流程](../../../.agents/skills/verify-uvw/references/mcp-benchmarks.md#executor-capacity-benchmark)。[汇总脚本](../../../.agents/skills/verify-uvw/bin/mcp-bench-summary.py)保留 Python 统计实现；从仓库根目录运行 `python3 .agents/skills/verify-uvw/bin/mcp-bench-summary.py <bench.json> --markdown`，可从完整运行的原始 JSON 重现第 3.3、6.2 节的五张测量与内存预算表。省略 `--markdown` 则输出含样本数和原始精度统计值的汇总 JSON。内存预算表中的余量、子进程预留与保守建议仍是策略假设。
 
 | 场景 | 次数 | 网关耗时中位数、范围、p95（ms） | `worker_cpu_ms` 中位数、范围（ms） | 错误数 |
 | --- | --- | --- | --- | --- |
@@ -419,7 +419,7 @@ RSS 把共享的 Chromium 库和字体页在每个进程里重复计入，两个
 
 **对用户可见延迟的占比。** 暖的 `screenshot` 工具调用（网关事件 `duration_ms` 按请求 ID 与 renderer 日志的 `duration_ms` 关联，各 10 次）：Sheet 593 ms 中 renderer 占 558 ms（94%），Doc 926 ms 中 renderer 占 882 ms（95%）。渲染服务就是 `screenshot` 的延迟，执行层与网关合计约 35 至 45 ms。
 
-复跑：`node .agents/skills/verify-uvw/bin/renderer-bench.mjs --output <json>`，汇总用 `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`，步骤和各场景的含义见[渲染服务测量](../../../.agents/skills/verify-uvw/features/mcp.md#renderer-capacity-benchmark)。本节的原始 JSON 是主测量一份（冷、热、吞吐 1 与 2、复用）、4 个 runtime 一份、2048 与 3072 MiB 限制各一份和端到端一份。主测量和 4 个 runtime 那一份用的是 `renderer-bench.mjs` 加入 `--memory-limit` 之前的版本（`scriptSha256` 为 `8501c746…`），其余三份用当前版本；据作者说明场景代码没有改动，旧版本不在 git 中，无法逐行核对，独立复测的热延迟与吞吐中位数与本节相差不超过 5%。
+复跑：`node .agents/skills/verify-uvw/bin/renderer-bench.mjs --output <json>`，汇总用 `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`，步骤和各场景的含义见[渲染服务测量](../../../.agents/skills/verify-uvw/references/mcp-benchmarks.md#renderer-capacity-benchmark)。本节的原始 JSON 是主测量一份（冷、热、吞吐 1 与 2、复用）、4 个 runtime 一份、2048 与 3072 MiB 限制各一份和端到端一份。主测量和 4 个 runtime 那一份用的是 `renderer-bench.mjs` 加入 `--memory-limit` 之前的版本（`scriptSha256` 为 `8501c746…`），其余三份用当前版本；据作者说明场景代码没有改动，旧版本不在 git 中，无法逐行核对，独立复测的热延迟与吞吐中位数与本节相差不超过 5%。
 
 #### 7.1.2 已知问题与后续
 

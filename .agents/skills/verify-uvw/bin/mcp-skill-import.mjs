@@ -108,7 +108,7 @@ try {
   proof.metadata = imported.metadata;
   proof.assertions = "import-and-publication-passed";
   save("mr15-summary.json", proof);
-  console.log("PASS MR15 source read, draft review and browser publication. Run rail proof as documented in features/mcp.md.");
+  console.log("PASS MR15 source read, draft review and browser publication. Run rail proof as documented in features/mcp-skills-api.md.");
 } catch (error) {
   proof.error = error.message;
   throw error;

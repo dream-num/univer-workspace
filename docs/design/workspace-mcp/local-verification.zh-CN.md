@@ -251,7 +251,7 @@ $V mcp-allow-users <workspace-user-id> [<another-workspace-user-id> ...]
 命令先等待重建的 executor 健康，再重建 gateway，保证首次能力发现能看到执行层。不重建镜像，不重启 Workspace、Vite 或 renderer。失败时保留所选白名单，重试同一命令即可。
 `executor-allowed-user-ids` 与 `run.env` 一起保留以供审查；凭据仍只保存在 `home/` 并由 `down` 删除。
 
-MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp.md](../../../.agents/skills/verify-uvw/features/mcp.md#mb-deployment-and-per-account-tools)。
+MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp-production.md](../../../.agents/skills/verify-uvw/features/mcp-production.md#mb-deployment-and-per-account-tools)。
 MB1 比对七种 toolset 的显式有序列表，MB2 检查 instructions，MB3 用第二个非白名单用户验证 40 个纯 HTTP 工具与 unknown-tool 错误，MB4 用 PAT 完成 MX1 至 MX3，MB5 先验证 `/readyz` 为 200，再停止 executor 并通过 `$V mcp-gateway-restart` 仅重建 gateway，预期为 503 且命名 executor 检查；启动 executor 后十秒内恢复 200。已发现过兼容能力的 gateway 不因 executor 停止而未就绪，仍可服务 HTTP 工具。Workspace 的可选停机检查记录为未运行，因为 helper 没有独立的 server stop/restart 命令。
 若基线尚未合入该端点而返回 404，脚本记录 MB5 未运行，不能宣称就绪验收通过。
 
@@ -337,7 +337,7 @@ export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high
 
 **`renderer-call`（阶段 E）。** `verify-uvw renderer-call <label> screenshot|printPdf|lint|measureText < input.json` 在 executor 容器内用 `MCP_RENDERER_URL` 和内部令牌调用 renderer，保存 `evidence/<label>.json`，截图写 `<label>-<name>.png`，PDF 写 `<label>.pdf`。`bin/renderer-proof.mjs` 输出带中英文的小 Sheet 或 Doc 作为输入。`screenshot`、`print_pdf`、`lint` 和真实字体的 `compile_svg` 现已调用 renderer，这个命令用于直接驱动 renderer 的单个操作。
 
-**`renderer-restart`（阶段 E 验收）。** `verify-uvw renderer-restart [max-runtimes]` 只重建本次运行的 renderer 容器，把 `RENDERER_MAX_RUNTIMES` 设为参数（默认 2），等容器健康且启动时预热的第一个 runtime 就绪后返回。`bin/renderer-bench.mjs` 用它在不同池大小之间切换，测量方法见[渲染服务测量](../../../.agents/skills/verify-uvw/features/mcp.md#renderer-capacity-benchmark)，结果在[架构 7.1](architecture.zh-CN.md#71-渲染服务)。
+**`renderer-restart`（阶段 E 验收）。** `verify-uvw renderer-restart [max-runtimes]` 只重建本次运行的 renderer 容器，把 `RENDERER_MAX_RUNTIMES` 设为参数（默认 2），等容器健康且启动时预热的第一个 runtime 就绪后返回。`bin/renderer-bench.mjs` 用它在不同池大小之间切换，测量方法见[渲染服务测量](../../../.agents/skills/verify-uvw/references/mcp-benchmarks.md#renderer-capacity-benchmark)，结果在[架构 7.1](architecture.zh-CN.md#71-渲染服务)。
 
 ### 6.3 `mcp`
 
@@ -450,7 +450,7 @@ verify-uvw mcp-logs
 | MA5 | `--auth dev` 调用 `whoami` | 退出码 0，事件 `auth_kind` 为 `dev`，`client_id` 为 `dev` |
 | MO1 | opencode 只配置 MCP URL，通过浏览器授权后调用 `whoami` 和 `repo_list` | 未认证 POST 返回 401 和资源元数据 challenge；资源与授权服务器元数据匹配本次运行；授权页显示四个 scope；取消 `worktree:merge` 后 callback 只含 `read write publish`；opencode 输出 `Connected to ws`，run 退出码 0；两条工具事件的 `auth_kind` 为 `oauth`，`client_id` 等于 authorize URL 中动态注册的客户端，`user_id` 等于本次用户，`outcome` 为 `ok` |
 
-MO1 的完整 Bash 脚本位于 [MCP 旅程](../../../.agents/skills/verify-uvw/features/mcp.md)，放在
+MO1 的完整 Bash 脚本位于 [mcp-oauth-opencode.sh](../../../.agents/skills/verify-uvw/bin/mcp-oauth-opencode.sh)，放在
 MA5 后、M12 前。它在 `$RUN/home` 下新建临时目录，写入无 Authorization header 的 `ws`
 配置，并将 `XDG_DATA_HOME`、`XDG_CONFIG_HOME`、`XDG_STATE_HOME`、`XDG_CACHE_HOME`
 全部指向该目录。脚本选择空闲端口，通过 `opencode service set port <port>` 配置独立的托管服务，

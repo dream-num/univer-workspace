@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { credentialSecrets, findSecrets, redact, runSecrets } from './secrets.mjs';
+import { credentialSecrets, findSecrets, redact, redactSignIn, runSecrets } from './secrets.mjs';
 
 const pat = 'uvw_pat_3fJk-9a.B_c~d', session = 'c2Vzc2lvbi1zZWNyZXQtdmFsdWU';
 
@@ -37,6 +37,15 @@ test('challenges, placeholders, token shapes and ordinary tool arguments stay re
     assert.equal(redact(text), text);
     assert.deepEqual(findSecrets(text), []);
   }
+});
+
+test('a sign-in transcript also loses its OAuth flow values and colours, and keeps its challenge', () => {
+  const tool = JSON.stringify({ type: 'tool_use', input: { code: 'return tools["ws"].whoami();', state: 'private-state' }, output: 'ok' });
+  assert.deepEqual(JSON.parse(redactSignIn(tool)), { type: 'tool_use', input: { code: '[REDACTED]', state: '[REDACTED]' }, output: 'ok' });
+  assert.equal(redactSignIn('\x1b[32mGET /callback?code=c0de&state=s1&code_challenge=ch\x1b[0m'), 'GET /callback?code=[REDACTED]&state=[REDACTED]&code_challenge=[REDACTED]');
+  const challenge = 'WWW-Authenticate: Bearer resource_metadata="http://127.0.0.1:3930/.well-known/oauth-protected-resource/mcp"';
+  assert.equal(redactSignIn(challenge), challenge);
+  assert.equal(redactSignIn(`token ${pat} and run-secret-1`, ['run-secret-1']), 'token [REDACTED] and [REDACTED]');
 });
 
 test('a secret of the run is removed by value even when it has no recognisable shape', () => {

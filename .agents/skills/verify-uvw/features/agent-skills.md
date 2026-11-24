@@ -42,7 +42,7 @@ follow-up composer and a **Skills** section in the session rail.
 ## Driving it with agent-browser and uvw
 
 Use Bash in one persistent shell so the instance and mock processes survive. Run
-[MR1](mcp.md) before seeding custom skills. The commands below share one fresh run and
+[MR1](mcp-skills-api.md#mr1-skills-list-and-get-fallback) before seeding custom skills. The commands below share one fresh run and
 use distinct names for each journey. A journey that continues another session says so.
 Install and build the prerequisites in [the skill](../SKILL.md#launch) first.
 

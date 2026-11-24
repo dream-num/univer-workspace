@@ -29,7 +29,7 @@ in their browser only, saves nothing, and offers `Save my version` to copy the p
   `uvw html-view create --file … --space <space id> --name <name> --idempotency-key <key>`.
 - Browser: a repository's `Pages` tab (`/spaces/<id>?view=apps`, Repository theme), the Wiki file tree, or the
   page link. Agents create pages as drafts that the owner publishes at `/drafts/<id>`
-  ([MH3 in the MCP journeys](./mcp.md)).
+  ([MHV3 in HTML View drafts over MCP](./mcp-html-view.md#mhv3-save-retry-revise-and-read-back-the-pending-html-view-draft)).
 - Visitors open a shared page link; the page and each source Sheet need Link Sharing `viewer`.
 
 ## Driving it with agent-browser and uvw
