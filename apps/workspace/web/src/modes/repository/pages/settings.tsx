@@ -9,6 +9,15 @@ import { ApiError } from "../../../shared/api/errors";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Button, ConfirmDialog, Field, Input, Textarea, toast } from "../../../shared/ui";
+import type { components } from "../../../../../generated/http/schema.js";
+
+type SpaceProposals = components["schemas"]["SpaceProposals"];
+
+const PROPOSALS = {
+  members: ["settingsProposalsMembers", "settingsProposalsMembersDescription"],
+  accountable: ["settingsProposalsAccountable", "settingsProposalsAccountableDescription"],
+  anyone: ["settingsProposalsAnyone", "settingsProposalsAnyoneDescription"],
+} as const satisfies Record<SpaceProposals, readonly [string, string]>;
 
 export function RepositorySpaceSettingsPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();
@@ -237,6 +246,37 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
           {t("save")}
         </Button>
       </form>
+      {space.type === "team" ? (
+        <fieldset
+          className="grid gap-2"
+          aria-describedby="space-proposals-hint"
+          disabled={!canEdit || !space.publicRead || rename.isPending}
+        >
+          <legend className="mb-1.5 text-[13px] font-medium text-foreground">{t("settingsProposals")}</legend>
+          {Object.entries(PROPOSALS).map(([value, [label, description]]) => (
+            <label key={value} className="flex max-w-xl items-start gap-2 text-sm has-disabled:opacity-60">
+              <input
+                type="radio"
+                name="space-proposals"
+                value={value}
+                checked={space.proposals === value}
+                onChange={() => update({ proposals: value as SpaceProposals })}
+                aria-describedby={`space-proposals-${value}`}
+                className="mt-0.5 size-4 shrink-0 accent-primary"
+              />
+              <span className="grid gap-0.5">
+                <span>{t(label)}</span>
+                <span id={`space-proposals-${value}`} className="text-xs text-muted-foreground">
+                  {t(description)}
+                </span>
+              </span>
+            </label>
+          ))}
+          <p id="space-proposals-hint" className="text-[13px] text-muted-foreground">
+            {t(space.publicRead ? "settingsProposalsHint" : "settingsProposalsNeedsPublic")}
+          </p>
+        </fieldset>
+      ) : null}
       <section className="rd-danger-zone" aria-labelledby="settings-danger-heading">
         <h3 id="settings-danger-heading" className="mb-2 text-2xl leading-9 font-normal">
           {t("settingsDangerZone")}

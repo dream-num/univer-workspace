@@ -7,6 +7,7 @@ const UNCLAIMED_AGENT_MAX_FILES = 20;
 const UNCLAIMED_AGENT_MAX_TEAM_SPACES = 3;
 const UNCLAIMED_AGENT_MAX_FORKS = 3;
 const UNCLAIMED_AGENT_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const NON_MEMBER_MAX_OPEN_PROPOSALS = 3;
 
 /** What each action tells the ceilings about its target and its session. */
 export interface CeilingContexts {
@@ -14,6 +15,8 @@ export interface CeilingContexts {
   readonly createTeamSpace: { readonly held: number };
   /** `held` counts the forks the principal already owns. */
   readonly createFork: { readonly held: number };
+  /** `open` counts the principal's open proposals in a Team Space it is not a member of. */
+  readonly openProposal: { readonly open: number };
   readonly updateSpace: { readonly publicRead: boolean };
   readonly addTeamMember: { readonly member: PrincipalCategory; readonly role: AccessRole; readonly owner: PrincipalCategory };
   readonly searchUsers: Readonly<Record<never, never>>;
@@ -50,6 +53,12 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     code: "AGENT_QUOTA_EXCEEDED",
     message: `An unclaimed agent can own at most ${UNCLAIMED_AGENT_MAX_FORKS} forks.`,
     forbids: (principal, { held }) => principal === "agent_unclaimed" && held >= UNCLAIMED_AGENT_MAX_FORKS,
+  },
+  // A Space's `proposals` setting can admit readers who hold no role there, so it cannot vouch for their volume.
+  openProposal: {
+    code: "FORBIDDEN",
+    message: `Someone who is not a Space Member can have at most ${NON_MEMBER_MAX_OPEN_PROPOSALS} open proposals in a Team Space.`,
+    forbids: (_principal, { open }) => open >= NON_MEMBER_MAX_OPEN_PROPOSALS,
   },
   updateSpace: {
     code: "AGENT_NOT_ALLOWED",

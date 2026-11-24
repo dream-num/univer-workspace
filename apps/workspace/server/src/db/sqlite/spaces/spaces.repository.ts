@@ -46,15 +46,15 @@ export class SqliteSpacesRepository implements SpacesRepository {
     return this._database.transaction((database) => {
       assertTeamSpaceQuota(database, input.ownerUserId);
       const insert = database.prepare(`
-        INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
-        SELECT $id, 'team', $name, $slug, $publicRead, $ownerUserId, $createdAt, $createdAt
+        INSERT INTO spaces (id, type, name, slug, public_read, proposals, owner_user_id, created_at, updated_at)
+        SELECT $id, 'team', $name, $slug, $publicRead, $proposals, $ownerUserId, $createdAt, $createdAt
         WHERE NOT EXISTS (SELECT 1 FROM forks WHERE owner_user_id = $ownerUserId AND name = $slug)
         ON CONFLICT (owner_user_id, slug) WHERE slug IS NOT NULL DO NOTHING
       `);
       let slug = input.slug ?? input.slugBase;
       for (let attempt = 2; ; attempt += 1) {
         const result = insert.run({
-          id: input.id, name: input.name, slug, publicRead: Number(input.publicRead), ownerUserId: input.ownerUserId, createdAt: input.createdAt,
+          id: input.id, name: input.name, slug, publicRead: Number(input.publicRead), proposals: input.proposals, ownerUserId: input.ownerUserId, createdAt: input.createdAt,
         });
         if (result.changes) break;
         if (input.slugBase === undefined) return null;
@@ -80,7 +80,7 @@ export class SqliteSpacesRepository implements SpacesRepository {
       const assignments = ["updated_at = ?"];
       const values: (string | number)[] = [updatedAt];
       for (const [column, value] of [
-        ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug],
+        ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug], ["proposals", settings.proposals],
       ] as const) {
         if (value === undefined) continue;
         assignments.push(`${column} = ?`);

@@ -2,5 +2,5 @@ export { createSpacesRouter } from "./spaces.router.js";
 export type { SpacesRepository } from "./spaces.repository.js";
 export { createSpacesModule } from "./spaces.service.js";
 export type { SpacesModule } from "./spaces.service.js";
-export type { SpaceView } from "./spaces.types.js";
+export type { SpaceProposals, SpaceView } from "./spaces.types.js";
 export type { SpacePinsRepository } from "./space-pins.repository.js";

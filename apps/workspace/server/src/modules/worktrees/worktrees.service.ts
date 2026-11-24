@@ -54,6 +54,7 @@ interface WorktreeFacts {
   readonly author: boolean;
   readonly authorOrClaimer: boolean;
   readonly role: "owner" | "admin" | "editor" | "viewer" | null;
+  readonly proposes: boolean;
   readonly readsAll: boolean;
   readonly editsAll: boolean;
 }
@@ -341,7 +342,7 @@ export function createWorktreesModule(options: {
           input.teamSpaceId
         );
         if (!space || space.type !== "team") throw notFound();
-        if (!space.member) throw forbidden();
+        if (!space.capabilities.propose) throw forbidden();
       }
       const payload = {
         ...input,
@@ -992,6 +993,7 @@ async function worktreeCapabilities(
     // A claimer owns the agent's Space, so decides the agent's pull requests; only the author edits them.
     authorOrClaimer: Boolean(row.actor_owns_creator_space),
     role: row.actor_owns_team_space ? "owner" : row.actor_member_role,
+    proposes: Boolean(row.actor_proposes),
     readsAll,
     editsAll,
   };
@@ -1013,11 +1015,11 @@ function mayMerge(facts: WorktreeFacts): boolean {
 }
 
 /**
- * Proposing writes only the draft. A Team Worktree takes a proposal from any Space Member who can
- * read its Units; a User Worktree is its author's own, limited to what the author can edit.
+ * Proposing writes only the draft. A Team Worktree takes a proposal from anyone who may propose in
+ * its Space and can read its Units; a User Worktree is its author's own, limited to what the author can edit.
  */
 function mayPropose(facts: WorktreeFacts): boolean {
-  return facts.author && (facts.team ? facts.role !== null && facts.readsAll : facts.editsAll);
+  return facts.author && (facts.team ? facts.proposes && facts.readsAll : facts.editsAll);
 }
 
 const capabilityRules: { readonly [C in keyof WorktreeCapabilities]: (facts: WorktreeFacts) => boolean } = {
@@ -1128,7 +1130,7 @@ async function validateTarget(
   if (purpose === "propose" && worktree.kind === "team") {
     const space = await access.resolveSpace(userId, spaceId);
     if (!space) throw notFound();
-    if (!space.member) throw forbidden();
+    if (!space.capabilities.propose) throw forbidden();
     if (parentNodeId !== null && (await access.resolveNode(userId, parentNodeId))?.spaceId !== spaceId) throw notFound();
     return;
   }

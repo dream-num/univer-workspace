@@ -14,7 +14,7 @@ beforeEach(async () => {
   `);
   for (const id of ["alpha", "beta", "gamma"]) {
     await repositories.spaces.createTeamSpace({
-      id, name: id, slug: id, publicRead: false, ownerUserId: "owner", createdAt: 1,
+      id, name: id, slug: id, publicRead: false, proposals: "members", ownerUserId: "owner", createdAt: 1,
     });
   }
   pins = repositories.spacePins;

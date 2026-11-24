@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS spaces (
   public_read INTEGER NOT NULL DEFAULT 0 CHECK (public_read IN (0, 1)),
   description TEXT NOT NULL DEFAULT '',
   slug TEXT COLLATE NOCASE,
+  proposals TEXT NOT NULL DEFAULT 'members' CHECK (proposals IN ('members', 'accountable', 'anyone')),
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS spaces_personal_owner
@@ -779,7 +780,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 28;
+PRAGMA user_version = 29;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>

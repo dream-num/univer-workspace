@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type { SpaceListEntry, SpaceListScope } from "../../../modules/spaces/spaces.repository.js";
 import type { SpaceStar } from "../../../modules/spaces/spaces.types.js";
-import { ownsSpaceSql } from "../access/access.repository.js";
+import { ownsSpaceSql, proposesSql } from "../access/access.repository.js";
 
 type Connection = Pool | PoolClient;
 
@@ -47,8 +47,8 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
 
 const selectSpaceView = `
   SELECT spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId", ${owned} AS "owned",
-    spaces.public_read AS "publicRead", space_members.role AS "memberRole",
-    users.username AS "ownerUsername", spaces.description, spaces.slug
+    spaces.public_read AS "publicRead", space_members.role AS "memberRole", ${proposesSql("spaces", "$1")} AS "proposes",
+    users.username AS "ownerUsername", spaces.description, spaces.slug, spaces.proposals
   FROM spaces JOIN users ON users.id = spaces.owner_user_id
   ${memberJoin}`;
 

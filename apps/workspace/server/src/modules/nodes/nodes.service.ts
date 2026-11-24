@@ -260,6 +260,7 @@ function syntheticSpace(node: NodeAccess): SpaceAccess {
       createIssue: false,
       triageIssues: false,
       manageIssueLabels: false,
+      propose: false,
     },
   };
 }

@@ -22,10 +22,25 @@ export function spaceOwnerIdsSql(ownerIdsSql: string): string {
     UNION SELECT owner_user_id FROM agents WHERE owner_user_id IS NOT NULL AND user_id IN (${ownerIdsSql})`;
 }
 
+/**
+ * Who may open a proposal, a Team Worktree, in a Team Space: its owners, its members while it is not
+ * suspended, and the signed-in readers of a public one that its `proposals` setting admits.
+ */
+export function proposesSql(space: string, userId = "$userId"): string {
+  return `(${space}.type = 'team' AND (${ownsSpaceSql(`${space}.owner_user_id`, userId)} OR (
+    NOT ${ownerSuspendedSql(`${space}.owner_user_id`)} AND (
+      EXISTS (SELECT 1 FROM space_members AS proposer WHERE proposer.space_id = ${space}.id AND proposer.user_id = ${userId})
+      OR (${space}.public_read AND ${space}.proposals <> 'members' AND EXISTS (
+        SELECT 1 FROM users AS proposer WHERE proposer.id = ${userId} AND (
+          ${space}.proposals = 'anyone' OR proposer.kind = 'human'
+          OR EXISTS (SELECT 1 FROM agents AS claimed WHERE claimed.user_id = proposer.id AND claimed.owner_user_id IS NOT NULL))))))))`;
+}
+
 export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId",
   ${ownsSpaceSql("spaces.owner_user_id")} AS "owned",
-  spaces.public_read AS "publicRead", space_members.role AS "memberRole"`;
+  spaces.public_read AS "publicRead", space_members.role AS "memberRole",
+  ${proposesSql("spaces")} AS "proposes"`;
 
 export const spaceMemberJoin = `
   LEFT JOIN space_members
@@ -127,6 +142,17 @@ export async function assertForkQuota(client: PoolClient, userId: string): Promi
            (SELECT (owner_user_id IS NOT NULL)::integer FROM agents WHERE user_id = $1) AS requester_claimed,
            (SELECT COUNT(*)::integer FROM forks WHERE owner_user_id = $1) AS held`, [userId]);
   assertCeiling(requesterCategory(row!), "createFork", { held: row!.held });
+}
+
+/** Counted in the transaction that opens the next proposal, so concurrent opens cannot pass the cap. Members are not capped. */
+export async function assertProposalQuota(database: PostgresDatabase, userId: string, spaceId: string): Promise<void> {
+  const row = await database.prepare(`SELECT ${requesterColumns},
+    (SELECT COUNT(*)::integer FROM worktrees JOIN spaces ON spaces.id = worktrees.team_space_id
+      WHERE worktrees.team_space_id = $spaceId AND worktrees.creator_user_id = $userId AND worktrees.processed_at IS NULL
+        AND NOT ${ownsSpaceSql("spaces.owner_user_id")}
+        AND NOT EXISTS (SELECT 1 FROM space_members WHERE space_id = $spaceId AND user_id = $userId)) AS open`).get({ userId, spaceId }) as
+    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly open: number };
+  assertCeiling(requesterCategory(row), "openProposal", { open: row.open });
 }
 
 export class PostgresAccessRepository implements AccessRepository {

@@ -57,6 +57,7 @@ CREATE TABLE spaces (
   public_read BOOLEAN NOT NULL DEFAULT false,
   description TEXT NOT NULL DEFAULT '',
   slug TEXT,
+  proposals TEXT NOT NULL DEFAULT 'members' CHECK (proposals IN ('members', 'accountable', 'anyone')),
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX spaces_personal_owner

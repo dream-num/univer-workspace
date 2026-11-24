@@ -8,9 +8,9 @@
       Repeating the request with the same `name` and `upstreamSpaceId` returns the existing fork with
       `200`. A name that one of the owner's forks of another upstream, or one of the owner's Team Space
       slugs, already uses returns `409 SPACE_SLUG_TAKEN`. An upstream the caller cannot read, and a
-      Personal Space, return `404`. A caller who can read the upstream but is not its owner, the human
-      who claimed its agent owner, or one of its Space Members gets `403 FORBIDDEN`, because a fork
-      needs membership to propose. An unclaimed agent owns at most 3 forks (`403 AGENT_QUOTA_EXCEEDED`).
+      Personal Space, return `404`. A caller who can read the upstream but may not propose in it, see
+      `capabilities.propose` and the Space's `proposals` setting, gets `403 FORBIDDEN` with a message that
+      names the setting. An unclaimed agent owns at most 3 forks (`403 AGENT_QUOTA_EXCEEDED`).
     requestBody:
       required: true
       content:
@@ -150,8 +150,10 @@
       open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
       `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
       finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
-      Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. The
-      Unit's content is then written through the Worktree, as in any other Worktree.
+      Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. An owner
+      who may no longer propose in the upstream gets `403 FORBIDDEN`, and so does one who is not a Space Member
+      and already holds 3 open proposals there. The Unit's content is then written through the Worktree, as in
+      any other Worktree.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:

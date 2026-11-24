@@ -151,9 +151,10 @@ _Avoid_: User-space Worktree, Personal Worktree
 
 **Team Worktree**:
 A Worktree belonging to one Team Space whose visibility may be creator-private
-or shared with current Space Members. Any Space Member may create one from the
-Units they can read, so a Member without edit access proposes a change there and
-a Member with edit access merges it. Marking one ready shares it with the Space
+or shared with current Space Members. Anyone who may propose in the Space creates
+one from the Units they can read: any Space Member, and while the Space reads
+publicly, the readers its proposals setting admits. A proposer without edit access
+proposes a change there and a Member with edit access merges it. Marking one ready shares it with the Space
 when its author cannot merge it. Space Owners and Admins may reopen, discard or
 change the visibility of a Team Worktree, without gaining access to the draft
 content of a private one, and do not merge a private one someone else created.
@@ -163,8 +164,8 @@ _Avoid_: Space-scoped Worktree, Team branch
 A User's named view of a whole Team Space, its upstream. It is one product record
 that copies no Node, Resource or Unit, and only its owner sees it. Its name shares
 the owner's namespace with Team Space slugs. Only someone who can propose in the
-upstream (its owner, the human who claimed its agent owner, or a Space Member) may
-fork it. A fork's state is derived from its one open Team Worktree in the upstream.
+upstream (its owner, the human who claimed its agent owner, a Space Member, or a
+reader its proposals setting admits) may fork it. A fork's state is derived from its one open Team Worktree in the upstream.
 Deleting a fork leaves that Worktree and its history as an ordinary Team Worktree.
 _Avoid_: Copy, clone, branch
 

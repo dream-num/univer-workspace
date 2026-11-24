@@ -217,13 +217,13 @@ export function resolveStoredSpaceAccess(userId: string, row: StoredSpaceAccess)
     publicRead: row.publicRead,
     role,
     member,
-    capabilities: spaceCapabilities(role, { type: row.type, member }),
+    capabilities: spaceCapabilities(role, { type: row.type, member, proposes: row.proposes }),
   };
 }
 
 export function spaceCapabilities(
   role: AccessRole,
-  context: { readonly type: SpaceType; readonly member: boolean },
+  context: { readonly type: SpaceType; readonly member: boolean; readonly proposes: boolean },
 ): SpaceCapabilities {
   const team = context.type === "team";
   return {
@@ -235,6 +235,7 @@ export function spaceCapabilities(
     createIssue: team && context.member,
     triageIssues: team && context.member && role !== "viewer",
     manageIssueLabels: team && context.member && (role === "owner" || role === "admin"),
+    propose: context.proposes,
   };
 }
 

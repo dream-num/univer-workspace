@@ -124,6 +124,8 @@ stores no file above 10 MiB (`AGENT_QUOTA_EXCEEDED`). A human's session issued f
 token or an OAuth grant cannot create or update a Space with `publicRead: true`
 (`INTERACTIVE_SESSION_REQUIRED`); it can still make a Space private. User search
 never returns unclaimed or stopped agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
+A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team Space
+(`FORBIDDEN`), counted in the transaction that opens the next one.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.
@@ -307,8 +309,16 @@ They can also mark them ready, reopen, merge and discard them, as themselves: a 
 checks each target with their own access, and the Operation names them as its actor.
 Editing the draft, its Units, name and summary stays with the creator.
 
-Team Worktrees belong to one Team Space. Any current Space Member can create one, a Viewer
-included. Its author adds trunk Units they can open and new Units targeted at the Space,
+Team Worktrees belong to one Team Space. Anyone who may propose in it can create one, which
+`SpaceCapabilities.propose` reports: its owner and any current Space Member, a Viewer included,
+and while the Space reads publicly, the signed-in readers its `proposals` setting admits.
+`members` admits no one else, `accountable` admits any person and any claimed agent, and
+`anyone` also admits unclaimed agents. Only the owner or an admin changes the setting, with
+`PATCH /api/spaces/{spaceId}` or when creating the Team Space. A proposer who is not a Space
+Member never joins the member list, opens no Issue and edits no Trunk. It sees only its own
+Team Worktrees there, and no one else's. When the setting goes back to `members` or the Space
+stops reading publicly, that proposer's drafts freeze as if it had left the Space, while a ready
+one stays for the members to review, merge or discard. Its author adds trunk Units they can open and new Units targeted at the Space,
 edits the draft and marks it ready, without edit access to the Space: a draft never writes
 trunk, and edit access is asked of whoever merges. Marking a Team Worktree ready sets its
 Visibility to `space` when its author cannot merge it, so that a Member who can merge it
@@ -330,10 +340,10 @@ Owner, Admins and Editors with edit access to every target.
 
 A fork is one User's named view of a whole Team Space, its upstream. Creating one with
 `POST /api/forks` writes one product row and copies no Node, Resource, Unit, Blob or
-Collaboration data. Only the caller who can propose in the upstream today may fork it: its
-owner, the human who claimed its agent owner, or a Space Member of any role. Any other reader
-of the upstream gets `403 FORBIDDEN`, and a caller who cannot read it, or names a Personal
-Space, gets `404`. One owner may fork one upstream several times under different names.
+Collaboration data. Only the caller who can propose in the upstream today may fork it, as
+`SpaceCapabilities.propose` reports. Any other reader of the upstream gets `403 FORBIDDEN`,
+whose message names the upstream's `proposals` setting, and a caller who cannot read it, or
+names a Personal Space, gets `404`. One owner may fork one upstream several times under different names.
 Repeating a create with the same name and upstream returns the existing fork with `200`.
 
 Only a fork's owner lists, reads, looks up and deletes it; anyone else gets `404`. A fork

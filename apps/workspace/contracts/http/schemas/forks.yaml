@@ -62,7 +62,7 @@ CreateFork:
   properties:
     upstreamSpaceId:
       type: string
-      description: The Team Space to fork. The caller must be its owner, the human who claimed its agent owner, or a Space Member of any role.
+      description: The Team Space to fork. The caller must be allowed to propose in it, see `SpaceCapabilities.propose`.
     name:
       $ref: ./spaces.yaml#/SpaceSlug
 

@@ -108,6 +108,7 @@ export function migrateLegacyV0(database: DatabaseSync): void {
         CHECK (public_read IN (0, 1));
       ALTER TABLE spaces ADD COLUMN description TEXT NOT NULL DEFAULT '';
       ALTER TABLE spaces ADD COLUMN slug TEXT COLLATE NOCASE;
+      ALTER TABLE spaces ADD COLUMN proposals TEXT NOT NULL DEFAULT 'members' CHECK (proposals IN ('members', 'accountable', 'anyone'));
       ALTER TABLE worktrees ADD COLUMN number INTEGER;
       ALTER TABLE worktrees ADD COLUMN created_via TEXT CHECK (created_via IN ('browser', 'agent'));
       ALTER TABLE worktrees ADD COLUMN fork_id TEXT REFERENCES forks(id) ON DELETE SET NULL CHECK (fork_id IS NULL OR kind = 'team');
@@ -540,9 +541,9 @@ function validateMigrated(
   const version = database.prepare("PRAGMA user_version").get() as
     | { readonly user_version?: unknown }
     | undefined;
-  if (version?.user_version !== 28) {
+  if (version?.user_version !== 29) {
     throw new Error(
-      `Migrated database has user_version ${String(version?.user_version)} instead of 28.`
+      `Migrated database has user_version ${String(version?.user_version)} instead of 29.`
     );
   }
 }

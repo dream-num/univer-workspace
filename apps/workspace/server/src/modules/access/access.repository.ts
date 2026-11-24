@@ -36,6 +36,7 @@ export interface StoredSpaceAccess {
   readonly owned: boolean;
   readonly publicRead: boolean;
   readonly memberRole: Exclude<AccessRole, "owner"> | null;
+  readonly proposes: boolean;
 }
 
 export interface ResourceMappingRow {

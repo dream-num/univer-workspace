@@ -1,10 +1,11 @@
 import type { StoredSpaceAccess } from "../access/index.js";
-import type { SpaceStar } from "./spaces.types.js";
+import type { SpaceProposals, SpaceStar } from "./spaces.types.js";
 
 export interface SpaceListEntry extends StoredSpaceAccess {
   readonly ownerUsername: string;
   readonly description: string;
   readonly slug: string | null;
+  readonly proposals: SpaceProposals;
 }
 
 export type SpaceListScope = "mine" | "starred" | "explore";
@@ -13,6 +14,7 @@ export type CreateTeamSpaceInput = {
   readonly id: string;
   readonly name: string;
   readonly publicRead: boolean;
+  readonly proposals: SpaceProposals;
   readonly ownerUserId: string;
   readonly createdAt: number;
 } & (
@@ -25,6 +27,7 @@ export interface SpaceSettingsPatch {
   readonly slug?: string;
   readonly description?: string;
   readonly publicRead?: boolean;
+  readonly proposals?: SpaceProposals;
 }
 
 export interface SpacesRepository {
