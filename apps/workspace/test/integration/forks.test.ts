@@ -387,11 +387,12 @@ describe("pages through a fork", () => {
       const draft = await send(origin, "POST", "/api/html-view-drafts", { kind: "replace", ...page, html: html("Proposed"), sourceWorktreeId: worktree.id },
         agent.cookie, { "idempotency-key": randomUUID() });
       expect(draft.status).toBe(201);
+      const { draft: { id: draftId } } = (await draft.json()) as { draft: { id: string } };
 
       expect(await transition(origin, worktree.id, "ready", agent)).toBe("ready");
       expect(await worktreeView(origin, editor, worktree.id)).toMatchObject({ visibility: "space", units: [], capabilities: { merge: true } });
       expect((await expectError(open(), 409, "FORK_WORKTREE_NOT_DRAFT")).message).toMatch(/is ready/);
-      const merged = await send(origin, "POST", `/api/worktrees/${worktree.id}/merge`, undefined, editor.cookie, { "idempotency-key": randomUUID() });
+      const merged = await send(origin, "POST", `/api/worktrees/${worktree.id}/merge`, { pageDraftIds: [draftId] }, editor.cookie, { "idempotency-key": randomUUID() });
       expect({ status: merged.status, body: await merged.json() }).toMatchObject({
         status: 200, body: { worktree: { state: "merged" }, publishedPages: [{ name: "Page.univer.html" }] },
       });

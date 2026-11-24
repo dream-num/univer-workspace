@@ -45,7 +45,7 @@ export function createHtmlViewDraftsModule(options: {
   repository: HtmlViewDraftsRepository;
   access: AccessResolver;
   store: BlobStore;
-  worktrees: Pick<WorktreesModule, "get" | "holdReady">;
+  worktrees: Pick<WorktreesModule, "get">;
   users: Pick<IdentityModule, "findUsers">;
   now?: () => number;
 }) {
@@ -97,8 +97,9 @@ export function createHtmlViewDraftsModule(options: {
       throw error;
     }
   }
-  async function livePages(worktreeId: string, before = Infinity): Promise<DraftRow[]> {
-    return (await repository.pendingForWorktree(worktreeId)).filter((row) => row.expires_at > now() && row.updated_at <= before);
+  async function livePages(worktreeId: string, draftIds?: readonly string[]): Promise<DraftRow[]> {
+    return (await repository.pendingForWorktree(worktreeId))
+      .filter((row) => row.expires_at > now() && (draftIds === undefined || draftIds.includes(row.id)));
   }
   async function sourceWorktree(userId: string, worktreeId: string) {
     const worktree = await reviewable(userId, worktreeId);
@@ -184,8 +185,6 @@ export function createHtmlViewDraftsModule(options: {
               html: request.html, sourceWorktreeId: request.sourceWorktreeId ?? previous.source_worktree_id ?? undefined }
         : request;
       if (input.kind === "revise") throw new Error("Revision draft is missing.");
-      // Until this draft is pending, its pull request cannot turn ready, so a reviewer sees every page it merges.
-      using _hold = input.sourceWorktreeId === undefined ? undefined : await options.worktrees.holdReady(input.sourceWorktreeId);
       let row = await repository.findKey(userId, key.data);
       if (previous && !row) {
         requirePendingDraft(previous, now());
@@ -196,7 +195,6 @@ export function createHtmlViewDraftsModule(options: {
       if (source?.state === "discarded") throw draftConflict("Source pull request was discarded.");
       const left = previous?.source_worktree_id && previous.source_worktree_id !== input.sourceWorktreeId
         ? await sourceWorktree(userId, previous.source_worktree_id) : undefined;
-      // A reviewer must merge the pages they saw, so a pull request under review takes no page changes.
       for (const worktree of [source, left]) {
         if (worktree?.state === "ready" || worktree?.state === "merging")
           throw draftConflict(`Pull request #${worktree.number ?? worktree.id} is ${worktree.state}. Reopen it to change its pages.`);
@@ -323,19 +321,22 @@ export function createHtmlViewDraftsModule(options: {
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
     publish,
-    async writable(worktreeId: string, userId: string, before?: number): Promise<boolean> {
-      for (const row of await livePages(worktreeId, before)) if (!(await mayWrite(userId, row))) return false;
+    async pending(worktreeId: string, before = Infinity): Promise<string[]> {
+      return (await livePages(worktreeId)).filter((row) => row.updated_at <= before).map((row) => row.id);
+    },
+    async writable(worktreeId: string, userId: string, draftIds?: readonly string[]): Promise<boolean> {
+      for (const row of await livePages(worktreeId, draftIds)) if (!(await mayWrite(userId, row))) return false;
       return true;
     },
-    async foreign(worktreeId: string, before: number): Promise<string[]> {
+    async foreign(worktreeId: string, draftIds: readonly string[]): Promise<string[]> {
       const names: string[] = [];
-      for (const row of await livePages(worktreeId, before)) if (!(await mayWrite(row.author_user_id, row))) names.push(row.name);
+      for (const row of await livePages(worktreeId, draftIds)) if (!(await mayWrite(row.author_user_id, row))) names.push(row.name);
       return names;
     },
-    /** Publishes as the merger each draft that was pending before the merge began; a later one was never reviewed with it. */
-    async publishForWorktree(worktreeId: string, mergerId: string, before: number): Promise<PublishedPage[]> {
+    /** Publishes as the merger the drafts its merge fixed when it began; a draft pending later was never reviewed with it. */
+    async publishForWorktree(worktreeId: string, mergerId: string, draftIds: readonly string[]): Promise<PublishedPage[]> {
       const publishedPages: PublishedPage[] = [];
-      const rows = (await repository.pendingForWorktree(worktreeId)).filter((row) => row.updated_at <= before);
+      const rows = (await repository.pendingForWorktree(worktreeId)).filter((row) => draftIds.includes(row.id));
       for (const row of rows) {
         try {
           if (row.expires_at <= now()) throw draftConflict("Draft expired.");

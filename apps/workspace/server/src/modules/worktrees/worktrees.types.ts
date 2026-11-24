@@ -285,8 +285,6 @@ export interface WorktreesModule {
     unitId: string,
     input: unknown
   ): Promise<WorktreeChangesetSubmitResult>;
-  /** Keeps the Worktree from turning ready until the hold is disposed. */
-  holdReady(worktreeId: string): Promise<Disposable>;
   markReady(
     userId: string,
     worktreeId: string
@@ -300,7 +298,9 @@ export interface WorktreesModule {
     worktreeId: string,
     operationId: unknown,
     /** A person merging in the browser, not a CLI, PAT or OAuth session. */
-    browser?: boolean
+    browser?: boolean,
+    /** The request body, which may name the pending page drafts the merger reviewed. */
+    input?: unknown
   ): Promise<{
     readonly publishedPages: readonly PublishedPage[];
     readonly operation: WorktreeOperationView;

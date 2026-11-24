@@ -2507,9 +2507,11 @@ export interface paths {
         put?: never;
         /**
          * Merge Worktree Units and activate successful local Units.
-         * @description The merge also publishes, as the merger, every page draft that was pending when it began, so the merger
-         *     needs edit access to every Unit and page target. A page whose target changed since its draft is left
-         *     `conflicted` while the Units still merge.
+         * @description The merge also publishes, as the merger, the page drafts that were pending and unexpired when it began, so
+         *     the merger needs edit access to every Unit and to each of those page targets. The merge Operation records
+         *     their IDs, so a replay or an Operation retry publishes the same drafts, and a draft that turns pending later
+         *     waits for its author. A page whose target changed since its draft is left `conflicted` while the Units still
+         *     merge.
          */
         post: operations["mergeWorktree"];
         delete?: never;
@@ -4261,6 +4263,14 @@ export interface components {
         };
         WorktreeSummaryEnvelope: {
             worktree: components["schemas"]["WorktreeSummary"];
+        };
+        MergeWorktree: {
+            /**
+             * @description IDs of the drafts the merger reviewed in `GET /api/worktrees/{worktreeId}/html-view-drafts` with state
+             *     `pending` or `conflicted`, which for an unmerged pull request are its pending, unexpired drafts. Order does
+             *     not matter. Omit it when the merger did not review the pages.
+             */
+            pageDraftIds?: string[];
         };
         WorktreeMergeResponse: {
             operation: components["schemas"]["OperationView"];
@@ -8880,7 +8890,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MergeWorktree"];
+            };
+        };
         responses: {
             /** @description Merge attempt reached a stable result. */
             200: {
@@ -8905,9 +8919,12 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /**
-             * @description The Worktree state does not allow a merge, or `PAGE_REVIEW_REQUIRED`: a pending page's author cannot
-             *     write its target, so only a person signed in to the browser may merge. The message names the pages and
-             *     the pull request URL. Nothing changes.
+             * @description The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's author cannot write
+             *     its target, so only a person signed in to the browser who sends `pageDraftIds` may merge. The message
+             *     names the pages and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
+             *     merge would publish, so the merger must review the pages again. The message names the pull request URL.
+             *     A request that could get both gets `PAGE_REVIEW_REQUIRED`, which a newer review cannot clear outside the
+             *     browser. Nothing changes.
              */
             409: {
                 headers: {

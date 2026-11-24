@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { components } from "../../../../generated/http/schema.js";
 import { sessionQueryOptions } from "../auth";
+import { ApiError } from "../../shared/api/errors";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import {
   Alert,
@@ -103,11 +104,17 @@ export function WorktreeReviewPanel({
     : selectedView;
   const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
 
+  const pageList = useQuery({ ...worktreeHtmlViewDraftsQueryOptions(worktree.id), enabled: worktree.capabilities.review });
+  // The merge acts on every page listed pending or conflicted: it publishes the first and leaves the second conflicted.
+  const mergePages = pageList.data?.filter((draft) => draft.state === "pending" || draft.state === "conflicted");
+  const pagesToPublish = pageList.data?.filter((draft) => draft.state === "pending").length ?? 0;
+
   const removal = useToggleUnitRemoval(worktree.id);
   const action = useWorktreeLifecycle(worktree.id);
-  const onError = (error: Error) => toast.error(error.message);
-  const runAction = (value: ReviewAction) =>
-    action.mutate(value, {
+  const onError = (error: Error) =>
+    toast.error(error instanceof ApiError && error.code === "PAGES_CHANGED" ? t("pagesChangedReviewAgain") : error.message);
+  const runAction = (value: ReviewAction, pageDraftIds?: readonly string[]) =>
+    action.mutate({ action: value, pageDraftIds }, {
       onSuccess: ({ action: value, state, publishedPages }) => {
         if (value === "reopen" && state === "draft") {
           onSelectedViewChange?.("agent");
@@ -178,12 +185,12 @@ export function WorktreeReviewPanel({
       ) : worktree.capabilities.merge ? (
         <ConfirmDialog
           title={t("mergeConfirm")}
-          description={t("mergeDescription") + ((worktree.pendingPageDrafts ?? 0) > 0 ? ` ${t(worktree.pendingPageDrafts === 1 ? "mergePublishesPage" : "mergePublishesPages", { count: worktree.pendingPageDrafts ?? 0 })}` : "")}
+          description={t("mergeDescription") + (pagesToPublish > 0 ? ` ${t(pagesToPublish === 1 ? "mergePublishesPage" : "mergePublishesPages", { count: pagesToPublish })}` : "")}
           confirmText={t("confirmMerge")}
           cancelText={t("cancel")}
-          onConfirm={() => runAction("merge")}
+          onConfirm={() => runAction("merge", mergePages?.map((draft) => draft.id))}
           trigger={
-            <Button size="sm" disabled={action.isPending || mergeReviewPending}>
+            <Button size="sm" disabled={action.isPending || mergeReviewPending || mergePages === undefined}>
               <CheckCircle2 />
               {t("confirmMerge")}
             </Button>

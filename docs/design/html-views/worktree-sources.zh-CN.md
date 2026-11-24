@@ -205,7 +205,8 @@ S1 的验收：附录脚本的 A2 返回新的错误码和说明；在 `verify-u
 发布规则：
 
 - 来源 PR 未合并时，手动发布返回 409，草稿页显示"等待 PR #N 合并"，发布按钮不可用。
-- 每次合并都在完成后以合并者身份发布 merge Operation 创建前已 `pending` 的关联草稿，不分会话类型。
+- 合并开始时读取一次关联的 `pending` 且未过期的草稿，把这组草稿 ID 存进 merge Operation 的 payload（`pageDraftIds`）。
+  每次合并都在完成后以合并者身份发布这组草稿，不分会话类型；重放和 Operation 重试发布同一组。
   `decided_by` 是合并者，权限和配额算合并者的；create 草稿新建的页面，创建者仍是草稿作者。
   合并确认框已经告诉合并者会发布几个页面，所以合并这一下就是合并者的确认。
 - 合并权包含页面目标。合并者写不了某份待发布草稿的目标时，`capabilities.merge` 为 false，合并返回 403。
@@ -216,13 +217,16 @@ S1 的验收：附录脚本的 A2 返回新的错误码和说明；在 `verify-u
   消息列出页面和 PR 地址，什么都不改变。作者自己能写目标的草稿在任何合并中发布，包括持有 `worktree:merge`
   的 Agent 用令牌合并自己的 PR。这样"只有人发布页面"只约束作者自己发布不了的代码。
 - 上游页面在草稿之后被改过（ETag 不一致）时，只有这一页变为 `conflicted`，同一 PR 的 Sheet 照常合入。
-- PR ready 之后不会再出现新的 pending 草稿：同一 PR 的草稿接收与 mark ready 在进程内串行。合并只发布 merge Operation
-  创建前已 pending 的草稿，合并后才挂上的草稿由作者手动发布。
+- 评审 N，合入 N。Browser 合并带上评审面板列表里 `pending` 和 `conflicted` 草稿的 ID，它们就是这组草稿。
+  不一致时返回 409 `PAGES_CHANGED`，什么都不改变，Browser 刷新页面列表并提示重新评审。带 foreign 草稿的 PR，
+  Browser 合并不带这组 ID 时也返回 `PAGE_REVIEW_REQUIRED`。两者都适用时先返回 `PAGE_REVIEW_REQUIRED`。
+- PR 处于 `ready` 或 `merging` 时，草稿接收返回 409，但这项检查和 mark ready 之间没有锁，多副本部署时一份草稿仍可能在
+  PR ready 之后才变为 pending。它不在合并固定的那组里，不随合并发布，保持 pending，合并后由作者手动发布。
 - 自动发布挂在 `worktrees.service.ts` 的 `merge` 里，`executeReserved` 之后，这样首次合并、
-  重放已完成的 Operation 和恢复中断的合并都会执行它。它只选 `pending` 的关联草稿，重复执行结果不变。
+  重放已完成的 Operation 和恢复中断的合并都会执行它。它只选那组草稿里仍为 `pending` 的，重复执行结果不变。
   单份草稿发布失败（过期、配额、权限）只记录，不让合并失败，草稿保持原状态，作者可以在草稿页处理。
 - 合并响应多一个 `publishedPages`，列出这次发布的草稿 ID、名称和节点 ID，浏览器据此提示。
-  Worktree 摘要多一个 `pendingPageDrafts` 计数，合并确认框据此提示。
+  Worktree 摘要多一个 `pendingPageDrafts` 计数。合并确认框的页数来自评审面板的页面列表，和合并请求带上的草稿 ID 同源。
 
 改动分三个 PR，叠在 S1 之上：
 

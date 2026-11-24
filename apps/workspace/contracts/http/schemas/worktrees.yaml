@@ -533,6 +533,20 @@ WorktreeOperationResponse:
     worktree:
       $ref: "#/WorktreeSummary"
 
+MergeWorktree:
+  type: object
+  additionalProperties: false
+  properties:
+    pageDraftIds:
+      type: array
+      description: |
+        IDs of the drafts the merger reviewed in `GET /api/worktrees/{worktreeId}/html-view-drafts` with state
+        `pending` or `conflicted`, which for an unmerged pull request are its pending, unexpired drafts. Order does
+        not matter. Omit it when the merger did not review the pages.
+      items:
+        type: string
+        minLength: 1
+
 WorktreeMergeResponse:
   type: object
   additionalProperties: false

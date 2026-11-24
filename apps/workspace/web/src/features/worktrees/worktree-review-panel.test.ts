@@ -218,18 +218,55 @@ describe("Worktree continue editing", () => {
 });
 
 
-it.each([0, 1, 2, undefined])("announces only a positive pending page count (%s) in merge confirmation", (count) => {
+const listedPage = (id: string, state: string) => ({ id, name: `${id}.univer.html`, state, author: { id: "user-3", username: "eve", displayName: "Eve", avatarUrl: null } });
+
+it.each([0, 1, 2])("announces only a positive count (%s) of the listed pages a merge publishes", (count) => {
   const value = worktree(false);
   value.capabilities.merge = true;
-  if (count !== undefined) value.pendingPageDrafts = count;
+  value.pendingPageDrafts = 5;
+  state.pages = [...Array.from({ length: count }, (_, index) => listedPage(`draft-${index}`, "pending")), listedPage("old", "conflicted")];
   const html = renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
   expect(html).toContain("mergeDescription");
   if (count) expect(html).toContain(count === 1 ? "mergePublishesPage(1)" : "mergePublishesPages(2)");
   else expect(html).not.toContain("mergePublishesPage");
 });
 
+describe("merging the pages a person reviewed", () => {
+  it("waits for the page list before it offers the merge", () => {
+    const value = worktree(false);
+    value.capabilities.merge = true;
+    expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }))).toContain("disabled");
+    state.pages = [];
+    expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }))).not.toContain("disabled");
+  });
+
+  it("sends the listed pages the merge acts on", async () => {
+    const value = worktree(false);
+    value.capabilities.merge = true;
+    state.pages = [listedPage("draft-1", "pending"), listedPage("draft-2", "conflicted"), listedPage("draft-3", "expired"), listedPage("draft-4", "rejected")];
+    state.post.mockResolvedValue({ data: { worktree: { state: "merged" }, publishedPages: [] } });
+    renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+    state.clicks.get("confirmMerge")!();
+    await vi.waitFor(() => expect(state.success).toHaveBeenCalledWith("taskMerged"));
+    expect(state.post).toHaveBeenCalledWith("/api/worktrees/{worktreeId}/merge", expect.objectContaining({ body: { pageDraftIds: ["draft-1", "draft-2"] } }));
+  });
+
+  it("refreshes the page list and asks the person to review again when the pages changed", async () => {
+    const value = worktree(false);
+    value.capabilities.merge = true;
+    state.pages = [listedPage("draft-1", "pending")];
+    state.post.mockResolvedValue({ error: { error: { code: "PAGES_CHANGED", message: "The pages of this pull request changed since you reviewed it." } } });
+    renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+    state.clicks.get("confirmMerge")!();
+    await vi.waitFor(() => expect(state.error).toHaveBeenCalledWith("pagesChangedReviewAgain"));
+    expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["html-view-drafts", "worktree", "worktree-1"] });
+    expect(state.success).not.toHaveBeenCalled();
+  });
+});
+
 it.each([{ publishedPages: [] }, { publishedPages: [{ draftId: "draft-1", name: "Page", nodeId: "page-1" }] }, { publishedPages: [{ draftId: "draft-1", name: "Page", nodeId: "page-1" }, { draftId: "draft-2", name: "Page 2", nodeId: "page-2" }] }])("links to published pages only when merge returns them (%j)", async ({ publishedPages }) => {
   const value = worktree(false); value.capabilities.merge = true;
+  state.pages = [];
   state.post.mockResolvedValue({ data: { worktree: { state: "merged" }, publishedPages } });
   renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
   state.clicks.get("confirmMerge")!();

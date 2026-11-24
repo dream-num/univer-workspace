@@ -346,12 +346,18 @@ page binds must be in the pull request or readable by the draft's author when it
 otherwise `403`. The author of a Team pull request proposes a page in its Team Space as it
 proposes a Unit: reading the page, or its destination, is enough.
 
-Every merge publishes, as the merger, the drafts that were pending when it began. A new page
-keeps its author as creator. Whoever merges needs edit access to each page target as to each
-Unit, and `capabilities.merge` says so. A page whose target changed since its draft is left
-`conflicted`, and the Units still merge. When a page's author cannot write its target, only a
-person signed in to the browser merges the pull request. Any other session, CLI, PAT or OAuth,
-gets `409 PAGE_REVIEW_REQUIRED` naming the pages and the pull request URL, and nothing changes.
+A merge fixes the drafts that are pending and unexpired when it begins, records their IDs in its
+Operation, and publishes them as the merger. A replay or an Operation retry publishes the same
+drafts, and a draft that turns pending later is left to its author. A new page keeps its author
+as creator. Whoever merges needs edit access to each page target as to each Unit, and
+`capabilities.merge` says so. A page whose target changed since its draft is left `conflicted`,
+and the Units still merge. When a page's author cannot write its target, only a person signed in
+to the browser who sends `pageDraftIds` merges the pull request. Any other session, CLI, PAT or
+OAuth, and a browser merge without `pageDraftIds`, gets `409 PAGE_REVIEW_REQUIRED` naming the
+pages and the pull request URL, and nothing changes. `pageDraftIds` names the drafts the merger
+reviewed, those listed as `pending` or `conflicted`. When they differ from the drafts the merge
+fixed, it gets `409 PAGES_CHANGED` naming the pull request URL, and nothing changes. A request
+that could get both gets `PAGE_REVIEW_REQUIRED`.
 
 ## Forks
 
