@@ -48,7 +48,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull
   request, search and browse tools with uvw, including idempotency keys and preserved errors. MI12 submits an Issue
   over MCP, sends it back and accepts it in the browser. MI13 judges four merged pull requests, one of which deletes a
-  file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its claimer only. MP11
+  file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its claimer only. MI14 shows
+  each linked pull request's check results there, counting or not, and says when the repository declares none. MP11
   lists reviewable pull requests, and MP12 has two agents find their own work with prompts that carry no task. MP13 links a fork's
   pull request to an Issue and checks both sides in MCP, uvw and the browser. MP14 drives an
   agent to its budget of open pull requests and counts a merge in `whoami`. MP15 reports check results declared in

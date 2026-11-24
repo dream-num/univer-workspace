@@ -293,14 +293,19 @@ const CHECK_STATES = {
   missing: { label: "checkMissing", variant: "outline" },
 } as const;
 
-function PullRequestChecks({ worktreeId }: { readonly worktreeId: string }) {
+export function PullRequestChecks({ worktreeId, explainNone = false }: {
+  readonly worktreeId: string;
+  readonly explainNone?: boolean;
+}) {
   const { t } = useI18n();
   const checks = useQuery(worktreeChecksQueryOptions(worktreeId));
   if (checks.isError) return <p role="alert" className="m-0 border-t border-border px-4 py-3 text-sm text-destructive">{checks.error.message}</p>;
-  if (!checks.data?.length) return null;
+  const noneDeclared = explainNone && checks.data !== undefined && !checks.data.some((check) => check.declared);
+  if (!checks.data?.length && !noneDeclared) return null;
   return (
     <section aria-label={t("checks")} className="border-t border-border px-4 py-3">
       <h2 className="m-0 mb-2 text-xs font-semibold text-muted-foreground">{t("checks")}</h2>
+      {noneDeclared ? <p className="m-0 mb-2 text-sm text-muted-foreground">{t("checksNoneDeclared")}</p> : null}
       <ul className="m-0 grid list-none gap-2 p-0">
         {checks.data.map((check) => (
           <li key={check.name} className="grid gap-1 text-sm">

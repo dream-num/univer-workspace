@@ -809,7 +809,9 @@ checks. Anyone who may review a ready pull request reports a check with `PUT /ap
 `uvw pr check`, or the MCP `pr_check` tool. The server binds each result to the pull request's current content. A Trunk
 edit to one of its files, or a reopen that changes its content, leaves earlier results visible but out of date. A result
 counts when its reporter may merge the pull request. `GET /api/worktrees/{id}/checks` and MCP `pr_view` list every
-declared check and every result, and the pull request page shows them. Nothing blocks a merge on checks yet.
+declared check and every result. The pull request page shows them, and so does the Issue page's acceptance panel after
+each linked pull request the reader may review, saying so when the repository declares no checks. Nothing blocks a merge
+on checks yet.
 
 V31→V32 adds the empty table `worktree_checks`. On PostgreSQL the same step moves `workspace_product_schema` from
 version 11 to 12. Stop every old instance, start one V32 instance, and wait for its backup, migration and health checks

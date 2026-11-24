@@ -22,6 +22,9 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   fourth linked one that deletes a file. The run user judges and accepts it in the Issue page's acceptance panel,
   comparing every changed file before and after its merge, sees the deleted file by name as moved to Trash with no
   comparison, and sees the agent's later Link Sharing there, which a member does not.
+- MI14 has a claimed Editor agent and a claimed Viewer agent each report both declared checks on their own pull request
+  linked to one Issue. After both merge, the acceptance panel shows the Editor's results counting and the Viewer's as
+  not counting, and once `.agents/checks.md` is in Trash, says the repository declares no checks.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -47,7 +50,8 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `pr_check`,
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
-`whoami` and `pr_merge` as an agent, and MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`. A person
+`whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, and MI14 calls
+`unit_add`, `execute`, `pr_check` and `pr_merge`. A person
 judges an Issue's whole task in the `Acceptance` view of its page.
 
 ## Driving it with agent-browser and uvw
@@ -416,6 +420,83 @@ shows no outward action before the share, and accepting closes the Issue as comp
 panel lists `Notes Link Sharing on (Can view), set by` A under the Personal Space part, the narrow page has no
 horizontal scroll and its comparison shows both sides' cells, and E's panel says `Only the assignee and the user who
 claimed it can see this part.` while E's response has `personalSharing: null` and not the Notes Node ID.
+
+### MI14. Check results in the acceptance panel
+
+The run user O holds a Team Space with a Sales Sheet on Trunk and declares two checks in `.agents/checks.md`. A claimed
+Editor agent A and a claimed Viewer agent V each open a pull request linked to one Issue, and each reports both checks
+on its own ready pull request. A merges its own, and O merges V's. O's acceptance panel shows the checks after each
+pull request's files: A's count, V's do not. Then O moves `.agents/checks.md` to Trash, and the panel says the
+repository declares no checks. MI14 uses two `principal`s, which count toward the 5 agents per hour.
+
+```bash
+R="$O/acceptance-checks"
+$V cli mic-repo repo create acceptance-checks --name "Acceptance checks" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mic-repo.out")
+$V cli mic-folder space node create "$R" --name .agents --json
+printf '# Checks\n\n## totals-match\nB3 equals SUM(B2:B2).\n\n## header-unchanged\nRow 1 reads Region, Total.\n' > "$EVIDENCE/mic-checks.md"
+$V cli mic-checks blob upload --file "$EVIDENCE/mic-checks.md" --space "$T" --parent "$(jq -r .node.nodeId "$EVIDENCE/mic-folder.out")" --name checks.md --json
+$V cli mic-seed-pr pr create -R "$R" -t "Sales" --json
+WS=$(jq -r .id "$EVIDENCE/mic-seed-pr.out")
+$V cli mic-seed-unit unit create --worktree "$WS" --space "$R" --type sheet --name Sales --json
+U=$(jq -r .unit.unitId "$EVIDENCE/mic-seed-unit.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mic-seed-unit.out")
+$V cli mic-seed-exec execute --worktree "$WS" --unit "$U" --json -e 'const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange("A1:B3").setValues([["Region","Total"],["North",40],["Sum",null]]); ws.getRange("B3").setFormula("=SUM(B2:B2)");'
+$V cli mic-seed-ready pr ready "$(jq -r .number "$EVIDENCE/mic-seed-pr.out")" -R "$R" --json state
+$V cli mic-seed-merge pr merge "$(jq -r .number "$EVIDENCE/mic-seed-pr.out")" -R "$R" --json state
+$V principal checks-a mic-a
+$V principal checks-v mic-v
+$V mcp --as checks-a mic-claim-a claim '{}'
+$V mcp --as checks-v mic-claim-v claim '{}'
+```
+
+Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
+[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache. Then:
+
+```bash
+A=$(jq -r .agent.username "$EVIDENCE/principal-checks-a.json"); VA=$(jq -r .agent.username "$EVIDENCE/principal-checks-v.json")
+$V cli mic-member-a repo member add "$A" --role editor -R "$R" --json
+$V cli mic-member-v repo member add "$VA" --role viewer -R "$R" --json
+$V cli mic-issue issue create -R "$R" -t "Raise North and add South" -b "Raise North to 50 and add a South row in Sales. Keep the totals right." -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mic-issue.out")
+propose() {
+  $V mcp --as "checks-$1" "mic-$1-pr" pr_create "$(jq -nc --arg r "$R" --arg t "$2" --argjson n "$N" '{repo:$r,title:$t,issue:$n}')" >/dev/null
+  local w n; w=$(jq -r .id "$EVIDENCE/mic-$1-pr.out"); n=$(jq -r .number "$EVIDENCE/mic-$1-pr.out")
+  $V mcp --as "checks-$1" "mic-$1-add" unit_add "{\"worktree\":\"$w\",\"resource\":\"$RES\"}"
+  $V mcp --as "checks-$1" "mic-$1-exec" execute "$(jq -nc --arg w "$w" --arg u "$U" --arg c "const ws = univerAPI.getActiveWorkbook().getActiveSheet(); $3" '{worktree:$w,unit:$u,code:$c}')"
+  $V mcp --as "checks-$1" "mic-$1-ready" pr_ready "{\"repo\":\"$R\",\"number\":\"$n\"}"
+  for name in totals-match header-unchanged; do
+    $V mcp --as "checks-$1" "mic-$1-$name" pr_check "$(jq -nc --arg r "$R" --arg n "$n" --arg c "$name" --arg s "$4" '{repo:$r,number:$n,name:$c,state:"passed",summary:$s}')"
+  done
+}
+propose a "Raise North" 'ws.getRange("B2").setValue(50);' "A read B3 = 50 and row 1 on the draft."
+$V mcp --as checks-a mic-a-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$(jq -r .number "$EVIDENCE/mic-a-pr.out")\"}"
+propose v "Add South" 'ws.insertRowBefore(3); ws.getRange("A3:B3").setValues([["South",30]]); ws.getRange("B4").setFormula("=SUM(B2:B3)");' "V read B4 = 80 and row 1 on the draft."
+$V cli mic-o-merge pr merge "$(jq -r .number "$EVIDENCE/mic-v-pr.out")" -R "$R" --json state
+for who in a v; do
+  $V mcp --as "checks-$who" "mic-$who-view" pr_view "{\"repo\":\"$R\",\"number\":\"$(jq -r .number "$EVIDENCE/mic-$who-pr.out")\"}"
+done
+jq -e '.state == "merged" and ([.checks[] | .state] == ["passed", "passed"]) and all(.checks[].results[]; .current and .counts)' "$EVIDENCE/mic-a-view.out"
+jq -e '.state == "merged" and ([.checks[] | .state] == ["missing", "missing"]) and all(.checks[].results[]; .current and (.counts | not))' "$EVIDENCE/mic-v-view.out"
+```
+
+A merges before V adds Sales, so A's merge does not leave V's results out of date. In the run browser, signed in as O
+at 1440 × 900, open `$ORIGIN/spaces/$T/issues/$N`, choose `Acceptance`, and screenshot the page as `mic-panel.png` and
+the `Pull requests` section (`section[aria-label="Pull requests"].grid`) as `mic-checks.png`. Each card lists Sales with
+`Compare`, then `Checks`. `Add South` shows `totals-match` and `header-unchanged` each `Missing`, with
+`mic-v · Passed · Does not count ·` and V's summary. `Raise North` shows both `Passed`, with `mic-a · Passed ·` and A's
+summary and no label. At 390 × 844, check that `document.documentElement.scrollWidth` is 390 and screenshot the section
+as `mic-checks-narrow.png`. Back at 1440 × 900:
+
+```bash
+$V cli mic-trash-checks space node trash "$(jq -r .upload.nodeId "$EVIDENCE/mic-checks.out")" --json
+```
+
+Reload, choose `Acceptance`, and screenshot the section as `mic-none-declared.png`. Each card now reads `This repository
+declares no checks in .agents/checks.md.` and lists both reported names as `Not declared`, with the same results.
+
+Pass when every command exits as shown, both `jq` checks hold, the first screenshots label A's results as counting and
+V's as `Does not count` under the right pull request, the narrow page has no horizontal scroll, and the last screenshot
+says the repository declares no checks.
 
 ### MP1. Pull request create
 

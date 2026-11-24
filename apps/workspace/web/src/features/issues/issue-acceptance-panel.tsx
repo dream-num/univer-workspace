@@ -12,6 +12,7 @@ import { Avatar, Badge, Button, Spinner, toast } from "../../shared/ui";
 import { createComparisonUniver } from "../editor/comparison-univer";
 import { worktreeHtmlViewDraftsQueryOptions } from "../html-views/drafts/draft-queries";
 import {
+  PullRequestChecks,
   UnitChangeIcon,
   UnitTypeIcon,
   worktreeQueryOptions,
@@ -154,6 +155,7 @@ function AcceptancePull({ pull, spaceId }: { readonly pull: PullRequest; readonl
         )}
         {files.length > MAX_ROWS ? <Muted>{t("issueAcceptanceFilesBound", { count: files.length, shown: MAX_ROWS })}</Muted> : null}
       </div>
+      {worktree?.capabilities.review && pull.state !== "discarded" ? <PullRequestChecks worktreeId={pull.id} explainNone /> : null}
     </article>
   );
 }
