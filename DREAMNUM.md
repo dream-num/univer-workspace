@@ -62,13 +62,13 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   without rebuilding or promoting dependencies.
 
 - **Univer Workspace MCP** — the private remote gateway under `apps/mcp`, built on Client Core.
-  It exposes identity, repository, fork, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
+  It exposes identity, repository, repository member, fork, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
   Link Sharing, Facade API reference, Skills, and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
   them at Workspace for short-lived sessions; development session authentication is refused in production.
-  It lists `pr_merge` with `core` and never lists `repo_create` for an agent User. When the connection holds the
+  It lists `pr_merge` with `core`, and for an agent User also `repo_create`, `repo_edit` and the repository member tools. When the connection holds the
   `worktree:merge` scope, it tells the caller to merge its own verified work, and a person or a claimed agent to hand the
   pull request over instead when asked to or when a person must decide; without that scope it leaves merging to the user.
-  An agent shares its merged work, and an unclaimed agent also gets `claim` and a claim link in its `share` result. It runs
+  An agent shares its merged Personal Space work, and an unclaimed agent also gets `claim` and a claim link in its `share` result. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G.
   Contract: [MCP README](apps/mcp/README.md).

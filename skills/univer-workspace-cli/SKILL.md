@@ -109,8 +109,9 @@ repository checkout, guessed installation paths, or a different CLI version's AP
   Editor. With read access only you can still open a pull request in a Team repository, change it and
   mark it `uvw pr ready`: that shows it to the repository's members, and one who can edit merges it.
   Until a person claims a guest agent, nobody else can open the pull request in its own Space, so the agent
-  finishes the task itself: it merges its own pull request, turns on Link Sharing with
-  `uvw share <node-id> --link viewer`, and returns the file link and the claim link from the result.
+  finishes the task itself: it merges its own pull request, turns on Link Sharing for a file in its
+  Personal Space with `uvw share <node-id> --link viewer`, and returns the file link and the claim link
+  from the result. Link Sharing applies only to Personal Space files.
   A claimed agent hands off as above instead when the person who claimed it asked to review the work
   or the change needs a person's decision; that person merges it. The installed core Skill describes both.
 - When the user gives a file link, read the file with `--unit <file-link> --trunk`.

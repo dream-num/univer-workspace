@@ -23,7 +23,7 @@ export const expectedTools = {
     'export_markdown', 'compile_typst', 'compile_svg'
   ],
   'admin': [
-    'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node', 'pr_discard',
+    'repo_create', 'repo_edit', 'repo_member_list', 'repo_member_write', 'label_list', 'label_write', 'space_node', 'pr_discard',
     'resources_registries', 'resources_find', 'resources_export'
   ],
   'core,files': [
@@ -43,12 +43,12 @@ export const expectedTools = {
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
     'html_view_styles', 'html_view_save', 'html_view_read',
-    'html_view_draft_get', 'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node',
+    'html_view_draft_get', 'repo_create', 'repo_edit', 'repo_member_list', 'repo_member_write', 'label_list', 'label_write', 'space_node',
     'pr_discard', 'resources_registries', 'resources_find', 'resources_export'
   ],
   'files,admin': [
     'blob_get', 'blob_upload', 'blob_download', 'blob_replace', 'asset_download', 'compile_markdown',
-    'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit', 'label_list',
+    'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit', 'repo_member_list', 'repo_member_write', 'label_list',
     'label_write', 'space_node', 'pr_discard', 'resources_registries', 'resources_find',
     'resources_export'
   ],
@@ -60,7 +60,7 @@ export const expectedTools = {
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
     'html_view_styles', 'html_view_save', 'html_view_read',
     'html_view_draft_get', 'blob_get', 'blob_upload', 'blob_download', 'blob_replace', 'asset_download',
-    'compile_markdown', 'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit',
+    'compile_markdown', 'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit', 'repo_member_list', 'repo_member_write',
     'label_list', 'label_write', 'space_node', 'pr_discard', 'resources_registries',
     'resources_find', 'resources_export'
   ],
@@ -71,7 +71,7 @@ export const restrictedTools = [
   'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
   'file_upload_create', 'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create',
   'skill_draft_get', 'html_view_styles', 'html_view_read', 'html_view_draft_get', 'blob_get', 'blob_upload',
-  'blob_download', 'blob_replace', 'asset_download', 'repo_create', 'repo_edit', 'label_list', 'label_write',
+  'blob_download', 'blob_replace', 'asset_download', 'repo_create', 'repo_edit', 'repo_member_list', 'repo_member_write', 'label_list', 'label_write',
   'space_node', 'pr_discard', 'resources_registries', 'resources_find', 'resources_export'
 ];
 

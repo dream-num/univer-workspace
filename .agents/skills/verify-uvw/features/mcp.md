@@ -130,7 +130,7 @@ $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","pr_merge","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
-ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_discard","resources_registries","resources_find","resources_export"]'
+ADMIN='["repo_create","repo_edit","repo_member_list","repo_member_write","label_list","label_write","space_node","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
 jq -e --argjson want "$ADMIN" 'map(.name) == $want' "$EVIDENCE/mcp-tools-admin.out"
@@ -139,9 +139,9 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|repo_member_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|share|unit_(add|create)|file_upload_create|skill_draft_create|blob_upload|html_view_save|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
+    and all(.[] | select(.name | test("^(repo_edit|repo_member_write|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
 diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:43]' "$EVIDENCE/mcp-tools-all.out")
@@ -155,7 +155,7 @@ jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.pro
 
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
-destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`, `blob_replace`); the core list equals the
+destructive: `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard`, `blob_replace`); the core list equals the
 first 43 tools of `all`; the immediate-effect descriptions, the leave-to-the-user `pr_discard` description and the
 `pr_merge` description that defers to the server instructions are present; no tool description
 names `uvw`; the 12 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown

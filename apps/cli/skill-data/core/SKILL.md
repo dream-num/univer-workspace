@@ -370,7 +370,9 @@ logical operation; use a new or omitted key for an intentional second copy.
 
 ### Work through a fork
 
-Work through a fork when the user asks for one or gives you one. Pass the fork's name where a command
+Work through a fork when the user asks for one or gives you one. Before you fork, check
+`uvw repo view <owner>/<slug> --json capabilities`: `propose` says whether you may. Members may, and a
+public repository's `proposals` setting decides for anyone else. Pass the fork's name where a command
 takes `--worktree <id>`: `execute`, `unit list/add/create`, `import`, `inspect`, `outline`, `read`, `find`,
 `screenshot`, and `lint`. Other commands, and `unit create --from`, need the Worktree `id` from
 `uvw fork view <fork> --json worktree`, which exists after the fork's first write.
@@ -541,8 +543,10 @@ and the pull request stays `merging` or `merged`, run the same `pr merge` again 
 Until a person claims it, nobody else can open a guest agent's pull request, so a guest agent
 finishes the task itself. A claimed one (`uvw auth status --json` shows `"claimed": true`) hands
 off as above instead when the person who claimed it asked to review the work or the change needs
-a person's decision; that person merges it. Otherwise, after step 4, merge the pull request, turn
-on Link Sharing for the file, and return the link instead of the review URL:
+a person's decision; that person merges it. Otherwise, after step 4, merge the pull request. For a
+file in the agent's Personal Space, turn on Link Sharing for the file and return the link instead of
+the review URL. Link Sharing applies only to Personal Space files, so in a Team repository return the
+review URL:
 
 ```bash
 uvw pr merge <n> -R <username>/personal --json
@@ -571,7 +575,8 @@ repository; there is no stored default repository.
 | Intent                    | Commands                                                                    |
 | ------------------------- | --------------------------------------------------------------------------- |
 | Connect                   | `config set workspace.origin`, `auth login`, `auth guest`, `auth status`, `auth logout` |
-| List owned/joined repositories or view a public repository | `repo list`, `repo view <owner>/<slug>`, `repo create/edit/rename` |
+| List owned/joined repositories or view a public repository | `repo list`, `repo view <owner>/<slug>`, `repo create/edit/rename` (`--proposals members\|accountable\|anyone` decides who besides members may fork a public one) |
+| Give others access to a Team repository | `repo member list/add/edit/remove` (`--role admin\|editor\|viewer`; `repo view --json capabilities` shows `manageMembers`) |
 | Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`               |
 | Read and update Issues    | `issue list/view/create/edit/comment/close/reopen`, `label list/create/edit/delete`, `search issues` |
 | Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                                           |

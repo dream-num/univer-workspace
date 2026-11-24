@@ -20,7 +20,7 @@ export const forkCreateTool: ToolDefinition = {
   scope: "write",
   title: "Fork a Team repository",
   description:
-    "Fork a Team repository you are a member of, with any role: your own view of all its files, named <you>/<name>, that copies nothing. Pass that address as worktree to content tools and as repo to space_browse and space_find. The first write through it opens a pull request in the repository, and later writes join it. upstream.accessRole says whether you can merge it. Creating the same fork again returns it.",
+    "Fork a Team repository you may propose to, as capabilities.propose from repo_view says: a member may, and a public repository's proposals setting decides for anyone else. A fork is your own view of all its files, named <you>/<name>, that copies nothing. Pass that address as worktree to content tools and as repo to space_browse and space_find. The first write through it opens a pull request in the repository, and later writes join it. upstream.accessRole says whether you can merge it. Creating the same fork again returns it.",
   inputSchema,
   outputSchema: forkSchema,
   annotations: writeAnnotations,

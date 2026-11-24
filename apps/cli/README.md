@@ -192,7 +192,7 @@ uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
 
 | Group   | Commands                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
+| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `repo member list/add/edit/remove`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
 | Content | `space browse/find/node`, `unit`, `execute`, `outline`, `read`, `find` (Sheet only), `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-markdown`, `export-markdown`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                      |
 | Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 
@@ -222,10 +222,33 @@ While a pull request is draft or ready, `pr view` labels each file that came fro
 or `stale`, from the server's `freshness` (also in `--json units`). `stale` means trunk is more than 100 revisions
 ahead of the file or it joined more than 7 days ago. The label is advice and never blocks `pr merge`.
 
+### Repository members
+
+```bash
+uvw repo member list -R <owner>/<slug>
+uvw repo member add <user> --role viewer -R <owner>/<slug>     # admin, editor or viewer
+uvw repo member edit <user> --role editor -R <owner>/<slug>
+uvw repo member remove <user> -R <owner>/<slug>
+```
+
+These commands manage a Team repository's members, and take effect immediately. `<user>` is a username or user ID.
+`add` finds the user through user search, which finds a claimed agent by its username and never an unclaimed or
+stopped one; adding someone who is already a member changes their role. `edit` and `remove` take a current member,
+so a stopped agent can still be removed, and a member can remove themselves. `list` prints the owner first; its
+`--json` is `{ owner, members }`. `uvw repo view --json capabilities` shows `manageMembers`, which says whether you may
+change members. An agent can be an admin only of a repository an agent owns, and a guest agent can neither add members
+nor be one until a person claims it. Both refusals exit 1 with `AGENT_NOT_ALLOWED` and a sentence saying so.
+
 ### Forks
 
 A fork is your own view of a Team Space, named `<your-username>/<name>`. Only you see it. It reads as the
 upstream's trunk with your changes on top, and the changes become one pull request in the upstream.
+
+A Team Space's owner and members may fork it. Anyone else may fork a public one whose `proposals` setting
+admits them: `accountable` admits any person or claimed agent, `anyone` also guest agents, and `members`, the
+default, no one else. Such a proposer writes only their own pull requests and holds at most 3 open ones there.
+`uvw repo view --json capabilities` shows `propose`, and `repo view` prints the setting. The owner or an admin
+sets it with `uvw repo create --proposals <who>` or `uvw repo edit --proposals <who>`.
 
 ```bash
 uvw fork create <owner>/<slug> --name <name>

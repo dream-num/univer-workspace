@@ -16,7 +16,50 @@ export interface WorkspaceSpace {
   readonly fullName?: string | null;
   readonly owner?: { readonly id: string; readonly username: string };
   readonly publicRead?: boolean;
+  /** Who besides its members may fork the Team Space and propose; it applies only while `publicRead` is true. */
+  readonly proposals?: WorkspaceSpaceProposals;
   readonly slug?: string | null;
+  /** What the caller may do in the Space, on full Space views from a server that reports every one of them. */
+  readonly capabilities?: WorkspaceSpaceCapabilities;
+}
+
+const SPACE_CAPABILITIES = [
+  "browseRoot",
+  "createAtRoot",
+  "renameSpace",
+  "manageMembers",
+  "viewTrash",
+  "createIssue",
+  "triageIssues",
+  "manageIssueLabels",
+  "propose",
+] as const;
+export type WorkspaceSpaceCapabilities = { readonly [Name in (typeof SPACE_CAPABILITIES)[number]]: boolean };
+
+export const SPACE_PROPOSALS = ["members", "accountable", "anyone"] as const;
+export type WorkspaceSpaceProposals = (typeof SPACE_PROPOSALS)[number];
+
+export const TEAM_ROLES = ["admin", "editor", "viewer"] as const;
+export type WorkspaceTeamRole = (typeof TEAM_ROLES)[number];
+
+export interface WorkspaceTeamUser {
+  readonly displayName: string;
+  readonly id: string;
+  readonly username: string;
+}
+
+export interface WorkspaceTeamMember {
+  readonly createdAt: string;
+  readonly grantedBy: WorkspaceTeamUser;
+  readonly role: WorkspaceTeamRole;
+  readonly updatedAt: string;
+  readonly user: WorkspaceTeamUser;
+}
+
+/** A Team Space's owner and members. The owner is never one of the members. */
+export interface WorkspaceTeamMembers {
+  readonly members: readonly WorkspaceTeamMember[];
+  readonly owner: WorkspaceTeamUser;
 }
 
 export interface WorkspaceResourceCapabilities {
@@ -151,6 +194,9 @@ export function parseSpace(value: unknown): WorkspaceSpace {
   const owner = value["owner"];
   const hasOwner =
     isWorkspaceRecord(owner) && typeof owner["id"] === "string" && typeof owner["username"] === "string";
+  const capabilities = value["capabilities"];
+  const hasCapabilities =
+    isWorkspaceRecord(capabilities) && SPACE_CAPABILITIES.every((name) => typeof capabilities[name] === "boolean");
   return {
     id: value["id"],
     name: value["name"],
@@ -165,8 +211,53 @@ export function parseSpace(value: unknown): WorkspaceSpace {
       : {}),
     ...(hasOwner ? { owner: { id: owner["id"] as string, username: owner["username"] as string } } : {}),
     ...(typeof value["publicRead"] === "boolean" ? { publicRead: value["publicRead"] } : {}),
+    ...(SPACE_PROPOSALS.includes(value["proposals"] as WorkspaceSpaceProposals)
+      ? { proposals: value["proposals"] as WorkspaceSpaceProposals }
+      : {}),
     ...(value["slug"] === null || typeof value["slug"] === "string" ? { slug: value["slug"] } : {}),
+    ...(hasCapabilities
+      ? {
+          capabilities: Object.fromEntries(
+            SPACE_CAPABILITIES.map((name) => [name, capabilities[name]]),
+          ) as WorkspaceSpaceCapabilities,
+        }
+      : {}),
   };
+}
+
+export function parseTeamMembers(value: Record<string, unknown>): WorkspaceTeamMembers {
+  if (!Array.isArray(value["members"])) throw invalidResponse("Workspace response is missing Team members");
+  return { owner: parseTeamUser(value["owner"]), members: value["members"].map(parseTeamMember) };
+}
+
+export function parseTeamMember(value: unknown): WorkspaceTeamMember {
+  if (
+    !isWorkspaceRecord(value) ||
+    !(TEAM_ROLES as readonly unknown[]).includes(value["role"]) ||
+    typeof value["createdAt"] !== "string" ||
+    typeof value["updatedAt"] !== "string"
+  ) {
+    throw invalidResponse("Workspace response contains an invalid Team membership");
+  }
+  return {
+    user: parseTeamUser(value["user"]),
+    role: value["role"] as WorkspaceTeamRole,
+    grantedBy: parseTeamUser(value["grantedBy"]),
+    createdAt: value["createdAt"],
+    updatedAt: value["updatedAt"],
+  };
+}
+
+function parseTeamUser(value: unknown): WorkspaceTeamUser {
+  if (
+    !isWorkspaceRecord(value) ||
+    typeof value["id"] !== "string" ||
+    typeof value["username"] !== "string" ||
+    typeof value["displayName"] !== "string"
+  ) {
+    throw invalidResponse("Workspace response contains an invalid Team member User");
+  }
+  return { displayName: value["displayName"], id: value["id"], username: value["username"] };
 }
 
 function isAccessRole(value: unknown): value is WorkspaceAccessRole {

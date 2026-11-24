@@ -3,8 +3,11 @@ import {
   createRepo,
   repoEditPatch,
   selectRepos,
+  SPACE_PROPOSALS,
+  TEAM_ROLES,
   type WorkspaceSpace,
   type WorkspaceSpaceFeature,
+  type WorkspaceTeamMember,
 } from "@univerjs/univer-workspace-client-core/product";
 import {
   emit,
@@ -19,9 +22,16 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 export const REPO_JSON_FIELDS = [
   "id", "name", "type", "accessRole", "affiliation", "description", "fullName", "owner", "publicRead", "slug",
+  "proposals", "capabilities",
 ] as const satisfies readonly (keyof WorkspaceSpace)[];
 
+const MEMBER_JSON_FIELDS = ["user", "role", "grantedBy", "createdAt", "updatedAt"] as const satisfies
+  readonly (keyof WorkspaceTeamMember)[];
+
 const flag = (parameter: string) => `--${parameter}`;
+const PROPOSALS_HELP =
+  "who besides members may fork and propose while it is public: members, accountable (any person or claimed agent) or anyone";
+const proposalsOf = (value: string) => oneOf(value, SPACE_PROPOSALS, "--proposals");
 
 export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
   const root = new Command("repo").description(
@@ -71,6 +81,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
         [
           `${nameOf(space)}  (${space.name})`,
           `${visibility(space)} ${space.type ?? "space"}, your role: ${space.accessRole ?? "unknown"}, ${space.starCount} stars`,
+          ...(space.type === "team" && space.proposals !== undefined ? [`proposals: ${space.proposals}`] : []),
           `id: ${space.id}`,
           ...(space.description ? ["", space.description] : []),
         ].join("\n"),
@@ -83,11 +94,12 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .option("--name <name>", "display name (default: the slug)")
     .option("--description <text>", "short plain-text description")
     .option("--public", "let anyone with the link read it")
+    .option("--proposals <who>", PROPOSALS_HELP)
     .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
         slug: string,
-        options: JsonFieldsOption & { description?: string; name?: string; public?: boolean },
+        options: JsonFieldsOption & { description?: string; name?: string; proposals?: string; public?: boolean },
       ) => {
         const space = await executeCommand(create, async () => {
           return await createRepo(
@@ -97,6 +109,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
               ...(options.description === undefined ? {} : { description: options.description }),
               ...(options.name === undefined ? {} : { name: options.name }),
               ...(options.public === true ? { public: true } : {}),
+              ...(options.proposals === undefined ? {} : { proposals: proposalsOf(options.proposals) }),
             },
             flag,
           );
@@ -106,16 +119,17 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     );
 
   const edit = new Command("edit")
-    .description("Change a repository's display name, description or visibility")
+    .description("Change a repository's display name, description, visibility or proposals setting")
     .argument("[ref]", "owner/slug, unique bare slug from repo list, Space ID or URL (default: $UVW_REPO)")
     .option("--name <name>")
     .option("--description <text>", "plain text; an empty string clears it")
     .option("--visibility <visibility>", "public or private")
+    .option("--proposals <who>", PROPOSALS_HELP)
     .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
         ref: string | undefined,
-        options: JsonFieldsOption & { description?: string; name?: string; visibility?: string },
+        options: JsonFieldsOption & { description?: string; name?: string; proposals?: string; visibility?: string },
       ) => {
         const space = await executeCommand(edit, async () => {
           const patch = repoEditPatch(
@@ -125,8 +139,9 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
               ...(options.visibility === undefined
                 ? {}
                 : { visibility: oneOf(options.visibility, ["public", "private"], "--visibility") }),
+              ...(options.proposals === undefined ? {} : { proposals: proposalsOf(options.proposals) }),
             },
-            ["name", "description", "visibility"],
+            ["name", "description", "visibility", "proposals"],
             flag,
           );
           const { spaceId } = await context.repo(ref);
@@ -154,7 +169,69 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .addCommand(view)
     .addCommand(create)
     .addCommand(edit)
-    .addCommand(rename);
+    .addCommand(rename)
+    .addCommand(createMemberCommand(spaces, context));
+}
+
+function createMemberCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
+  const member = new Command("member").description(
+    "Manage a Team repository's members; needs capabilities.manageMembers from repo view --json",
+  );
+  const spaceId = async (options: { readonly repo?: string }) => (await context.repo(options.repo)).spaceId;
+  const role = (value: string) => oneOf(value, TEAM_ROLES, "--role");
+
+  const list = new Command("list")
+    .description("List the owner and the members with their roles")
+    .option(...REPO_OPTION)
+    .addOption(jsonFieldsOption(["owner", "members"]))
+    .action(async (options: JsonFieldsOption & { repo?: string }) => {
+      const team = await executeCommand(list, async () => await spaces.members(await spaceId(options)));
+      emit(
+        list,
+        options,
+        team,
+        table([
+          [team.owner.username, "owner"],
+          ...team.members.map((item) => [item.user.username, item.role]),
+        ]),
+      );
+    });
+
+  const add = new Command("add")
+    .description("Add a user, named by username or user ID, with a role")
+    .argument("<user>")
+    .requiredOption("--role <role>", TEAM_ROLES.join(", "))
+    .option(...REPO_OPTION)
+    .addOption(jsonFieldsOption(MEMBER_JSON_FIELDS))
+    .action(async (user: string, options: JsonFieldsOption & { repo?: string; role: string }) => {
+      const added = await executeCommand(add, async () =>
+        await spaces.addMember(await spaceId(options), user, role(options.role)));
+      emit(add, options, added, `Added ${added.user.username} as ${added.role}`);
+    });
+
+  const edit = new Command("edit")
+    .description("Change a member's role")
+    .argument("<user>")
+    .requiredOption("--role <role>", TEAM_ROLES.join(", "))
+    .option(...REPO_OPTION)
+    .addOption(jsonFieldsOption(MEMBER_JSON_FIELDS))
+    .action(async (user: string, options: JsonFieldsOption & { repo?: string; role: string }) => {
+      const edited = await executeCommand(edit, async () =>
+        await spaces.editMember(await spaceId(options), user, role(options.role)));
+      emit(edit, options, edited, `${edited.user.username} is now ${edited.role}`);
+    });
+
+  const remove = new Command("remove")
+    .description("Remove a member, or leave the repository yourself")
+    .argument("<user>")
+    .option(...REPO_OPTION)
+    .addOption(jsonFieldsOption(["removed"]))
+    .action(async (user: string, options: JsonFieldsOption & { repo?: string }) => {
+      const removed = await executeCommand(remove, async () => await spaces.removeMember(await spaceId(options), user));
+      emit(remove, options, removed, `Removed ${removed.removed}`);
+    });
+
+  return member.addCommand(list).addCommand(add).addCommand(edit).addCommand(remove);
 }
 
 /** `owner/slug`, falling back to the ID for a Team Space created before slugs existed. */

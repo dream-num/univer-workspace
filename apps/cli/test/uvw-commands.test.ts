@@ -206,6 +206,29 @@ describe("uvw repository and Issue commands", () => {
     });
   });
 
+  it("sets who may propose on create and edit, and shows it in view", async () => {
+    const { repoContext } = context();
+    const proposing = { ...teamSpace, type: "team", publicRead: true, proposals: "accountable" };
+    const create = vi.fn(async () => proposing);
+    const update = vi.fn(async () => proposing);
+    const spaces = {
+      create,
+      get: vi.fn(async () => proposing),
+      getStar: vi.fn(async () => ({ starCount: 0, starred: false })),
+      update,
+    } as unknown as WorkspaceSpaceFeature;
+    const command = createRepoCommand(spaces, repoContext);
+
+    await run(command, ["create", "docs", "--public", "--proposals", "accountable"]);
+    expect(create).toHaveBeenCalledWith({ name: "docs", publicRead: true, proposals: "accountable", slug: "docs" });
+    expect(JSON.parse(await run(command, ["edit", "alice/docs", "--proposals", "anyone", "--json", "proposals"])))
+      .toEqual({ proposals: "accountable" });
+    expect(update).toHaveBeenCalledWith("space-1", { proposals: "anyone" });
+    await expect(run(command, ["edit", "alice/docs", "--proposals", "everyone"])).rejects.toMatchObject({ exitCode: 1 });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(await run(command, ["view", "alice/docs"])).toContain("proposals: accountable");
+  });
+
   it("uses affiliation for @me, falls back on older servers, and exposes it in JSON", async () => {
     const { repoContext } = context();
     const spaces = {

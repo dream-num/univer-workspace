@@ -87,8 +87,8 @@ test('MB expectations cover all combinations and exclude renderer tools', () => 
     assert.equal(new Set(names).size, names.length);
     if (sets !== 'all') assert.deepEqual(names, expectedTools.all.filter(name => sets.split(',').some(set => expectedTools[set].includes(name))));
   }
-  assert.equal(expectedTools.all.length, 60);
-  assert.equal(restrictedTools.length, 47);
+  assert.equal(expectedTools.all.length, 62);
+  assert.equal(restrictedTools.length, 49);
   assert(restrictedTools.every(name => expectedTools.all.includes(name)));
   assert(!restrictedTools.includes('execute'));
 });

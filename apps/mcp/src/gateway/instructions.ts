@@ -59,7 +59,7 @@ export function buildServerInstructions(
             : [
                 ...(has("share")
                   ? [
-                      "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
+                      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.",
                     ]
                   : []),
                 principal === "agent_unclaimed"

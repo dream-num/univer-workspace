@@ -52,7 +52,7 @@ Exceptions:
 
 Toolsets:
 
-- admin: `repo_create`, `repo_edit`, `space_node`, `label_list`, `label_write`, `pr_discard`, `resources_registries`, `resources_find`, `resources_export`.
+- admin: `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write`, `space_node`, `label_list`, `label_write`, `pr_discard`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, core also lists `repo_create`, `repo_edit` and both member tools.
 - files: `blob_get`, `blob_upload`, `blob_download`, `blob_replace`, `asset_download`, `compile_markdown`, `export_markdown`, `compile_svg`, `compile_typst`, `print_pdf`, `lint`.
 
 Unavailable operations:
@@ -320,6 +320,8 @@ change depends on still holds, and after merging read the result back from trunk
 `stale` (more than 100 revisions behind, or added more than 7 days ago): redo the
 work in a new pull request, then give the user the stale one's link and say it can
 be discarded. Do not discard it unless they ask. Freshness never blocks a merge.
+`share` works only on files in a Personal Space. For a Team repository, return the
+pull request link instead.
 An agent identity that returns a `share` url also says who can open it, from
 `access`. While unclaimed, it also gives the user the `claimUrl` from `share`, or
 from `claim`.

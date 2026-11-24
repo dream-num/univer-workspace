@@ -105,15 +105,22 @@ export {
   type WorkspaceShare,
   type WorkspaceShareLink,
 } from "./share.js";
-export type {
-  WorkspaceAccessRole,
-  WorkspaceBlobResource,
-  WorkspaceLinkSharing,
-  WorkspaceNode,
-  WorkspaceNodeSummary,
-  WorkspaceSpace,
-  WorkspaceTrashBatch,
-  WorkspaceUnitType,
+export {
+  SPACE_PROPOSALS,
+  TEAM_ROLES,
+  type WorkspaceAccessRole,
+  type WorkspaceBlobResource,
+  type WorkspaceLinkSharing,
+  type WorkspaceNode,
+  type WorkspaceNodeSummary,
+  type WorkspaceSpace,
+  type WorkspaceSpaceCapabilities,
+  type WorkspaceSpaceProposals,
+  type WorkspaceTeamMember,
+  type WorkspaceTeamMembers,
+  type WorkspaceTeamRole,
+  type WorkspaceTrashBatch,
+  type WorkspaceUnitType,
 } from "./space-model.js";
 export { WorkspaceBlobFeature } from "./blob.js";
 export { WorkspaceUnitFeature, worktreeUnits } from "./unit.js";
