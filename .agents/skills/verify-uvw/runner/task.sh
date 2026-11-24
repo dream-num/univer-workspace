@@ -11,7 +11,9 @@ rm -rf /tmp/verify-uvw /tmp/verify-uvw-*
 # up links each run's evidence/ and logs/ to $out/runs/<run>/ on the host, including runs a recipe starts under its own root.
 export VERIFY_UVW_EVIDENCE_ROOT=$out/runs
 $V brief --own "$task" "$feature" "$@" >"$out/brief.txt" || exit 3
-timeout 1800 claude -p "$(cat "$out/brief.txt")" --output-format stream-json --verbose --max-turns 150 \
+# claude -p exits only after its background tasks end, so a server the verifier started as one held a finished task
+# until the timeout. Without them it starts such servers with &, which outlive the session.
+CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 timeout 1800 claude -p "$(cat "$out/brief.txt")" --output-format stream-json --verbose --max-turns 150 \
   --dangerously-skip-permissions >"$out/transcript.jsonl" 2>"$out/claude.stderr"
 echo $? >"$out/claude.exit"
 # secret-check goes before down, which deletes the run's secret values; skip each root's current symlink so no run is downed early.
