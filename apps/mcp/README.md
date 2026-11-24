@@ -276,7 +276,11 @@ and the matching owner/slug candidates when available.
 | --- | --- | --- |
 | `whoami` | None | `{ origin, subject: { id, name } }` |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
-| `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL |
+| `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
+| `fork_create` | Required `repo` (a Team repository the caller is a member of, with any role), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. A non-member gets `FORBIDDEN`, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |
+| `fork_list` | None | `{ forks: [...] }`, the caller's own forks |
+| `fork_view` | Required `fork` (`<owner>/<name>` or fork ID) | Fork. Another user's fork is `NOT_FOUND` |
+| `fork_delete` | Required `fork` | `{ fork, worktree }`. Deletes only the fork. Its open pull request, `worktree`, stays an ordinary pull request of the upstream |
 | `issue_list` | Required `repo`; optional `state` (default `open`), `labels`, `assignee`, `author`, `search`, `limit` (default 30) | `{ issues: [...] }` |
 | `issue_view` | Required `repo`, `number` (`12`, `#12` or Issue URL); optional `comments` | Issue, plus `timeline` when `comments` is true |
 | `issue_create` | Required `repo`, `title`; optional `body`, `labels`, `assignees`, `nodes` | Issue |
@@ -291,13 +295,13 @@ and the matching owner/slug candidates when available.
 | `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Needs edit access to every changed file: the author, the person who claimed the authoring agent, or the Owner, an Admin or an Editor of a Team pull request visible to its repository. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, or anyone who may merge it |
 | `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
-| `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |
-| `space_find` | Required `repo`, `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
+| `space_browse` | Required `repo` (a repository or a fork address); optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }`. A fork lists its upstream without the files its pull request removes and with the files it creates; a created file's `url` opens it in the pull request |
+| `space_find` | Required `repo` (a repository or a fork address), `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
 | `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt?, access? }`. `access` says who can open the link and, while Link Sharing is off, the next step the caller can take; the wording follows the caller, not the owner, so a person reading the file of an agent they claimed gets a person's step. The text content repeats these lines. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. A person's token session can read but not write: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error asks the user to share in the browser and gives the file `url`. A link of another origin is `workspace-origin-mismatch`. For an unclaimed agent the result also has `claimUrl` and `claimHint`, one sentence telling the agent to give the link to the user so they can keep the file; a Workspace that cannot make a claim code leaves both out |
 | `claim` | None. Listed only for an unclaimed agent | `{ claimUrl, expiresAt }`: the `<identity origin>/claim/<code>` page where a person signs in and claims the agent. The code works once, for 10 minutes. Scope `publish`, because the person who claims becomes an owner of the agent's files |
-| `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
+| `unit_list` | Required `worktree` (Worktree ID or fork address) | `{ units: [...] }`, each with the pull request page `url`. A clean fork lists none |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
-| `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `from` (a file link or Node ID of a file the caller can open), `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit. With `from` the Unit is a copy of that file with its content and images, `type` must be its type, and the merged file records it as its source. An unreadable `from` is `workspace-not-found` |
+| `unit_create` | Required `worktree`, `space` (a fork address names its upstream), `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `from` (a file link or Node ID of a file the caller can open; not with a fork address), `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit. With `from` the Unit is a copy of that file with its content and images, `type` must be its type, and the merged file records it as its source. An unreadable `from` is `workspace-not-found` |
 | `file_upload_create` | Required `purpose` (`office-import`, `blob`, `html-view`, `markdown-assets`, `svg-assets`, `typst-bundle`), `file_name`, `media_type`; optional `size` (upper bound) | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` (`id:<id>`, `name:<name>`, `index:N`; bare values are rejected) | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
@@ -330,6 +334,19 @@ limit. Narrow the request or omit `json` if the result is too large.
 When more remains, `next` is `{ tool, arguments }`. Pass `arguments` unchanged to
 `tool`; it preserves the Unit, scope and original options with the new cursor.
 The final text line gives the same next call in neutral tool syntax.
+
+A fork address `<owner>/<name>` from `fork_create` works as `worktree` in `execute`, `unit_list`, `unit_add`, `unit_create`,
+`import`, `inspect`, `outline`, `read`, `find`, `screenshot` and `print_pdf`. The gateway resolves it through Client Core before
+the tool runs, so the executor and the result see a Worktree ID or trunk. A reading tool reads the fork's open Worktree when
+it holds the Unit, and the upstream trunk otherwise, so `scope` and `next` say `trunk` for a file the fork has not changed.
+Such a file also reads its formulas and embeds from trunk, even when they point at a file the fork changed. `execute`,
+`unit_add`, `unit_create` and `import` always write the fork's open Worktree through `POST /api/forks/{forkId}/units`, which
+first adds the upstream file, and opens the Worktree on the fork's first write. A write while that pull request is ready fails
+with `FORK_WORKTREE_NOT_DRAFT`. Every other `worktree` argument rejects a fork address with `workspace-argument-invalid`
+and asks for the `worktree.id` from `fork_view`. Every `repo` and `space` argument other than those of `space_browse`,
+`space_find`, `repo_view`, `unit_create` and `import` resolves repositories only, and a fork address there is
+`workspace-argument-invalid` naming the fork's upstream and pull request number. So no tool writes the upstream trunk
+through a fork.
 
 `read`, `find`, `inspect`, `outline` and `screenshot` also take a file link, `<identity origin>/nodes/<nodeId>`, as `unit`.
 The gateway reads the Node as the caller and passes its Unit ID on, so the result and `next` carry the Unit ID. This is how a
@@ -486,11 +503,11 @@ the draft page before the Skill exists. Ask-mode connections must switch to Auto
 `skill_draft_get` (`core`, `read`) takes `{ draft: "<id>" }` and returns the same metadata
 with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 
-Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `fork_list`, `fork_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for `fork_create`, `fork_delete`, the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `space_node`, `share` and `claim`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
-true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
+true only for `fork_delete`, `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns

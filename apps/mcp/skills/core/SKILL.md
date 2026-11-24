@@ -177,6 +177,27 @@ identical arguments. Never derive it from names or reuse a key from earlier work
 Where a schema requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
 underscores or hyphens. After an unknown content commit, read back before retrying.
 
+## Work through a fork
+
+Work through a fork when the user asks for one or gives you one. `fork_create`
+returns its address `<you>/<name>`, and `fork_list` lists yours. Pass it as
+worktree to `execute`, `unit_list`, `unit_add`, `unit_create`, `import`,
+`inspect`, `outline`, `read`, `find`, `screenshot` and `print_pdf`, and as repo to
+`space_browse` and `space_find`. Skip `pr_create`: the first write opens the
+fork's pull request in the upstream. Other tools, and `unit_create` with from,
+take worktree.id from `fork_view`.
+
+- A read shows the fork's version of a file it changed and the upstream's trunk
+  for every other file. A file the fork has not changed reads its formulas and
+  embeds from trunk, even when they point at a file the fork changed. To check it
+  against the fork's changes, add it with `unit_add` first.
+- `execute` through a fork adds the file to the pull request even when the code
+  only reads. Read with `read` or `inspect` instead.
+- Hand off with worktree.number from `fork_view` and the upstream as repo. A write
+  to a ready pull request fails with `FORK_WORKTREE_NOT_DRAFT` until `pr_ready`
+  with undo true. After a merge or discard the next write opens a new one.
+- `fork_delete` deletes only the fork; its open pull request stays.
+
 ## Edit one Unit
 
 Read the `sheet`, `doc`, `slide`, `base` or `board` Skill before Facade code.

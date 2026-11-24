@@ -2,12 +2,14 @@ import { assertSpaceFilter } from "@univerjs/univer-workspace-client-core/produc
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 import { nodeSchema } from "../schemas.js";
-import { repoInput, resolveRepo } from "./issue-support.js";
+import { repoInput } from "./issue-support.js";
 import { spaceFeature } from "./pr-support.js";
-import { nodeIdInput, resourceKindInput, unitTypeInput, withNodeUrl } from "./space-support.js";
+import { nodeIdInput, resolveListing, resourceKindInput, unitTypeInput, withListingUrl } from "./space-support.js";
 
 const inputSchema = z.object({
-  repo: repoInput,
+  repo: repoInput.describe(
+    `${repoInput.description ?? ""} Or a fork address <owner>/<name>, which lists its upstream with the fork's changes.`,
+  ),
   parent: nodeIdInput("the folder to list; omit for the repository root").optional(),
   recursive: z.boolean().optional().describe("Include every descendant."),
   resource_kind: resourceKindInput.optional(),
@@ -29,14 +31,14 @@ export const spaceBrowseTool: ToolDefinition = {
       ...(resource_kind === undefined ? {} : { resourceKind: resource_kind }),
       ...(unit_type === undefined ? {} : { unitType: unit_type }),
     });
-    const spaceId = await resolveRepo(context, repo);
+    const listing = await resolveListing(context, repo);
     const nodes = await spaceFeature(context).browse({
-      spaceId,
+      ...listing,
       ...(resource_kind === undefined ? {} : { resourceKind: resource_kind }),
       ...(unit_type === undefined ? {} : { unitType: unit_type }),
       ...(parent === undefined ? {} : { parentNodeId: parent }),
       ...(recursive === true ? { recursive: true } : {}),
     });
-    return { output: { nodes: nodes.map((node) => withNodeUrl(context, node)) }, repo: spaceId };
+    return { output: { nodes: nodes.map((node) => withListingUrl(context, listing, node)) }, repo: listing.spaceId };
   },
 };

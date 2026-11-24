@@ -4,6 +4,7 @@ import { downloadSchema } from "../../staging/model.js";
 import { executorTool } from "../executor-tool.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { stagingStore } from "./staging-support.js";
+import { worktreeInput } from "../core/space-support.js";
 
 const op = opSpecs["markdown.export"];
 export const exportMarkdownTool = executorTool({
@@ -15,7 +16,7 @@ export const exportMarkdownTool = executorTool({
     "Read current native Doc blocks as Markdown, a refreshed sourceMap and private asset download links valid for 15 minutes. Like the CLI, requires the source_map from the last successful compile or export and distinct explicit blocks; a hand-built map is rejected, and a Doc never compiled from Markdown has none, so read it with inspect or read-only execute instead. Output uses Univer directive Markdown (::heading, :span{...}), not GitHub Markdown; convert it before handing it to the user as plain Markdown. No resource bytes are inlined.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
-    worktree: z.string().min(1),
+    worktree: worktreeInput.min(1),
     unit: z.string().min(1),
     source_map: markdownExportInput.shape.sourceMap,
     blocks: markdownExportInput.shape.blockIds,

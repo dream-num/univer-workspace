@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { runtimeScope, sheetLensOutput } from "../../../shared/executor-protocol.js";
-import { worktreeInput } from "./space-support.js";
+import { worktreeOrForkInput } from "./space-support.js";
 
 export const sheetLensTarget = z
   .object({
     unit: z.string().min(1),
     trunk: z.boolean().optional(),
-    worktree: worktreeInput.optional(),
+    worktree: worktreeOrForkInput.optional(),
     json: z
       .boolean()
       .optional()

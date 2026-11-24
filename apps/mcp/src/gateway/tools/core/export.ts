@@ -5,6 +5,7 @@ import { downloadSchema } from "../../staging/model.js";
 import { executorTool } from "../executor-tool.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { stagingStore } from "../files/staging-support.js";
+import { worktreeInput } from "./space-support.js";
 
 const officeMediaTypes = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -20,7 +21,7 @@ export const exportTool = executorTool({
     "Export a pull request file as xlsx, docx or pptx. Return a private download link valid for 15 minutes. If the conversion outlasts the server's synchronous wait (30 seconds by default), returns a job_id with status running; poll job_get until succeeded or failed. Reuse idempotency_key with the same arguments on retry to avoid a second export; different arguments return workspace-idempotency-conflict. The RPC result is capped at 128 MiB.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
-    worktree: z.string().min(1),
+    worktree: worktreeInput.min(1),
     unit: z.string().min(1),
     format: z.enum(["xlsx", "docx", "pptx"]),
     idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional().describe(IDEMPOTENCY_KEY_DESCRIPTION),

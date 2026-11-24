@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import { worktreeInput } from "../core/space-support.js";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { svgCompileInput, opSpecs } from "../../../shared/executor-protocol.js";
 import { executorTool } from "../executor-tool.js";
@@ -21,7 +22,7 @@ export const compileSvgTool = executorTool({
     page: svgCompileInput.shape.page,
     add: z.boolean().optional(),
     apply: z.boolean().optional(),
-    worktree: z.string().min(1).optional(),
+    worktree: worktreeInput.min(1).optional(),
     unit: z.string().min(1).optional(),
   }),
   op: opSpecs["svg.compile"],

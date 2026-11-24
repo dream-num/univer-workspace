@@ -25,6 +25,10 @@ import { screenshotTool } from "./core/screenshot.js";
 import { whoamiTool } from "./core/whoami.js";
 import { repoListTool } from "./core/repo-list.js";
 import { repoViewTool } from "./core/repo-view.js";
+import { forkCreateTool } from "./core/fork-create.js";
+import { forkListTool } from "./core/fork-list.js";
+import { forkViewTool } from "./core/fork-view.js";
+import { forkDeleteTool } from "./core/fork-delete.js";
 import { issueCommentTool } from "./core/issue-comment.js";
 import { issueCreateTool } from "./core/issue-create.js";
 import { issueEditTool } from "./core/issue-edit.js";
@@ -69,6 +73,10 @@ export const tools: readonly ToolDefinition[] = [
   whoamiTool,
   repoListTool,
   repoViewTool,
+  forkCreateTool,
+  forkListTool,
+  forkViewTool,
+  forkDeleteTool,
   issueListTool,
   issueViewTool,
   issueCreateTool,

@@ -6,7 +6,8 @@ import { opSpecs } from "../../../shared/executor-protocol.js";
 import { executorTool } from "../executor-tool.js";
 import { writeAnnotations } from "../definition.js";
 import { stagingStore } from "../files/staging-support.js";
-import { repoInput, resolveRepo } from "./issue-support.js";
+import { repoInput, resolveRepoOrUpstream } from "./issue-support.js";
+import { worktreeOrForkInput } from "./space-support.js";
 import { worktreeFeature, spaceFeature } from "./pr-support.js";
 
 const op = opSpecs["exchange.import"];
@@ -20,7 +21,7 @@ export const importTool = executorTool({
   annotations: writeAnnotations,
   inputSchema: z.object({
     upload_id: z.string().min(1),
-    worktree: z.string().min(1),
+    worktree: worktreeOrForkInput.min(1),
     space: repoInput,
     type: op.input.shape.type,
     name: z.string().optional(),
@@ -33,7 +34,7 @@ export const importTool = executorTool({
   async request(args, context) {
     const store = stagingStore(context);
     await store.requireUpload(context.user.id, args.upload_id, "office-import");
-    const spaceId = await resolveRepo(context, args.space);
+    const spaceId = await resolveRepoOrUpstream(context, args.space);
     return store.withUpload(
       context.user.id,
       args.upload_id,

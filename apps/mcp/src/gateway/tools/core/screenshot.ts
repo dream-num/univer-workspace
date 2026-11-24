@@ -7,7 +7,7 @@ import { downloadSchema } from "../../staging/model.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
 import { stagingStore } from "../files/staging-support.js";
-import { acceptUnitLink, worktreeInput } from "./space-support.js";
+import { acceptForkAddress, acceptUnitLink, worktreeOrForkInput } from "./space-support.js";
 
 // Images up to this total come back as image content blocks; larger results as download links.
 const INLINE_LIMIT_BYTES = 1024 * 1024;
@@ -15,7 +15,7 @@ const INLINE_LIMIT_BYTES = 1024 * 1024;
 const imageEntry = screenshotImage.omit({ offset: true });
 const text = (what: string) => z.string().describe(what);
 
-export const screenshotTool = acceptUnitLink(executorTool({
+export const screenshotTool = acceptUnitLink(acceptForkAddress(executorTool({
   name: "screenshot",
   toolset: "core",
   scope: "read",
@@ -26,7 +26,7 @@ export const screenshotTool = acceptUnitLink(executorTool({
   inputSchema: z.object({
     unit: z.string().min(1),
     trunk: z.boolean().optional(),
-    worktree: worktreeInput.optional(),
+    worktree: worktreeOrForkInput.optional(),
     pages: text("Slide pages or page IDs, for example 1,3-5,cover, or all.").optional(),
     contact_slide: z
       .boolean()
@@ -111,4 +111,4 @@ export const screenshotTool = acceptUnitLink(executorTool({
         : {}),
     };
   },
-}));
+})));

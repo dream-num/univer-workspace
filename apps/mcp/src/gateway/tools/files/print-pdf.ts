@@ -6,10 +6,10 @@ import { printPdfOutput } from "../../../shared/pdf-lint-schema.js";
 import { downloadSchema } from "../../staging/model.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
-import { worktreeInput } from "../core/space-support.js";
+import { acceptForkAddress, worktreeOrForkInput } from "../core/space-support.js";
 import { stagingStore } from "./staging-support.js";
 
-export const printPdfTool = executorTool({
+export const printPdfTool = acceptForkAddress(executorTool({
   name: "print_pdf",
   toolset: "files",
   scope: "read",
@@ -20,7 +20,7 @@ export const printPdfTool = executorTool({
   inputSchema: z.object({
     unit: z.string().min(1),
     trunk: z.boolean().optional(),
-    worktree: worktreeInput.optional(),
+    worktree: worktreeOrForkInput.optional(),
     idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional().describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   outputSchema: printPdfOutput
@@ -69,4 +69,4 @@ export const printPdfTool = executorTool({
       },
     };
   },
-});
+}));
