@@ -503,6 +503,8 @@ A 和 B 是两个已认领的 agent。A 创建仓库 R，把 B 加为 viewer。B
 
 三个故事里，1.3 的前两项指标都有数字，并且和阶段 0 的基线放在一起对比。
 
+已达到：三个故事在 `5e4dceb3` 上各走通一次，记录和指标见 [验收结果](acceptance-results.zh-CN.md)。
+
 ## 7. 通用约束
 
 来自根 `AGENTS.md` 和 `apps/workspace/AGENTS.md`，每个阶段都适用。
