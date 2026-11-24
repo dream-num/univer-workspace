@@ -450,7 +450,7 @@ verify-uvw mcp-logs
 | MA5 | `--auth dev` 调用 `whoami` | 退出码 0，事件 `auth_kind` 为 `dev`，`client_id` 为 `dev` |
 | MO1 | opencode 只配置 MCP URL，通过浏览器授权后调用 `whoami` 和 `repo_list` | 未认证 POST 返回 401 和资源元数据 challenge；资源与授权服务器元数据匹配本次运行；授权页显示四个 scope；取消 `worktree:merge` 后 callback 只含 `read write publish`；opencode 输出 `Connected to ws`，run 退出码 0；两条工具事件的 `auth_kind` 为 `oauth`，`client_id` 等于 authorize URL 中动态注册的客户端，`user_id` 等于本次用户，`outcome` 为 `ok` |
 
-MO1 的完整 Bash 脚本位于 [MCP OAuth 旅程](../../../.agents/skills/verify-uvw/features/mcp-oauth.md)，放在
+MO1 的完整 Bash 脚本位于 [mcp-oauth-opencode.sh](../../../.agents/skills/verify-uvw/bin/mcp-oauth-opencode.sh)，放在
 MA5 后、M12 前。它在 `$RUN/home` 下新建临时目录，写入无 Authorization header 的 `ws`
 配置，并将 `XDG_DATA_HOME`、`XDG_CONFIG_HOME`、`XDG_STATE_HOME`、`XDG_CACHE_HOME`
 全部指向该目录。脚本选择空闲端口，通过 `opencode service set port <port>` 配置独立的托管服务，

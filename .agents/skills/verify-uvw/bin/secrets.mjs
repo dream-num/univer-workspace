@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The one place that keeps secrets out of evidence.
-// secrets.mjs redact <run> < text > redacted      secrets.mjs check <run> <directory>
+// secrets.mjs redact|redact-sign-in <run> < text > redacted      secrets.mjs check <run> <directory>
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,21 @@ export function redact(text, literals = []) {
   for (const literal of literals) if (literal) text = text.split(literal).join(MARK);
   for (const [, pattern] of PATTERNS) text = text.replace(pattern, (_, keep) => (typeof keep === 'string' ? keep : '') + MARK);
   return text;
+}
+
+// A client's OAuth sign-in transcript also carries the authorization code, its state and challenge, and
+// the code the client's own tools echo. Other evidence keeps `code` and `state` readable (error codes,
+// Issue states), so only sign-in transcripts get these.
+const SIGN_IN = [
+  [/([?&](?:code|state|code_challenge)=)[^\s"'<>\\&#]+/gi, `$1${MARK}`],
+  [/("(?:code|state|code_challenge)"\s*:\s*")(?:\\.|[^"\\\r\n])*(")/gi, `$1${MARK}$2`],
+];
+
+/** `redact` for a sign-in transcript: terminal colours removed and the OAuth flow values hidden too. */
+export function redactSignIn(text, literals = []) {
+  text = text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+  for (const [pattern, replacement] of SIGN_IN) text = text.replace(pattern, replacement);
+  return redact(text, literals);
 }
 
 /** Names what `redact` would still change, never the secret itself. */
@@ -60,8 +75,8 @@ export function runSecrets(run) {
 // The helper reaches this file through /tmp, which macOS resolves to /private/tmp.
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [command, run, directory] = process.argv.slice(2);
-  if (command === 'redact' && run) {
-    process.stdout.write(redact(readFileSync(0, 'utf8'), runSecrets(run)));
+  if ((command === 'redact' || command === 'redact-sign-in') && run) {
+    process.stdout.write((command === 'redact' ? redact : redactSignIn)(readFileSync(0, 'utf8'), runSecrets(run)));
   } else if (command === 'check' && directory && existsSync(directory)) {
     const literals = runSecrets(run);
     const paths = readdirSync(directory, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name));
@@ -69,7 +84,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
     console.log(found.length ? found.join('\n') : `ok    no token, session cookie or run secret in ${paths.length} files under ${directory}`);
     process.exitCode = found.length ? 1 : 0;
   } else {
-    console.error('Usage: secrets.mjs redact <run> < text\n       secrets.mjs check <run> <directory>');
+    console.error('Usage: secrets.mjs redact|redact-sign-in <run> < text\n       secrets.mjs check <run> <directory>');
     process.exitCode = 2;
   }
 }
