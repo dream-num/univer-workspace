@@ -783,8 +783,14 @@ as completed, or sends it back with a reason, after which an assignee submits ag
 the Accept and Send back buttons in the Issue page's acceptance panel. The Issue shows its latest verdict as `acceptance`, the timeline shows
 every verdict, and `acceptance=submitted|sent_back` filters Issue lists.
 
+A Team Space owner or admin can turn on an acceptance deadline in Settings, with `uvw repo edit --accept-after-hours
+<n|off>`, or with the MCP `repo_edit` tool. It is off by default, and 72 hours is the suggested value. A submitted Issue
+that nobody sends back within that many hours is then accepted and closed as completed, attributed to no one. A send-back
+stops the clock and the next submission restarts it. Every server instance checks once a minute, and the database
+decides which one accepts.
+
 V30→V31 adds the empty table `issue_verdicts` with the index `issue_verdicts_issue`, and the nullable column
-`spaces.accept_after_hours`, which nothing reads yet. Existing rows read null. On PostgreSQL the same step moves
+`spaces.accept_after_hours`, which holds that deadline. Existing rows read null. On PostgreSQL the same step moves
 `workspace_product_schema` from version 10 to 11. Stop every old instance, start one V31 instance, and wait for its
 backup, migration and health checks before restoring service. Back up PostgreSQL before the upgrade. Failed migration
 rolls back; successful restarts do not repeat migration or backup. V30 code refuses a V31 database, so a code rollback

@@ -271,6 +271,8 @@ describe("Workspace Issue feature", () => {
         : { items: [comment("a")], nextCursor: "next" });
     expect((await issues.timeline("s1", 7)).map((item) => item.id)).toEqual(["a", "b"]);
     expect(calls).toHaveLength(2);
+    const deadline = { type: "event", id: "d", kind: "accepted", actor: null, payload: { body: "" }, createdAt: "2026-09-30T00:00:00.000Z" };
+    expect(await feature(() => ({ items: [deadline], nextCursor: null })).feature.timeline("s1", 7)).toEqual([deadline]);
     const broken = feature(() => ({ items: [{ type: "comment", id: "x" }], nextCursor: null }));
     await expect(broken.feature.timeline("s1", 7)).rejects.toMatchObject({ code: "workspace-invalid-response" });
   });

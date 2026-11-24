@@ -16,6 +16,8 @@ export interface SpaceView {
   readonly name: string;
   readonly publicRead: boolean;
   readonly proposals: SpaceProposals;
+  /** Hours after a submission at which an Issue nobody sent back is accepted; null when off. */
+  readonly acceptAfterHours: number | null;
   readonly description: string;
   readonly slug: string | null;
   readonly fullName: string | null;

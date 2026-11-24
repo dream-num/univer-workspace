@@ -382,11 +382,16 @@ function IssueRow({
           <p className="mt-1 mb-0 text-sm text-muted-foreground">
             {showSpace ? <span>{issue.space.name} · </span> : null}
             {closed && issue.closedAt
-              ? t("issueClosedBy", {
-                  number: issue.number,
-                  name: (issue.closedBy ?? issue.author).displayName,
-                  date: formatRelativeDate(issue.closedAt, language),
-                })
+              ? issue.closedBy
+                ? t("issueClosedBy", {
+                    number: issue.number,
+                    name: issue.closedBy.displayName,
+                    date: formatRelativeDate(issue.closedAt, language),
+                  })
+                : t("issueClosedByDeadline", {
+                    number: issue.number,
+                    date: formatRelativeDate(issue.closedAt, language),
+                  })
               : t("issueOpenedBy", {
                   number: issue.number,
                   name: issue.author.displayName,

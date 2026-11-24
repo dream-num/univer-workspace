@@ -55,7 +55,7 @@ export function IssueAcceptancePanel({ issue, timeline }: { readonly issue: Issu
         {issue.body.trim() ? <IssueMarkdown text={issue.body} /> : <Muted>{t("issueNoDescription")}</Muted>}
       </Section>
       <Section title={t("issueAcceptanceSubmission")}>
-        {submission?.type === "event" ? (
+        {submission?.type === "event" && submission.actor ? (
           <Entry user={submission.actor} meta={t("issueAcceptanceSubmittedOn", { date: formatRelativeDate(submission.createdAt, language) })}>
             <IssueMarkdown text={typeof submission.payload["body"] === "string" ? submission.payload["body"] : ""} />
           </Entry>

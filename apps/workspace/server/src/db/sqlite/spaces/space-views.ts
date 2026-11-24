@@ -38,15 +38,16 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
 };
 
 const selectSpaceView = `
-  SELECT ${spaceAccessColumns}, users.username AS ownerUsername, spaces.description, spaces.slug, spaces.proposals
+  SELECT ${spaceAccessColumns}, users.username AS ownerUsername, spaces.description, spaces.slug, spaces.proposals,
+    spaces.accept_after_hours AS acceptAfterHours
   FROM spaces
   JOIN users ON users.id = spaces.owner_user_id
   ${spaceMemberJoin}`;
 
-type SpaceViewRow = SqliteSpaceAccessRow & Pick<SpaceListEntry, "description" | "slug" | "ownerUsername" | "proposals">;
+type SpaceViewRow = SqliteSpaceAccessRow & Pick<SpaceListEntry, "description" | "slug" | "ownerUsername" | "proposals" | "acceptAfterHours">;
 
 function storedSpaceView(row: SpaceViewRow): SpaceListEntry {
-  return { ...storedSpaceAccess(row), description: row.description, slug: row.slug, ownerUsername: row.ownerUsername, proposals: row.proposals };
+  return { ...storedSpaceAccess(row), description: row.description, slug: row.slug, ownerUsername: row.ownerUsername, proposals: row.proposals, acceptAfterHours: row.acceptAfterHours };
 }
 
 export function findSpaceView(database: SqliteDatabase, userId: string, key: { spaceId: string } | { username: string; slug: string }): SpaceListEntry | null {

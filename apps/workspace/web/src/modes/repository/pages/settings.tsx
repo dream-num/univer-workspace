@@ -19,6 +19,11 @@ const PROPOSALS = {
   anyone: ["settingsProposalsAnyone", "settingsProposalsAnyoneDescription"],
 } as const satisfies Record<SpaceProposals, readonly [string, string]>;
 
+const SUGGESTED_ACCEPT_AFTER_HOURS = 72;
+const MAX_ACCEPT_AFTER_HOURS = 720;
+const validHours = (value: string) =>
+  /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= MAX_ACCEPT_AFTER_HOURS;
+
 export function RepositorySpaceSettingsPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();
   return (
@@ -48,6 +53,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
   const [error, setError] = useState<string>();
   const [slug, setSlug] = useState(space?.slug ?? "");
   const [slugError, setSlugError] = useState<string>();
+  const [hours, setHours] = useState(String(space?.acceptAfterHours ?? SUGGESTED_ACCEPT_AFTER_HOURS));
   const rename = useUpdateSpace(spaceId);
   function update(values: Parameters<typeof rename.mutate>[0]) {
     rename.mutate(values, {
@@ -56,6 +62,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
         if (values.name !== undefined) setName(values.name);
         if (values.description !== undefined) setDescription(values.description);
         if (values.slug !== undefined) setSlug(values.slug);
+        if (values.acceptAfterHours) setHours(String(values.acceptAfterHours));
       },
       onError: (mutationError) => {
         if (mutationError instanceof ApiError && mutationError.field === "slug") {
@@ -276,6 +283,59 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
             {t(space.publicRead ? "settingsProposalsHint" : "settingsProposalsNeedsPublic")}
           </p>
         </fieldset>
+      ) : null}
+      {space.type === "team" ? (
+        <form
+          className="grid gap-2"
+          aria-label={t("settingsAcceptDeadline")}
+          onSubmit={(event) => {
+            event.preventDefault();
+            update({ acceptAfterHours: Number(hours) });
+          }}
+        >
+          <fieldset className="grid gap-2" aria-describedby="space-accept-deadline-hint" disabled={!canEdit || rename.isPending}>
+            <legend className="mb-1.5 text-[13px] font-medium text-foreground">{t("settingsAcceptDeadline")}</legend>
+            <label className="flex max-w-xl items-start gap-2 text-sm has-disabled:opacity-60">
+              <input
+                type="checkbox"
+                checked={space.acceptAfterHours !== null}
+                onChange={(event) =>
+                  update({ acceptAfterHours: event.target.checked ? SUGGESTED_ACCEPT_AFTER_HOURS : null })
+                }
+                className="mt-0.5 size-4 shrink-0 accent-primary"
+              />
+              <span>{t("settingsAcceptDeadlineOn")}</span>
+            </label>
+            {space.acceptAfterHours !== null ? (
+              <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                <Input
+                  id="space-accept-after-hours"
+                  aria-label={t("settingsAcceptDeadlineHours")}
+                  className="h-8 w-24 rounded-[6px] px-3"
+                  type="number"
+                  min={1}
+                  max={MAX_ACCEPT_AFTER_HOURS}
+                  step={1}
+                  value={hours}
+                  onChange={(event) => setHours(event.target.value)}
+                />
+                <span>{t("settingsAcceptDeadlineHours")}</span>
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="secondary"
+                  className="rounded-[6px] bg-secondary text-sm"
+                  disabled={!validHours(hours) || Number(hours) === space.acceptAfterHours}
+                >
+                  {t("save")}
+                </Button>
+              </div>
+            ) : null}
+            <p id="space-accept-deadline-hint" className="text-[13px] text-muted-foreground">
+              {t("settingsAcceptDeadlineHint")}
+            </p>
+          </fieldset>
+        </form>
       ) : null}
       <section className="rd-danger-zone" aria-labelledby="settings-danger-heading">
         <h3 id="settings-danger-heading" className="mb-2 text-2xl leading-9 font-normal">

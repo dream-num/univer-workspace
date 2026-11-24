@@ -2742,6 +2742,7 @@ export interface components {
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
             proposals: components["schemas"]["SpaceProposals"];
+            acceptAfterHours: components["schemas"]["SpaceAcceptAfterHours"];
             /** @description URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed. */
             slug: string | null;
             /**
@@ -2889,6 +2890,7 @@ export interface components {
             state: components["schemas"]["IssueState"];
             stateReason: components["schemas"]["IssueStateReason"] | null;
             author: components["schemas"]["PublicUser"];
+            /** @description Who closed the Issue; `null` while it is open and when the Space's acceptance deadline closed it. */
             closedBy: components["schemas"]["PublicUser"] | null;
             /** Format: date-time */
             closedAt: string | null;
@@ -3675,6 +3677,7 @@ export interface components {
             kind: "issue-opened" | "issue-closed";
             /** Format: date-time */
             at: string;
+            /** @description Who opened or closed the Issue; `null` for a close by the Space's acceptance deadline. */
             actor: components["schemas"]["PublicUser"] | null;
             /** @description Source of this write; `unknown` for closes (not recorded). */
             writeSource: components["schemas"]["WriteSource"];
@@ -3705,6 +3708,13 @@ export interface components {
          * @enum {string}
          */
         SpaceProposals: "members" | "accountable" | "anyone";
+        /**
+         * @description Hours after an Issue is submitted for acceptance at which the server accepts it and closes it as
+         *     completed, unless someone sends it back first. A send-back stops the clock and the next submission
+         *     restarts it. Such an acceptance has no actor. `null`, the default, turns it off. Personal Spaces
+         *     report `null`.
+         */
+        SpaceAcceptAfterHours: number | null;
         /**
          * @description Ownership or Team membership, independent of the effective access role. Public readers have none.
          * @enum {string}
@@ -3773,6 +3783,8 @@ export interface components {
             publicRead?: boolean;
             /** @description Team Spaces only. The owner or an admin may change it. */
             proposals?: components["schemas"]["SpaceProposals"];
+            /** @description Team Spaces only. The owner or an admin may change it. `72` is the suggested value when turning it on. */
+            acceptAfterHours?: components["schemas"]["SpaceAcceptAfterHours"];
             /** @description Plain text. Surrounding whitespace is trimmed; an empty string clears the description. */
             description?: string;
         };
@@ -4256,6 +4268,7 @@ export interface components {
         IssueVerdictKind: "submitted" | "accepted" | "sent_back";
         IssueAcceptance: {
             kind: components["schemas"]["IssueVerdictKind"];
+            /** @description Who recorded the verdict; `null` for an `accepted` verdict the Space's acceptance deadline recorded. */
             actor: components["schemas"]["PublicUser"] | null;
             /** @description Markdown. What was done, checked and assumed for `submitted`; the reason for `sent_back`. */
             body: string;
@@ -4335,7 +4348,11 @@ export interface components {
             type: "event";
             id: string;
             kind: components["schemas"]["IssueEventKind"];
-            actor: components["schemas"]["PublicUser"];
+            /**
+             * @description `null` only for an `accepted` verdict the Space's acceptance deadline recorded. That acceptance closes
+             *     the Issue as completed without a `closed` event.
+             */
+            actor: components["schemas"]["PublicUser"] | null;
             /**
              * @description Snapshot taken when the event happened. `closed` carries `reason`;
              *     `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry

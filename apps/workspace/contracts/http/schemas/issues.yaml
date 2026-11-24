@@ -143,6 +143,7 @@ IssueSummary:
       oneOf:
         - $ref: ./identity.yaml#/PublicUser
         - type: "null"
+      description: Who closed the Issue; `null` while it is open and when the Space's acceptance deadline closed it.
     closedAt:
       type: [string, "null"]
       format: date-time
@@ -229,6 +230,7 @@ IssueAcceptance:
       oneOf:
         - $ref: ./identity.yaml#/PublicUser
         - type: "null"
+      description: Who recorded the verdict; `null` for an `accepted` verdict the Space's acceptance deadline recorded.
     body:
       type: string
       description: Markdown. What was done, checked and assumed for `submitted`; the reason for `sent_back`.
@@ -463,7 +465,12 @@ IssueTimelineEvent:
     kind:
       $ref: "#/IssueEventKind"
     actor:
-      $ref: ./identity.yaml#/PublicUser
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
+      description: |
+        `null` only for an `accepted` verdict the Space's acceptance deadline recorded. That acceptance closes
+        the Issue as completed without a `closed` event.
     payload:
       type: object
       additionalProperties: true

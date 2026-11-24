@@ -36,6 +36,15 @@ const participantSql = `(${ownsSpaceSql("spaces.owner_user_id", "?")} OR (
   NOT ${ownerSuspendedSql("spaces.owner_user_id")}
   AND EXISTS (SELECT 1 FROM space_members WHERE space_id = spaces.id AND user_id = ?)))`;
 
+const DUE_SQL = `SELECT issues.id, issues.space_id, verdict.created_at AS submitted_at
+  FROM issues
+  JOIN spaces ON spaces.id = issues.space_id
+  JOIN issue_verdicts AS verdict ON verdict.id = (
+    SELECT id FROM issue_verdicts WHERE issue_id = issues.id ORDER BY created_at DESC, id DESC LIMIT 1)
+  WHERE issues.state = 'open' AND verdict.kind = 'submitted' AND spaces.accept_after_hours IS NOT NULL
+    AND verdict.created_at + spaces.accept_after_hours * 3600000 <= ?
+    AND NOT ${ownerSuspendedSql("spaces.owner_user_id")}`;
+
 export class SqliteIssuesRepository implements IssuesRepository {
   constructor(
     private readonly _database: SqliteDatabase,
@@ -106,6 +115,26 @@ export class SqliteIssuesRepository implements IssuesRepository {
       }
       return this.readIssueDetail(input.userId, space, input.number);
     });
+  }
+
+  async acceptDue(now: number, limit: number): Promise<string[]> {
+    const due = this._all(`${DUE_SQL} ORDER BY verdict.created_at, issues.id LIMIT ?`, now, limit) as Array<{ id: string }>;
+    const accepted: string[] = [];
+    for (const { id } of due) {
+      const spaceId = this._database.transaction(() => {
+        const row = this._get(`${DUE_SQL} AND issues.id = ?`, now, id) as { space_id: string; submitted_at: number } | undefined;
+        if (!row) return null;
+        const at = Math.max(now, row.submitted_at + 1);
+        this._run(
+          "INSERT INTO issue_verdicts (id, issue_id, kind, actor_user_id, body, created_at) VALUES (?, ?, 'accepted', NULL, '', ?)",
+          randomUUID(), id, at,
+        );
+        this.setIssueState(id, "closed", "completed", null, at);
+        return row.space_id;
+      });
+      if (spaceId) accepted.push(spaceId);
+    }
+    return accepted;
   }
 
   private readLatestVerdict(issueId: string): VerdictRow | null {

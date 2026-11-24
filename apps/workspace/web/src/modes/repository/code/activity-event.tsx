@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Clock } from "lucide-react";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
 import type { ActivityEvent } from "../data";
@@ -13,16 +14,23 @@ export function ActivityEventLine({ event }: { readonly event: ActivityEvent }) 
     "issue-opened": "repositoryEventIssueOpened",
     "issue-closed": "repositoryEventIssueClosed",
   } as const;
+  const deadline = event.kind === "issue-closed" && !event.actor.user;
   return (
     <>
-      <ActorAvatar actor={event.actor} size="sm" />
+      {deadline ? (
+        <span className="rd-avatar rd-avatar-sm" aria-hidden="true">
+          <Clock />
+        </span>
+      ) : (
+        <ActorAvatar actor={event.actor} size="sm" />
+      )}
       <div className="rd-event-text">
         <b>
-          {event.actor.user?.displayName ||
-            event.actor.user?.username ||
-            t("repositoryUnknownActor")}
+          {deadline
+            ? t("repositoryAcceptanceDeadline")
+            : event.actor.user?.displayName || event.actor.user?.username || t("repositoryUnknownActor")}
         </b>{" "}
-        {t(verb[event.kind])}{" "}
+        {t(deadline ? "repositoryEventIssueAcceptedByDeadline" : verb[event.kind])}{" "}
         {"pull" in event ? (
           <PullRequestLink
             target={{ spaceId: event.pull.spaceId ?? undefined, worktree: event.pull }}

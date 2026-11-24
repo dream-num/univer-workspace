@@ -14,6 +14,7 @@ export function useUpdateSpace(spaceId: string) {
       readonly publicRead?: boolean;
       readonly description?: string;
       readonly proposals?: components["schemas"]["SpaceProposals"];
+      readonly acceptAfterHours?: number | null;
     }) => {
       const { error } = await api.PATCH("/api/spaces/{spaceId}", {
         params: { path: { spaceId } },

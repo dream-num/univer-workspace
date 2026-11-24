@@ -223,6 +223,9 @@ Whoever may close the Issue, its author or a member who triages, answers with `u
 completed, or `uvw issue send-back <n> -b <reason>`, after which an assignee submits again. `--body-file -` reads the body
 from stdin. Repeating the latest verdict with the same body changes nothing. `issue view` shows the latest verdict as
 `acceptance`, and `uvw search issues --acceptance submitted|sent_back` finds Issues by it.
+The owner or an admin of a repository can turn on an acceptance deadline with `uvw repo edit --accept-after-hours 72`
+(1 to 720 hours, `off` turns it off). Then a submitted Issue that nobody sends back in time is accepted and closed as
+completed by no one: `issue view` prints `acceptance: accepted by deadline`, and `repo view` prints the setting.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

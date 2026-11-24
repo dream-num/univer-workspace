@@ -100,6 +100,16 @@ describe("uvw repository and Issue commands", () => {
     });
   });
 
+  it("says who accepted an Issue, or that its deadline did", async () => {
+    const { repoContext } = context();
+    const accepted = (actor: unknown) =>
+      issue({ state: "closed", acceptance: { kind: "accepted", actor, body: "", createdAt: "2026-10-03T00:00:00.000Z" } });
+    const get = vi.fn().mockResolvedValueOnce(accepted({ id: "u1", username: "bob", displayName: "Bob" })).mockResolvedValueOnce(accepted(null));
+    const command = createIssueCommand({ context: repoContext, feature: { get } as unknown as WorkspaceIssueFeature, origin: async () => ORIGIN });
+    expect(await run(command, ["view", "3", "-R", "alice/docs"])).toContain("acceptance: accepted by bob 2026-10-03");
+    expect(await run(command, ["view", "3", "-R", "alice/docs"])).toContain("acceptance: accepted by deadline 2026-10-03");
+  });
+
   it("resolves a bare slug through the shared repository context", async () => {
     const spaces = {
       lookup: vi.fn(async () => teamSpace),
@@ -228,6 +238,27 @@ describe("uvw repository and Issue commands", () => {
     await expect(run(command, ["edit", "alice/docs", "--proposals", "everyone"])).rejects.toMatchObject({ exitCode: 1 });
     expect(update).toHaveBeenCalledTimes(1);
     expect(await run(command, ["view", "alice/docs"])).toContain("proposals: accountable");
+  });
+
+  it("turns the acceptance deadline on and off, and shows it in view", async () => {
+    const { repoContext } = context();
+    const deadline = { ...teamSpace, type: "team", acceptAfterHours: 72 };
+    const update = vi.fn(async () => deadline);
+    const spaces = {
+      get: vi.fn(async () => deadline),
+      getStar: vi.fn(async () => ({ starCount: 0, starred: false })),
+      update,
+    } as unknown as WorkspaceSpaceFeature;
+    const command = createRepoCommand(spaces, repoContext);
+
+    await run(command, ["edit", "alice/docs", "--accept-after-hours", "72"]);
+    await run(command, ["edit", "alice/docs", "--accept-after-hours", "off"]);
+    expect(update.mock.calls).toEqual([["space-1", { acceptAfterHours: 72 }], ["space-1", { acceptAfterHours: null }]]);
+    for (const value of ["0", "721", "1.5", "soon"]) {
+      await expect(run(command, ["edit", "alice/docs", "--accept-after-hours", value])).rejects.toMatchObject({ exitCode: 1 });
+    }
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(await run(command, ["view", "alice/docs"])).toContain("accept after: 72 hours");
   });
 
   it("uses affiliation for @me, falls back on older servers, and exposes it in JSON", async () => {

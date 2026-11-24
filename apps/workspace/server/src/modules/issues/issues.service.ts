@@ -244,15 +244,16 @@ export function createIssuesModule(options: {
       const rows = await repository.timeline(issue.id, cursor, limit + 1);
       const hasNext = rows.length > limit;
       const visible = hasNext ? rows.slice(0, limit) : rows;
-      const users = await repository.users(visible.map((row) => row.actor_user_id));
+      const users = await repository.users(visible.flatMap((row) => row.actor_user_id === null ? [] : [row.actor_user_id]));
       const items = visible.map((row): IssueTimelineItem =>
         row.type === "comment"
           ? {
-              type: "comment", id: row.id, author: user(users, row.actor_user_id), body: row.body ?? "",
+              type: "comment", id: row.id, author: user(users, row.actor_user_id!), body: row.body ?? "",
               createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
             }
           : {
-              type: "event", id: row.id, kind: row.kind as IssueEventKind | IssueVerdictKind, actor: user(users, row.actor_user_id),
+              type: "event", id: row.id, kind: row.kind as IssueEventKind | IssueVerdictKind,
+              actor: row.actor_user_id === null ? null : user(users, row.actor_user_id),
               payload: row.type === "verdict" ? { body: row.body ?? "" } : JSON.parse(row.payload_json ?? "{}") as Record<string, unknown>,
               createdAt: iso(row.created_at),
             });
@@ -296,6 +297,12 @@ export function createIssuesModule(options: {
       const issue = await requireIssue(spaceId, number);
       const assignments = await repository.assignments(issue.id);
       return options.accessChanges(userId, spaceId, assignments.map((row) => ({ userId: row.user_id, since: row.assigned_at })));
+    },
+
+    async acceptDue(time, limit) {
+      const spaceIds = await repository.acceptDue(time, limit);
+      for (const spaceId of new Set(spaceIds)) await notify(spaceId);
+      return spaceIds.length;
     },
 
     async updateComment(userId, commentId, input) {

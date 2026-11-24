@@ -81,9 +81,9 @@ export class PostgresSpacesRepository implements SpacesRepository {
         )).rowCount) return null;
 
         const assignments = ["updated_at = $2"];
-        const values: (string | number | boolean)[] = [spaceId, updatedAt];
+        const values: (string | number | boolean | null)[] = [spaceId, updatedAt];
         for (const [column, value] of [
-          ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug], ["proposals", settings.proposals],
+          ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug], ["proposals", settings.proposals], ["accept_after_hours", settings.acceptAfterHours],
         ] as const) {
           if (value === undefined) continue;
           values.push(value);

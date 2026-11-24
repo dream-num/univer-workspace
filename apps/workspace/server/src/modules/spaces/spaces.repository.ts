@@ -6,6 +6,7 @@ export interface SpaceListEntry extends StoredSpaceAccess {
   readonly description: string;
   readonly slug: string | null;
   readonly proposals: SpaceProposals;
+  readonly acceptAfterHours: number | null;
 }
 
 export type SpaceListScope = "mine" | "starred" | "explore";
@@ -28,6 +29,7 @@ export interface SpaceSettingsPatch {
   readonly description?: string;
   readonly publicRead?: boolean;
   readonly proposals?: SpaceProposals;
+  readonly acceptAfterHours?: number | null;
 }
 
 export interface SpacesRepository {

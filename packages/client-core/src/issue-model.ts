@@ -98,7 +98,8 @@ export type WorkspaceIssueTimelineItem =
       readonly updatedAt: string;
     }
   | {
-      readonly actor: WorkspaceIssueUser;
+      /** Null for an acceptance by the Space's deadline. */
+      readonly actor: WorkspaceIssueUser | null;
       readonly createdAt: string;
       readonly id: string;
       readonly kind: string;
@@ -284,7 +285,7 @@ function parseTimelineItem(value: unknown): WorkspaceIssueTimelineItem {
   }
   if (value["type"] === "event" && typeof value["kind"] === "string" && isWorkspaceRecord(value["payload"])) {
     return {
-      actor: parseUser(value["actor"]),
+      actor: value["actor"] === null ? null : parseUser(value["actor"]),
       createdAt: value["createdAt"],
       id: value["id"],
       kind: value["kind"],

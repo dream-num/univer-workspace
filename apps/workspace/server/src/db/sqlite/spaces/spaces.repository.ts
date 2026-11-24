@@ -78,9 +78,9 @@ export class SqliteSpacesRepository implements SpacesRepository {
       `).get({ owner: before.ownerUserId, slug: settings.slug, spaceId })) return null;
 
       const assignments = ["updated_at = ?"];
-      const values: (string | number)[] = [updatedAt];
+      const values: (string | number | null)[] = [updatedAt];
       for (const [column, value] of [
-        ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug], ["proposals", settings.proposals],
+        ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug], ["proposals", settings.proposals], ["accept_after_hours", settings.acceptAfterHours],
       ] as const) {
         if (value === undefined) continue;
         assignments.push(`${column} = ?`);

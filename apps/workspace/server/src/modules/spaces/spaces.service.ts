@@ -36,11 +36,13 @@ export interface SpacesModule {
       readonly publicRead?: unknown;
       readonly description?: unknown;
       readonly proposals?: unknown;
+      readonly acceptAfterHours?: unknown;
     }
   ): Promise<SpaceView>;
 }
 
 const DEFAULT_PIN_COUNT = 8;
+const MAX_ACCEPT_AFTER_HOURS = 720;
 const PIN_LIMIT = 12;
 
 export function createSpacesModule(options: {
@@ -148,7 +150,8 @@ export function createSpacesModule(options: {
         input.slug === undefined &&
         input.publicRead === undefined &&
         input.description === undefined &&
-        input.proposals === undefined
+        input.proposals === undefined &&
+        input.acceptAfterHours === undefined
       ) {
         throw new ApplicationError(
           "INVALID_INPUT",
@@ -167,12 +170,17 @@ export function createSpacesModule(options: {
       if (proposals !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space takes proposals.", "proposals");
       }
+      const acceptAfterHours = input.acceptAfterHours === undefined ? undefined : validAcceptAfterHours(input.acceptAfterHours);
+      if (acceptAfterHours !== undefined && access.type !== "team") {
+        throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has Issues to accept.", "acceptAfterHours");
+      }
       const row = await options.repository.updateSettings(userId, spaceId, {
         ...(name !== undefined && { name }),
         ...(publicRead !== undefined && { publicRead }),
         ...(description !== undefined && { description }),
         ...(input.slug !== undefined && { slug: validSlug(input.slug) }),
         ...(proposals !== undefined && { proposals }),
+        ...(acceptAfterHours !== undefined && { acceptAfterHours }),
       }, now());
       if (!row) throw slugTaken();
       return spaceView(userId, row);
@@ -189,6 +197,7 @@ function spaceView(userId: string, row: SpaceListEntry): SpaceView {
     name: access.name,
     publicRead: access.publicRead,
     proposals: row.proposals,
+    acceptAfterHours: row.acceptAfterHours,
     description: row.description,
     ...fullNameOf(access.type, row.slug, row.ownerUsername),
     owner: { id: access.ownerUserId, username: row.ownerUsername },
@@ -243,6 +252,15 @@ function validProposals(value: unknown): SpaceProposals {
     throw new ApplicationError("INVALID_INPUT", 400, `proposals must be one of ${SPACE_PROPOSALS.join(", ")}.`, "proposals");
   }
   return value as SpaceProposals;
+}
+
+function validAcceptAfterHours(value: unknown): number | null {
+  if (value !== null && !(Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_ACCEPT_AFTER_HOURS)) {
+    throw new ApplicationError(
+      "INVALID_INPUT", 400, `acceptAfterHours must be null or an integer from 1 to ${MAX_ACCEPT_AFTER_HOURS}.`, "acceptAfterHours",
+    );
+  }
+  return value as number | null;
 }
 
 function validName(value: unknown): string {

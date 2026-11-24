@@ -49,7 +49,8 @@ export interface VerdictRow {
 export interface TimelineRow {
   readonly type: "comment" | "event" | "verdict";
   readonly id: string;
-  readonly actor_user_id: string;
+  /** Null only for a verdict its acceptance deadline recorded. */
+  readonly actor_user_id: string | null;
   readonly body: string | null;
   readonly kind: IssueEventKind | IssueVerdictKind | null;
   readonly payload_json: string | null;
@@ -145,6 +146,8 @@ export interface IssuesRepository {
   createIssue(input: CreateIssue): Promise<IssueDetail>;
   updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
   recordVerdict(input: RecordVerdict): Promise<IssueDetail>;
+  /** Accepts at most `limit` submitted Issues whose Space deadline passed by `now`, and returns their Space IDs. */
+  acceptDue(now: number, limit: number): Promise<string[]>;
   findIssue(spaceId: string, number: number): Promise<IssueRow | null>;
   issueDetail(userId: string, spaceId: string, number: number): Promise<IssueDetail>;
   listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]>;

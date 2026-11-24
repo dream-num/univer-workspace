@@ -438,7 +438,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it("edits a repository only when something changes and maps visibility to publicRead", async () => {
     const client = await connect();
     const nothing = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team" } });
-    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility, proposals or slug." });
+    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility, proposals, acceptAfterHours or slug." });
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     const edited = await client.callTool({
       name: "repo_edit",
@@ -470,6 +470,23 @@ describe("space, unit, repository admin, label and merge tools", () => {
     requests.length = 0;
     const invalid = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", proposals: "everyone" } });
     expect(invalid.isError).toBe(true);
+    expect(writesOf()).toEqual([]);
+  });
+
+  it("turns the acceptance deadline on and off", async () => {
+    const client = await connect();
+    const on = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", acceptAfterHours: 72 } });
+    expect(on.structuredContent).toMatchObject({ acceptAfterHours: 72 });
+    const off = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", acceptAfterHours: null } });
+    expect(off.structuredContent).toMatchObject({ acceptAfterHours: null });
+    expect(writesOf()).toEqual([
+      { method: "PATCH", path: "/api/spaces/team-1", body: { acceptAfterHours: 72 } },
+      { method: "PATCH", path: "/api/spaces/team-1", body: { acceptAfterHours: null } },
+    ]);
+    requests.length = 0;
+    for (const hours of [0, 721, 1.5]) {
+      expect((await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", acceptAfterHours: hours } })).isError).toBe(true);
+    }
     expect(writesOf()).toEqual([]);
   });
 

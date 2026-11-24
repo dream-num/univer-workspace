@@ -9,6 +9,8 @@ and their pass conditions start at [MCP gateway](../features/mcp.md), and each t
 On macOS with Docker Desktop or OrbStack, opt in with `VERIFY_UVW_MCP=1 $V up`. `up` refuses any other
 engine. It builds `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
 port 3930 (`VERIFY_UVW_MCP_PORT`). Without the opt-in, every command keeps its default-mode behavior.
+Keep `VERIFY_UVW_SERVER_PORT` off the Fetch standard's blocked ports, such as 4045 and 6000. The gateway's `fetch`
+refuses them with `bad port`, and `doctor` then says the container cannot reach the host Workspace.
 
 These variables are read at `up` and saved in `run.env`:
 
