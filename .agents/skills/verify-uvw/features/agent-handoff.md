@@ -59,35 +59,61 @@ Preconditions:
   `G=$VERIFY_UVW_ROOT/$VERIFY_UVW_RUN/home-guest; gu(){ env UNIVER_HOME=$G node apps/cli/dist/main.js "$@"; }`
   and `gu config set workspace.origin $ORIGIN`. Remove `$G` yourself after `$V down`.
 
-- **Guest (AH4, uvw).** `gu auth guest --json` returns `agent.username` (`A`) and `repo: "<A>/personal"`.
-- **Agent work and link (AH5).** As the guest: `gu pr create -R $A/personal -t Handoff --json`, then
-  `gu unit create --worktree <id> --space $A/personal --type sheet --name "Handoff sheet" --json` (Node ID `AN`),
-  `gu pr ready` and `gu pr merge`. `gu share $AN --link viewer` prints an expiry date and a `Claim link`, with
-  `It works once, within 10 minutes.` Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
-- **Visitor view (AH1-AH3).** In a separate agent-browser session (`AGENT_BROWSER_SESSION=<run>-anon`), open
-  `$ORIGIN/nodes/$AN`, pin the locale, reload, and wait for `canvas`. The bar shows `By agent` and
-  `Unverified agent`. Click `More actions`, then the menu item `Hand to my agent`
-  (`find role menuitem click --name "Hand to my agent" --exact`; the dialog has the same title). Read the MCP tab,
-  click `Command line (uvw)`, then `Copy prompt`. Screenshot both tabs and close with `Close`.
-- **Claim (AH6).** In that session open the claim URL: `Sign in to claim this agent`. Sign in as the run user
-  through the embedded form. The page shows `Claim agent` (the guest's name is `agent`), `@<A>` and `1 file`.
-  Click `Claim agent`; the URL becomes `/spaces/<id>`. Reopen the claim URL: `agent is yours`.
-- **My agents (AH9).** Set `univer-workspace-view-onboarding-complete` to `true` in that session, open `/home`,
-  then Account > `My agents`. The row shows `@<A>`, `Files 1`, `Open space` and `Stop agent`.
-- **Decisions (AH10).** The guest opens and readies a second PR. As the run user,
-  `$V cli ah-pr-list pr list -R $A/personal -s all --json` lists both, `pr merge` merges the second, and
-  `pr create -R $A/personal` fails with
-  `Personal Space pull requests must target the signed-in user's own Space.`
-- **Errors (AH8).** Another signed-in user opening the used claim URL sees `This agent has already been claimed.`;
-  `$ORIGIN/claim/not-a-real-code` shows the not-valid text.
-- **Stop (AH9).** `Stop agent`, then `Stop` in `Stop this agent?`. The row shows `Stopped`,
-  `$V open-anon ah-stopped "$ORIGIN/nodes/$AN"` reports 404, and the guest's uvw session is gone.
-- **MCP guest and an agent-signed browser (AH4, AH7).** `$V mcp-oauth login g1 --guest` saves
-  `g1-guest-card.png` and leaves the run browser signed in as the guest. `$V mcp --auth oauth g1-whoami whoami`
-  names it `verify-uvw g1 · <suffix>`. `$V mcp --auth oauth g1-claim claim '{}'` returns the link; opening it in
-  the run browser shows `Sign out and continue`. Click it, sign in as the run user, and claim.
+### HO1. Guest (AH4, uvw)
 
-### MH. Agent principals, claims and public Spaces
+`gu auth guest --json` returns `agent.username` (`A`) and `repo: "<A>/personal"`.
+
+### HO2. Agent work and link (AH5)
+
+As the guest: `gu pr create -R $A/personal -t Handoff --json`, then
+`gu unit create --worktree <id> --space $A/personal --type sheet --name "Handoff sheet" --json` (Node ID `AN`),
+`gu pr ready` and `gu pr merge`. `gu share $AN --link viewer` prints an expiry date and a `Claim link`, with
+`It works once, within 10 minutes.` Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
+
+### HO3. Visitor view (AH1-AH3)
+
+In a separate agent-browser session (`AGENT_BROWSER_SESSION=<run>-anon`), open
+`$ORIGIN/nodes/$AN`, pin the locale, reload, and wait for `canvas`. The bar shows `By agent` and
+`Unverified agent`. Click `More actions`, then the menu item `Hand to my agent`
+(`find role menuitem click --name "Hand to my agent" --exact`; the dialog has the same title). Read the MCP tab,
+click `Command line (uvw)`, then `Copy prompt`. Screenshot both tabs and close with `Close`.
+
+### HO4. Claim (AH6)
+
+In that session open the claim URL: `Sign in to claim this agent`. Sign in as the run user
+through the embedded form. The page shows `Claim agent` (the guest's name is `agent`), `@<A>` and `1 file`.
+Click `Claim agent`; the URL becomes `/spaces/<id>`. Reopen the claim URL: `agent is yours`.
+
+### HO5. My agents (AH9)
+
+Set `univer-workspace-view-onboarding-complete` to `true` in that session, open `/home`,
+then Account > `My agents`. The row shows `@<A>`, `Files 1`, `Open space` and `Stop agent`.
+
+### HO6. Decisions (AH10)
+
+The guest opens and readies a second PR. As the run user,
+`$V cli ah-pr-list pr list -R $A/personal -s all --json` lists both, `pr merge` merges the second, and
+`pr create -R $A/personal` fails with
+`Personal Space pull requests must target the signed-in user's own Space.`
+
+### HO7. Errors (AH8)
+
+Another signed-in user opening the used claim URL sees `This agent has already been claimed.`;
+`$ORIGIN/claim/not-a-real-code` shows the not-valid text.
+
+### HO8. Stop (AH9)
+
+`Stop agent`, then `Stop` in `Stop this agent?`. The row shows `Stopped`,
+`$V open-anon ah-stopped "$ORIGIN/nodes/$AN"` reports 404, and the guest's uvw session is gone.
+
+### HO9. MCP guest and an agent-signed browser (AH4, AH7)
+
+`$V mcp-oauth login g1 --guest` saves
+`g1-guest-card.png` and leaves the run browser signed in as the guest. `$V mcp --auth oauth g1-whoami whoami`
+names it `verify-uvw g1 · <suffix>`. `$V mcp --auth oauth g1-claim claim '{}'` returns the link; opening it in
+the run browser shows `Sign out and continue`. Click it, sign in as the run user, and claim.
+
+### MH1. Unclaimed agent
 
 Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per source IP.
 Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
@@ -100,30 +126,42 @@ $V mcp-instructions --as bot1 mh-bot1-instructions
 $V mcp --as bot1 mh-bot1-claim claim '{}'
 ```
 
-- **MH1. Unclaimed agent.** `mh-bot1.out` lists 52 tools: the 47 `core` tools with `claim` right after `share`,
-  then `repo_create`, `repo_edit`, `repo_member_list` and `repo_member_write`, which an agent gets in `core` to set up
-  its own repository. A person's default list has 47 and no `claim`. The instructions say the agent
-  `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
-  `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
-  `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
-- **MH2. Claimed agent.** Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
-  gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 51 tools (no `claim`),
-  and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
-- **MH3. Claimer decisions.** bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
-  `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
-  `$V mcp <label> pr_merge '{"repo":…,"number":…}'` merges it. The run user's `pr_create` there fails with
-  `Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
-  Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
-  [pull requests](./pull-requests.md) for that refusal in a Team Space).
-- **MH4. Public Spaces.** `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
-  with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
-  and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
-  the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
-  `AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
-- **MH5. Copy a shared file.** With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
-  `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
-  `The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only
-  after its pull request merges.
+`mh-bot1.out` lists 52 tools: the 47 `core` tools with `claim` right after `share`,
+then `repo_create`, `repo_edit`, `repo_member_list` and `repo_member_write`, which an agent gets in `core` to set up
+its own repository. A person's default list has 47 and no `claim`. The instructions say the agent
+`works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
+`claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
+`principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
+
+### MH2. Claimed agent
+
+Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
+gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 51 tools (no `claim`),
+and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
+
+### MH3. Claimer decisions
+
+bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
+`<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
+`$V mcp <label> pr_merge '{"repo":…,"number":…}'` merges it. The run user's `pr_create` there fails with
+`Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
+Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
+[pull requests](./pull-requests.md) for that refusal in a Team Space).
+
+### MH4. Public Spaces
+
+`$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
+with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
+and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
+the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
+`AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
+
+### MH5. Copy a shared file
+
+With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
+`"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
+`The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only
+after its pull request merges.
 
 ## Gotchas
 
@@ -133,7 +171,7 @@ $V mcp --as bot1 mh-bot1-claim claim '{}'
   mints a new one.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
 - The MCP tool lists change with the claim after the gateway's cache (about 30 s): unclaimed agents have `claim`,
-  claimed agents do not. See [MH1 and MH2](#mh-agent-principals-claims-and-public-spaces).
+  claimed agents do not. See [MH1 and MH2](#mh1-unclaimed-agent).
 - Prompts are English whatever the interface language.
 - The dialog keeps the tab you last chose until the page reloads. Click `MCP (recommended)` before reading the
   MCP tab on a second opening.

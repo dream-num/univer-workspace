@@ -35,7 +35,7 @@ These variables are read at `up` and saved in `run.env`:
 | `VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` | Builds the image from another checkout, such as a clean `git worktree` at `origin/main` that reuses the cached install layer. Its `apps/mcp`, `packages/client-core` and `apps/cli/skill-data` must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data` is empty). Doctor checks the image against that checkout's source digest. |
 | `VERIFY_UVW_AGENT_PORT=<port>` | Registers the Workspace Agent's OAuth client for `agent-up`. See [Workspace Agent](#workspace-agent). |
 | `EXECUTOR_MAX_WORKERS`, `EXECUTOR_IDLE_TTL_MS` | Size the executor pool (defaults 4 and 60000 ms), for both executors. They do not change product defaults. |
-| `MCP_SYNC_BUDGET_MS=1` | Turns long Office and Typst calls into jobs. See [Typst job verification](../features/mcp-executor.md#typst-job-verification). |
+| `MCP_SYNC_BUDGET_MS=1` | Turns long Office and Typst calls into jobs. See [Typst job verification](../features/mcp-executor.md#mt2-typst-job-verification). |
 | `MCP_CIMD_ENABLED=0` | Passes through to the Workspace server. Unset means enabled. |
 
 With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the server for MCP OAuth. When
@@ -44,7 +44,7 @@ With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the 
 
 Which mode a journey needs:
 
-- Run [MB](../features/mcp-production.md#mb-deployment-and-per-account-tools-host-only) with `VERIFY_UVW_MCP_RENDERER=0` and
+- Run [MB](../features/mcp-production.md#mb1-deployment-and-per-account-tools-host-only) with `VERIFY_UVW_MCP_RENDERER=0` and
   `VERIFY_UVW_MCP_PRODUCTION=1`.
 - Journeys that use `--auth dev`, MA5 and the session-based second-user client of MF4 need development
   mode, which is the default.

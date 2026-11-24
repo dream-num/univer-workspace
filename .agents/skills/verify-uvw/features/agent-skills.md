@@ -119,7 +119,9 @@ agent-browser wait --url '**/home'
 agent-browser find role button click --name Agents --exact
 ```
 
-**AS1. Save the mock provider.** The helper chooses a free port starting at 5986 with
+### AS1. Save the mock provider
+
+The helper chooses a free port starting at 5986 with
 `lsof` before starting the provider. Use that same port in the form.
 
 ```bash
@@ -150,7 +152,7 @@ Pass when the saved-state notice appears, the screenshot records it, and the com
 has **Model** set to **AS mock · mock-agent**. If another provider was selected, select
 this one from **Model** before continuing. No real provider key is needed.
 
-**AS2. First repository message.**
+### AS2. First repository message
 
 ```bash
 seed "$O/personal" as2-personal 'AS2 personal instructions.' > "$EVIDENCE/as2-seed-personal.json"
@@ -167,7 +169,7 @@ Pass when the rail lists `as2-repository` as **Repository** and `as2-personal` a
 **Personal**, and request 1's `lastUser` contains both catalog entries in a
 `<system-reminder>` with `This list replaces any earlier one.`
 
-**AS3. Expand the rail.**
+### AS3. Expand the rail
 
 ```bash
 seed "$REPO" as3-alpha 'AS3 alpha instructions.' > "$EVIDENCE/as3-seed-alpha.json"
@@ -187,7 +189,7 @@ Pass when exactly three skills appear initially, all six appear after expansion 
 plus the user-invocable built-ins `html-view-creator` and `skill-creator`), and three remain after
 collapse. The button's `aria-expanded` follows the state.
 
-**AS4. Model reads a skill.**
+### AS4. Model reads a skill
 
 ```bash
 seed "$REPO" as4-read 'AS4_READ_BODY: read me on demand.' > "$EVIDENCE/as4-seed.json"
@@ -202,7 +204,9 @@ node "$A" requests "$EVIDENCE/as4-requests.jsonl" | tee "$EVIDENCE/as4-requests.
 Pass when the steps show the successful `skills_read`, request 2 carries its result
 with `AS4_READ_BODY`, and `as4-read` is first in the rail with **Used**.
 
-**AS5. Unchanged second turn.** Continue AS4 without restarting the mock.
+### AS5. Unchanged second turn
+
+Continue AS4 without restarting the mock.
 
 ```bash
 follow 'AS5 unchanged catalog.'
@@ -215,7 +219,9 @@ node "$A" prefix "$EVIDENCE/as4-requests.jsonl" 2 3 | tee "$EVIDENCE/as5-prefix.
 Pass when request 3's last user content is exactly `AS5 unchanged catalog.` and the
 prefix check exits 0. The rail's synthetic cache-hit ratio remains 50%.
 
-**AS6. Added skill between turns.** Continue AS5.
+### AS6. Added skill between turns
+
+Continue AS5.
 
 ```bash
 seed "$O/personal" as6-added 'AS6 added between turns.' > "$EVIDENCE/as6-seed.json"
@@ -231,7 +237,7 @@ shot as6-expanded
 Pass when request 4's reminder contains the full six-entry replacement catalog,
 including `as6-added`, the expanded rail shows it, and the prefix check exits 0.
 
-**AS7. Global then repository scope.**
+### AS7. Global then repository scope
 
 ```bash
 seed "$REPO" as7-scope 'AS7 repository scope instructions.' > "$EVIDENCE/as7-seed.json"
@@ -255,7 +261,9 @@ Pass when request 1's reminder lists only `(user)` skills, request 2 adds reposi
 including `as7-scope`, the system comparison prints `System messages match.`, and
 prefix exits 0. **Repository: Auto** on Home starts with global scope.
 
-**AS8. Non-member public repository.** Make this disposable repository public. Register
+### AS8. Non-member public repository
+
+Make this disposable repository public. Register
 another throwaway user through the public API, then use a separate browser session.
 Keep its generated password under `home`, which `down` removes.
 
@@ -318,7 +326,7 @@ Pass when the rail says **Repository skills not loaded: you are not a member.** 
 request 1 has no `as8-public` reminder entry. This fresh outsider has no personal skills,
 so its last user message is exactly `AS8 non-member catalog.`
 
-**AS9. Diagnostics and repository precedence.**
+### AS9. Diagnostics and repository precedence
 
 ```bash
 seed "$O/personal" as9-shadow 'AS9_USER_BODY.' > "$EVIDENCE/as9-seed-user.json"
@@ -348,7 +356,9 @@ Pass when **Needs attention** lists **Overridden**, **Built-in name reserved**, 
 each with its `.agents/skills/.../SKILL.md` path. The reminder has exactly one
 `as9-shadow (repository)` entry, no user shadow, no `sheet`, and no `as9-invalid`.
 
-**AS10. Slash menu in both composers.** Seed two matching personal skills. Reloading
+### AS10. Slash menu in both composers
+
+Seed two matching personal skills. Reloading
 with `home` gives the composer a fresh scope catalog, including the new files.
 
 ```bash
@@ -392,7 +402,7 @@ and an `aria-activedescendant` matching a selected option. ArrowDown changes tha
 Tab completes `/as10-beta ` and closes the menu. Escape closes it, clears the active
 ID, and leaves `/as10` intact. No menu action sends a message.
 
-**AS11. Explicit arguments and the message pill.**
+### AS11. Explicit arguments and the message pill
 
 ```bash
 seed "$O/personal" as11-args 'AS11_ARGS_BODY: report for $ARGUMENTS.' > "$EVIDENCE/as11-seed-args.json"
@@ -413,7 +423,7 @@ invocation reminder has `AS11_ARGS_BODY: report for 2026-W46.` with no `$ARGUMEN
 Request 2 has `AS11_APPEND_BODY` followed by `ARGUMENTS: revenue`. Both have empty
 `toolResults`; the scripted model never calls `skills_read` for these invocations.
 
-**AS12. Repeat invocation in the follow-up composer.**
+### AS12. Repeat invocation in the follow-up composer
 
 ```bash
 seed "$O/personal" as12-repeat 'AS12_REPEAT_BODY: work on $ARGUMENTS.' > "$EVIDENCE/as12-seed.json"
@@ -432,7 +442,7 @@ Pass when request 2's last user reminder says the instructions are already loade
 includes `ARGUMENTS: second-topic`, omits `AS12_REPEAT_BODY`, and prefix exits 0.
 The repeated invocation still has a pill and marks the skill used.
 
-**AS13. Manual-only skill and resource exception.**
+### AS13. Manual-only skill and resource exception
 
 ```bash
 mkdir -p "$EVIDENCE/sources/as13-manual/references"
@@ -452,7 +462,7 @@ Pass when `/as13-manual` works with a pill and its invocation reminder includes
 `The skill "as13-manual" can only be invoked by the user with /as13-manual.`.
 Request 3's resource result contains `AS13_SUPPORTING_GUIDE`.
 
-**AS14. Model-only skill.**
+### AS14. Model-only skill
 
 ```bash
 seed "$O/personal" as14-model 'AS14_MODEL_BODY: model-only instructions.' 'user-invocable: false\n' > "$EVIDENCE/as14-seed.json"
@@ -474,7 +484,7 @@ Pass when the `/as14` menu lists `/as14-visible` but not `/as14-model`, the bubb
 request 1 has a catalog entry but no explicit invocation reminder for it. Request 2's
 model tool result contains `AS14_MODEL_BODY`.
 
-**AS15. Running session treats slash text as steering.**
+### AS15. Running session treats slash text as steering
 
 ```bash
 seed "$O/personal" as15-steer 'AS15_STEER_BODY: do not expand steering.' > "$EVIDENCE/as15-seed.json"
@@ -508,7 +518,7 @@ wait "$MODEL_PID" || true
 $V down
 ```
 
-### Skill draft review and publication
+### AS16. Review evidence
 
 Run with MCP and the same-origin proxy enabled, as for AS1. Choose free ports with
 `lsof` and keep one persistent shell for the instance and mock provider. Use the
@@ -524,7 +534,7 @@ eval "$($V env)"
 node "$B/skill-drafts.mjs" create | tee "$EVIDENCE/sb2-create.txt"
 ```
 
-**AS16. Review evidence.** Open `draft.previewPath` from `sb2-draft.json` at
+Open `draft.previewPath` from `sb2-draft.json` at
 `$ORIGIN`. Wait for **Partly works in Workspace**, rendered **Browser draft** and
 **1 unverified**. Files are rows (`references/guide.md 60 B`) that load into one viewer with
 **Preview** and **Source**. Capture `sb2-review.png`.
@@ -536,13 +546,17 @@ frontmatter; the source line numbers and replacement diff also use the raw text.
 The fake quote is absent, the destination is
 `.agents/skills/sb2-review`, and **Publish** is enabled.
 
-**AS17. Invalid frontmatter.** Open the path in `sb2-invalid.json`. Capture
+### AS17. Invalid frontmatter
+
+Open the path in `sb2-invalid.json`. Capture
 `sb2-invalid.png`. The decision heading is **Cannot publish**, the **Blocking** finding is
 **Invalid Skill details**, **Publish** is disabled, and its `aria-describedby` text
 **1 blocking finding. Ask the Agent to revise the draft.** explains the disabled control.
 No files have been published.
 
-**AS19. Publish and invoke.** Return to the AS16 draft and click **Publish**.
+### AS19. Publish and invoke
+
+Return to the AS16 draft and click **Publish**.
 Wait for **Published**, reload and capture `sb2-published.png`. Click **Agents**
 on Home, configure the AS1 mock provider with one text step, then reload Home.
 Type `/sb2` into the composer and capture `sb2-slash-menu.png`. The menu lists
@@ -557,7 +571,9 @@ The request's last user reminder contains `SB2_SKILL_BODY: summarize some args.`
 The invocation has no model `skills_read` tool call. Synthetic mock token counts
 only verify usage display.
 
-**AS18. Replacement.** After AS19 publishes the Skill, create a replacement.
+### AS18. Replacement
+
+After AS19 publishes the Skill, create a replacement.
 
 ```bash
 node "$B/skill-drafts.mjs" replace | tee "$EVIDENCE/sb2-replace.txt"
@@ -569,7 +585,9 @@ The **Files** heading reads `1 removed · 0 kept`, and the `references/guide.md`
 chip: it moves to Trash on publish. The helper checks that the complete replacement base contains two
 files. Leave this draft pending.
 
-**AS20. Reject.** Open the path in `sb2-reject.json`, click **Reject**, wait for
+### AS20. Reject
+
+Open the path in `sb2-reject.json`, click **Reject**, wait for
 **Rejected**, reload and capture `sb2-rejected.png`. Read both decisions back
 through HTTP, then stop the mock and run `down`.
 
@@ -583,14 +601,12 @@ $V down
 The helper asserts the AS19 draft is `published` and AS20 draft is `rejected`.
 Keep JSON readbacks, screenshots, mock JSONL and summary text with the run evidence.
 
-### Built-in Skill authoring
+### AS21. Built-in invocation and personal publication
 
 Use the AS1 provider and shell helpers with an MCP image built from this checkout.
 Use free ports and a disposable run, for example server 3933, Vite 5983 and MCP 3943
 under `VERIFY_UVW_ROOT=/tmp/verify-uvw-sb4`. The provider's responses are scripted;
 draft creation, authorization, publication and discovery use the real services.
-
-**AS21. Built-in invocation and personal publication.**
 
 ```bash
 mock as21 '[{"text":"Which sections should the weekly report include?"}]'
@@ -636,7 +652,9 @@ tool-result lines. Use `agent-requests.mjs prefix` between requests of the same
 conversation to check unchanged system, tools and sent history. Mock cached-token
 counts are synthetic and do not measure a provider's actual cache.
 
-**AS22. Ask denies saving.** Start a fresh Home session in Ask. Restart the mock
+### AS22. Ask denies saving
+
+Start a fresh Home session in Ask. Restart the mock
 with the same `skill_draft_create` input as AS21 but a fresh idempotency key, then
 one text response acknowledging the denial. Send
 `/skill-creator make a weekly report skill`. Capture `as22-denied.png` and the
@@ -644,7 +662,9 @@ request summary. The tool result must say `This connection is not authorized for
 write access. In the Workspace Agent's Ask mode, switch to Auto and try again.`
 No successful draft result may appear.
 
-**AS23. One pull request per session.** Start a fresh repository session in Auto. The mock
+### AS23. One pull request per session
+
+Start a fresh repository session in Auto. The mock
 calls `pr_create` once, then answers. Pad the idempotency key: it needs 16 to 200 URL-safe
 characters, and a short run ID makes `as23-$VERIFY_UVW_RUN` too short.
 

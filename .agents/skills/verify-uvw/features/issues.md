@@ -27,22 +27,36 @@ Preconditions:
 - Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 - No repository `verify-team` exists.
 
-- **Create repo.** Run `$V cli issue-repo-create repo create verify-team --name "Verify Team" --json id,fullName`.
-  The output has `fullName: "<O>/verify-team"`.
-- **Open Issue.** Run `$V cli issue-create-cli issue create -R $O/verify-team -t "Totals look wrong" -b "North should be 42" --json number,state,title`.
-  Output: `number: 1`, `state: "open"`.
-- **Open it in the browser.** Run `agent-browser open "$($V uvw browse 1 -R $O/verify-team)"`
-  and `agent-browser wait 3000`. The heading reads `Totals look wrong #1`, and the body
-  says `North should be 42`.
+### IS1. Create repo
+
+Run `$V cli issue-repo-create repo create verify-team --name "Verify Team" --json id,fullName`.
+The output has `fullName: "<O>/verify-team"`.
+
+### IS2. Open Issue
+
+Run `$V cli issue-create-cli issue create -R $O/verify-team -t "Totals look wrong" -b "North should be 42" --json number,state,title`.
+Output: `number: 1`, `state: "open"`.
+
+### IS3. Open it in the browser
+
+Run `agent-browser open "$($V uvw browse 1 -R $O/verify-team)"`
+and `agent-browser wait 3000`. The heading reads `Totals look wrong #1`, and the body
+says `North should be 42`.
+
+### IS4. Comment and close
+
 - **Comment.** Run `agent-browser find label "Add a comment" click`,
   `agent-browser keyboard type "Confirmed in browser"`, and
   `agent-browser find role button click --name "Comment" --exact`.
 - **Close.** Run `agent-browser find role button click --name "Close issue"`,
   `agent-browser wait 2000`, and `agent-browser screenshot "$EVIDENCE/issue-close-web.png"`.
   The timeline shows `closed this as completed`, and the button now reads `Reopen issue`.
-- **CLI readback.** Run `$V cli issue-timeline-cli issue view 1 -R $O/verify-team -c --json`.
-  The output has state `closed`, a comment with body `Confirmed in browser`, and an event
-  with `type: "event"`, `kind: "closed"` and `payload.reason: "completed"`.
+
+### IS5. CLI readback
+
+Run `$V cli issue-timeline-cli issue view 1 -R $O/verify-team -c --json`.
+The output has state `closed`, a comment with body `Confirmed in browser`, and an event
+with `type: "event"`, `kind: "closed"` and `payload.reason: "completed"`.
 
 ## Gotchas
 

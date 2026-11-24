@@ -26,7 +26,7 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. These journeys need the renderer, which `up` starts unless `VERIFY_UVW_MCP_RENDERER=0`.
 MR12 also needs opencode.
 
-### MR9 renderer role
+### MR9. renderer role
 
 The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. `screenshot`
 (MR10), `print_pdf` and `lint` (MR11) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
@@ -57,7 +57,7 @@ Pass when:
   `pkill -P "$(node .agents/skills/verify-uvw/bin/mcp-processes.mjs pid "$RUN" renderer)" chromium`. A plain
   `pkill chromium` also kills the run's agent-browser.
 
-### MR10 screenshot tool
+### MR10. screenshot tool
 
 The `screenshot` tool loads the Unit in the executor, which inlines every image Asset, and sends only the unit to the renderer. A
 Worktree Unit proves the Worktree Asset read and a trunk Unit proves the trunk Asset read. Run it after MR9's `doctor` passes and
@@ -135,7 +135,7 @@ Pass when:
   The usage event records `render_pages` 2 and `export_bytes` above 1 MiB.
 - Both rejections exit 1 with their message and a `tool_error` event.
 
-### MR11 print_pdf and lint tools
+### MR11. print_pdf and lint tools
 
 Both tools load the Unit in the executor, which inlines every image Asset, and send only the unit to the renderer. A Worktree Unit proves the
 Worktree reads and a trunk Unit proves the trunk reads. Run it after MR9's `doctor` passes and use a parallel run id when another run is active.
@@ -247,7 +247,7 @@ Pass when:
   renderer and the CLI measure text with different Chromium builds and fonts.
 - The lint rejections exit 1 with the CLI's text, and the Sheet keeps the CLI's code `workspace-unit-layout-lint-unit-type-unsupported`.
 
-### MR12 opencode screenshot
+### MR12. opencode screenshot
 
 An agent reads a screenshot through `screenshot`, so the image must reach the model and the model must describe it correctly. The model is
 `$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). `screenshot` is a core tool, so opencode runs from

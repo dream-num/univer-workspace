@@ -243,7 +243,7 @@ Pass when estimated SVG compilation matches the CLI, retains its estimation lint
 of a new Slide, and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There
 is no SVG retry key; an unknown write outcome requires inspection before another apply.
 
-### Typst job verification
+### MT2. Typst job verification
 
 After the default-budget journeys, run `down` and start a fresh stack with
 `MCP_SYNC_BUDGET_MS=1 VERIFY_UVW_MCP=1 $V up`, then `user` and `doctor`.

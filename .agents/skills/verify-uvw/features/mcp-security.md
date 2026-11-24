@@ -96,6 +96,42 @@ Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker
 | MG10 | exposed | With the allowlist set to `*`, the executor becomes healthy with session grants; the renderer becomes healthy with `--no-sandbox`. |
 | MG11 | exposed | One Chromium browser process serves both users; each call gets a context in the shared browser. |
 
+### MG2. Environment variable names
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG2.
+
+### MG4. Network reach
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG4.
+
+### MG5. Other users' processes and files
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG5.
+
+### MG6. CPU deadline and reclamation
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG6.
+
+### MG7. Memory limit and reclamation
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG7.
+
+### MG8. Worker slots under contention
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG8.
+
+### MG9. Product data mounts
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG9.
+
+### MG10. Unsafe configuration refuses to start
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG10.
+
+### MG11. Renderer browser per user
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG11.
+
 ## Gotchas
 
 - The second user is `verify-<run-id>-b`. It is registered through `/api/auth/password/register` and its password and PAT live in

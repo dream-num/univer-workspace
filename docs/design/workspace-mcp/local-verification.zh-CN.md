@@ -251,7 +251,7 @@ $V mcp-allow-users <workspace-user-id> [<another-workspace-user-id> ...]
 命令先等待重建的 executor 健康，再重建 gateway，保证首次能力发现能看到执行层。不重建镜像，不重启 Workspace、Vite 或 renderer。失败时保留所选白名单，重试同一命令即可。
 `executor-allowed-user-ids` 与 `run.env` 一起保留以供审查；凭据仍只保存在 `home/` 并由 `down` 删除。
 
-MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp-production.md](../../../.agents/skills/verify-uvw/features/mcp-production.md#mb-deployment-and-per-account-tools-host-only)。
+MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp-production.md](../../../.agents/skills/verify-uvw/features/mcp-production.md#mb1-deployment-and-per-account-tools-host-only)。
 MB1 比对七种 toolset 的显式有序列表，MB2 检查 instructions，MB3 用第二个非白名单用户验证 40 个纯 HTTP 工具与 unknown-tool 错误，MB4 用 PAT 完成 MX1 至 MX3，MB5 先验证 `/readyz` 为 200，再停止 executor 并通过 `$V mcp-gateway-restart` 仅重建 gateway，预期为 503 且命名 executor 检查；启动 executor 后十秒内恢复 200。已发现过兼容能力的 gateway 不因 executor 停止而未就绪，仍可服务 HTTP 工具。Workspace 的可选停机检查记录为未运行，因为 helper 没有独立的 server stop/restart 命令。
 若基线尚未合入该端点而返回 404，脚本记录 MB5 未运行，不能宣称就绪验收通过。
 

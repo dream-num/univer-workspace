@@ -198,7 +198,7 @@ jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
 ```
 
 Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1, the reused cursor has a matching usage event, and the CLI also rejects the unknown Skill.
-### MR13 custom Skills
+### MR13. custom Skills
 
 Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
 Run MR13 after MR1 or on a fresh run: MR1 expects only the twelve built-in Skills.
@@ -263,7 +263,7 @@ names follow the same rule at their respective paths and skip the ambiguous subt
 Dot-named nested folders and `blob upload --parent` are exercised by these uploads.
 Use a fresh run for the duplicate case because it intentionally leaves an ambiguous folder.
 
-### MR14 Skill draft authoring
+### MR14. Skill draft authoring
 
 Start a fresh MCP-enabled run, then run `user` and `doctor`.
 MR14 follows MR13's live custom Skill discovery path.
@@ -285,7 +285,7 @@ The four draft call events must say `ok`, `executor: none`, and the destination
 Space ID, with no Skill content. `mr14-summary.json` records the asserted result.
 Run `$V down` afterward.
 
-### MR15 Import a pinned external Skill and publish after review
+### MR15. Import a pinned external Skill and publish after review
 
 Use a fresh MCP-enabled same-origin run, with live GitHub network access. Build the
 MCP image from this checkout. Check the chosen ports with `lsof` first.
