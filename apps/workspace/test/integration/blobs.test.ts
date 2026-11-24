@@ -2,10 +2,12 @@ import { interactivePrincipal } from "../fixtures/principal.js";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { ApplicationError } from "../../server/src/middleware/errors.js";
+import { LocalBlobStore } from "../../server/src/integrations/blob/blob-store.js";
+import { createBlobsModule } from "../../server/src/modules/blobs/index.js";
 
 const applications: SqliteTestApplication[] = [];
 const directories: string[] = [];
@@ -314,7 +316,7 @@ describe("Blob Resources", () => {
     expect(await readAll(opened.stream)).toEqual(Buffer.alloc(0));
   });
 
-  it("recovers an interrupted upload on application restart", async () => {
+  it("reopens an upload after a restart once its stopped process left the lease unrenewed", async () => {
     const directory = mkdtempSync(join(tmpdir(), "workspace-blob-restart-"));
     directories.push(directory);
     const blobDirectory = join(directory, "objects");
@@ -357,14 +359,15 @@ describe("Blob Resources", () => {
         .get(reserved.body.upload.id) as { readonly object_key: string }
     ).object_key;
     first.database.connection
-      .prepare("UPDATE blob_upload_sessions SET state = 'verifying' WHERE id = ?")
-      .run(reserved.body.upload.id);
+      .prepare("UPDATE blob_upload_sessions SET state = 'verifying', updated_at = ? WHERE id = ?")
+      .run(Date.now() - 61_000, reserved.body.upload.id);
     mkdirSync(blobDirectory, { recursive: true });
     writeFileSync(join(blobDirectory, `${objectKey}.upload`), "stale");
     await first.close();
 
     const restarted = await createSqliteTestApplication(config, dependencies);
     applications.push(restarted);
+    await restarted.blobs.runMaintenance("recovery");
     expect(await restarted.blobs.getUpload(userId, reserved.body.upload.id)).toMatchObject({
       upload: { state: "waitingForUpload" },
     });
@@ -699,7 +702,73 @@ describe("Blob content replacement", () => {
     });
   });
 
-  it("fails interrupted replacements once on restart and cleans only unpublished objects", async () => {
+  it("keeps an upload and a replacement that receive for longer than the lease", async () => {
+    const { application, blobDirectory } = await createTestApplication();
+    const blobs = createBlobsModule({
+      repository: application.repositories.blobs,
+      access: application.access,
+      store: new LocalBlobStore(blobDirectory),
+      now: () => Date.now(),
+    });
+    const user = await register(application, "slow-receive");
+    const actor = interactivePrincipal(user);
+    const space = (await application.spaces.list(user)).spaces[0]!;
+    const blob = await uploadedBlob(application, user, space.id, "old.bin", "slow-receive-create-0001");
+    await application.blobs.complete(actor, blob.uploadId);
+    const etag = await contentEtag(application, user, blob.resourceId);
+    const reserved = await application.blobs.createUpload(actor, "slow-receive-upload-0001", {
+      spaceId: space.id, parentNodeId: null, name: "slow.bin", originalFilename: "slow.bin", byteSize: 4,
+    });
+    const operationId = "slow-receive-replace-0001";
+    const [uploadBody, replaceBody] = [new PassThrough(), new PassThrough()];
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      const uploading = blobs.upload(user, reserved.body.upload.id, "4", uploadBody);
+      const replacing = blobs.replace(actor, blob.resourceId, operationId, etag, "4", replaceBody);
+      uploadBody.write("sl");
+      replaceBody.write("ne");
+      await vi.waitFor(async () => {
+        expect((await application.blobs.getUpload(user, reserved.body.upload.id)).upload.state).toBe("verifying");
+        expect((await application.operations.get(user, operationId)).state).toBe("pending");
+      });
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await blobs.runMaintenance("another-replica");
+      uploadBody.end("ow");
+      replaceBody.end("wb");
+      await uploading;
+      await replacing;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await application.blobs.getUpload(user, reserved.body.upload.id)).toMatchObject({ upload: { state: "uploaded" } });
+    expect(await application.operations.get(user, operationId)).toMatchObject({ state: "completed" });
+    const content = await application.blobs.openContent(user, blob.resourceId, undefined);
+    expect(await readAll(content.stream)).toEqual(Buffer.from("newb"));
+  });
+
+  it("keeps the old bytes when maintenance fails a replacement whose bytes still stream", async () => {
+    const { application, blobDirectory } = await createTestApplication();
+    const user = await register(application, "lapsed-replace");
+    const actor = interactivePrincipal(user);
+    const space = (await application.spaces.list(user)).spaces[0]!;
+    const blob = await uploadedBlob(application, user, space.id, "old.bin", "lapsed-replace-create-0001");
+    await application.blobs.complete(actor, blob.uploadId);
+    const etag = await contentEtag(application, user, blob.resourceId);
+    const operationId = "lapsed-replace-0001";
+    const body = new PassThrough();
+    const replacing = application.blobs.replace(actor, blob.resourceId, operationId, etag, "4", body);
+    body.write("ne");
+    await vi.waitFor(async () => expect((await application.operations.get(user, operationId)).state).toBe("pending"));
+    await application.repositories.blobs.failReplacement(operationId, "REPLACEMENT_INTERRUPTED", "Lease lapsed.", Date.now());
+    body.end("wb");
+    await expect(replacing).rejects.toMatchObject({ code: "CONFLICT" });
+    await application.blobs.runMaintenance("cleanup");
+    const content = await application.blobs.openContent(user, blob.resourceId, undefined);
+    expect(await readAll(content.stream)).toEqual(Buffer.from([0, 1, 2, 3]));
+    expect(readdirSync(blobDirectory)).toHaveLength(1);
+  });
+
+  it("fails a replacement whose stopped process left the lease unrenewed and cleans only its object", async () => {
     const { application, blobDirectory } = await createTestApplication();
     const user = await register(application, "replace-recovery");
     const space = (await application.spaces.list(user)).spaces[0]!;
@@ -717,16 +786,16 @@ describe("Blob content replacement", () => {
       operationId,
       interactivePrincipal(user),
       { resourceId: blob.resourceId, expectedEtag: "old", byteSize: 4 },
-      Date.now(),
+      Date.now() - 61_000,
     );
     writeFileSync(join(blobDirectory, pending.objectKey), "lost");
     await application.close();
     const restarted = (await createTestApplication(join(blobDirectory, ".."))).application;
+    await restarted.blobs.runMaintenance("recovery");
     expect(await restarted.operations.get(user, operationId)).toMatchObject({
       state: "failed",
       error: { code: "REPLACEMENT_INTERRUPTED" },
     });
-    await restarted.blobs.runMaintenance("recovery");
     expect(readdirSync(blobDirectory)).toHaveLength(1);
     const content = await restarted.blobs.openContent(user, blob.resourceId, undefined);
     expect(await readAll(content.stream)).toEqual(Buffer.from([0, 1, 2, 3]));

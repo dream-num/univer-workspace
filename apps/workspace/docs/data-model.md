@@ -320,8 +320,10 @@ Markdown 只增加只读展示，不新增 Resource kind、Unit 或持久化字�
 
 保存发布前的三段上传状态以及服务端预留的 Node/Resource/Object 身份。上传完成前不创建
 Node 和 Resource，因此 Tree 不会看见半成品。Complete 在一个产品事务中发布 Node、
-Resource 与 Blob 扩展并完成 Operation。单进程服务启动时会把中断在 `verifying` 的上传
-恢复为可重传状态；确定性临时对象会在重传、Abort 或过期清理时移除。
+Resource 与 Blob 扩展并完成 Operation。接收字节的请求每 10 秒续期一次 `verifying` 行的
+`updated_at`。任一副本的后台维护（每 5 秒一轮）把超过 60 秒未续期的 `verifying` 行视为接收进程已停止，
+恢复为可重传状态，因此进程停止后约 65 秒内可以重传。服务启动不再恢复上传：PostgreSQL 下其他副本可能仍在
+接收这些字节，SQLite 也走同一条后台路径。确定性临时对象会在重传、Abort 或过期清理时移除。
 
 ### `univer_assets`
 
@@ -338,8 +340,9 @@ application-design.md "Office Exchange Module"）。附件转成在线文档后�
 
 保存原生 Univer File API 上传的 `receiving | stored` 状态。行中预留 Asset/Object 身份并固化
 Unit Scope；字节完整写入 BlobStore 后记录 Hash 与 ETag，再在一个产品事务中发布
-`univer_assets` 并删除 Upload 行。启动恢复会发布完整的 `stored` 行，放弃不完整的
-`receiving` 行并写删除任务。
+`univer_assets` 并删除 Upload 行。预留在创建 1 小时后过期，足够在 20 MB 上限内完成上传。
+任一副本的后台维护发布已过期的完整 `stored` 行，放弃已过期的 `receiving` 行并写删除任务。
+未过期的行可能仍属于另一副本上正在进行的上传，维护不会处理。
 
 ### `object_deletion_jobs`
 
@@ -603,8 +606,10 @@ Node。
 上传结束后重新校验编辑权限，并在产品事务中比较旧 ETag、切换对象与内容元数据、生成随机新 ETag、
 完成 Operation，同时写入 `blob_content_replaced` 删除任务。内容相同也生成新 ETag；SHA-256
 仍表示字节校验值。版本不匹配返回 412，旧对象与旧内容保留。
-失败请求标记 Failed，并写 `blob_upload_abandoned` 删除任务；启动阶段将中断的 Pending 替换
-按同样方式收敛。Completed Key 只回放记录结果，不重复写入；Pending 不可并发重入，Failed
+失败请求标记 Failed，并写 `blob_upload_abandoned` 删除任务。接收字节的请求每 10 秒续期 Pending
+Operation 的 `updated_at`；任一副本的后台维护把超过 60 秒未续期的 Pending 替换按同样方式收敛为
+`REPLACEMENT_INTERRUPTED`。完成事务只在 Operation 仍为 Pending 时切换对象，因此续期中断后才写完的字节
+不会被发布；该请求失败时会为新对象再写一次删除任务。Completed Key 只回放记录结果，不重复写入；Pending 不可并发重入，Failed
 必须用新 Key 重试。Operation 查询用于确认未知结果。Blob 不作为 Unit 进入 Worktree，也不保存历史版本；
 经 Fork 替换 Blob 是挂在 Worktree 上的文件草稿，见「HTML View 草稿」的「文件草稿」。
 

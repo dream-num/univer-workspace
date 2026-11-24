@@ -674,7 +674,7 @@ describe("automatic product database migration to V29", { timeout: 30_000 }, () 
     original.close();
   });
 
-  it("starts the application after V3 migration and recovers upload sessions", async () => {
+  it("starts the application after V3 migration and recovers expired upload sessions in maintenance", async () => {
     const { directory, filename } = richV3Database();
     const application = await createSqliteTestApplication(
       {
@@ -698,6 +698,7 @@ describe("automatic product database migration to V29", { timeout: 30_000 }, () 
       expect(application.database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
         user_version: 29,
       });
+      await application.univerAssets.recoverInterruptedUploads();
       expect(count(application.database.connection, "univer_asset_uploads")).toBe(0);
       expect(count(application.database.connection, "univer_assets")).toBe(2);
       expect(

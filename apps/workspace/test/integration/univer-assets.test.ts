@@ -289,7 +289,7 @@ describe("Univer embedded assets", () => {
     expect(count(application, "object_deletion_jobs")).toBe(0);
   });
 
-  it("recovers stored uploads and abandons incomplete uploads on restart", async () => {
+  it("publishes stored uploads and abandons incomplete ones after a restart once their reservation expired", async () => {
     const directory = mkdtempSync(join(tmpdir(), "workspace-asset-recovery-"));
     directories.push(directory);
     const blobDirectory = join(directory, "objects");
@@ -369,6 +369,7 @@ describe("Univer embedded assets", () => {
 
     const restarted = await createSqliteTestApplication(config, dependencies);
     applications.push(restarted);
+    await restarted.univerAssets.recoverInterruptedUploads();
     expect(count(restarted, "univer_asset_uploads")).toBe(0);
     expect(count(restarted, "univer_assets")).toBe(1);
     expect(

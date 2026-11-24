@@ -98,7 +98,8 @@ export interface BlobsRepository {
     now: number,
   ): Promise<BlobReplacementResult>;
   failReplacement(operationId: string, code: string, message: string, now: number): Promise<void>;
-  pendingReplacementIds(): Promise<string[]>;
+  pendingReplacementIds(renewedBefore: number): Promise<string[]>;
+  renewReplacement(operationId: string, renewedAt: number): Promise<void>;
   reserve(input: {
     readonly operationId: string;
     readonly actorUserId: string;
@@ -107,7 +108,8 @@ export interface BlobsRepository {
     readonly expiresAt: number;
   }): Promise<ReservedBlobUpload>;
   find(uploadId: string, actorUserId: string): Promise<ReservedBlobUpload | null>;
-  recoverInterruptedUploads(recoveredAt: number): Promise<number>;
+  recoverInterruptedUploads(recoveredAt: number, renewedBefore: number): Promise<number>;
+  renewUpload(uploadId: string, renewedAt: number): Promise<void>;
   beginUpload(uploadId: string, updatedAt: number): Promise<boolean>;
   markUploaded(input: {
     readonly uploadId: string;

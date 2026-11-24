@@ -149,8 +149,8 @@ export class PostgresUniverAssetsRepository implements UniverAssetsRepository {
     readonly abandoned: number;
   }> {
     const rows = await this._database.prepare(
-      `SELECT * FROM univer_asset_uploads ORDER BY created_at, id`
-    ).all() as unknown as UniverAssetUploadRow[];
+      `SELECT * FROM univer_asset_uploads WHERE expires_at <= ? ORDER BY created_at, id`
+    ).all(recoveredAt) as unknown as UniverAssetUploadRow[];
     let published = 0;
     let abandoned = 0;
     for (const row of rows) {
