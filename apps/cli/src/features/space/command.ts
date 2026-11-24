@@ -2,6 +2,8 @@ import { Command } from "commander";
 import {
   assertSpaceFilter,
   nodeMoveParent,
+  type BrowseSpaceInput,
+  type WorkspaceForkFeature,
   type WorkspaceResourceKindFilter,
   type WorkspaceSpaceFeature,
   type WorkspaceUnitType,
@@ -10,6 +12,7 @@ import { executeCommand, oneOf, present, type JsonOption } from "../../command.j
 import type { RepoContext } from "../../repo-context.js";
 
 const flag = (parameter: string) => `--${parameter.replaceAll("_", "-")}`;
+const LISTED_REPO = "owner/slug, unique bare slug from repo list, Space ID, URL, or a fork's owner/name";
 
 interface BrowseOptions extends JsonOption {
   readonly parent?: string;
@@ -18,11 +21,19 @@ interface BrowseOptions extends JsonOption {
   readonly unitType?: string;
 }
 
-export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: RepoContext): Command {
+export function createSpaceCommand(
+  feature: WorkspaceSpaceFeature,
+  context: RepoContext,
+  forks: Pick<WorkspaceForkFeature, "listing">,
+): Command {
+  const listing = async (reference: string): Promise<Pick<BrowseSpaceInput, "overlay" | "spaceId">> => {
+    const resolved = await context.repoOrFork(reference);
+    return "fork" in resolved ? await forks.listing(resolved.fork) : { spaceId: resolved.spaceId };
+  };
   const space = new Command("space").description("Browse and manage the files (Nodes) of a repository; list repositories with `uvw repo list`");
   const browse = new Command("browse")
-    .description("Browse a Space Node directory")
-    .argument("<repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
+    .description("Browse a Space Node directory; a fork lists its upstream with the fork's changes")
+    .argument("<repo>", LISTED_REPO)
     .option("--parent <node>", "parent Node ID")
     .option("--recursive", "browse descendants recursively")
     .option("--resource-kind <kind>", "none, univer, or blob")
@@ -34,7 +45,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
           browse,
           async () =>
             await feature.browse({
-              spaceId: (await context.repo(repo)).spaceId,
+              ...(await listing(repo)),
               ...filters(options),
               ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
               ...(options.recursive === true ? { recursive: true } : {}),
@@ -44,9 +55,9 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
       present(browse, options, value);
     });
   const find = new Command("find")
-    .description("Find Nodes by name across a Space")
+    .description("Find Nodes by name across a Space or a fork")
     .argument("<query...>", "name query")
-    .requiredOption("--space <repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
+    .requiredOption("--space <repo>", LISTED_REPO)
     .option("--resource-kind <kind>", "none, univer, or blob")
     .option("--unit-type <type>", "sheet, base, doc, slide, or board")
     .option("--json", "write structured JSON")
@@ -57,7 +68,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
           async () =>
             await feature.find({
               query: query.join(" "),
-              spaceId: (await context.repo(options.space)).spaceId,
+              ...(await listing(options.space)),
               ...filters(options),
             }),
         ),

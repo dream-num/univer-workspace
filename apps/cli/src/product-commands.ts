@@ -1,5 +1,6 @@
 import type { Config } from "@univer-cli/config";
 import {
+  WorkspaceForkFeature,
   WorkspaceIssueFeature,
   WorkspaceSpaceFeature,
   WorkspaceWorktreeFeature,
@@ -9,6 +10,7 @@ import { workspaceSessionPath } from "./config.js";
 import { createAuthCommand } from "./features/auth/command.js";
 import { WorkspaceAuth } from "./features/auth/session.js";
 import { createBrowseCommand } from "./features/browse/command.js";
+import { createForkCommand } from "./features/fork/command.js";
 import { createIssueCommand } from "./features/issue/command.js";
 import { createLabelCommand } from "./features/label/command.js";
 import { createPullRequestCommands } from "./features/pr/command.js";
@@ -19,13 +21,14 @@ import { RepoContext } from "./repo-context.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
 /**
- * The product commands (sign-in, repositories, Issues, pull requests) only talk HTTP to the
+ * The product commands (sign-in, repositories, forks, Issues, pull requests) only talk HTTP to the
  * Workspace. They are built from the light Client Core entry so that running one of them does not
  * load the Univer runtime that content commands need.
  */
 export const PRODUCT_COMMAND_NAMES: ReadonlySet<string> = new Set([
   "auth",
   "repo",
+  "fork",
   "issue",
   "label",
   "pr",
@@ -51,12 +54,14 @@ export function createProductServices(options: ProductOptions) {
   const authenticatedHttp = async () => await auth.authenticatedHttp("client");
   const origin = async () => await auth.configuredOrigin();
   const spaces = new WorkspaceSpaceFeature(authenticatedHttp);
+  const forks = new WorkspaceForkFeature(authenticatedHttp);
   return {
     auth,
     authenticatedHttp,
+    forks,
     issues: new WorkspaceIssueFeature(authenticatedHttp),
     origin,
-    repoContext: new RepoContext(spaces, origin, options.env),
+    repoContext: new RepoContext(spaces, forks, origin, options.env),
     spaces,
     userId: async () => (await auth.whoami()).subject.id,
     worktrees: new WorkspaceWorktreeFeature(authenticatedHttp),
@@ -66,10 +71,11 @@ export function createProductServices(options: ProductOptions) {
 export type ProductServices = ReturnType<typeof createProductServices>;
 
 export function createProductCommands(services: ProductServices): readonly Command[] {
-  const { auth, issues, origin, repoContext, spaces, userId, worktrees } = services;
+  const { auth, forks, issues, origin, repoContext, spaces, userId, worktrees } = services;
   return [
     createAuthCommand(auth),
     createRepoCommand(spaces, repoContext),
+    createForkCommand(forks, repoContext),
     createIssueCommand({ context: repoContext, feature: issues, origin }),
     createLabelCommand(issues, repoContext),
     ...createPullRequestCommands({ context: repoContext, origin, spaces, userId, worktrees }),

@@ -38,7 +38,7 @@ export function createWorkspaceScreenshotCommand(input: {
   });
   command.description("Render a Workspace Unit as PNG images");
   command.addOption(
-    new Option("--worktree <worktree-id>", "capture the Unit from a Worktree").conflicts("trunk"),
+    new Option("--worktree <worktree-id>", "capture the Unit from a Worktree, or through a fork's owner/name").conflicts("trunk"),
   );
   command.addOption(new Option("--trunk", "capture the Unit from trunk").conflicts("worktree"));
   const output = command.options.find((option) => option.long === "--out");

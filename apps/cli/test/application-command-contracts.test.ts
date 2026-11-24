@@ -173,6 +173,7 @@ describe("Workspace application Commander adapters", () => {
         trashNode,
       } as unknown as WorkspaceSpaceFeature,
       repoContext(),
+      NO_FORKS,
     );
 
     const browseOutput = await run(command, [
@@ -233,7 +234,7 @@ describe("Workspace application Commander adapters", () => {
 
   it("requires exactly one explicit Node move destination", async () => {
     const moveNode = vi.fn();
-    const command = createSpaceCommand({ moveNode } as unknown as WorkspaceSpaceFeature, repoContext());
+    const command = createSpaceCommand({ moveNode } as unknown as WorkspaceSpaceFeature, repoContext(), NO_FORKS);
 
     await expect(run(command, ["node", "move", "node-1"])).rejects.toThrow(/process\.exit/u);
     await expect(
@@ -249,7 +250,7 @@ describe("Workspace application Commander adapters", () => {
       add,
       create,
       list: async () => [],
-    } as unknown as WorkspaceUnitFeature, repoContext(), async () => "https://workspace.test");
+    } as unknown as WorkspaceUnitFeature, NO_FORKS, repoContext(), async () => "https://workspace.test");
 
     await run(command, ["add", "--worktree", "wt-1", "--resource", "resource-1"]);
     await run(command, [
@@ -392,9 +393,18 @@ function authCommands(auth: WorkspaceAuth): readonly Command[] {
   return createAuthCommand(auth).commands;
 }
 
+const NO_FORKS = {
+  addUnit: vi.fn(),
+  createUnit: vi.fn(),
+  get: vi.fn(),
+  listing: vi.fn(),
+  units: vi.fn(),
+};
+
 function repoContext(): RepoContext {
   return new RepoContext(
     { lookup: async () => ({ id: "looked-up", name: "Looked up" }), get: async (id) => ({ id, name: "By ID" }), list: async () => [] },
+    NO_FORKS,
     async () => "https://workspace.test",
     {},
   );

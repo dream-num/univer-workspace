@@ -88,6 +88,14 @@ export {
   type WorkspaceUniverResource,
 } from "./space-model.js";
 export {
+  isForkAddress,
+  resolveRepoOrFork,
+  WorkspaceForkFeature,
+  type WorkspaceFork,
+  type WorkspaceForkState,
+  type WorkspaceForkWorktree,
+} from "./fork.js";
+export {
   parseItemNumber,
   parseRepoReference,
   resolveRepoReference,

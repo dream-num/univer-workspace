@@ -21,7 +21,7 @@ export function createWorkspacePrintPdfCommand(
     .argument("<output.pdf>", "output PDF file")
     .requiredOption("--unit <unit-id>", "Unit to print")
     .addOption(
-      new Option("--worktree <worktree-id>", "print the Unit from a Worktree").conflicts(
+      new Option("--worktree <worktree-id>", "print the Unit from a Worktree, or through a fork's owner/name").conflicts(
         "trunk",
       ),
     )

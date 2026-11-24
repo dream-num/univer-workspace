@@ -1,5 +1,5 @@
 /**
- * Light entry: the product workflows that only talk HTTP (sign-in, Spaces, Issues, Worktrees and
+ * Light entry: the product workflows that only talk HTTP (sign-in, Spaces, forks, Issues, Worktrees and
  * their addressing). A Client Shell that needs just these imports `./product` and skips loading
  * the Univer runtime that the package root pulls in.
  */
@@ -61,6 +61,14 @@ export {
   PULL_REQUEST_STATES,
   type PullRequestState,
 } from "./pull-request.js";
+export {
+  isForkAddress,
+  resolveRepoOrFork,
+  WorkspaceForkFeature,
+  type WorkspaceFork,
+  type WorkspaceForkState,
+  type WorkspaceForkWorktree,
+} from "./fork.js";
 export {
   parseItemNumber,
   parseNodeReference,

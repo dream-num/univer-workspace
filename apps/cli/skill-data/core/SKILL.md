@@ -90,6 +90,10 @@ Understand these identities before running a mutation:
   that Space and may be private or visible to that Space.
 - **Worktree-local Unit**: a new Unit created inside a Worktree. The server allocates its
   `unitId`, `resourceId`, and `nodeId`; merge activates the target Node/Resource.
+- **Fork**: your own view of a Team Space, named `<your-username>/<name>` and visible only to you. It
+  reads as the upstream's trunk with your changes on top. Its first write opens one Team pull request in
+  the upstream that holds all of its changes. A fork is not a repository: commands that take `-R` or a
+  repository refuse its name.
 
 Never interchange `spaceId`, `nodeId`, `resourceId`, `unitId`, Worktree `id`, pull request number, or
 display name. Content commands (`execute`, `inspect`, `screenshot`, `unit`, `import`, `export`, ...) take
@@ -364,6 +368,36 @@ They accept `--idempotency-key <key>`. Normally omit it and let the CLI generate
 `workspace-result-unknown` diagnostic returns a key, reuse that exact key only to retry the same
 logical operation; use a new or omitted key for an intentional second copy.
 
+### Work through a fork
+
+Work through a fork when the user asks for one or gives you one. Pass the fork's name where a command
+takes `--worktree <id>`: `execute`, `unit list/add/create`, `import`, `inspect`, `outline`, `read`, `find`,
+`screenshot`, and `lint`. Other commands, and `unit create --from`, need the Worktree `id` from
+`uvw fork view <fork> --json worktree`, which exists after the fork's first write.
+
+```bash
+uvw fork create <owner>/<slug> --name <task-name> --json
+uvw space find <name> --space <you>/<task-name> --json
+uvw execute --worktree <you>/<task-name> --unit <unit-id> --script edit.js --json
+uvw unit create --worktree <you>/<task-name> --space <you>/<task-name> --type sheet --name <file-name> --json
+uvw read A1:D20 --unit <unit-id> --worktree <you>/<task-name> --json
+uvw fork view <you>/<task-name>
+```
+
+- `space browse <fork>` and `space find --space <fork>` list the upstream's files without the ones the fork
+  removed and with the ones it created. A created file has no Node permissions until merge.
+- A read shows the fork's version of a file it changed and the upstream's current trunk version of every
+  other file. A file the fork has not changed reads its formulas and embeds from trunk, even when they point
+  at a file the fork changed. To check such a file against the fork's changes, add it to the fork first with
+  `unit add --worktree <fork> --resource <resource-id>`.
+- A write adds the upstream file to the fork's pull request first, so `execute` through a fork adds the file
+  even when the code only reads. Read with `read` or `inspect` instead.
+- `fork view` prints the pull request number. Hand off with `pr ready <n> -R <owner>/<slug>` as for any
+  pull request. A write to a `ready` one fails with `FORK_WORKTREE_NOT_DRAFT` until
+  `pr ready <n> -R <owner>/<slug> --undo`. After a merge or discard the fork is `clean`, and its next write
+  opens a new pull request.
+- `fork delete` deletes the fork only; its open pull request stays in the upstream.
+
 ## Continue same-task rework
 
 Use only the already-known Worktree:
@@ -542,6 +576,7 @@ repository; there is no stored default repository.
 | Read and update Issues    | `issue list/view/create/edit/comment/close/reopen`, `label list/create/edit/delete`, `search issues` |
 | Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                                           |
 | Start a task              | `pr create`, `unit create`, `unit add`                                                               |
+| Work through a fork       | `fork create/list/view/delete`, then the fork's name as `--worktree` and as the `space browse` repository |
 | Inspect a known task      | `pr view`, `pr list`, `unit list`                                                                    |
 | Continue same-task rework | `pr ready <n> --undo`                                                                                |
 | Map a Sheet Unit          | `uvw outline --unit <id> --worktree <id> [--at <ref>] [--from <ref>] [--depth <0\|1\|2>] [--budget <chars>]` (Sheet only) |

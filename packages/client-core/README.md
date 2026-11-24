@@ -16,6 +16,10 @@
   结果的 `access` 说明谁能打开链接，链接关闭时再给出调用方能走的下一步，措辞按 Client 传入的会话主体（agent 或人）而定，
   不按文件 owner。`formatShare` 把结果排成 Client 打印的文本。CLI 与 MCP 共用这一实现。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
+- 提供 fork workflow（`WorkspaceForkFeature`）：create、list、按 `owner/name` 或 ID 读取、delete，经 fork 写入路由添加或新建 Unit；
+  `readScope` 与 `writeScope` 把一个 fork address 和 Unit 解析成 Trunk 或 fork 当前打开的 Worktree，写入时先把上游 Trunk 文件加入
+  该 Worktree，首次写入会打开它。`listing` 配合 `WorkspaceSpaceFeature.browse`/`find` 的 `overlay` 列出 fork 看到的上游目录。
+  `resolveRepoOrFork` 先解析仓库，`owner/name` 在仓库查找 404 后才查 fork；`resolveRepoReference` 仍只返回 Space。
 - 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。
 - 提供 runtime target、Worktree/Trunk source resolution、Snapshot read adapter 与 referenced-Unit policy。
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
@@ -70,8 +74,8 @@
 - 通过独立 worker subpath 交付共享 worker implementation；Client Shell 显式提供 packaged worker entry、
   credential 与 license resolver。
 - 通过 package 根入口提供 named exports；另提供轻量子入口 `@univerjs/univer-workspace-client-core/product`，
-  只导出 HTTP 型产品 workflow（认证、Space、Issue、Worktree、仓库引用解析），不加载 Univer runtime。
-  CLI 的 product 命令（auth/repo/issue/label/pr/search/browse）使用它以保持快速启动。
+  只导出 HTTP 型产品 workflow（认证、Space、fork、Issue、Worktree、仓库引用解析），不加载 Univer runtime。
+  CLI 的 product 命令（auth/repo/fork/issue/label/pr/search/browse）使用它以保持快速启动。
 
 ## 非职责
 

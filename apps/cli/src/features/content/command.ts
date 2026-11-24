@@ -21,7 +21,7 @@ export function createContentExecuteCommand(
     .description(
       "Run Facade code against one Worktree Unit and submit captured Sheet, Doc, Slide, Base, or Board mutations",
     )
-    .requiredOption("--worktree <id>", "target draft Worktree")
+    .requiredOption("--worktree <id>", "target draft Worktree, or a fork's owner/name")
     .requiredOption("--unit <id>", "target Unit")
     .option("-e <js>", "inline Facade code; use --script for multiline code")
     .option("--code <js>", "inline Facade code; use --script for multiline code")
