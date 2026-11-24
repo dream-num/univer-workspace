@@ -144,6 +144,7 @@ export function createForksModule(options: {
         throw new ApplicationError("FORK_WORKTREE_NOT_DRAFT", 409,
           `The fork's Worktree is ${worktree.state}, and only a draft takes writes. Reopen a ready Worktree to write again.`);
       }
+      if (!worktree.capabilities.addUnit) throw new ApplicationError("FORBIDDEN", 403, "This Worktree action is not allowed.");
       const trunk = input as { readonly source?: unknown; readonly resourceId?: unknown } | null;
       const present = trunk?.source === "trunk" && units.find((unit) => unit.source === "trunk" && unit.resourceId === trunk.resourceId);
       if (present) return { status: 200, body: { worktree, unit: present } };

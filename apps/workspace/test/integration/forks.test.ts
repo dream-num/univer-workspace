@@ -324,6 +324,12 @@ describe("writing through a fork", () => {
         agent.cookie, { "idempotency-key": randomUUID() }), 404, "NOT_FOUND");
     }
     expect((await commit(origin, agent, worktree.id, unit, [setCell(budget, 1, "after-removal")])).status).toBe(403);
+
+    expect((await send(origin, "PATCH", `/api/spaces/${team}`, { publicRead: true }, holder.cookie)).status).toBe(200);
+    for (const [fork, resourceId] of [[drafting, budget.resourceId], [drafting, forecast.resourceId], [clean, forecast.resourceId]] as const) {
+      await expectError(send(origin, "POST", `/api/forks/${fork}/units`, { source: "trunk", resourceId },
+        agent.cookie, { "idempotency-key": randomUUID() }), 403, "FORBIDDEN");
+    }
   }, 60_000);
 
   it("gives each of two forks of one upstream its own Worktree (A4.11)", async () => {
