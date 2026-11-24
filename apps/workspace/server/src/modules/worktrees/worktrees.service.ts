@@ -1008,8 +1008,10 @@ const decides = (facts: WorktreeFacts): boolean => facts.authorOrClaimer || admi
 
 /** Merging writes Trunk, so whoever merges needs edit access to every Unit. */
 function mayMerge(facts: WorktreeFacts): boolean {
+  // editsAll is vacuously true for a Worktree with no Unit, so a Team merge also needs a role in the Space.
   return (
     facts.editsAll &&
+    (!facts.team || facts.role !== null) &&
     (facts.authorOrClaimer || (facts.shared && (administers(facts) || facts.role === "editor")))
   );
 }

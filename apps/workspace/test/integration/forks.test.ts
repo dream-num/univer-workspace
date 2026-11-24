@@ -485,6 +485,28 @@ describe("proposals from readers who are not Space Members", () => {
     for (let pull = 0; pull < 4; pull += 1) await createPull(origin, editor, team, budget.resourceId);
   }, 120_000);
 
+  it("never lets a reader who is not a Space Member merge, even a proposal without Units", async () => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, "accountable");
+    const proposer = await person(origin, "proposer");
+    const open = async (name: string) => {
+      const response = await send(origin, "POST", "/api/worktrees", { kind: "team", teamSpaceId: team, visibility: "private", name, summary: null },
+        proposer.cookie, { "idempotency-key": randomUUID() });
+      expect(response.status).toBe(201);
+      return ((await response.json()) as { id: string }).id;
+    };
+    const [proposed, frozen] = [await open("empty"), await open("frozen")];
+
+    expect(await transition(origin, proposed, "ready", proposer)).toBe("ready");
+    expect(await worktreeView(origin, proposer, proposed)).toMatchObject({ state: "ready", capabilities: { merge: false } });
+    expect((await send(origin, "POST", `/api/worktrees/${proposed}/merge`, undefined, proposer.cookie, { "idempotency-key": randomUUID() })).status).toBe(403);
+    expect(await worktreeView(origin, editor, proposed)).toMatchObject({ state: "ready", capabilities: { merge: true } });
+
+    await settings(origin, holder, team, { proposals: "members" });
+    expect(await worktreeView(origin, proposer, frozen)).toMatchObject({ state: "draft", capabilities: { markReady: false, merge: false } });
+    expect((await send(origin, "POST", `/api/worktrees/${frozen}/ready`, undefined, proposer.cookie, { "idempotency-key": randomUUID() })).status).toBe(403);
+  }, 90_000);
+
   it("shows a reader's proposal to its author and, once ready, to members, but never to another reader", async () => {
     const { origin } = await start();
     const { holder, editor, team } = await publicUpstream(origin, "accountable");
