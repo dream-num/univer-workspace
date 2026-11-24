@@ -8,24 +8,22 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
-import { loadFeatures, plan } from './journeys.mjs';
-import { exitCode, findKey, finish, parseArgs, readTranscript, summary } from './runner.mjs';
+import { loadFeatures, parseFeature, plan } from './journeys.mjs';
+import { exitCode, expand, findKey, finish, parseArgs, readTranscript, summary } from './runner.mjs';
 
 const transcript = readFileSync(fileURLToPath(new URL('../fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
 const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.map((j) => `### ${j}\n`).join('\n')}`;
 
-test('a task is a feature or a feature with journeys, and repeated features get distinct run ids', () => {
-  const { jobs, keep, tasks } = parseArgs(['link-sharing:LS1,LS2', 'auth', 'link-sharing']);
+test('a spec is a feature, or a feature with journey IDs or mode names', () => {
+  const { jobs, keep, specs } = parseArgs(['link-sharing:LS1,LS2', 'auth', 'sheet-lens:mcp,SLC1']);
   assert.equal(jobs, 3);
   assert.equal(keep, false);
-  assert.deepEqual(tasks, [
-    { id: 'link-sharing', feature: 'link-sharing', journeys: ['LS1', 'LS2'] },
-    { id: 'auth', feature: 'auth', journeys: [] },
-    { id: 'link-sharing-2', feature: 'link-sharing', journeys: [] },
+  assert.deepEqual(specs, [
+    { feature: 'link-sharing', selectors: ['LS1', 'LS2'] },
+    { feature: 'auth', selectors: [] },
+    { feature: 'sheet-lens', selectors: ['mcp', 'SLC1'] },
   ]);
-  for (const { id } of tasks) assert.match(id, /^[a-z0-9][a-z0-9_-]*$/);
   assert.deepEqual(parseArgs(['--keep', '--jobs', '2', 'auth']).jobs, 2);
-  assert.equal(parseArgs(['auth']).jobs, 1);
   assert.equal(parseArgs(['--keep', 'auth']).keep, true);
   assert.throws(() => parseArgs(['--jobs', '4', 'auth']), /--jobs takes 1 to 3/);
   assert.throws(() => parseArgs(['--jobs', 'x', 'auth']), /--jobs takes 1 to 3/);
@@ -33,9 +31,36 @@ test('a task is a feature or a feature with journeys, and repeated features get 
   assert.throws(() => parseArgs(['--fast', 'auth']), /unknown option --fast/);
   assert.throws(() => parseArgs(['Auth']), /bad task Auth/);
   assert.throws(() => parseArgs(['auth:']), /bad task auth:/);
-  assert.deepEqual(parseArgs(['--check']), { check: true, tasks: [] });
-  assert.deepEqual(parseArgs(['--check', 'auth']).tasks, [{ id: 'auth', feature: 'auth', journeys: [] }]);
+  assert.deepEqual(parseArgs(['--check']), { check: true, specs: [] });
+  assert.deepEqual(parseArgs(['--check', 'auth']).specs, [{ feature: 'auth', selectors: [] }]);
   assert.throws(() => parseArgs(['--check', '--keep', 'auth']), /--check takes only tasks/);
+});
+
+test('each spec becomes one task per mode, with a run id per task, and host-only journeys go to the host list', () => {
+  const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.join('\n\n')}\n`;
+  const features = new Map(Object.entries({
+    lens: recipe('Lens', '### L1. One', '### L2. Two (host only)\n\nMode: mcp.', '### L3. Three\n\nMode: mcp.', '### L4. Four\n\nMode: mcp-same-origin.', '### L5. Five'),
+    agents: recipe('Agents', 'Mode: mcp-same-origin. Needs: web-build.', '### G1. One', '### G2. Two (host only)'),
+    whole: recipe('Whole (host only)', '### W1. One'),
+  }).map(([name, text]) => [name, parseFeature(name, text)]));
+  const tasks = (...specs) => expand(specs.map((spec) => ({ feature: spec[0], selectors: spec.slice(1) })), features);
+  const shape = ({ tasks: t }) => t.map(({ id, mode, needs, selectors, expected }) => [id, mode, needs, selectors, expected.map((j) => j.id)]);
+
+  const batch = tasks(['lens'], ['agents'], ['whole'], ['lens', 'L3'], ['lens', 'mcp-same-origin', 'L1']);
+  assert.deepEqual(shape(batch), [
+    ['lens', 'default', [], ['default'], ['L1', 'L5']],
+    ['lens-mcp', 'mcp', [], ['mcp'], ['L3']],
+    ['lens-mcp-same-origin', 'mcp-same-origin', [], ['mcp-same-origin'], ['L4']],
+    ['agents', 'mcp-same-origin', ['web-build'], [], ['G1']],
+    ['lens-2', 'mcp', [], ['L3'], ['L3']],
+    ['lens-3', 'default', [], ['L1'], ['L1']],
+    ['lens-mcp-same-origin-2', 'mcp-same-origin', [], ['L4'], ['L4']],
+  ]);
+  for (const { id } of batch.tasks) assert.match(id, /^[a-z0-9][a-z0-9_-]*$/, 'a task id is a valid MCP run id');
+  assert.deepEqual(batch.hostOnly, [{ id: 'whole', feature: 'whole' }]);
+  assert.deepEqual(batch.host, [{ feature: 'lens', selectors: ['L2'] }, { feature: 'agents', selectors: ['G2'] }, { feature: 'whole', selectors: [] }]);
+  assert.throws(() => tasks(['missing']), /no features\/missing\.md/);
+  assert.throws(() => tasks(['lens', 'mpc']), /no journey or mode mpc in features\/lens\.md/);
 });
 
 test('runner --check names the key source and fingerprint, proves the key with one request, and names the host-only tasks', async () => {
@@ -155,19 +180,19 @@ test('a task with an expected journey that has no verdict is INCOMPLETE and exit
       ['2026-11-24T10:00:04Z', 'IS3', 'PASS'], ['2026-11-24T10:00:05Z', 'IS4', 'BLOCKED', 'the Comment\nbutton never rendered']);
     verdicts('other', ['2026-11-24T10:00:02Z', 'IS2', 'PASS']);
 
-    const incomplete = finish({ id: 'issues', expected }, dir, 95, 'the-key');
+    const incomplete = finish({ id: 'issues', mode: 'default', expected }, dir, 95, 'the-key');
     assert.deepEqual([incomplete.status, incomplete.result], ['finished', 'INCOMPLETE']);
     assert.deepEqual(incomplete.journeys.map((j) => j.verdict), ['PASS', 'FAIL', 'PASS', 'BLOCKED', 'MISSING'], 'the later FAIL from another run wins');
     assert.equal(exitCode([incomplete]), 4);
     assert.deepEqual(JSON.parse(readFileSync(join(out, 'result.json'), 'utf8')).journeys[4], { id: 'IS5', verdict: 'MISSING', note: '' });
 
-    const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [incomplete], hostOnly: [], setup: [90], wallSeconds: 100 });
-    assert.match(text, /^\| Task \| Status \| Result \| Journeys \| PASS \| FAIL \| DRIFT \| BLOCKED \| MISSING \| Turns \|/m);
-    assert.match(text, /^\| issues \| finished \| INCOMPLETE \| 5 \| 2 \| 1 \| 0 \| 1 \| 1 \| 30 \| 95 s \|/m);
+    const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [incomplete], host: [], setup: [90], wallSeconds: 100 });
+    assert.match(text, /^\| Task \| Mode \| Status \| Result \| Journeys \| PASS \| FAIL \| DRIFT \| BLOCKED \| MISSING \| Turns \|/m);
+    assert.match(text, /^\| issues \| default \| finished \| INCOMPLETE \| 5 \| 2 \| 1 \| 0 \| 1 \| 1 \| 30 \| 95 s \|/m);
     assert.match(text, /^Journeys that are not PASS:\n\n- issues IS2 FAIL: number is 2\n- issues IS4 BLOCKED: the Comment button never rendered\n- issues IS5 MISSING\n/m);
 
     verdicts('late', ['2026-11-24T10:00:06Z', 'IS5', 'PASS']);
-    const complete = finish({ id: 'issues', expected }, dir, 95, 'the-key');
+    const complete = finish({ id: 'issues', mode: 'default', expected }, dir, 95, 'the-key');
     assert.deepEqual([complete.result, exitCode([complete])], ['ISSUES', 0]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -178,7 +203,7 @@ test('a session that ends on an API error is an infra-error, and summary.md show
     mkdirSync(join(dir, id));
     writeFileSync(join(dir, id, 'claude.exit'), `${exit}\n`);
     writeFileSync(join(dir, id, 'transcript.jsonl'), `${JSON.stringify({ type: 'result', num_turns: 120, ...record })}\n`);
-    return finish({ id, expected: [{ id: 'X1' }] }, dir, 681, 'the-key');
+    return finish({ id, mode: 'mcp', expected: [{ id: 'X1' }] }, dir, 681, 'the-key');
   };
   try {
     const balance = task('sheet-lens', 1, { is_error: true, result: 'API Error: 402 Insufficient Balance (request_id: r-1)' });
@@ -191,12 +216,44 @@ test('a session that ends on an API error is an infra-error, and summary.md show
     assert.deepEqual([task('issues', 1, { is_error: true, result: 'Reached max turns' }).status, quoted.result], ['finished', 'INCOMPLETE']);
 
     const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'DEEPSEEK_API_KEY from .env (sha256 0123abcd)', jobs: 1, dir,
-      results: [balance, quoted], hostOnly: [], setup: [90], wallSeconds: 700 });
+      results: [balance, quoted], host: [], setup: [90], wallSeconds: 700 });
     assert.match(text, /^Snapshot s of HEAD h, image i, DEEPSEEK_API_KEY from \.env \(sha256 0123abcd\), 1 runner/m);
-    assert.match(text, /^\| sheet-lens \| infra-error \| INCOMPLETE \| 1 \| 0 \| 0 \| 0 \| 0 \| 1 \| 120 \|/m);
+    assert.match(text, /^\| sheet-lens \| mcp \| infra-error \| INCOMPLETE \| 1 \| 0 \| 0 \| 0 \| 0 \| 1 \| 120 \|/m);
     assert.match(text, /^These tasks stopped on an API error:\n\n- sheet-lens: API Error: 402 Insufficient Balance \(request_id: r-1\)$/m);
     assert.doesNotMatch(text, /- auth:/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a task whose instance failed to start is an infra-error, and summary.md quotes the FAIL lines of its prepare log', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-prepare-'));
+  const task = (id, log) => {
+    mkdirSync(join(dir, id));
+    writeFileSync(join(dir, id, 'prepare.log'), log);
+    writeFileSync(join(dir, id, 'prepare.failed'), '1\n');
+    return finish({ id, mode: 'mcp', expected: [{ id: 'X1' }, { id: 'X2' }] }, dir, 40, 'the-key');
+  };
+  try {
+    const doctor = task('lens-mcp', 'run:      lens-mcp\nok    run lens-mcp at /tmp/verify-uvw/lens-mcp\nFAIL  MCP gateway port 3930 is not owned by this run\nFAIL  MCP whoami failed: run verify-uvw user\n');
+    assert.deepEqual([doctor.status, doctor.result, doctor.turns], ['infra-error', 'INCOMPLETE', null]);
+    assert.deepEqual(doctor.prepare, ['FAIL  MCP gateway port 3930 is not owned by this run', 'FAIL  MCP whoami failed: run verify-uvw user']);
+    assert.equal(exitCode([doctor]), 4);
+    const up = task('lens', 'verify-uvw: these journeys need web-build, and apps/workspace/dist/public is not built; run: pnpm …\n');
+    assert.deepEqual(up.prepare, ['verify-uvw: these journeys need web-build, and apps/workspace/dist/public is not built; run: pnpm …']);
+    const silent = task('quiet', 'Terminated\n');
+
+    const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [doctor, up, silent], host: [], setup: [90], wallSeconds: 60 });
+    assert.match(text, /^\| lens-mcp \| mcp \| infra-error \| INCOMPLETE \| 2 \| 0 \| 0 \| 0 \| 0 \| 2 \|/m);
+    assert.ok(text.includes(['These tasks could not start their instance, so no verifier ran:', '',
+      `- lens-mcp, from ${dir}/lens-mcp/prepare.log:`, '  FAIL  MCP gateway port 3930 is not owned by this run', '  FAIL  MCP whoami failed: run verify-uvw user',
+      `- lens, from ${dir}/lens/prepare.log:`, '  verify-uvw: these journeys need web-build, and apps/workspace/dist/public is not built; run: pnpm …',
+      `- quiet, from ${dir}/quiet/prepare.log:`, '  (no FAIL line; read the log)'].join('\n')));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('summary.md lists each host-only instance with its up --for and brief commands', () => {
+  const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir: '/d', results: [], setup: [1], wallSeconds: 1,
+    host: [{ feature: 'sheet-lens', selectors: ['SLM1'] }, { feature: 'mcp-security', selectors: [] }] });
+  assert.match(text, /^- `\$V up --for sheet-lens SLM1`, then `\$V brief sheet-lens SLM1`\n- `\$V up --for mcp-security`, then `\$V brief mcp-security`$/m);
 });
 
 test('the report, turns and usage come from the last result record, with run paths moved to the batch', () => {

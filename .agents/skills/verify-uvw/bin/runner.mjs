@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 // Runs verify-uvw journeys in disposable Linux containers, each task driven by Claude Code on deepseek-flash.
-// Usage: verify-uvw runner [--jobs N] [--keep] <feature[:ID,ID]>... | verify-uvw runner --check [feature[:ID,ID]...]
+// Usage: verify-uvw runner [--jobs N] [--keep] <feature[:ID|mode,...]>... | verify-uvw runner --check [feature[:ID|mode,...]...]
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fold, loadFeatures, plan, readRuns } from './journeys.mjs';
+import { NEEDS, fold, loadFeatures, plan, readRuns } from './journeys.mjs';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
 const repo = join(skill, '../../..');
 const MAX_JOBS = 3;
 const FAILED = new Set(['timeout', 'infra-error', 'secret-leak']);
 const VERDICTS = ['PASS', 'FAIL', 'DRIFT', 'BLOCKED', 'MISSING'];
-const USAGE = 'usage: verify-uvw runner [--jobs 1|2|3] [--keep] <feature[:ID,ID]>... | verify-uvw runner --check [feature[:ID,ID]...]';
+const USAGE = 'usage: verify-uvw runner [--jobs 1|2|3] [--keep] <feature[:ID|mode,...]>... | verify-uvw runner --check [feature[:ID|mode,...]...]';
 
 export function parseArgs(argv) {
   let jobs, keep = false, check = false;
@@ -28,18 +28,37 @@ export function parseArgs(argv) {
   }
   if (check && (keep || jobs !== undefined)) throw new Error(`--check takes only tasks\n${USAGE}`);
   if (!specs.length && !check) throw new Error(USAGE);
-  const seen = new Map();
-  const tasks = specs.map((spec) => {
-    const [, feature, ids] = /^([a-z0-9][a-z0-9-]*)(?::([A-Za-z0-9-]+(?:,[A-Za-z0-9-]+)*))?$/.exec(spec)
-      ?? (() => { throw new Error(`bad task ${spec}; write feature or feature:ID,ID\n${USAGE}`); })();
-    const n = (seen.get(feature) ?? 0) + 1;
-    seen.set(feature, n);
-    return { id: n === 1 ? feature : `${feature}-${n}`, feature, journeys: ids ? ids.split(',') : [] };
+  const parsed = specs.map((spec) => {
+    const [, feature, selectors] = /^([a-z0-9][a-z0-9-]*)(?::([A-Za-z0-9-]+(?:,[A-Za-z0-9-]+)*))?$/.exec(spec)
+      ?? (() => { throw new Error(`bad task ${spec}; write feature, feature:ID,ID or feature:mode\n${USAGE}`); })();
+    return { feature, selectors: selectors ? selectors.split(',') : [] };
   });
-  if (check) return { check, tasks };
-  jobs ??= Math.min(tasks.length, MAX_JOBS);
+  if (check) return { check, specs: parsed };
+  jobs ??= MAX_JOBS;
   if (!Number.isInteger(jobs) || jobs < 1 || jobs > MAX_JOBS) throw new Error(`--jobs takes 1 to ${MAX_JOBS}\n${USAGE}`);
-  return { jobs, keep, tasks };
+  return { jobs, keep, specs: parsed };
+}
+
+// One task per mode partition of each spec, with an id that is a valid run id: the feature, `<feature>-<mode>` when
+// a spec splits, and a number for a repeat. A spec with no partition is host only, and `host` lists every journey
+// the host runs, one entry per instance it needs.
+export function expand(specs, features) {
+  const tasks = [], hostOnly = [], host = [], used = new Set();
+  const unique = (base) => { let id = base; for (let n = 2; used.has(id); n++) id = `${base}-${n}`; used.add(id); return id; };
+  for (const { feature: name, selectors } of specs) {
+    const feature = features.get(name);
+    if (!feature) throw new Error(`no features/${name}.md`);
+    const { partitions, host: only } = plan(feature, selectors, { where: 'runner' });
+    for (const p of partitions) {
+      tasks.push({ id: unique(partitions.length > 1 && p.mode !== 'default' ? `${name}-${p.mode}` : name), feature: name, mode: p.mode, needs: p.needs, selectors: p.selectors, expected: p.journeys });
+    }
+    if (!partitions.length) hostOnly.push({ id: unique(name), feature: name });
+    if (only.length) {
+      const again = plan(feature, only.length === feature.journeys.length ? selectors : only.map((j) => j.id));
+      host.push(...again.partitions.map((p) => ({ feature: name, selectors: p.selectors })));
+    }
+  }
+  return { tasks, hostOnly, host };
 }
 
 export function findKey(env, dotenv) {
@@ -133,44 +152,48 @@ export function finish(task, dir, wallSeconds, key) {
   const out = join(dir, task.id);
   const read = (name) => (existsSync(join(out, name)) ? readFileSync(join(out, name), 'utf8') : null);
   const claudeExit = read('claude.exit')?.trim();
+  const prepare = read('prepare.failed') === null ? null : (read('prepare.log') ?? '').split('\n').filter((line) => /^(FAIL|verify-uvw:) /.test(line));
   const transcript = readTranscript(read('transcript.jsonl') ?? '', join(out, 'runs'));
   if (transcript) writeFileSync(join(out, 'report.md'), transcript.report.endsWith('\n') ? transcript.report : `${transcript.report}\n`);
   const secretCheckFail = readdirSync(out).filter((name) => name.startsWith('secret-check-') && /^FAIL/m.test(read(name)));
   const status = holds(out, key) ? 'secret-leak'
     : claudeExit === '124' ? 'timeout'
-      : claudeExit === undefined || transcript?.error ? 'infra-error'
+      : prepare || claudeExit === undefined || transcript?.error ? 'infra-error'
         : 'finished';
   const { journeys, result: verdict } = fold(task.expected, readRuns(join(out, 'runs')));
-  const result = { task: task.id, status, result: verdict, journeys, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, secretCheckFail };
+  const result = { task: task.id, mode: task.mode, status, result: verdict, journeys, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, prepare, secretCheckFail };
   writeFileSync(join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
 
-export function summary({ batch, sha, head, image, key, jobs, dir, results, hostOnly, setup, wallSeconds }) {
+export function summary({ batch, sha, head, image, key, jobs, dir, results, host, setup, wallSeconds }) {
   const n = (v) => (v == null ? '' : String(v));
   const errors = results.filter((r) => r.error).map((r) => `- ${r.task}: ${r.error}`);
+  const unprepared = results.filter((r) => r.prepare).flatMap((r) => [`- ${r.task}, from ${dir}/${r.task}/prepare.log:`,
+    ...(r.prepare.length ? r.prepare : ['(no FAIL line; read the log)']).map((line) => `  ${line}`)]);
   const flagged = results.flatMap((r) => (r.secretCheckFail ?? []).map((name) => `- ${dir}/${r.task}/${name}`));
   const count = (r, verdict) => (r.journeys ? r.journeys.filter((j) => j.verdict === verdict).length : '');
   const open = results.flatMap((r) => (r.journeys ?? []).filter((j) => j.verdict !== 'PASS')
     .map((j) => `- ${r.task} ${j.id} ${j.verdict}${j.note ? `: ${j.note.replace(/\s+/g, ' ')}` : ''}`));
-  const rows = results.map((r) => `| ${r.task} | ${r.status} | ${n(r.result)} | ${n(r.journeys?.length)} | ${VERDICTS.map((v) => count(r, v)).join(' | ')} | ${n(r.turns)} | ${r.wallSeconds} s | ${n(r.usage?.input)} | ${n(r.usage?.cacheRead)} | ${n(r.usage?.output)} |`);
+  const rows = results.map((r) => `| ${r.task} | ${n(r.mode)} | ${r.status} | ${n(r.result)} | ${n(r.journeys?.length)} | ${VERDICTS.map((v) => count(r, v)).join(' | ')} | ${n(r.turns)} | ${r.wallSeconds} s | ${n(r.usage?.input)} | ${n(r.usage?.cacheRead)} | ${n(r.usage?.output)} |`);
   return [
     `# verify runner batch ${batch}`,
     '',
     `Snapshot ${sha} of HEAD ${head}, image ${image}, ${key}, ${jobs} runner(s), ${wallSeconds} s in total.`,
     `Runner setup: ${setup.map((s, k) => `r${k + 1} ${s == null ? 'failed' : `${s} s`}`).join(', ')}.`,
     '',
-    `| Task | Status | Result | Journeys | ${VERDICTS.join(' | ')} | Turns | Wall | Input tokens | Cache read tokens | Output tokens |`,
-    `|${' --- |'.repeat(VERDICTS.length + 9)}`,
+    `| Task | Mode | Status | Result | Journeys | ${VERDICTS.join(' | ')} | Turns | Wall | Input tokens | Cache read tokens | Output tokens |`,
+    `|${' --- |'.repeat(VERDICTS.length + 10)}`,
     ...rows,
     '',
     ...(open.length ? ['Journeys that are not PASS:', '', ...open, ''] : []),
     `Each task's report is ${dir}/<task>/report.md, and its runs are under ${dir}/<task>/runs/.`,
+    ...(unprepared.length ? ['', 'These tasks could not start their instance, so no verifier ran:', '', ...unprepared] : []),
     ...(errors.length ? ['', 'These tasks stopped on an API error:', '', ...errors] : []),
     // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
     ...(flagged.length ? ['', 'secret-check printed FAIL lines. Read them before you share these files:', '', ...flagged] : []),
-    ...(hostOnly.length ? ['', 'Run these on the host, as SKILL.md "Hand the driving to another agent" says:', '',
-      ...hostOnly.map((t) => `- \`$V brief ${[t.feature, ...t.journeys].join(' ')}\``)] : []),
+    ...(host.length ? ['', 'Run these on the host, one instance each, as SKILL.md "Hand the driving to another agent" says:', '',
+      ...host.map((h) => [h.feature, ...h.selectors].join(' ')).map((spec) => `- \`$V up --for ${spec}\`, then \`$V brief ${spec}\``)] : []),
     '',
   ].join('\n');
 }
@@ -178,34 +201,22 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
 const readKey = () => findKey(process.env, existsSync(join(repo, '.env')) ? readFileSync(join(repo, '.env'), 'utf8') : '');
 const imageTag = () => `uvw-verify-runner:${createHash('sha256').update(readFileSync(join(skill, 'runner/Dockerfile'))).digest('hex').slice(0, 12)}`;
 
-// Each task expects the journeys its feature's headings select for the runner; (host only) ones go to a host run.
-function split(tasks) {
-  const hostOnly = [], queue = [], skipped = [];
-  let features;
-  try { features = loadFeatures(); } catch (error) { fail(2, error.message); }
-  for (const t of tasks) {
-    const feature = features.get(t.feature) ?? fail(2, `no features/${t.feature}.md`);
-    let p;
-    try { p = plan(feature, t.journeys, { where: 'runner' }); } catch (error) { fail(2, error.message); }
-    if (!p.partitions.length) hostOnly.push(t);
-    for (const partition of p.partitions) queue.push({ ...t, expected: partition.journeys });
-    if (p.partitions.length && p.host.length) skipped.push({ feature: t.feature, journeys: p.host.map((j) => j.id) });
-  }
-  return { hostOnly, queue, skipped };
+function expanded(specs) {
+  try { return expand(specs, loadFeatures()); } catch (error) { return fail(2, error.message); }
 }
 
 // What a batch needs, checked without starting anything. SKILL.md chooses between runner and host mode from it.
-async function check(tasks) {
+async function check(specs) {
   const found = readKey();
   const docker = capture('docker', ['info', '--format', '{{.NCPU}}']);
-  const { hostOnly, queue, skipped } = split(tasks);
+  const { tasks: queue, host } = expanded(specs);
   const refused = found && await refusal(found);
   if (!found) console.log('FAIL  DEEPSEEK_API_KEY not found; set it or add a DEEPSEEK_API_KEY= line to .env');
   else console.log(refused ? `FAIL  ${keyName(found)}: ${refused}` : `ok    ${keyName(found)} works`);
   if (docker.status !== 0) console.log('FAIL  docker is not available');
   else console.log(`ok    docker answers with ${docker.stdout.trim()} CPUs`);
-  for (const t of [...hostOnly, ...skipped]) console.log(`host  ${t.feature}${t.journeys.length ? `:${t.journeys.join(',')}` : ''} is marked (host only); run it in host mode`);
-  const runnable = !tasks.length || queue.length;
+  for (const h of host) console.log(`host  ${h.feature}${h.selectors.length ? `:${h.selectors.join(',')}` : ''} is marked (host only); run it in host mode`);
+  const runnable = !specs.length || queue.length;
   if (docker.status === 0 && runnable) {
     const image = imageTag();
     console.log(capture('docker', ['image', 'inspect', image]).status === 0 ? `ok    image ${image} is built`
@@ -217,9 +228,10 @@ async function check(tasks) {
 async function main() {
   let options;
   try { options = parseArgs(process.argv.slice(2)); } catch (error) { fail(2, error.message); }
-  if (options.check) return check(options.tasks);
-  const { keep, tasks } = options;
-  const { hostOnly, queue, skipped } = split(tasks);
+  if (options.check) return check(options.specs);
+  const { keep } = options;
+  const { tasks, hostOnly, host } = expanded(options.specs);
+  const queue = [...tasks];
 
   const found = readKey();
   if (!found) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
@@ -230,7 +242,7 @@ async function main() {
   if (info.status !== 0) fail(3, 'docker is not available; run the journeys in host mode (SKILL.md, "Choose runner or host")');
 
   if (!queue.length) {
-    console.error(`verify-uvw runner: every task runs only on the host:\n${hostOnly.map((t) => `  $V brief ${[t.feature, ...t.journeys].join(' ')}`).join('\n')}`);
+    console.error(`verify-uvw runner: every task runs only on the host:\n${host.map((h) => `  $V up --for ${[h.feature, ...h.selectors].join(' ')}`).join('\n')}`);
     process.exit(3);
   }
   const jobs = Math.min(options.jobs, queue.length);
@@ -262,6 +274,7 @@ async function main() {
   const cpus = String(Math.max(1, Math.floor((Number(info.stdout) - 2) / jobs)));
   const env = { ...process.env, ANTHROPIC_AUTH_TOKEN: key, DEEPSEEK_API_KEY: key };
   const results = new Map(hostOnly.map((t) => [t.id, { task: t.id, status: 'host-only', result: null, turns: null, wallSeconds: 0, usage: null }]));
+  const needs = [...new Set(queue.flatMap((t) => t.needs))];
   const setup = Array(jobs).fill(null);
   const runner = async (k) => {
     const name = `uvw-verify-${batch}-r${k + 1}`, log = join(dir, `r${k + 1}-setup.log`), since = Date.now();
@@ -272,7 +285,7 @@ async function main() {
       'set -e', "git config --global --add safe.directory '*'",
       `git init -q ~/repo && cd ~/repo && git fetch -q --depth 1 file:///hostgit ${sha} && git checkout -q FETCH_HEAD`,
       'pnpm install --frozen-lockfile', "pnpm --filter 'univer-workspace-cli...' build",
-      "pnpm --filter '@univerjs/univer-workspace-mcp...' build"].join('\n')], { log }) === 0;
+      "pnpm --filter '@univerjs/univer-workspace-mcp...' build", ...needs.map((need) => NEEDS[need].setup)].join('\n')], { log }) === 0;
     if (!built) return console.error(`runner r${k + 1} setup failed; see ${log}`);
     setup[k] = seconds(since);
     for (let task; (task = queue.shift());) {
@@ -280,17 +293,17 @@ async function main() {
       console.error(`r${k + 1}: ${task.id} started`);
       mkdirSync(join(dir, task.id), { recursive: true });
       await run(['exec', '-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY', name, 'bash', '/home/node/repo/.agents/skills/verify-uvw/runner/task.sh',
-        task.id, task.feature, ...task.journeys], { log: join(dir, task.id, 'task.log'), env });
+        task.id, task.feature, ...task.selectors], { log: join(dir, task.id, 'task.log'), env });
       const result = finish(task, dir, seconds(begun), key);
       results.set(task.id, result);
       console.error(`r${k + 1}: ${task.id} ${result.status} ${result.result ?? ''}`);
     }
   };
   await Promise.all(setup.map((_, k) => runner(k)));
-  for (const t of queue) results.set(t.id, { task: t.id, status: 'infra-error', result: null, turns: null, wallSeconds: 0, usage: null });
+  for (const t of queue) results.set(t.id, { task: t.id, mode: t.mode, status: 'infra-error', result: null, turns: null, wallSeconds: 0, usage: null });
 
-  const ordered = tasks.map((t) => results.get(t.id));
-  const text = summary({ batch, sha, head, image, key: keyName(found), jobs, dir, results: ordered, hostOnly: [...hostOnly, ...skipped], setup, wallSeconds: seconds(started) });
+  const ordered = [...tasks, ...hostOnly].map((t) => results.get(t.id));
+  const text = summary({ batch, sha, head, image, key: keyName(found), jobs, dir, results: ordered, host, setup, wallSeconds: seconds(started) });
   writeFileSync(join(dir, 'summary.md'), text);
   process.stdout.write(text);
   if (keep) console.error(`kept containers; remove them with: docker rm -f $(docker ps -aq --filter label=uvw-verify.batch=${batch})`);
