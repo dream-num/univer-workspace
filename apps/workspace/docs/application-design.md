@@ -492,6 +492,8 @@ Repository 的同一事务内完成。读取以 owner 自己的身份经 Spaces 
 Operation、权限判定与幂等。Fork 没有未处理的 Worktree 时，服务以 owner 身份调用 `create`，带上只有本模块传入的
 `forkId`；打开用的 Operation ID 由 Fork ID 与请求的 `Idempotency-Key` 派生，加入 Unit 用 key 本身。打开失败时服务重新读取
 Fork，并发写入已经打开的 Worktree 就加入它，否则返回原错误。Worktree 不是 `draft` 时返回 409 `FORK_WORKTREE_NOT_DRAFT`。
+`POST /api/forks/{forkId}/worktree` 走同一段打开逻辑但不加入 Unit，供页面草稿挂到 Fork 的 Worktree；新打开返回 201，
+已有 draft 返回 200，调用者没有 `editDraft` 时返回 403。
 
 ## Operation Runner
 

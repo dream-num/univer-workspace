@@ -138,6 +138,20 @@ export class WorkspaceForkFeature {
     return { kind: "worktree", worktreeId: (await this.addTrunkUnit(fork, resourceId)).worktreeId };
   }
 
+  /**
+   * The Worktree a page draft through the fork attaches to. A clean fork opens it with no Unit, and the server
+   * refuses a Worktree that is not a draft with `FORK_WORKTREE_NOT_DRAFT`.
+   */
+  public async openWorktree(reference: string): Promise<WorkspaceForkWorktree> {
+    const fork = await this.get(reference);
+    const body = await (await this.authenticatedHttp()).json(`/api/forks/${encodeURIComponent(fork.id)}/worktree`, {
+      idempotencyKey: randomUUID(),
+      method: "POST",
+    });
+    const { units: _units, ...summary } = parseWorktree(body["worktree"]);
+    return summary;
+  }
+
   /** What `WorkspaceSpaceFeature.browse` and `find` list for the fork: the upstream as its open Worktree sees it. */
   public async listing(fork: WorkspaceFork): Promise<Pick<BrowseSpaceInput, "overlay" | "spaceId">> {
     const upstream = requireUpstream(fork);

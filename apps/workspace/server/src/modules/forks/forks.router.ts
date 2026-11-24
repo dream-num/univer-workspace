@@ -39,6 +39,12 @@ export function createForksRouter(options: {
     response.status(result.status).json(result.body);
   });
 
+  router.post("/forks/:forkId/worktree", async (request, response) => {
+    const { user, writeSource } = await options.identity.requireSession(request.headers.cookie);
+    const result = await options.forks.openWorktree(user.id, request.params.forkId, request.headers["idempotency-key"], writeSource);
+    response.status(result.status).json(result.body);
+  });
+
   router.delete("/forks/:forkId", async (request, response) => {
     const session = await options.identity.requireSession(request.headers.cookie);
     response.json(await options.forks.delete(session.user.id, request.params.forkId));

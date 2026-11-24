@@ -1484,6 +1484,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forks/{forkId}/worktree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the fork's Worktree for a write that adds no Unit, or return the open one.
+         * @description A page draft through a fork attaches to the fork's open Worktree, which this route returns. On a `clean`
+         *     fork it opens that Worktree as `POST /api/forks/{forkId}/units` does, with no Unit, and returns `201`.
+         *     The Collaboration SDK readies and merges a Worktree with no Unit, so a proposal of pages alone is a pull
+         *     request like any other. When the open Worktree is not a draft, the request returns
+         *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, and a fork whose upstream its owner
+         *     can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`.
+         */
+        post: operations["openForkWorktree"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces/{spaceId}/nodes": {
         parameters: {
             query?: never;
@@ -3632,7 +3659,8 @@ export interface components {
          * @description Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
          *     `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
          *     an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
-         *     (`POST /api/forks/{forkId}/units`), and only a `drafting` fork takes writes.
+         *     (`POST /api/forks/{forkId}/units`, or `POST /api/forks/{forkId}/worktree` for a page draft), and only a
+         *     `drafting` fork takes writes.
          * @enum {string}
          */
         ForkState: "clean" | "drafting" | "proposed" | "merging";
@@ -3672,6 +3700,9 @@ export interface components {
         ForkUnitWrite: {
             worktree: components["schemas"]["WorktreeSummary"];
             unit: components["schemas"]["WorktreeUnit"];
+        };
+        ForkWorktree: {
+            worktree: components["schemas"]["WorktreeSummary"];
         };
         ResourceCapabilities: {
             openContent: boolean;
@@ -6933,6 +6964,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForkUnitWrite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    openForkWorktree: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fork's open draft Worktree. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkWorktree"];
+                };
+            };
+            /** @description The Worktree this request opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkWorktree"];
                 };
             };
             400: components["responses"]["BadRequest"];

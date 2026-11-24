@@ -437,7 +437,7 @@ User Worktree 在 `owner/personal` 下的归属用于编号与列表；该 Perso
 
 `fork_id`（V28，`TEXT`，可空）指向它所属的 Fork，外键 `ON DELETE SET NULL`。CHECK 要求非空时 `kind = 'team'`，
 部分唯一索引 `worktrees_open_fork`（`fork_id IS NOT NULL AND processed_at IS NULL`）保证一个 Fork 至多有一个未处理的
-Worktree。只有 Fork 的写入路径（`POST /api/forks/{forkId}/units`）在创建 Worktree 时写入 `fork_id`，`POST /api/worktrees`
+Worktree。只有 Fork 的写入路径（`POST /api/forks/{forkId}/units` 与 `POST /api/forks/{forkId}/worktree`）在创建 Worktree 时写入 `fork_id`，`POST /api/worktrees`
 不接受它；`create_worktree` Operation 的 payload 记下 `forkId`，重试时沿用。插入事务先读这个 Fork 未处理的 Worktree，
 已有一个时拒绝插入，部分唯一索引兜底。
 

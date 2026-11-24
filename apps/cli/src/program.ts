@@ -245,6 +245,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
             input,
           ),
       }),
+      forks,
+      product.repoContext,
     ),
     createAssetCommand(
       new WorkspaceAssetFeature(async () => await auth.authenticatedHttp("client")),

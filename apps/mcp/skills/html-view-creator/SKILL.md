@@ -12,7 +12,7 @@ user-invocable: true
   Controls write input cells; subscriptions show recalculated results.
 - A draft is not live. Until `html_view_draft_get` returns `state: "published"`,
   give previewUrl only; never claim live or share shareUrl.
-- For sources new/changed in a pull request, pass `repo` and `pr` when saving. IDs survive merge. Merge only as the server
+- For sources new/changed in a pull request or fork, save with `repo` and `pr`, or `worktree`. IDs survive merge. Merge only as the server
   instructions say, and never use older merged data instead.
 - If `html_view_save` is unavailable, say this connection cannot draft pages and
   stop. Never substitute a Slide, Board or other Unit.

@@ -5,13 +5,15 @@ draft, and the owner previews and publishes it. Validation and missing-source er
 `uvw html-view validate`. A reviewer of the draft's pull request lists and previews its pages without
 publishing them, and the preview loads only the Sheets a page declares. A pull request's merge publishes its
 pages as the merger. A page its author could not publish alone goes live only when a person merges in the
-browser, and a page changed since its draft stays as it was while the Sheets merge.
+browser, and a page changed since its draft stays as it was while the Sheets merge. An agent that works through a
+fork reads, checks and saves a page with the fork's address, and its pull request carries the page.
 
 ## Sub-features
 
 - MHV1 through MHV4 compare HTML View dry runs with the CLI, preserve missing-source errors, save and retry drafts, revise pending drafts, and preview, publish and read back the revised page.
 - MHV5 through MHV7 list a pull request's pages for a reviewer, preview one read-only with an undeclared Sheet refused, and refuse page changes while the pull request is ready.
 - MHV8 through MHV10 publish a Viewer's page when an Editor merges in the browser after refusing the Editor's CLI merge, leave a page changed since its draft `conflicted` while the Sheet merges, and let an Editor agent merge its own page over MCP.
+- MHV11 through MHV15 change a page through a fork: a Viewer agent's Sheet and page, the conflicted variant, a non-member agent's page alone and then with its Sheet, uvw validation through a fork and its refusal to create a page there, and a real model's story.
 
 ## How to get to it (user POV)
 
@@ -382,6 +384,196 @@ Pass when `mpa-role` says `editor`, `mpa-save` is a pending `create` draft with 
 the draft is `published` with a `shareUrl`, O reads the agent's HTML byte for byte, and Trunk B2 is `99`.
 Before `$V down`, close E's browser session and run `uh daemon stop` and `ue daemon stop`. After it,
 `rm -rf "$HH" "$EH"`.
+
+### MHV11. A Viewer agent changes a Sheet and its page through a fork, and an Editor merges in the browser
+
+A holder H owns a public Team Space whose `proposals` setting is `accountable`. A claimed agent A is a Viewer and
+works only through its fork, and E is an Editor. Register H and E and sign their uvw in as in MHV8, then define
+`uh`, `ue` and MHV8's `page` function. H creates the Space and A. Each `principal` counts toward the 5 agents per
+hour, and MHV11 to MHV15 use two:
+
+```bash
+uh repo create fork-pages --name "Fork pages" --public --proposals accountable --json id > "$EVIDENCE/mfp-team.out"; T=$(jq -r .id "$EVIDENCE/mfp-team.out")
+$V principal pagefork mfp-a
+AID=$(jq -r .agent.id "$EVIDENCE/principal-pagefork.json")
+$V mcp --as pagefork mfp-claim claim '{}'
+```
+
+Open the `claimUrl` from `mfp-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
+code in `mfp-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Then H adds A
+as a Viewer and E as an Editor, and puts a Sheet with North `42` in B2 on Trunk and a page bound to it, with the
+commands of MHV8 on `$H/fork-pages`, from `uh pr create` to `PN` and `PR`:
+
+```bash
+for pair in "$AID:viewer" "$(jq -r .user.id "$EH/register.json"):editor"; do
+  curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PUT -H 'content-type: application/json' -d "{\"role\":\"${pair#*:}\"}" "$ORIGIN/api/team-spaces/$T/members/${pair%%:*}"
+done
+$V mcp --as pagefork mfp-role repo_view "{\"repo\":\"$H/fork-pages\"}"
+```
+
+A forks the Space, reads the page through the fork, changes B2 through the fork, checks the page against the
+fork and against Trunk, saves it, reads it back through the fork and saves it again:
+
+```bash
+$V mcp --as pagefork mfp-fork fork_create "{\"repo\":\"$H/fork-pages\",\"name\":\"fix\"}"
+F=$(jq -r .fullName "$EVIDENCE/mfp-fork.out")
+$V mcp --as pagefork mfp-read html_view_read "{\"resource\":\"$PR\",\"worktree\":\"$F\"}"
+$V mcp --as pagefork mfp-exec execute "$(jq -nc --arg w "$F" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(77); return ws.getRange(\"B2\").getValue();"}')"
+page 'Budget through a fork' > "$EVIDENCE/mfp-v1.univer.html"
+$V mcp --as pagefork mfp-dry html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mfp-v1.univer.html" --arg w "$F" '{html:$html,dryRun:true,worktree:$w}')"
+$V mcp --as pagefork mfp-dry-trunk html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mfp-v1.univer.html" '{html:$html,dryRun:true}')"
+save(){ jq -nc --rawfile html "$EVIDENCE/$1.univer.html" --arg page "$PR" --arg etag "$(jq -r .etag "$EVIDENCE/$2.out")" --arg w "$3" --arg key "$4-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,page:$page,etag:$etag,worktree:$w,idempotency_key:$key}'; }
+$V mcp --as pagefork mfp-save html_view_save "$(save mfp-v1 mfp-read "$F" mfp-save)"
+$V mcp --as pagefork mfp-read-draft html_view_read "{\"resource\":\"$PR\",\"worktree\":\"$F\"}"
+page 'Budget through a fork, revised' > "$EVIDENCE/mfp-v2.univer.html"
+$V mcp --as pagefork mfp-revise html_view_save "$(save mfp-v2 mfp-read-draft "$F" mfp-revise)"
+$V mcp --as pagefork mfp-old-draft html_view_draft_get "{\"draft\":\"$(jq -r .draft.id "$EVIDENCE/mfp-save.out")\"}"
+$V mcp --as pagefork mfp-view fork_view "{\"fork\":\"$F\"}"
+P=$(jq -r .worktree.number "$EVIDENCE/mfp-view.out"); W=$(jq -r .worktree.id "$EVIDENCE/mfp-view.out"); D=$(jq -r .draft.id "$EVIDENCE/mfp-revise.out")
+$V mcp --as pagefork mfp-ready pr_ready "{\"repo\":\"$H/fork-pages\",\"number\":$P}"
+curl --fail-with-body -sS -b "$EH/cookies" "$ORIGIN/api/worktrees/$W/html-view-drafts" > "$EVIDENCE/mfp-list.json"
+$V mcp --as pagefork mfp-frozen html_view_save "$(save mfp-v2 mfp-read-draft "$F" mfp-frozen)"; test $? -eq 1
+```
+
+In E's browser session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-editor`), set the language, view and
+onboarding as in MHV5 and sign in as E with `$EH/pw`. Open `$ORIGIN/spaces/$T/pulls/$P`, scroll to the `Pages`
+section and save `mfp-e-pages.png`. Follow `Preview`, wait 8 s, save `mfp-e-preview.png` and list the buttons as in
+MHV6. Merge as in MHV8 and save `mfp-e-merged.png` after `Published 1 page`. Read the result back, then open
+`$ORIGIN/nodes/$PN?view=immersive` in E's session, wait 6 s and save `mfp-page-published.png`:
+
+```bash
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mfp-trunk-after.out"
+$V mcp mfp-page-after html_view_read "{\"resource\":\"$PR\"}"
+jq -j .html "$EVIDENCE/mfp-page-after.out" | cmp "$EVIDENCE/mfp-v2.univer.html" -
+$V mcp --as pagefork mfp-draft-after html_view_draft_get "{\"draft\":\"$D\"}"
+$V mcp --as pagefork mfp-view-after fork_view "{\"fork\":\"$F\"}"
+```
+
+Pass when `mfp-role` says `viewer` and `mfp-fork` is `clean`. `mfp-read` is the page with its `etag` and no `draft`.
+`mfp-dry` samples `77` and `mfp-dry-trunk` samples `42`. `mfp-save` is a pending `replace` draft with
+`publishWhen: "merge"` whose `sourceWorktreeId` is `W`. `mfp-read-draft` returns that draft's id, the page as
+`resource`, the `etag` of `mfp-read` and the first HTML, so `mfp-revise` revises it: `mfp-old-draft` is
+`superseded` by `D`. `mfp-ready` has `visibility: "space"`, the list holds only `D`, pending and by A, and
+`mfp-frozen` has `code: "FORK_WORKTREE_NOT_DRAFT"` and `The fork's Worktree is ready`. The `Pages` section shows
+`Budget.univer.html`, A's name and `Pending review`. The preview says `<A> wrote this page. The preview is
+read-only and loads only the Sheets it declares.`, shows the second HTML with `North: 77`, and has only the
+`New` and `Current` buttons. The dialog says `Merging will publish 1 page.` After the merge, Trunk B2 is `77`, the
+page is the second HTML byte for byte and shows `North: 77`, the draft is `published`, and the fork is `clean`.
+
+### MHV12. Through a fork, a page someone changed since its draft stays as it was, and the Sheet merges
+
+Continue from MHV11. A's fork is clean, so its next write opens a new pull request:
+
+```bash
+$V mcp --as pagefork mfc-exec execute "$(jq -nc --arg w "$F" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(88); return ws.getRange(\"B2\").getValue();"}')"
+$V mcp --as pagefork mfc-read html_view_read "{\"resource\":\"$PR\",\"worktree\":\"$F\"}"
+page 'Budget through a fork again' > "$EVIDENCE/mfc-v.univer.html"
+$V mcp --as pagefork mfc-save html_view_save "$(save mfc-v mfc-read "$F" mfc-save)"
+D2=$(jq -r .draft.id "$EVIDENCE/mfc-save.out")
+uh blob download --resource "$PR" --force --json "$EVIDENCE/mfc-h-before.univer.html" > "$EVIDENCE/mfc-h-download.out"
+page 'Budget by holder, later' > "$EVIDENCE/mfc-h.univer.html"
+uh blob replace --resource "$PR" --file "$EVIDENCE/mfc-h.univer.html" --etag "$(jq -r .download.etag "$EVIDENCE/mfc-h-download.out")" --idempotency-key "mfc-h-replace-$VERIFY_UVW_RUN-0001" --json
+$V mcp --as pagefork mfc-view fork_view "{\"fork\":\"$F\"}"
+P2=$(jq -r .worktree.number "$EVIDENCE/mfc-view.out"); W2=$(jq -r .worktree.id "$EVIDENCE/mfc-view.out")
+$V mcp --as pagefork mfc-ready pr_ready "{\"repo\":\"$H/fork-pages\",\"number\":$P2}"
+```
+
+E merges `$ORIGIN/spaces/$T/pulls/$P2` in the browser as in MHV9 and saves `mfc-e-merged.png`. Then:
+
+```bash
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mfc-trunk-after.out"
+uh blob download --resource "$PR" --force --json "$EVIDENCE/mfc-h-after.univer.html"
+cmp "$EVIDENCE/mfc-h.univer.html" "$EVIDENCE/mfc-h-after.univer.html"
+curl -sS -b "$EH/cookies" "$ORIGIN/api/worktrees/$W2/html-view-drafts" > "$EVIDENCE/mfc-list.json"
+$V mcp --as pagefork mfc-draft-after html_view_draft_get "{\"draft\":\"$D2\"}"
+```
+
+Pass when `mfc-read` is the page MHV11 published, with no `draft`. The merge ends with
+`The task was merged into the official version.` and no published-page toast, Trunk B2 is `88`, the page holds H's
+later bytes, and the list, the draft and the `Pages` section read `conflicted` (`Conflicted` in the browser).
+
+### MHV13. A non-member agent proposes a page alone through a fork, then a page and its Sheet
+
+Continue from MHV12. A second claimed agent G is no member of H's Space, which `accountable` opens to it:
+
+```bash
+$V principal pageguest mfn-g
+$V mcp --as pageguest mfn-claim claim '{}'
+```
+
+Claim it in the run browser as in MHV11 and replace the code in `mfn-claim.*`. G saves only the page on its clean
+fork:
+
+```bash
+$V mcp --as pageguest mfn-role repo_view "{\"repo\":\"$H/fork-pages\"}"
+uh repo member list -R "$H/fork-pages" --json > "$EVIDENCE/mfn-members.out"
+$V mcp --as pageguest mfn-fork fork_create "{\"repo\":\"$H/fork-pages\",\"name\":\"page\"}"
+FG=$(jq -r .fullName "$EVIDENCE/mfn-fork.out")
+$V mcp --as pageguest mfn-read html_view_read "{\"resource\":\"$PR\",\"worktree\":\"$FG\"}"
+page 'Budget proposed by a guest' > "$EVIDENCE/mfn-v.univer.html"
+$V mcp --as pageguest mfn-save html_view_save "$(save mfn-v mfn-read "$FG" mfn-save)"
+$V mcp --as pageguest mfn-view fork_view "{\"fork\":\"$FG\"}"
+P3=$(jq -r .worktree.number "$EVIDENCE/mfn-view.out")
+$V mcp --as pageguest mfn-units unit_list "{\"worktree\":\"$FG\"}"
+$V mcp --as pageguest mfn-ready pr_ready "{\"repo\":\"$H/fork-pages\",\"number\":$P3}"
+```
+
+In E's session, open `$ORIGIN/spaces/$T/pulls/$P3`, follow `Preview` and save `mfn-e-preview.png` as in MHV11, then
+merge and wait for `Published 1 page`. Then G changes B2 and the page in the fork's next pull request:
+
+```bash
+$V mcp mfn-page-after html_view_read "{\"resource\":\"$PR\"}"
+jq -j .html "$EVIDENCE/mfn-page-after.out" | cmp "$EVIDENCE/mfn-v.univer.html" -
+uh pr view "$P3" -R "$H/fork-pages" --json state,units > "$EVIDENCE/mfn-pr-after.out"
+$V mcp --as pageguest mfn2-exec execute "$(jq -nc --arg w "$FG" --arg u "$U" '{worktree:$w,unit:$u,code:"const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange(\"B2\").setValue(99); return ws.getRange(\"B2\").getValue();"}')"
+$V mcp --as pageguest mfn2-read html_view_read "{\"resource\":\"$PR\",\"worktree\":\"$FG\"}"
+page 'Budget and Sheet by a guest' > "$EVIDENCE/mfn2-v.univer.html"
+$V mcp --as pageguest mfn2-save html_view_save "$(save mfn2-v mfn2-read "$FG" mfn2-save)"
+$V mcp --as pageguest mfn2-view fork_view "{\"fork\":\"$FG\"}"
+P4=$(jq -r .worktree.number "$EVIDENCE/mfn2-view.out")
+$V mcp --as pageguest mfn2-ready pr_ready "{\"repo\":\"$H/fork-pages\",\"number\":$P4}"
+```
+
+E previews `$ORIGIN/spaces/$T/pulls/$P4` (`mfn2-e-preview.png`) and merges it the same way. Read back Trunk B2 and
+compare the page with `mfn2-v.univer.html` as in MHV11.
+
+Pass when `mfn-role` has `affiliation: "none"` and `capabilities.propose: true`, `mfn-members` does not list G,
+and `mfn-fork` is `clean`. `mfn-save` is a pending draft, `mfn-view` is `drafting` with the pull request the save
+opened, and `mfn-units` is empty. Both previews name G and are read-only, and both merges publish 1 page. The
+first pull request is `merged` with no Unit and publishes G's page byte for byte while Trunk B2 stays `88`. The
+second publishes `mfn2-v.univer.html` with Trunk B2 `99`.
+
+### MHV14. uvw validates a page through a fork and refuses to create a page in one
+
+O is a person, so `accountable` opens the Space to O too. O forks it with uvw and checks a page against the fork:
+
+```bash
+$V cli mfv-fork fork create "$H/fork-pages" --name check --json
+$V cli mfv-clean html-view validate --file "$EVIDENCE/mfp-v1.univer.html" --worktree "$O/check" --json
+$V cli mfv-exec execute --worktree "$O/check" --unit "$U" --json -e 'const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange("B2").setValue(66); return ws.getRange("B2").getValue();'
+$V cli mfv-fork-scope html-view validate --file "$EVIDENCE/mfp-v1.univer.html" --worktree "$O/check" --json
+$V cli mfv-create html-view create --file "$EVIDENCE/mfp-v1.univer.html" --space "$O/check" --name Refused --idempotency-key "mfv-create-$VERIFY_UVW_RUN-0001" --json
+```
+
+Pass when `mfv-clean` samples Trunk's `99`, `mfv-fork-scope` samples `66`, and `mfv-create` exits `1` with
+`workspace-argument-invalid: <O>/check is a fork of <H>/fork-pages. html-view create publishes to a repository's trunk at once, and the CLI saves no page drafts, so it cannot propose a page through a fork. Save the page through the fork with the MCP tool html_view_save and worktree <O>/check.`
+
+### MHV15. A real model fixes a Sheet and its page through a fork
+
+A runs one story with a real model. Its fork from MHV11 is clean:
+
+```bash
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+$V story --as pagefork mfs-story mcp "通过你的 fork $F 把 $H/fork-pages 里 Budget 表格的 North（B2）改成 120，并把页面 Budget.univer.html 的标题改成 Budget fixed，然后把这个 pull request 标记为 ready 交给人审阅。"
+$V mcp-logs | jq -s --arg since "$since" '[.[] | select(.event == "mcp.tool_call" and .ts >= $since)]' > "$EVIDENCE/mfs-events.json"
+jq -e 'all(.[]; ((.error_code // "") | test("AGENT_NOT_ALLOWED|INTERACTIVE_SESSION_REQUIRED") | not))' "$EVIDENCE/mfs-events.json"
+$V mcp --as pagefork mfs-view fork_view "{\"fork\":\"$F\"}"
+```
+
+Pass when `mfs-story/trajectory.txt` shows `execute` and `html_view_save` with `worktree` set to the fork, the
+fork's pull request is `ready`, and no `mcp.tool_call` event holds `AGENT_NOT_ALLOWED` or
+`INTERACTIVE_SESSION_REQUIRED`. Before `$V down`, close E's browser session and run `uh daemon stop` and
+`ue daemon stop`. After it, `rm -rf "$HH" "$EH"`.
 
 ## Gotchas
 

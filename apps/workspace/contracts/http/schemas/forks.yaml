@@ -5,7 +5,8 @@ ForkState:
     Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
     `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
     an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
-    (`POST /api/forks/{forkId}/units`), and only a `drafting` fork takes writes.
+    (`POST /api/forks/{forkId}/units`, or `POST /api/forks/{forkId}/worktree` for a page draft), and only a
+    `drafting` fork takes writes.
 
 ForkView:
   type: object
@@ -88,3 +89,11 @@ ForkDeletion:
       oneOf:
         - $ref: ./worktrees.yaml#/WorktreeSummary
         - type: "null"
+
+ForkWorktree:
+  type: object
+  additionalProperties: false
+  required: [worktree]
+  properties:
+    worktree:
+      $ref: ./worktrees.yaml#/WorktreeSummary

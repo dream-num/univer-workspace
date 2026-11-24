@@ -37,6 +37,27 @@ export async function readWorkspaceHtmlViewDraft(
   return draft;
 }
 
+/**
+ * The author's newest pending draft of a page attached to a Worktree: the page as that pull request, or the fork
+ * it belongs to, shows it. `baseEtag` is the ETag of the page it replaces, which is still current while it is pending.
+ */
+export async function findWorkspaceHtmlViewDraft(
+  authenticatedHttp: AuthenticatedWorkspaceHttp,
+  origin: string,
+  input: { readonly worktreeId: string; readonly resourceId: string; readonly authorId: string },
+): Promise<(WorkspaceHtmlViewDraft & { readonly baseEtag: string }) | undefined> {
+  const body = await (await authenticatedHttp()).json(`/api/worktrees/${encodeURIComponent(input.worktreeId)}/html-view-drafts`);
+  if (!Array.isArray(body["drafts"])) throw workspaceError("workspace-invalid-response", "Workspace response is missing drafts.");
+  const found = body["drafts"].filter((value: unknown) =>
+    isWorkspaceRecord(value) && value["state"] === "pending" && value["targetResourceId"] === input.resourceId &&
+    isWorkspaceRecord(value["author"]) && value["author"]["id"] === input.authorId).at(-1) as Record<string, unknown> | undefined;
+  if (found === undefined) return undefined;
+  const baseEtag = found["baseEtag"];
+  if (typeof baseEtag !== "string" || !/^"[^"\r\n]+"$/.test(baseEtag))
+    throw workspaceError("workspace-invalid-response", "Workspace returned an invalid HTML View draft.");
+  return { ...parseHtmlViewDraft(found, origin), baseEtag };
+}
+
 export function parseHtmlViewDraft(value: unknown, origin: string): WorkspaceHtmlViewDraft {
   const invalid = () => workspaceError("workspace-invalid-response", "Workspace returned an invalid HTML View draft.");
   if (!isWorkspaceRecord(value)) throw invalid();

@@ -722,7 +722,8 @@ owner, a Space Member of any role, or a reader its `proposals` setting admits. `
 row. It copies no Node, Resource, Unit, Blob or Collaboration data. `GET /api/forks`, `GET /api/forks/lookup?owner&name`,
 `GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve only the fork's owner. A fork's name shares the
 owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). `POST /api/forks/{forkId}/units` writes a Unit
-through the fork. Its first write opens the fork's one Team Worktree in the upstream, and the fork's `state` follows
+through the fork, and `POST /api/forks/{forkId}/worktree` opens or returns the fork's Worktree for a write that adds no
+Unit, such as an HTML View draft. Its first write opens the fork's one Team Worktree in the upstream, and the fork's `state` follows
 that Worktree. A fork whose Worktree is not a draft refuses writes with `409 FORK_WORKTREE_NOT_DRAFT`. Deleting a fork
 removes only its row.
 

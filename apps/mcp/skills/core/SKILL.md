@@ -23,7 +23,7 @@ range. The `sheet` Skill's `references/reading.md` lists every option.
 Load a Skill with `skills_read` and its name, or read
 `skill://univer-workspace/<name>/SKILL.md`. Without arguments, `skills_read` lists
 names and descriptions. With a name it returns top-level name, content and optional
-resources. Read a reference or template with name and resource; full includes references only. Read templates and styles individually with resource.
+resources. Read a reference, template or style with name and resource; full includes references only.
 For a truncated resource, repeat the same arguments with the returned cursor.
 
 The shared Skills describe operations such as `api show` and `compile-svg`.
@@ -182,10 +182,10 @@ underscores or hyphens. After an unknown content commit, read back before retryi
 Work through a fork when the user asks for one or gives you one. `fork_create`
 returns its address `<you>/<name>`, and `fork_list` lists yours. Pass it as
 worktree to `execute`, `unit_list`, `unit_add`, `unit_create`, `import`,
-`inspect`, `outline`, `read`, `find`, `screenshot` and `print_pdf`, and as repo to
-`space_browse` and `space_find`. Skip `pr_create`: the first write opens the
-fork's pull request in the upstream. Other tools, and `unit_create` with from,
-take worktree.id from `fork_view`.
+`inspect`, `outline`, `read`, `find`, `screenshot`, `print_pdf`, `html_view_read`
+and `html_view_save`, and as repo to `space_browse` and `space_find`. Skip
+`pr_create`: the first write opens the fork's pull request in the upstream.
+Other tools, and `unit_create` with from, take worktree.id from `fork_view`.
 
 - A read shows the fork's version of a file it changed and the upstream's trunk
   for every other file. A file the fork has not changed reads its formulas and

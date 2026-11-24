@@ -20,6 +20,7 @@
   不按文件 owner。`formatShare` 把结果排成 Client 打印的文本。CLI 与 MCP 共用这一实现。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
 - 提供 fork workflow（`WorkspaceForkFeature`）：create、list、按 `owner/name` 或 ID 读取、delete，经 fork 写入路由添加或新建 Unit；
+  `openWorktree` 为不加 Unit 的写入（如页面草稿）打开或返回 fork 的 draft Worktree。
   `readScope` 与 `writeScope` 把一个 fork address 和 Unit 解析成 Trunk 或 fork 当前打开的 Worktree，写入时先把上游 Trunk 文件加入
   该 Worktree，首次写入会打开它。`listing` 配合 `WorkspaceSpaceFeature.browse`/`find` 的 `overlay` 列出 fork 看到的上游目录。
   `resolveRepoOrFork` 先解析仓库，`owner/name` 在仓库查找 404 后才查 fork；`resolveRepoReference` 仍只返回 Space。
@@ -61,7 +62,7 @@
   `configureExchange`，每次导出随选项携带 license 与 licenseKey，供单进程服务多个调用方；导入不需要 license。
   一个 feature 实例只持有一组 license；服务多个 license 的宿主为每个 license 构造一个实例。
   两项均为空表示免费版；只给其中一项在构造时以 `workspace-exchange-license-incomplete` 拒绝。
-- 提供 source-neutral 的 HTML View 校验、发布、内联读取和条件替换（`WorkspaceHtmlViewFeature`，输入 `{bytes, name}`），复用 trunk Sheet 导出与 Blob 上传；CLI 自己处理文件路径和恢复信息。读取返回强 ETag 并限制内联结果大小；替换先校验，再复用 Blob 的 ETag 与幂等协议，返回与创建相同的可见性摘要。MCP 使用新增的 `draft` 方法复用校验并向服务端保存草稿，`onWrite` 在全部读取完成后、草稿 POST 前触发；CLI 的 `create` 和 `replace` 继续直接发布。HTTP-only `readWorkspaceHtmlView`、`readWorkspaceHtmlViewDraft` 和 `htmlViewDraftUrl` 从 `/product` 导出，供 gateway 使用。
+- 提供 source-neutral 的 HTML View 校验、发布、内联读取和条件替换（`WorkspaceHtmlViewFeature`，输入 `{bytes, name}`），复用 trunk Sheet 导出与 Blob 上传；CLI 自己处理文件路径和恢复信息。读取返回强 ETag 并限制内联结果大小；替换先校验，再复用 Blob 的 ETag 与幂等协议，返回与创建相同的可见性摘要。MCP 使用新增的 `draft` 方法复用校验并向服务端保存草稿，`onWrite` 在全部读取完成后、草稿 POST 前触发；CLI 的 `create` 和 `replace` 继续直接发布。HTTP-only `readWorkspaceHtmlView`、`readWorkspaceHtmlViewDraft`、`findWorkspaceHtmlViewDraft`（按作者查找 Worktree 上某页面的 pending draft 及其 base ETag）和 `htmlViewDraftUrl` 从 `/product` 导出，供 gateway 使用。
 - 提供 HTTP-only Skill 来源读取（`WorkspaceSkillSourceFeature`）与固定来源导入，以及 Skill 草稿提交与状态读取（`WorkspaceSkillDraftFeature`），调用方校验返回的草稿合同；不提供发布入口，发布仍由作者的交互 Session 完成。
 - 提供 Markdown 到原生 Modern Doc 的共享编译适配、资源边界校验、创建和按稳定 ID 的局部更新；沿用 SDK 默认排版。
 - 通过共享 SDK 只读程序把当前原生选中块反转换为 Markdown 和资源文件，返回同次 runtime 读取的 revision 与刷新后的 source map，支持编辑后安全局部更新。
