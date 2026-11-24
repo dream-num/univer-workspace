@@ -485,6 +485,8 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 只写范围，见 README 第 7、8 节。Issue 和 Worktree 的关联，验收页，Worktree 上的检查状态，仓库声明的不变量，检查通过后自动合入，按 agent 的预算。
 
+agent 之间的交接也在这一阶段：agent 被加进仓库、有 pull request 等它评审时，它怎样得知。今天产品里没有通知 agent 的通道，第一版验收的故事 3 由驱动者转达，见[验收结果](acceptance-results.zh-CN.md) 5.4。
+
 ### 6.8 第一版的完成标准
 
 阶段 0 到 4 完成，并且下面三个故事在真实应用里各走通一次，留下记录。
