@@ -24,7 +24,7 @@ export function createOperationsRouter(options: {
         await options.operations.retry(
           session.user.id,
           parameter(request.params.operationId),
-          !session.tokenIssued
+          session.writeSource === "browser" && !session.tokenIssued
         )
       );
     }

@@ -779,20 +779,25 @@ V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述四张表，并
 `html_view_drafts` 保存作者、作者范围的 Idempotency-Key、create/replace 目标、基础 ETag、
 对象 key、字节数、SHA-256、状态、期限及发布结果，不保存 HTML 字节。目标没有外键，草稿不阻止
 目标删除。`receiving` 最长一小时，可同键重试；收完后为 `pending`，有效七天。作者可读；关联来源 Worktree 的草稿，
-能评审该 Worktree（`capabilities.review`）的人也可读取草稿和内容，其他人得到 404。只有作者的交互式 Session 可 publish 或 reject。终态为 `published`、`rejected`、`expired`、
+能评审该 Worktree（`capabilities.review`）的人也可读取草稿和内容，其他人得到 404。手动 publish 或 reject 只能由作者的交互式 Session 发起。终态为 `published`、`rejected`、`expired`、
 `conflicted`、`superseded`。读取派生过期、ETag 冲突和来源 PR 被丢弃的冲突，发布或维护任务持久化终态。
 
 发布在单个产品库事务中把草稿 object key 交给 Blob Resource，不复制字节、不创建 Operation。
 替换复用 Blob 交换逻辑，旧对象进入 `blob_content_replaced` 删除任务；拒绝、过期、冲突把草稿
 对象交给 `blob_upload_abandoned` 删除任务。同一 key 只属于接收中或待决草稿、已发布 Blob 或删除
-任务之一。终态行保留为幂等 tombstone，不设置保留期限或草稿数量上限。
+任务之一。终态行保留为幂等 tombstone，不设置保留期限。每个 Worktree 最多关联 20 份 pending 且未过期的草稿，
+第 21 份返回 409，修订替换前一份不占新名额；终态行不计数。
 
 V18→V19 只新增草稿表和到期索引，沿用一致性备份、事务回滚、指纹、外键与完整性检查；
 现存产品行、对象 key 和恢复状态保持原样。
 
 V26 追加可空 `source_worktree_id`，旧草稿为 NULL。它与目标一样不设外键，参与提交的幂等意图比较。
 提交 create 或 replace 草稿时，作者必须能评审来源 Worktree，且来源未被丢弃；已合并的来源仍可接受。
+目标权限按来源区分：来源是 Team Worktree、作者对它有 `editDraft`、目标在它的 Team Space 内时，作者像提议 Unit 一样提议页面，
+replace 只需要目标的 `openContent`，create 只需要能看到目的地；其他情况 replace 需要 `editContent`，create 需要目的地的创建权限。
 来源 Worktree 或被修订草稿的来源处于 `ready` 或 `merging` 时，新建和修订返回 409，重新打开后才能修改，作者仍可 reject。
+同一 Worktree 的草稿接收（从状态检查到 `pending`）与 mark ready 在进程内串行，所以 ready 之后不会出现新的 pending 草稿；
+这依赖单进程服务，多副本部署前要把 ready 时间写入产品库。
 提交时页面绑定的每个 Unit 必须在来源 Worktree 中，或作者对它有 `openContent`，否则返回 403，不区分 Unit 不存在和无权读取。
 来源未合并时手动发布返回 409 并标明 PR 编号，丢弃后 pending 草稿读取为 `conflicted`，发布拒绝。
 `pendingPageDrafts` 统计关联该 Worktree 的 pending 且未过期草稿，不按草稿作者过滤，所有可见摘要者都能读取计数。
@@ -801,11 +806,15 @@ V26 追加可空 `source_worktree_id`，旧草稿为 NULL。它与目标一样�
 Browser 预览别人写的草稿时只读，只加载页面声明的 Unit，包括其中 Sheet 引用的其他 Unit，页面请求其他 Unit 时拒绝并提示。
 发布后的页面不受这个限制，访问者能读的未声明 Unit 仍可被页面脚本请求。
 
-交互式 Session 合并后，Worktree Service 在 merge Operation 完成后调用草稿模块，逐份按
-`author_user_id` 发布，沿用作者的目标权限、配额和 ETag 检查。单份失败只记录日志，不影响合并，
-过期、配额或权限失败保持原行状态。PAT/OAuth 的 token-issued Session 合并不发布，作者之后可以手动发布。
+每次合并都在 merge Operation 完成后调用草稿模块，以合并者身份发布 Operation 创建前已 pending 的关联草稿，
+`decided_by` 记合并者，create 新建的 Node 和 Resource 的 `created_by` 仍是草稿作者。合并者的目标权限、配额和 ETag
+在发布事务里检查；ETag 不一致时只有这一页变为 `conflicted`，Sheet 照常合入。单份失败只记录日志，不影响合并，
+过期、配额或权限失败保持原行状态，作者之后可以手动发布。合并权包含页面目标：合并者必须能写每份待发布草稿的目标，
+否则 `capabilities.merge` 为 false，合并返回 403。草稿作者自己写不了目标时，该草稿是 foreign：只有
+`writeSource` 为 browser 且不是 token-issued 的 Session 能合并，CLI、PAT、OAuth 合并返回 409 `PAGE_REVIEW_REQUIRED`，
+消息列出页面名和 PR 地址，不改变任何状态。作者能写目标的草稿在任何合并中发布，包括 agent 用 token 合并。
 成功的合并响应 `publishedPages` 返回本次发布的 draftId、name、nodeId；重放不重复发布已发布草稿，
-列表不回填历史结果。中断后重放或恢复会继续尝试关联的 pending 草稿。服务端提交时只校验绑定的 Unit 可读，
+列表不回填历史结果。中断后重放或恢复会继续尝试 Operation 创建前已 pending 的关联草稿，合并后才关联的草稿由作者发布。服务端提交时只校验绑定的 Unit 可读，
 工作表与范围由客户端校验；发布时不重新校验，发布后仍连接实时 trunk。
 
 ## Skill 草稿（V20）

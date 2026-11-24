@@ -6,6 +6,9 @@
     description: |
       Every Unit the page binds must be in the source pull request or readable by the author, otherwise `403`.
       A draft attached to a pull request that is ready or merging is refused with `409`; reopen it first.
+      A pull request holds at most 20 pending drafts; one more is refused with `409`, and a revision replaces its predecessor.
+      The author of a Team pull request who may edit its draft proposes a page in its Team Space with read access to the page or its destination.
+      Elsewhere the author needs edit access to the page, or may create at its destination.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:

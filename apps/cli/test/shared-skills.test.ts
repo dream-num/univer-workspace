@@ -102,7 +102,7 @@ it("fixes the preview offer wording, honors direct requests and explains publica
     "With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview before `html-view create`",
     "Save an existing local file with bindings as a draft too",
     "why it fits the request or data in one clause",
-    "Explain draft.publishWhen: `merge` goes live when the user merges the pull request in Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**."])
+    "Explain draft.publishWhen: `merge` goes live when its pull request merges, published as whoever merges it; never tell them to press Publish. `publish` means open the preview and press **Publish**."])
     expect(content).toContain(term);
   expect([...await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")].length).toBeLessThanOrEqual(10300);
   expect(content).not.toContain("For a PR-linked draft");

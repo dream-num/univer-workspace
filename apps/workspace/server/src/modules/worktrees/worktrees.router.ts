@@ -170,7 +170,7 @@ export function createWorktreesRouter(options: {
           actor.user.id,
           request.params.worktreeId,
           request.headers["idempotency-key"],
-          !actor.tokenIssued
+          actor.writeSource === "browser" && !actor.tokenIssued
         )
       );
     }

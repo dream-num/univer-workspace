@@ -68,8 +68,8 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 Through MCP, check with `html_view_save` and `dryRun: true`, then save once as a draft.
 Revise pending drafts with `draft`. Save an existing local file with bindings as a draft too,
 unless the user explicitly requested a file.
-Explain draft.publishWhen: `merge` goes live when the user merges the pull request in
-Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**.
+Explain draft.publishWhen: `merge` goes live when its pull request merges, published as
+whoever merges it; never tell them to press Publish. `publish` means open the preview and press **Publish**.
 
 Dry runs do not run scripts; say render checks did not run.
 With a local shell and `node`, and not as an agent identity, end the reply with exactly

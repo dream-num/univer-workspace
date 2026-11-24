@@ -10,7 +10,7 @@ user-invocable: true
 
 - Live data only: no copied Sheet data, fallback numbers or page-side Sheet formulas.
   Controls write input cells; subscriptions show recalculated results.
-- Only a person publishes. Until `html_view_draft_get` returns `state: "published"`,
+- A draft is not live. Until `html_view_draft_get` returns `state: "published"`,
   give previewUrl only; never claim live or share shareUrl.
 - For sources new/changed in a pull request, pass `repo` and `pr` when saving. IDs survive merge. Merge only as the server
   instructions say, and never use older merged data instead.
@@ -129,8 +129,8 @@ Reuse keys only for identical retries.
 
 Reply with purpose, sources, cells controls change, previewUrl, and style.
 Say why the style fits in one clause.
-Explain draft.publishWhen: `merge` goes live when the user merges the pull request in
-Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**.
+Explain draft.publishWhen: `merge` goes live when its pull request merges, published as
+whoever merges it; never tell them to press Publish. `publish` means open the preview and press **Publish**.
 Explain access from `repositoryVisibility` and `privateSourceUnitIds`: public with no
 private sources means anyone with the link once published; otherwise permission is needed.
 Page access does not grant source access. Never change sharing without permission.

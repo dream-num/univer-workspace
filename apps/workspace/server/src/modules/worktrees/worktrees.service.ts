@@ -35,7 +35,7 @@ import type {
   WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, proposalStaysShared } from "./worktrees.errors.js";
+import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, proposalStaysShared } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -46,7 +46,7 @@ interface WorktreeContext {
   readonly canSeeUnits: boolean;
 }
 
-/** What a Worktree decision reads: who the actor is to the author, their Team Space role, and their access to every Unit. */
+/** What a Worktree decision reads: who the actor is to the author, their Team Space role, and their access to every Unit and pending page. */
 interface WorktreeFacts {
   readonly state: WorktreeState;
   readonly team: boolean;
@@ -57,6 +57,16 @@ interface WorktreeFacts {
   readonly proposes: boolean;
   readonly readsAll: boolean;
   readonly editsAll: boolean;
+  readonly writesPages: boolean;
+}
+
+/** The pending HTML View drafts attached to a Worktree, which its merge publishes as the merger. */
+export interface WorktreePages {
+  /** Whether the user may write every page a merge begun at `before` publishes; a page attached after it waits for its author. */
+  writable(worktreeId: string, userId: string, before?: number): Promise<boolean>;
+  /** Names of those pages whose own author may not write their target. */
+  foreign(worktreeId: string, before: number): Promise<readonly string[]>;
+  publish(worktreeId: string, mergerId: string, before: number): Promise<readonly PublishedPage[]>;
 }
 
 export function createWorktreesModule(options: {
@@ -68,11 +78,28 @@ export function createWorktreesModule(options: {
     worktreeId: string,
     unitIds: readonly string[]
   ) => Promise<void>;
-  readonly publishMergedPages: (worktreeId: string) => Promise<readonly PublishedPage[]>;
+  readonly pages: WorktreePages;
+  readonly publicOrigin: string | null;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
 }): WorktreesModule {
   const now = options.now ?? Date.now;
+  const readyHolds = new Map<string, Promise<void>>();
+
+  // shortcut: holds live in this process, like the draft upload map; record the ready time in the product database if Workspace runs more than one replica.
+  async function holdReady(worktreeId: string): Promise<Disposable> {
+    const previous = readyHolds.get(worktreeId);
+    let release!: () => void;
+    const tail = Promise.all([previous, new Promise<void>((resolve) => { release = resolve; })]).then(() => undefined);
+    readyHolds.set(worktreeId, tail);
+    await previous;
+    return {
+      [Symbol.dispose]() {
+        release();
+        if (readyHolds.get(worktreeId) === tail) readyHolds.delete(worktreeId);
+      },
+    };
+  }
 
   async function executeReserved<T>(
     operationId: string,
@@ -112,6 +139,7 @@ export function createWorktreesModule(options: {
       unitRows,
       options.access,
       data.units,
+      options.pages,
     );
     return {
       row,
@@ -133,6 +161,7 @@ export function createWorktreesModule(options: {
       await options.repository.units(row.id),
       options.access,
       value.units.map((unit) => ({ unitID: unit.unitId, removed: unit.change === "deleted" })),
+      options.pages,
     )).facts);
   }
 
@@ -305,6 +334,7 @@ export function createWorktreesModule(options: {
             unitRows,
             pageAccess,
             data.units,
+            options.pages,
           );
           visible.push({
             row,
@@ -721,7 +751,10 @@ export function createWorktreesModule(options: {
       return result;
     },
 
+    holdReady,
+
     async markReady(userId, worktreeId) {
+      using _hold = await holdReady(worktreeId);
       const value = await context(userId, worktreeId);
       if (!value.capabilities.markReady) throw forbidden();
       // Shared before the transition, so a retry after a failed transition still leaves it shared.
@@ -757,10 +790,11 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async merge(userId, worktreeId, operationIdValue, interactive = false) {
+    async merge(userId, worktreeId, operationIdValue, browser = false) {
       const operationId = validOperationId(operationIdValue);
       const value = await context(userId, worktreeId);
       const existing = await options.repository.getOperation(operationId);
+      const startedAt = existing?.created_at ?? now();
       if (existing) {
         const input = operationPayload<{ readonly worktreeId: string }>(
           existing,
@@ -772,7 +806,7 @@ export function createWorktreesModule(options: {
       const resumeMerged = value.state === "merged";
       const unfinished = value.row.processed_at === null && (value.state === "merging" || resumeMerged);
       // A started merge is a decision already made, so its starter, or anyone who may merge, can finish it.
-      const finishes = unfinished && (existing !== null || mayMerge({ ...value.facts, editsAll: true }));
+      const finishes = unfinished && (existing !== null || mayMerge({ ...value.facts, editsAll: true, writesPages: true }));
       // An applied merge keeps its recorded merger; only an Operation cut off before anyone was recorded completes.
       const recordsApplied = resumeMerged && !unfinished && existing !== null &&
         !(await options.repository.mergers([worktreeId])).has(worktreeId);
@@ -782,8 +816,11 @@ export function createWorktreesModule(options: {
         throw forbidden();
       }
       if (existing?.state !== "completed" && value.row.processed_at === null) {
-        await validateAllTargets(userId, value.row, value.units, options);
+        await validateAllTargets(userId, value.row, value.units, options, startedAt);
       }
+      // Code its author could not publish alone goes live only through a person who reviewed it in the browser.
+      const foreign = browser ? [] : await options.pages.foreign(worktreeId, startedAt);
+      if (foreign.length) throw pageReviewRequired(value.row, foreign, options.publicOrigin);
       const payload = { worktreeId };
       const reserved = await options.repository.reserveOperation({
         id: operationId,
@@ -848,9 +885,9 @@ export function createWorktreesModule(options: {
       }
       let current = await context(userId, worktreeId);
       let publishedPages: readonly PublishedPage[] = [];
-      if (interactive && current.state === "merged") {
+      if (current.state === "merged") {
         try {
-          publishedPages = await options.publishMergedPages(worktreeId);
+          publishedPages = await options.pages.publish(worktreeId, userId, operation.created_at);
         } catch (error) {
           logger.warn({ err: error, worktreeId }, "HTML View drafts could not be published after merge");
         }
@@ -948,6 +985,7 @@ export function createWorktreesModule(options: {
       unitRows,
       options.access,
       data.units,
+      options.pages,
     );
     return {
       row: current,
@@ -967,6 +1005,7 @@ async function worktreeCapabilities(
   units: readonly WorktreeUnitRow[],
   access: AccessResolver,
   states: readonly { readonly unitID: string; readonly removed?: boolean }[],
+  pages: WorktreePages,
 ): Promise<{
   readonly facts: WorktreeFacts;
   readonly capabilities: WorktreeCapabilities;
@@ -996,6 +1035,7 @@ async function worktreeCapabilities(
     proposes: Boolean(row.actor_proposes),
     readsAll,
     editsAll,
+    writesPages: row.pending_page_drafts === 0 || await pages.writable(row.id, userId),
   };
   const capabilities = Object.fromEntries(
     Object.entries(capabilityRules).map(([capability, allows]) => [capability, allows(facts)]),
@@ -1006,11 +1046,12 @@ async function worktreeCapabilities(
 const administers = (facts: WorktreeFacts): boolean => facts.role === "owner" || facts.role === "admin";
 const decides = (facts: WorktreeFacts): boolean => facts.authorOrClaimer || administers(facts);
 
-/** Merging writes Trunk, so whoever merges needs edit access to every Unit. */
+/** Merging writes Trunk and publishes the pending pages, so whoever merges needs edit access to every Unit and page. */
 function mayMerge(facts: WorktreeFacts): boolean {
   // editsAll is vacuously true for a Worktree with no Unit, so a Team merge also needs a role in the Space.
   return (
     facts.editsAll &&
+    facts.writesPages &&
     (!facts.team || facts.role !== null) &&
     (facts.authorOrClaimer || (facts.shared && (administers(facts) || facts.role === "editor")))
   );
@@ -1089,7 +1130,9 @@ async function validateAllTargets(
   options: {
     readonly repository: WorktreesRepository;
     readonly access: AccessResolver;
+    readonly pages: WorktreePages;
   },
+  startedAt: number,
 ): Promise<void> {
   for (const unit of await options.repository.units(row.id)) {
     if (states.find((state) => state.unitId === unit.unit_id)?.change === "deleted") {
@@ -1109,6 +1152,7 @@ async function validateAllTargets(
       throw mergeNeedsEditAccess();
     }
   }
+  if (!(await options.pages.writable(row.id, userId, startedAt))) throw mergeNeedsEditAccess();
 }
 
 async function validateTarget(

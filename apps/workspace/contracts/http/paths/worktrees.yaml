@@ -375,6 +375,10 @@
     tags: [Worktrees]
     operationId: mergeWorktree
     summary: Merge Worktree Units and activate successful local Units.
+    description: |
+      The merge also publishes, as the merger, every page draft that was pending when it began, so the merger
+      needs edit access to every Unit and page target. A page whose target changed since its draft is left
+      `conflicted` while the Units still merge.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     responses:
@@ -402,7 +406,14 @@
       "404":
         $ref: ../schemas/common.yaml#/NotFound
       "409":
-        $ref: ../schemas/common.yaml#/Conflict
+        description: |
+          The Worktree state does not allow a merge, or `PAGE_REVIEW_REQUIRED`: a pending page's author cannot
+          write its target, so only a person signed in to the browser may merge. The message names the pages and
+          the pull request URL. Nothing changes.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/worktrees/{worktreeId}/discard:
   parameters:

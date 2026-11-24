@@ -544,7 +544,7 @@ WorktreeMergeResponse:
       $ref: "#/WorktreeSummary"
     publishedPages:
       type: array
-      description: Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list.
+      description: Pages this merge published as the merger. Already published drafts are omitted on replay.
       items:
         type: object
         additionalProperties: false
