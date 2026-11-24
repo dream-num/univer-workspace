@@ -1,5 +1,7 @@
 import { WorkspaceUnitExchangeFeature } from "@univerjs/univer-workspace-client-core";
 import {
+  isForkAddress,
+  WorkspaceForkFeature,
   WorkspaceUnitFeature,
   workspaceError,
 } from "@univerjs/univer-workspace-client-core/product";
@@ -31,7 +33,9 @@ export function exchangeFeature(ctx: OpContext, unitId?: string) {
         );
       ctx.signal.throwIfAborted();
       ctx.onCreateUnit?.();
-      return new WorkspaceUnitFeature(async () => ctx.http()).create(input);
+      return isForkAddress(input.worktreeId)
+        ? new WorkspaceForkFeature(async () => ctx.http()).createUnit(input.worktreeId, input)
+        : new WorkspaceUnitFeature(async () => ctx.http()).create(input);
     },
   });
 }

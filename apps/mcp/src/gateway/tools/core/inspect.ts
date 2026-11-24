@@ -3,9 +3,9 @@ import { z } from "zod";
 import { inspectionOptions, opSpecs } from "../../../shared/executor-protocol.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
-import { acceptUnitLink, worktreeInput } from "./space-support.js";
+import { acceptForkAddress, acceptUnitLink, worktreeOrForkInput } from "./space-support.js";
 
-export const inspectTool = acceptUnitLink(executorTool({
+export const inspectTool = acceptUnitLink(acceptForkAddress(executorTool({
   name: "inspect",
   toolset: "core",
   scope: "read",
@@ -16,7 +16,7 @@ export const inspectTool = acceptUnitLink(executorTool({
   inputSchema: inspectionOptions.extend({
     unit: z.string().min(1),
     trunk: z.boolean().optional(),
-    worktree: worktreeInput.optional(),
+    worktree: worktreeOrForkInput.optional(),
   }),
   op: opSpecs["content.inspect"],
   request: ({ unit, trunk, worktree, ...options }) => {
@@ -36,4 +36,4 @@ export const inspectTool = acceptUnitLink(executorTool({
       },
     };
   },
-}));
+})));

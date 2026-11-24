@@ -73,7 +73,7 @@ describe("shared Skill operation resolution", () => {
     expect(core).toContain("Replace spaces and hyphens in an operation name with underscores");
     expect(core).toContain("Single-word names stay unchanged");
     expect(core).toContain("worktree prefix with pr first");
-    expect([...core].length).toBeLessThanOrEqual(19000);
+    expect([...core].length).toBeLessThanOrEqual(20500);
     expect(Object.fromEntries(bindings)).toEqual({
       "repo rename": "repo_edit", "skills list": "skills_read", "skills get": "skills_read",
       "space node create": "space_node", "space node rename": "space_node",

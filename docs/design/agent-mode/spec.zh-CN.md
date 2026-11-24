@@ -1,6 +1,6 @@
 # Agent Mode 实施规格
 
-> 状态：方案已采纳。阶段 0 已完成，结果见 [阶段 0 结果](phase-0-results.zh-CN.md)，阶段 1 起尚未实施。日期 2026-11-23。文中标为“目标”的内容都不是现状。
+> 状态：方案已采纳。阶段 0 已完成，结果见 [阶段 0 结果](phase-0-results.zh-CN.md)。阶段 1 到 4 已实施，第 4 节的“今天”一栏写各项现状。日期 2026-11-23。文中标为“目标”的内容都不是现状。
 > 背景、诊断、SDK 的行为和风险的展开见 [README](README.zh-CN.md)。README 只保留与本文一致的内容，范围见第 8 节。两者若仍有不一致，以本文为准。
 > “今天”一栏来自对 `main`（`b5aa99a8`）的代码阅读。Collaboration SDK 的行为来自 `@univerjs-pro/collaboration-worktree-service` 1.6.1 的类型和 README，阶段 0 已在运行中复核，见 [阶段 0 结果](phase-0-results.zh-CN.md)。
 
@@ -98,12 +98,12 @@ upstream repo (someone else's Team Space)        agent
 
 | 编号 | 要求                                                                         | 今天                                            | 阶段 |
 | ---- | ---------------------------------------------------------------------------- | ----------------------------------------------- | ---- |
-| R9   | fork 的单位是整个仓库。创建 fork 只写一行记录，不复制任何 Unit 或 Blob       | 没有                                            | 4    |
-| R10  | fork 里没改过的文件显示上游 Trunk 的最新内容                                 | 没有                                            | 4    |
-| R11  | Unit 在第一次被写入时加入 fork 当前的 Worktree，基线取在那一刻。Unit ID 不变 | 加入是浅引用，Unit ID 不变，这是 SDK 已有的行为 | 4    |
-| R12  | 一个 fork 同一时间至多有一个未结束的 Worktree。它整体提交，结果按项记录      | SDK 只能整体提交，结果按 Unit 记录              | 4    |
-| R13  | Worktree 结束后 fork 继续可用。下一次写入开始一个新的 Worktree               | 没有                                            | 4    |
-| R14  | 提议之后、合入之前，fork 不接受写入。要继续修改，先 reopen                   | SDK 的 `ready` 状态冻结全部 Unit                | 4    |
+| R9   | fork 的单位是整个仓库。创建 fork 只写一行记录，不复制任何 Unit 或 Blob       | 已有。`POST /api/forks` 只写 `forks` 的一行 | 4    |
+| R10  | fork 里没改过的文件显示上游 Trunk 的最新内容                                 | 已有。经 fork 读一个不在它 Worktree 里的 Unit 时读上游 Trunk（Client Core 的 `forks.readScope`）。跨 Unit 引用的限制见 5.5 | 4    |
+| R11  | Unit 在第一次被写入时加入 fork 当前的 Worktree，基线取在那一刻。Unit ID 不变 | 已有。写入先经 `POST /api/forks/{forkId}/units` 把 Unit 加进 fork 的 Worktree，基线是那一刻的 Trunk 修订，Unit ID 不变 | 4    |
+| R12  | 一个 fork 同一时间至多有一个未结束的 Worktree。它整体提交，结果按项记录      | 已有。部分唯一索引 `worktrees_open_fork` 保证至多一个。SDK 整体提交，结果按 Unit 记录 | 4    |
+| R13  | Worktree 结束后 fork 继续可用。下一次写入开始一个新的 Worktree               | 已有。Worktree 合入或丢弃后 fork 回到 `clean`，下一次写入打开新的 Worktree | 4    |
+| R14  | 提议之后、合入之前，fork 不接受写入。要继续修改，先 reopen                   | 已有。写入返回 409 `FORK_WORKTREE_NOT_DRAFT`，reopen 之后可以写 | 4    |
 
 ### 4.4 回程
 
@@ -120,9 +120,9 @@ upstream repo (someone else's Team Space)        agent
 | 编号 | 要求                                                                        | 今天                                                                                | 阶段 |
 | ---- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---- |
 | R20  | 读 Worktree 或 fork 里来自上游的内容，读者自己必须有上游的读权              | 已有。`authorizeProtocol` 和 `canReadUnit` 检查读者对上游 Resource 的 `openContent` | 2    |
-| R21  | 上游收回 agent 的成员资格后，agent 立刻读不到、写不了 fork 里来自上游的内容 | 从 R20 的规则推出，没有运行                                                         | 4    |
-| R22  | fork 不保存任何上游数据。删除 fork 不影响上游                               | 没有                                                                                | 4    |
-| R23  | 未认领 agent 的文件配额覆盖它拥有的全部 Space，仓库和 fork 的数量有上限     | 配额只数 Personal Space 的文件（`countPersonalFiles`）                              | 3    |
+| R21  | 上游收回 agent 的成员资格后，agent 立刻读不到、写不了 fork 里来自上游的内容 | 已有。写入要求成员资格，收回后被拒绝。读跟随上游的读权：私有上游读不到；公开上游像对任何公开读者一样仍然可读 | 4    |
+| R22  | fork 不保存任何上游数据。删除 fork 不影响上游                               | 已有。fork 只有 `forks` 的一行。删除只删这一行，它的 Worktree 留在上游，成为普通的 Team Worktree | 4    |
+| R23  | 未认领 agent 的文件配额覆盖它拥有的全部 Space，仓库和 fork 的数量有上限     | 已有。`createFiles` 数它持有的全部 Space 的文件（`countOwnedFiles`），它至多持有 3 个 Team Space 和 3 个 fork | 3、4 |
 | R24  | 用户、角色、Resource、Unit、Worktree 和修订都由服务端从会话和产品数据推导   | 已有，保持                                                                          | 全部 |
 
 ## 5. 方案
@@ -139,7 +139,7 @@ upstream repo (someone else's Team Space)        agent
 | D6   | 没改过的文件直接读上游 Trunk，不记录 fork 的时刻           | 不存任何东西。基线取在第一次写入时，比 fork 的时刻离上游更近                                                                                                                                           |
 | D7   | 过期只提示，不同步                                         | SDK 没有修改基线的接口。agent 重做一次的代价很低                                                                                                                                                       |
 | D8   | HTML View 沿用现有草稿。其他 Blob 第一版不能在 fork 里修改 | 草稿已经有覆盖写、`base_etag` 和挂在 Worktree 上的能力。其他 Blob 需要一个同样形状的对象，放到阶段 5                                                                                                   |
-| D9   | 不建新的工具集。现有工具的 `repo` 参数接受 fork 的地址     | agent 不用学第二套工具。新增的只有创建、列出和删除 fork                                                                                                                                                |
+| D9   | 不建新的工具集。内容工具的 `worktree` 参数，以及只读的浏览、查找和查看工具的 `repo` 参数，接受 fork 的地址 | agent 不用学第二套工具。内容工具没有 `repo` 参数，它们用 `worktree` 或 `trunk` 指定读写的范围。写 Trunk 的工具不接受 fork 的地址，所以经 fork 没有写上游 Trunk 的路径。新增的只有创建、列出、查看和删除 fork |
 | D10  | 第一版的提议只针对 Team Space                              | Personal Space 的所有者没有地方看到别人针对他的文件创建的 Worktree                                                                                                                                     |
 | D11  | agent 能持有的最高角色，看仓库的所有者是人还是 agent       | `addTeamMember` 上限保护的是所有者的组织。在 agent 持有的仓库里，admin 能触及的只有这个仓库，它的所有者是 agent 和认领它的人。人想让 agent 管理一个仓库，做法是让 agent 创建并持有它，再认领这个 agent |
 
@@ -262,7 +262,7 @@ owner 不是 `space_members` 里的一行，它是 `spaces.owner_user_id`。现�
 | `createTeamSpace`         | 未认领的 agent 已持有 3 个 Team Space 时拒绝，返回 `AGENT_QUOTA_EXCEEDED` | 已认领的 agent 放行。未认领的 agent 在数量上限之内放行                                                                                                   | 3    |
 | `updateSpace`（设为公开） | 只拒绝未认领的 agent。创建 Team Space 时也检查 | 已认领的 agent 放行                                                                                                                                      | 3    |
 | `createFiles`             | 与目标一致                 | 数未认领 agent 持有的全部 Space 的文件                                                                                                                   | 3    |
-| 新增：创建 fork           | 无                         | 未认领的 agent 有数量上限                                                                                                                                | 4    |
+| 新增：创建 fork           | 与目标一致。未认领的 agent 已持有 3 个 fork 时拒绝，返回 `AGENT_QUOTA_EXCEEDED` | 未认领的 agent 有数量上限                                                                                                                                | 4    |
 
 `addTeamMember` 分两步改。阶段 2 放行人持有的仓库里的 viewer 和 editor。阶段 3 加上所有者的类别，放行 agent 持有的仓库里的 admin，并拒绝未认领的 agent 添加成员。
 
@@ -279,6 +279,8 @@ owner 不是 `space_members` 里的一行，它是 `spaces.owner_user_id`。现�
 目录列表是上游的目录，加上 Worktree 里新建的 Unit，减去标记为移除的 Unit。HTML View 有一个挂在这个 Worktree 上的 `pending` 草稿时，读草稿，否则读上游的 Blob。
 
 client-core 的 `resolveReferencedRuntimeTarget` 已经按“在这个 Worktree 里就读 Worktree，否则读 Trunk”解析被引用的 Unit。
+
+已知限制：这条规则要求宿主 Unit 本身在 Worktree 里。fork 没改过的 Unit 按 Trunk 读，所以它的跨 Unit 公式和嵌入也读 Trunk，即使被引用的 Unit 在 fork 里改过。要按 fork 的修改核对这样的 Unit，先把它加进 fork 的 Worktree（CLI 的 `unit add --worktree <fork>`，MCP 的 `unit_add`）。CLI 和 MCP 的文档写明了这一点。
 
 **写。** 给定 fork 和一个 Unit：
 
@@ -321,8 +323,8 @@ HTML View 沿用 `html_view_drafts`。它已经满足覆盖写的规则：`repla
 
 ### 5.8 接口
 
-- HTTP contract 的来源是 `apps/workspace/contracts/http`。阶段 2 给 Worktree Unit 加上 5.6 的三个字段和标签。阶段 4 新增 fork 的创建、列出、读取和删除。
-- MCP 和 CLI 不新建工具集。阶段 4 之后，现有工具里指向仓库的参数接受 fork 的地址，读走 5.5 的读路径，写走 5.5 的写路径。新增的只有创建、列出和删除 fork。
+- HTTP contract 的来源是 `apps/workspace/contracts/http`。阶段 2 给 Worktree Unit 加上 5.6 的三个字段和标签。阶段 4 加上 fork 的创建、列出、读取和删除，以及经 fork 写入 Unit 的 `POST /api/forks/{forkId}/units`。
+- MCP 和 CLI 不新建工具集。内容工具的 `worktree` 参数（CLI 的 `--worktree`）接受 fork 的地址，读走 5.5 的读路径，写走 5.5 的写路径。MCP 的 `space_browse`、`space_find`（CLI 的 `space browse`、`space find`）按 5.5 列出 fork 的目录，MCP 的 `repo_view` 显示 fork 的上游。其他指向仓库的参数只接受仓库，遇到 fork 的地址就报错，错误里给出上游和 pull request 编号。还没接 fork 的内容工具（如 `export`）同样报错，要求改用 fork 的 Worktree ID。新增的只有创建、列出、查看和删除 fork：MCP 的 `fork_create`、`fork_list`、`fork_view`、`fork_delete`，CLI 的 `uvw fork create|list|view|delete`。
 - MCP 网关的说明文字由授予的 scope 和 `capabilities` 决定走哪个变体，不再按主体类别写死。
 
 ### 5.9 归属
@@ -558,6 +560,6 @@ A 和 B 是两个已认领的 agent。A 创建仓库 R，把 B 加为 viewer。B
 | viewer 创建的新 Unit 在合入时由谁通过目标位置的校验，创建之后归谁                              | A2.5                                                                        | 阶段 2，已确认。加入时作者只需是成员并且目标存在。合入时按合入者校验（`validateAllTargets`，以及 `activateLocalUnit` 事务里的 `requireTarget`）。Node 的 `created_by` 是作者，它不带来任何权限 |
 | `capabilities` 是否已经把 scope 和上限算进去                                                   | R6 要做多少                                                                 | 阶段 2，已确认没有。它只看用户、角色、可见性、状态和每个 Unit 的访问。scope 在 MCP 网关按工具执行，Worktree 模块不调用上限 |
 | 在 Worktree 里，跨 Unit 的公式读另一个也在这个 Worktree 里的 Unit 时，读的是草稿还是 Trunk     | fork 里几个改过的 Sheet 互相引用时是否一致                                  | 阶段 0，已确认读草稿 |
-| 现有工具带上 pull request 参数写入一个 Trunk 的 Unit 时，是否已经自动把它加进 Worktree         | 5.5 写路径的第 3 步是新增还是已有                                           | 阶段 4 开工          |
+| 现有工具带上 pull request 参数写入一个 Trunk 的 Unit 时，是否已经自动把它加进 Worktree         | 5.5 写路径的第 3 步是新增还是已有                                           | 阶段 4，已确认没有。写入不在 Worktree 里的 Unit 返回 `WORKSPACE_UNIT_NOT_FOUND`，第 3 步由 fork 的写入路由新增 |
 | 认领人对 agent 持有的 Team Space 有 owner 的能力。agent 过期或被封禁时，这个 Team Space 被暂停 | R2d。规则按 Space 的所有者写，读代码推出                                    | 阶段 3，原来部分成立：Team Worktree 按 `team_owner_user_id` 判定 owner，认领人没有。阶段 3 改为 `ownsSpaceSql` 后成立 |
 | Space 的所有权不能转移                                                                         | 5.4 的角色表假设仓库的所有者是人还是 agent 不会变。没有找到转移所有权的代码 | 阶段 3，已确认。没有代码修改 `spaces.owner_user_id`，认领也不改它 |

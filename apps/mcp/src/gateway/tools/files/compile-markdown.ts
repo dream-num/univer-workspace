@@ -2,6 +2,7 @@ import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import { worktreeInput } from "../core/space-support.js";
 import { markdownCompileInput, opSpecs } from "../../../shared/executor-protocol.js";
 import { executorTool } from "../executor-tool.js";
 import { writeAnnotations } from "../definition.js";
@@ -22,7 +23,7 @@ export const compileMarkdownTool = executorTool({
     assets_upload_id: z.string().min(1).optional(),
     title: z.string().optional(),
     apply: z.boolean().optional(),
-    worktree: z.string().min(1).optional(),
+    worktree: worktreeInput.min(1).optional(),
     space: repoInput.optional(),
     parent: z.string().min(1).optional(),
     unit: z.string().min(1).optional(),

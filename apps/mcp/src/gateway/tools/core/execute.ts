@@ -2,9 +2,9 @@ import { z } from "zod";
 import { codeInput, opSpecs } from "../../../shared/executor-protocol.js";
 import { writeAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
-import { worktreeInput } from "./space-support.js";
+import { acceptForkAddress, worktreeOrForkInput } from "./space-support.js";
 
-export const executeTool = executorTool({
+export const executeTool = acceptForkAddress(executorTool({
   name: "execute",
   toolset: "core",
   scope: "write",
@@ -12,7 +12,7 @@ export const executeTool = executorTool({
   description:
     "Run Univer Facade code in a pull request's Worktree and commit the changes. Content writes require a draft Worktree; before writing to an already-ready pull request, use pr_ready with undo: true. Read-only code does not require reopening. Read back with inspect to verify changes; the server instructions say what happens to the pull request next.",
   annotations: writeAnnotations,
-  inputSchema: z.object({ worktree: worktreeInput, unit: z.string().min(1), code: codeInput }),
+  inputSchema: z.object({ worktree: worktreeOrForkInput, unit: z.string().min(1), code: codeInput }),
   op: opSpecs["content.execute"],
   request: ({ worktree, unit, code }) => ({ input: { worktreeId: worktree, unitId: unit, code } }),
-});
+}));

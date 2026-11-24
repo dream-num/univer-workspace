@@ -2,6 +2,10 @@ export const coreNames = [
   "whoami",
   "repo_list",
   "repo_view",
+  "fork_create",
+  "fork_list",
+  "fork_view",
+  "fork_delete",
   "issue_list",
   "issue_view",
   "issue_create",
@@ -68,6 +72,8 @@ export const adminNames = [
   "resources_export",
 ];
 export const writeNames = [
+  "fork_create",
+  "fork_delete",
   "skill_draft_create",
   "compile_typst",
   "compile_svg",
@@ -96,6 +102,7 @@ export const writeNames = [
   "pr_discard",
 ];
 export const destructiveNames = [
+  "fork_delete",
   "blob_replace",
   "repo_edit",
   "label_write",
@@ -104,6 +111,10 @@ export const destructiveNames = [
   "pr_discard",
 ];
 export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree:merge"> = {
+  fork_create: "write",
+  fork_list: "read",
+  fork_view: "read",
+  fork_delete: "write",
   skill_draft_create: "write",
   skill_draft_get: "read",
   skill_source_read: "read",

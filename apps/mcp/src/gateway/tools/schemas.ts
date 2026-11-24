@@ -141,6 +141,25 @@ export const worktreeSchema = z.object({
   url: z.url(),
 });
 
+export const forkPullSchema = worktreeSchema
+  .omit({ units: true })
+  .nullable()
+  .describe("The fork's open pull request in its upstream; null while the fork is clean.");
+export const forkSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  fullName: z.string().describe("The fork address <owner>/<name>."),
+  owner: z.object({ id: z.string(), username: z.string() }),
+  upstream: repoSchema.nullable().describe("The repository the fork views; null once you can no longer read it."),
+  state: z
+    .enum(["clean", "drafting", "proposed", "merging"])
+    .describe(
+      "clean: no open pull request, the next write opens one. drafting: writes join the draft. proposed: ready, writes fail until pr_ready with undo true. merging: writes fail until the merge finishes.",
+    ),
+  worktree: forkPullSchema,
+  createdAt: z.string(),
+});
+
 const resourceCapabilitiesSchema = z.object({
   downloadContent: z.boolean(),
   editContent: z.boolean(),

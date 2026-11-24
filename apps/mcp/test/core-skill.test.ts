@@ -94,6 +94,17 @@ describe("MCP core Skill tool bindings", () => {
     expect(content).not.toContain("`repo_edit` to make a repository public");
   });
 
+  it("binds every fork tool and keeps the fork's cross-file reference limit", async () => {
+    const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    for (const name of ["fork_create", "fork_list", "fork_view", "fork_delete"]) {
+      expect(names.has(name), name).toBe(true);
+      expect(content, name).toContain(`\`${name}\``);
+    }
+    expect(content).toContain(
+      "A file the fork has not changed reads its formulas and embeds from trunk, even when they point at a file the fork changed.",
+    );
+  });
+
   it("states the shared idempotency key rule", async () => {
     const content = await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8");
     expect(content.replace(/\s+/gu, " ")).toContain(IDEMPOTENCY_KEY_DESCRIPTION);

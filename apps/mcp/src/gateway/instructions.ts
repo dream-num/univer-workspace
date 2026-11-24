@@ -90,6 +90,11 @@ export function buildServerInstructions(
         ]
       : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
+    ...(has("fork_create")
+      ? [
+          "When the user asks you to work through a fork, create it with fork_create or take it from fork_list. Pass its address <owner>/<name> as worktree to content tools and as repo to space_browse and space_find, and skip pr_create: the fork's first write opens its pull request in the upstream repository. fork_view gives that pull request's number for pr_ready and pr_merge, with repo set to the upstream.",
+        ]
+      : []),
     ...(has("pr_view")
       ? [
           "pr_view gives each file that came from trunk a freshness label. current: trunk has not moved; continue as the workflow says. behind: trunk changed the file after it joined, and the two merge without conflict, but a result you verified on the draft can still be wrong once merged; before you merge, read the file on trunk and check that what your change depends on still holds, and after merging read the result back from trunk. stale: redo the work in a new pull request, then give the user the stale one's link and say it can be discarded; do not discard it unless they ask. Freshness never blocks a merge.",

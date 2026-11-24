@@ -1,6 +1,7 @@
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import { worktreeInput } from "../core/space-support.js";
 import { typstCompileInput, opSpecs } from "../../../shared/executor-protocol.js";
 import { executorTool } from "../executor-tool.js";
 import { writeAnnotations } from "../definition.js";
@@ -18,7 +19,7 @@ export const compileTypstTool = executorTool({
   inputSchema: z.object({
     bundle_upload_id: z.string().min(1),
     apply: z.boolean().optional(),
-    worktree: z.string().min(1).optional(),
+    worktree: worktreeInput.min(1).optional(),
     space: repoInput.optional(),
     parent: z.string().min(1).optional(),
     idempotency_key: typstCompileInput.shape.idempotencyKey.describe(IDEMPOTENCY_KEY_DESCRIPTION),

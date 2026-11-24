@@ -724,7 +724,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"b77371646056a8235cb37c5ee269df6907ae65fe127f77e29da9dc339c727d60"`);
+    expect(digest).toMatchInlineSnapshot(`"e1e36d5205e3d609048d0a6aa98e99bef260293bd7749ac2547ef968dd37904c"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
@@ -739,6 +739,9 @@ describe("gateway over real HTTP and the MCP client", () => {
     for (const sentence of [review, leave, "agent identity", "Call share"]) {
       expect(human).not.toContain(sentence);
     }
+    expect(human).toContain(
+      "When the user asks you to work through a fork, create it with fork_create or take it from fork_list. Pass its address <owner>/<name> as worktree to content tools and as repo to space_browse and space_find, and skip pr_create",
+    );
     expect(human).toContain(
       "stale: redo the work in a new pull request, then give the user the stale one's link and say it can be discarded; do not discard it unless they ask. Freshness never blocks a merge.",
     );
