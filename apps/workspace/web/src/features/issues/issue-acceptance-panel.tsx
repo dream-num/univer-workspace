@@ -35,6 +35,10 @@ const MAX_ROWS = 50;
 const ISSUE_VIEW_PULL_LIMIT = 100;
 const ROLE_LABELS: Readonly<Record<Role, MessageKey>> = { admin: "accessAdmin", editor: "accessEditor", viewer: "accessViewer" };
 
+export function awaitsDecision(issue: Issue): boolean {
+  return issue.state === "open" && issue.acceptance?.kind === "submitted" && issue.capabilities.close;
+}
+
 /**
  * Everything a person needs to judge an Issue's whole task in one place, in reading order. It shows only
  * what the reader may already see: each part reads through the same route and rules as its own page.
@@ -72,9 +76,7 @@ export function IssueAcceptancePanel({ issue, timeline }: { readonly issue: Issu
         {issue.pullRequests.length >= ISSUE_VIEW_PULL_LIMIT ? <Muted>{t("issueAcceptancePullsBound", { count: ISSUE_VIEW_PULL_LIMIT })}</Muted> : null}
       </Section>
       <OutwardActions issue={issue} />
-      {issue.state === "open" && issue.acceptance?.kind === "submitted" && issue.capabilities.close ? (
-        <Decision spaceId={issue.space.id} number={issue.number} />
-      ) : null}
+      {awaitsDecision(issue) ? <Decision spaceId={issue.space.id} number={issue.number} /> : null}
     </div>
   );
 }
@@ -163,16 +165,20 @@ function AcceptanceFile({ worktreeId, unit, merged }: {
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const trashed = merged && unit.change === "deleted" && unit.source === "trunk";
   return (
     <li className="grid min-w-0 gap-2">
       <div className="flex min-w-0 items-center gap-2 text-sm">
         <UnitChangeIcon change={unit.change} />
         <UnitTypeIcon type={unit.unitType} />
         <span className="min-w-0 flex-1 truncate">{unit.name}</span>
-        <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {t(open ? "issueAcceptanceHideComparison" : "issueAcceptanceCompare")}
-        </Button>
+        {trashed ? null : (
+          <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {t(open ? "issueAcceptanceHideComparison" : "issueAcceptanceCompare")}
+          </Button>
+        )}
       </div>
+      {trashed ? <Muted>{t("issueAcceptanceMovedToTrash")}</Muted> : null}
       {open ? <Comparison worktreeId={worktreeId} unitId={unit.unitId} merged={merged} /> : null}
     </li>
   );

@@ -49,6 +49,49 @@ describe("the Issue acceptance panel's data", () => {
     expect((await fetch(`${origin}/api/worktrees/${hidden.id}/html-view-drafts`, { headers: { cookie: viewer.cookie } })).status).toBe(404);
   }, 60_000);
 
+  it("reads a file a merged pull request deleted by its name, without a comparison or a server error", async () => {
+    const { application, register, team, owner } = await setup();
+    const admin = await register("admin");
+    const viewer = await register("viewer");
+    await application.permissions.upsertTeamMember(owner.id, team, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(owner.id, team, viewer.id, { role: "viewer" });
+    const sheet = await application.resources.create(owner.id, randomUUID(), {
+      kind: "univer", spaceId: team, parentNodeId: null, name: "Archive", unitType: "sheet",
+    });
+    if (sheet.status === 202) throw new Error("Resource creation pending");
+    const issue = await application.issues.create(viewer.id, team, { title: "Remove the archive" });
+    const { id } = (await application.worktrees.create(admin.id, randomUUID(), {
+      kind: "team", teamSpaceId: team, visibility: "space", name: "Remove", summary: null, issueNumber: issue.number,
+    })).body;
+    const { unitId } = (await application.worktrees.addUnit(admin.id, id, randomUUID(), {
+      source: "trunk", resourceId: sheet.body.node.resource!.id,
+    })).body.unit;
+    await application.worktrees.setUnitRemoved(admin.id, id, unitId, { removed: true });
+    await application.worktrees.markReady(admin.id, id);
+    await application.worktrees.merge(admin.id, id, randomUUID());
+
+    const issueView = await application.issues.get(viewer.id, team, issue.number);
+    expect(issueView.capabilities.close).toBe(true);
+    expect(issueView.pullRequests).toEqual([expect.objectContaining({ id, state: "merged" })]);
+    const origin = await listen(application);
+    const pull = await fetch(`${origin}/api/worktrees/${id}`, { headers: { cookie: viewer.cookie } });
+    expect(pull.status).toBe(200);
+    expect((await pull.json()).worktree.units).toEqual([
+      expect.objectContaining({ unitId, name: "Archive", change: "deleted", mergeResult: "removed" }),
+    ]);
+    for (const mode of ["", "?view=merged", "?baseMode=parent&view=merged", "?baseMode=base"]) {
+      const comparison = await fetch(`${origin}/universer-api/worktrees/${id}/units/${unitId}/comparison${mode}`, {
+        headers: { cookie: viewer.cookie },
+      });
+      expect([mode, comparison.status]).toEqual([mode, 409]);
+    }
+
+    await application.permissions.removeTeamMember(owner.id, team, admin.id);
+    expect((await application.worktrees.get(admin.id, id)).worktree.units).toEqual([
+      expect.objectContaining({ unitId, name: "Removed resource" }),
+    ]);
+  }, 60_000);
+
   it("lists only the Team Space memberships an assignee granted after its assignment, as they stand now", async () => {
     const { application, register, team, owner } = await setup();
     const assignee = await register("assignee");

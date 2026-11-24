@@ -39,7 +39,7 @@ import { sessionQueryOptions } from "../auth";
 import { NodeIcon } from "../nodes";
 import { spaceQueryOptions } from "../spaces";
 import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment } from "./issues.commands";
-import { IssueAcceptancePanel } from "./issue-acceptance-panel";
+import { awaitsDecision, IssueAcceptancePanel } from "./issue-acceptance-panel";
 import { IssueComposer } from "./issue-composer";
 import { IssueLabelChip } from "./issue-label";
 import { IssueMarkdown } from "./issue-markdown";
@@ -242,6 +242,11 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
           ) : null}
           {view === "conversation" ? (
             <>
+              {awaitsDecision(issue) ? (
+                <Button variant="link" size="sm" className="h-auto w-fit max-w-full p-0 text-left whitespace-normal" onClick={() => setView("acceptance")}>
+                  {t("issueAcceptancePointer")}
+                </Button>
+              ) : null}
               <h2 className="sr-only">{t("issueBody")}</h2>
               <Card
                 author={issue.author}

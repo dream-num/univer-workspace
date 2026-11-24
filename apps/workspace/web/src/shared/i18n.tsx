@@ -986,6 +986,8 @@ export const messages = {
     issueAcceptanceCopiesUnknown: "复制到别处、没有留下来源记录的内容无法在这里显示。",
     issueAcceptanceNone: "无",
     issueAcceptanceRowsBound: "只显示最近的 {count} 条。",
+    issueAcceptanceMovedToTrash: "这个 pull request 删除了它，已移入回收站。",
+    issueAcceptancePointer: "在“验收”视图里验收通过或退回这个 Issue",
   },
   "en-US": {
     repositoryLastOpened: "Last opened {date}",
@@ -1992,6 +1994,8 @@ export const messages = {
     issueAcceptanceCopiesUnknown: "Content copied elsewhere without lineage cannot be shown here.",
     issueAcceptanceNone: "None",
     issueAcceptanceRowsBound: "Only the latest {count} are shown.",
+    issueAcceptanceMovedToTrash: "Deleted by this pull request and moved to Trash.",
+    issueAcceptancePointer: "Accept or send back this Issue in the Acceptance view",
   },
 } as const;
 

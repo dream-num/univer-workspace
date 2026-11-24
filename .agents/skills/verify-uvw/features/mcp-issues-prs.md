@@ -18,9 +18,10 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MI11 returns a structured `workspace-argument-invalid` for an invalid argument and records its usage event.
 - MI12 has a claimed Viewer agent submit an Issue it worked in a fork pull request, the run user send it back and
   accept it in the browser, and the agent find the sent-back Issue with `search` and `acceptance`.
-- MI13 has a claimed Editor agent merge three pull requests linked to an Issue and submit it. The run user judges and
-  accepts it in the Issue page's acceptance panel, comparing every file before and after its merge, and sees the
-  agent's later Link Sharing there, which a member does not.
+- MI13 has a claimed Editor agent merge three pull requests linked to an Issue and submit it, after the run user merges a
+  fourth linked one that deletes a file. The run user judges and accepts it in the Issue page's acceptance panel,
+  comparing every changed file before and after its merge, sees the deleted file by name as moved to Trash with no
+  comparison, and sees the agent's later Link Sharing there, which a member does not.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -297,10 +298,11 @@ completed with one `issue-closed` activity event.
 
 ### MI13. Judge the whole task in the acceptance panel
 
-The run user O claims an agent A, makes it an Editor of a Team Space with two Sheets on Trunk, and assigns it an Issue.
-A opens three pull requests linked to the Issue, two that change the Sheets and one that adds a Doc, merges them and
-submits. O opens the Issue page on its `Acceptance` view, compares every file before and after its merge, finds no
-outward actions, and accepts. Then A turns on Link Sharing for a file in its own Personal Space: O, who claimed A, sees
+The run user O claims an agent A, makes it an Editor of a Team Space with three Sheets on Trunk, and assigns it an
+Issue. A opens three pull requests linked to the Issue, two that change two Sheets and one that adds a Doc, and merges
+them. O opens and merges a fourth linked pull request that deletes the third Sheet, Archive, and then A submits. O opens
+the Issue page on its `Acceptance` view, compares every changed file before and after its merge, sees Archive as moved
+to Trash with no comparison, finds no outward actions, and accepts. Then A turns on Link Sharing for a file in its own Personal Space: O, who claimed A, sees
 it in the panel, and a member E sees neither the row nor the Node ID. MI13 uses one `principal`, which counts toward the
 5 agents per hour.
 
@@ -313,6 +315,7 @@ $V mcp mip-seed pr_create "{\"repo\":\"$R\",\"title\":\"Seed\"}"
 W0=$(jq -r .id "$EVIDENCE/mip-seed.out"); N0=$(jq -r .number "$EVIDENCE/mip-seed.out")
 $V mcp mip-budget unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Budget\"}"
 $V mcp mip-regions unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Regions\"}"
+$V mcp mip-archive unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Archive\"}"
 $V mcp mip-budget-seed execute "$(sheet "$W0" mip-budget 'ws.getRange("A1:B3").setValues([["Item","Budget"],["Rent",3000],["Marketing",2500]]);')"
 $V mcp mip-regions-seed execute "$(sheet "$W0" mip-regions 'ws.getRange("A1:A3").setValues([["Region"],["North"],["South"]]);')"
 $V mcp mip-seed-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N0\"}"
@@ -360,14 +363,31 @@ $V mcp --as panel mip-notes unit_create "{\"worktree\":\"$(jq -r .id "$EVIDENCE/
 NOTES=$(jq -r .unit.nodeId "$EVIDENCE/mip-notes.out")
 $V mcp --as panel mip-notes-ready pr_ready "{\"repo\":\"$A/personal\",\"number\":\"$NP\"}"
 $V mcp --as panel mip-notes-merge pr_merge "{\"repo\":\"$A/personal\",\"number\":\"$NP\"}"
+$V cli mip-pr-archive pr create -R "$R" -t "Remove the archive" --issue "$N" --json id,number
+W4=$(jq -r .id "$EVIDENCE/mip-pr-archive.out"); N4=$(jq -r .number "$EVIDENCE/mip-pr-archive.out")
+UA=$(jq -r .unit.unitId "$EVIDENCE/mip-archive.out")
+$V cli mip-add-archive unit add --worktree "$W4" --resource "$(jq -r .unit.resourceId "$EVIDENCE/mip-archive.out")" --json
+```
+
+In the run browser, signed in as O, open `$ORIGIN/spaces/$T/pulls/$N4`, wait for Archive to load, and click
+`Mark for deletion`. Then:
+
+```bash
+$V cli mip-ready-archive pr ready "$N4" -R "$R" --json state
+$V cli mip-merge-archive pr merge "$N4" -R "$R" --json state
+jq -e '.state == "merged"' "$EVIDENCE/mip-merge-archive.out"
 $V mcp --as panel mip-submit issue_verdict "$(jq -nc --arg r "$R" --arg n "$N" '{repo:$r,number:$n,verdict:"submit",body:"Raised Marketing to 4000, added West, and added a Summary Doc in three pull requests."}')"
-jq -e '.acceptance.kind == "submitted" and (.pullRequests | length) == 3 and all(.pullRequests[]; .state == "merged")' "$EVIDENCE/mip-submit.out"
+jq -e '.acceptance.kind == "submitted" and (.pullRequests | length) == 4 and all(.pullRequests[]; .state == "merged")' "$EVIDENCE/mip-submit.out"
 ```
 
 In the run browser, signed in as O at 1440 × 900, note the time, open `$ORIGIN/spaces/$T/issues/$N`, and screenshot it as
 `mip-panel.png`. The page opens on `Acceptance`, and the panel reads, in order: `Task` with the Issue text, A's
-submission, the three pull requests, each `Merged`, `opened by` and `merged by` A, and `Outward actions` with `None`
-under all three parts and the sentence about copies. Click `Compare` beside each file (`[data-acceptance-pull="<id>"] li
+submission, the four pull requests, each `Merged`, A's three `opened by` and `merged by` A and `Remove the archive`
+`opened by` and `merged by` O, and `Outward actions` with `None` under all three parts and the sentence about copies.
+Under `Remove the archive`, Archive has no `Compare` button and reads `Deleted by this pull request and moved to Trash.`:
+screenshot that card (`[data-acceptance-pull="$W4"]`) as `mip-deleted.png`, and in the same page run `agent-browser eval
+"fetch('/universer-api/worktrees/$W4/units/$UA/comparison?baseMode=parent&view=merged').then((r) => r.status)"` into
+`mip-deleted-comparison.txt`, which holds 409. Click `Compare` beside each other file (`[data-acceptance-pull="<id>"] li
 button`), wait about 9 s, and screenshot each as `mip-compare-<budget|regions|summary>.png`: Budget's `Before merge`
 has 2500 in B3 and `After merge` 4000, Regions gains West in A4, and Summary's left side is `Not present on this side`.
 Click `Accept`, note the time, and record both in `mip-timing.txt`. Then:
@@ -386,12 +406,13 @@ choose `Acceptance` and screenshot `Outward actions` as `mip-member.png`, then o
 jq -e '.personalSharing == null and .members == []' "$EVIDENCE/mip-member-access.json"
 ! grep -F "$NOTES" "$EVIDENCE/mip-member-access.json"
 $V cli mip-final issue view "$N" -R "$R" --json state,stateReason,acceptance,pullRequests
-jq -e '.state == "closed" and .acceptance.kind == "accepted" and (.pullRequests | length) == 3 and all(.pullRequests[]; .state == "merged")' "$EVIDENCE/mip-final.out"
+jq -e '.state == "closed" and .acceptance.kind == "accepted" and (.pullRequests | length) == 4 and all(.pullRequests[]; .state == "merged")' "$EVIDENCE/mip-final.out"
 AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e agent-browser close
 ```
 
-Pass when every command exits as shown, the panel lists all three merged pull requests with every file and its before
-and after, shows no outward action before the share, and accepting closes the Issue as completed. After the share, O's
+Pass when every command exits as shown, the panel lists all four merged pull requests with every changed file and its
+before and after, names the deleted Archive as moved to Trash with no comparison while its comparison request gets 409,
+shows no outward action before the share, and accepting closes the Issue as completed. After the share, O's
 panel lists `Notes Link Sharing on (Can view), set by` A under the Personal Space part, the narrow page has no
 horizontal scroll and its comparison shows both sides' cells, and E's panel says `Only the assignee and the user who
 claimed it can see this part.` while E's response has `personalSharing: null` and not the Notes Node ID.

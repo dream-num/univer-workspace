@@ -347,7 +347,9 @@ to `private` gets `FORBIDDEN`; reopen it first. A merged Team Worktree reports V
 whatever it was while open, so every Space Member finds it in the list and the Space activity;
 a discarded one keeps its Visibility. Marking a trunk Unit for deletion still
 needs the right to trash its Node, and content protection on a trunk Unit holds in its
-draft: an author without edit access to the Unit cannot change what a protection rule covers. Visibility controls who
+draft: an author without edit access to the Unit cannot change what a protection rule covers. A trunk Unit that a merge
+moved to Trash keeps its `name` in the Team Worktree for the Space's Owner and Members, who could read it before. Anyone
+else who cannot open it reads `Removed resource`, and so does everyone after permanent deletion. Visibility controls who
 may Review; Visibility never grants Resource Access.
 
 The Creator, and the human who claimed an agent creator, can discover, Review, mark

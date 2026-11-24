@@ -148,7 +148,7 @@ export function createWorktreesModule(options: {
     );
     if (!isDiscoverable(row, data.status === "merged")) throw notFound();
     const unitRows = await options.repository.units(worktreeId);
-    const units = await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId));
+    const units = await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId), readsTeamSpace(row));
     const access = await worktreeCapabilities(
       userId,
       row,
@@ -1103,7 +1103,7 @@ export function createWorktreesModule(options: {
     return {
       row: current,
       state: data.status,
-      units: await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId)),
+      units: await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId), readsTeamSpace(current)),
       facts: access.facts,
       capabilities: access.capabilities,
       canSeeUnits: access.canSeeUnits,
@@ -1320,6 +1320,11 @@ function isDiscoverable(row: WorktreeRow, merged: boolean): boolean {
   return teamRole === "owner" || teamRole === "admin";
 }
 
+/** A Team Space member reads every file in the Space, so it read a file before a merge moved it to Trash. */
+function readsTeamSpace(row: WorktreeRow): boolean {
+  return row.kind === "team" && (Boolean(row.actor_owns_team_space) || row.actor_member_role !== null);
+}
+
 function canManageSummary(userId: string, row: WorktreeRow): boolean {
   if (row.creator_user_id === userId) return true;
   return (
@@ -1342,6 +1347,7 @@ async function mapUnits(
   userId: string,
   access: AccessResolver,
   trunk: TrunkClock | null,
+  readsSpace: boolean,
 ): Promise<WorktreeUnit[]> {
   const byId = new Map(states.map((state) => [state.unitID, state]));
   return Promise.all(rows.map(async (row) => {
@@ -1360,7 +1366,7 @@ async function mapUnits(
       nodeId: row.node_id,
       source: row.source,
       name:
-        state?.removed && row.source === "trunk" && !(await access.resolveResource(userId, row.resource_id))
+        state?.removed && row.source === "trunk" && !readsSpace && !(await access.resolveResource(userId, row.resource_id))
           ? "Removed resource"
           : (row.existing_name ?? row.new_name ?? "Removed resource"),
       unitType: requireUnitType(
