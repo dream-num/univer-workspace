@@ -72,7 +72,8 @@ Run `$V doctor` first, and again whenever anything looks off. It exits non-zero 
 
 **Browser (agent-browser).** `$V env` exports `AGENT_BROWSER_SESSION=verify-uvw-<run-id>`, so this run
 gets its own headless browser. Each Bash tool call is a new shell, so start every call that uses
-agent-browser or uvw with `eval "$($V env)"`. It also sets `$ORIGIN` and `$EVIDENCE`. Always use
+agent-browser or uvw with `eval "$($V env)"`. It also sets `$ORIGIN`, `$EVIDENCE` and `$RUN`, the run
+directory. Always use
 `127.0.0.1`, never `localhost` or another host, because the bundled Univer license is bound to the
 domain and editors degrade elsewhere.
 

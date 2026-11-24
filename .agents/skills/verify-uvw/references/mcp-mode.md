@@ -48,8 +48,9 @@ and replaces logs, so save what you need from the logs first. Run `user` again a
 
 `$V user` also creates an MCP session, a fresh opencode directory and a personal access token (PAT). The
 gateway exchanges the PAT with Workspace (confidential client `univer-workspace-mcp-gateway`, whose
-secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. `$V env`
-exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL`. Sessions,
+secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. In MCP mode
+`$V env` adds `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL` to the
+default exports, which include `RUN`, `ORIGIN` and `EVIDENCE`. Sessions,
 opencode config, the executor and renderer tokens, and the metrics token stay under `home/` with
 credential files at mode 0600.
 

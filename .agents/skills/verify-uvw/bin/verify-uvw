@@ -658,6 +658,7 @@ cmd_env() {
   load_run
   cat <<EOF
 export VERIFY_UVW_RUN=$RUN_ID
+export RUN=$RUN
 export UNIVER_HOME=$UNIVER_HOME
 export AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION
 export ORIGIN=$ORIGIN

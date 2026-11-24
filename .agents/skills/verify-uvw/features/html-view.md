@@ -53,7 +53,10 @@ theme (see [page theme](./page-theme-wiki-repository.md)), and `O=verify-$VERIFY
   In a private Personal Space, `repositoryVisibility` is `private` and `privateSourceUnitIds` lists `$U`.
 - **Open (HV2).** `agent-browser open "$ORIGIN/spaces/$SPACE?view=apps"`: heading `Default page: Qty page`,
   `Visit page`, `Copy address`. Open `$ORIGIN/nodes/$PN` and wait about 4 s; `snapshot -i -c` shows the page's
-  `spinbutton "Qty"` with `5`, and the screenshot shows `Double: 10`. `curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$ORIGIN/apps/$PN/run"` is `302` to `/nodes/$PN?view=immersive`.
+  `spinbutton "Qty"` with `5`, and the screenshot shows `Double: 10`. In the same signed-in browser,
+  `agent-browser open "$ORIGIN/apps/$PN/run"`, wait 1500, then `agent-browser get url` ends with
+  `/nodes/$PN?view=immersive`. The server sends that redirect only to someone who can read the page. Signed
+  out, this private page answers `200` with a sign-in page instead.
 - **Owner write (HV3).** Take the spinbutton ref from `snapshot -i -c`, then `agent-browser fill @<ref> 7` and
   `agent-browser press Tab`. `$V cli hv-after inspect range A1:C2 --trunk --unit $U --worksheet id:$S --json`
   reads `7` and `14` in row 2.

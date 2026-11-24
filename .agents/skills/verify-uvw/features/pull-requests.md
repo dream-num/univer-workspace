@@ -72,7 +72,9 @@ that someone else holds, where the run user can only read:
 - **Propose.** As the run user, `$V cli pp-create pr create -R <H>/team-pr -t "Proposal" --json` has
   `state: "draft"`, `kind: "team"`, `visibility: "private"`. `$V cli pp-add unit add --worktree $W --resource $RES --json`
   has `unit.source: "trunk"`, and `$V cli pp-execute execute --worktree $W --unit $U --json -e '<code>'` has
-  `committed: true`. `uh inspect range A1:B2 --unit $U --trunk --worksheet index:1` still shows H's values.
+  `committed: true`. `$V cli pp-new unit create --worktree $W --space <H>/team-pr --type sheet --name Proposed --json`
+  adds a new file to the proposal; keep its `unit.nodeId` as `PN`.
+  `uh inspect range A1:B2 --unit $U --trunk --worksheet index:1` still shows H's values.
   `$V cli pp-ready pr ready $P -R <H>/team-pr --json state,visibility` prints
   `{"state": "ready", "visibility": "space"}`: marking it ready shares it, because its author cannot merge it.
 - **Propose through MCP.** In [MCP mode](../references/mcp-mode.md), `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
@@ -90,9 +92,9 @@ that someone else holds, where the run user can only read:
 - **Editor merges.** `ue pr list -R <H>/team-pr --json number,state,visibility,creator` lists the proposal as
   `ready` and `space` with the run user as `creator`. `ue pr merge $P -R <H>/team-pr --json state` prints
   `{"state": "merged"}`. H's `inspect --trunk` now shows the proposed values, and `uh space browse <H>/team-pr --json`
-  lists a file the proposal created. With H's cookie, `GET $ORIGIN/api/spaces/$T/activity?timeZone=UTC` has
+  lists `Proposed`, the file the proposal created. With H's cookie, `GET $ORIGIN/api/spaces/$T/activity?timeZone=UTC` has
   `pull-opened` by the run user and `pull-merged` by E for that pull request. The run user's
-  `space node trash <node of the file they proposed>` is still refused.
+  `space node trash $PN` is still refused.
 - **Browser.** A second member with read access (register one and add it as `viewer`) opens
   `$ORIGIN/spaces/$T/pulls/$P` on a ready proposal: the review panel reads
   `Merging this pull request needs edit access to every file it changes.` and has no merge button. In E's
