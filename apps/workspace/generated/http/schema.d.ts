@@ -1419,6 +1419,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forks/{forkId}/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write a Unit into the fork's open Worktree, opening that Worktree on the first write.
+         * @description Takes the same body as `POST /api/worktrees/{worktreeId}/units`. When the fork has no open Worktree, the
+         *     server opens one: a private Team Worktree of the upstream, authored by the fork's owner and named after
+         *     the fork. Only this route links a Worktree to a fork, and `POST /api/worktrees` never does. A Trunk Resource
+         *     joins with its own Unit ID, and its baseline is the upstream Trunk revision at this moment. A Trunk
+         *     Resource already in the Worktree returns `200` and adds nothing. Two concurrent first writes end in one
+         *     open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
+         *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
+         *     finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
+         *     Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. The
+         *     Unit's content is then written through the Worktree, as in any other Worktree.
+         */
+        post: operations["addForkUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces/{spaceId}/nodes": {
         parameters: {
             query?: never;
@@ -3535,8 +3566,8 @@ export interface components {
         /**
          * @description Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
          *     `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
-         *     an interrupted merge or discard still has to finish. Nothing opens a fork's Worktree yet, so every
-         *     fork reads `clean`.
+         *     an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
+         *     (`POST /api/forks/{forkId}/units`), and only a `drafting` fork takes writes.
          * @enum {string}
          */
         ForkState: "clean" | "drafting" | "proposed" | "merging";
@@ -3554,6 +3585,28 @@ export interface components {
              *     and which its author can still ready, reopen or discard. Null when the fork had none, or its owner cannot read it.
              */
             worktree: components["schemas"]["WorktreeSummary"] | null;
+        };
+        AddTrunkUnit: {
+            /** @constant */
+            source: "trunk";
+            resourceId: string;
+        };
+        CreateWorktreeLocalUnit: {
+            /** @constant */
+            source: "worktree";
+            name: string;
+            unitType: components["schemas"]["UnitType"];
+            targetSpaceId: string;
+            targetParentNodeId: string | null;
+            /** @description Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision. */
+            initialData?: {
+                [key: string]: unknown;
+            };
+        };
+        AddWorktreeUnit: components["schemas"]["AddTrunkUnit"] | components["schemas"]["CreateWorktreeLocalUnit"];
+        ForkUnitWrite: {
+            worktree: components["schemas"]["WorktreeSummary"];
+            unit: components["schemas"]["WorktreeUnit"];
         };
         ResourceCapabilities: {
             openContent: boolean;
@@ -4041,24 +4094,6 @@ export interface components {
             summary?: string | null;
             visibility?: components["schemas"]["WorktreeVisibility"];
         };
-        AddTrunkUnit: {
-            /** @constant */
-            source: "trunk";
-            resourceId: string;
-        };
-        CreateWorktreeLocalUnit: {
-            /** @constant */
-            source: "worktree";
-            name: string;
-            unitType: components["schemas"]["UnitType"];
-            targetSpaceId: string;
-            targetParentNodeId: string | null;
-            /** @description Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision. */
-            initialData?: {
-                [key: string]: unknown;
-            };
-        };
-        AddWorktreeUnit: components["schemas"]["AddTrunkUnit"] | components["schemas"]["CreateWorktreeLocalUnit"];
         WorktreeUnitEnvelope: {
             unit: components["schemas"]["WorktreeUnit"];
         };
@@ -6772,6 +6807,49 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    addForkUnit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path: {
+                forkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWorktreeUnit"];
+            };
+        };
+        responses: {
+            /** @description The Trunk Resource was already in the fork's open Worktree. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkUnitWrite"];
+                };
+            };
+            /** @description The Unit joined the fork's open Worktree. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkUnitWrite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listSpaceRootNodes: {

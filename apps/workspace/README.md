@@ -719,8 +719,10 @@ A fork is a User's named view of a Team Space they can propose in: its owner, th
 owner, or a Space Member of any role. `POST /api/forks` takes `{ upstreamSpaceId, name }` and writes one `forks`
 row. It copies no Node, Resource, Unit, Blob or Collaboration data. `GET /api/forks`, `GET /api/forks/lookup?owner&name`,
 `GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve only the fork's owner. A fork's name shares the
-owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). Nothing opens a fork's Worktree yet, so every fork
-reads `state: clean`. Deleting a fork removes only its row.
+owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). `POST /api/forks/{forkId}/units` writes a Unit
+through the fork. Its first write opens the fork's one Team Worktree in the upstream, and the fork's `state` follows
+that Worktree. A fork whose Worktree is not a draft refuses writes with `409 FORK_WORKTREE_NOT_DRAFT`. Deleting a fork
+removes only its row.
 
 V27→V28 adds the `forks` table, the nullable `worktrees.fork_id` column and the partial unique index
 `worktrees_open_fork`, and changes no existing row. On PostgreSQL the same step moves `workspace_product_schema`

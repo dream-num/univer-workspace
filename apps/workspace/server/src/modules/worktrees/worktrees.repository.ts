@@ -123,6 +123,7 @@ export interface WorktreesRepository {
     readonly visibility: WorktreeVisibility;
     readonly createdVia: WriteSource | null;
     readonly createdAt: number;
+    readonly forkId: string | null;
   }): Promise<void>;
   findIdByNumber(
     scope: { readonly teamSpaceId: string } | { readonly creatorUserId: string },

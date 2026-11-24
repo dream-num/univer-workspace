@@ -33,6 +33,12 @@ export function createForksRouter(options: {
     response.json(await options.forks.get(session.user.id, request.params.forkId));
   });
 
+  router.post("/forks/:forkId/units", async (request, response) => {
+    const { user, writeSource } = await options.identity.requireSession(request.headers.cookie);
+    const result = await options.forks.addUnit(user.id, request.params.forkId, request.headers["idempotency-key"], request.body, writeSource);
+    response.status(result.status).json(result.body);
+  });
+
   router.delete("/forks/:forkId", async (request, response) => {
     const session = await options.identity.requireSession(request.headers.cookie);
     response.json(await options.forks.delete(session.user.id, request.params.forkId));

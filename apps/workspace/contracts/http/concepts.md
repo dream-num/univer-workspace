@@ -340,10 +340,23 @@ Only a fork's owner lists, reads, looks up and deletes it; anyone else gets `404
 stays readable after its owner loses the upstream, with `upstream: null`, so the owner can
 still delete it. A fork's `state` is derived from its open Worktree, the one Team Worktree
 of the upstream that links to the fork and is not yet merged or discarded, and is never
-stored. Nothing opens a fork's Worktree yet, so every fork reads `clean` with
-`worktree: null`. Deleting a fork removes only its row. The upstream does not change, and
+stored. Deleting a fork removes only its row. The upstream does not change, and
 any Worktree that linked to the fork keeps its history as an ordinary Team Worktree of the
 upstream, which the delete response names.
+
+The owner writes through a fork with `POST /api/forks/{forkId}/units`, which takes an
+`Idempotency-Key` and the body of `POST /api/worktrees/{worktreeId}/units`. A `clean` fork's
+first write opens its Worktree: a private Team Worktree of the upstream, authored by the
+owner and named after the fork. Only the server links a Worktree to a fork, and
+`POST /api/worktrees` never does. The write then adds the Unit, with the upstream Trunk
+revision of that moment as its baseline, and returns `{ worktree, unit }`. A Trunk Resource
+already in the Worktree returns `200`. A fork has at most one open Worktree, so concurrent
+first writes share one. A fork whose open Worktree is not a draft refuses writes with
+`409 FORK_WORKTREE_NOT_DRAFT`, whose message names the state. Reopening a ready Worktree
+makes the fork writable again. After a merge or discard the fork is `clean`, and its next
+write opens a new Worktree. A fork whose upstream its owner can no longer read returns
+`404`, and a write the upstream no longer allows returns `403`. The Unit's content is then
+committed to the Worktree as in any other Worktree.
 
 ## Repository names and numbers
 

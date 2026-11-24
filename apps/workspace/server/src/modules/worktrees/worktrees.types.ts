@@ -231,7 +231,8 @@ export interface WorktreesModule {
     userId: string,
     operationId: unknown,
     input: unknown,
-    createdVia?: WriteSource | null
+    createdVia?: WriteSource | null,
+    forkId?: string | null
   ): Promise<{ readonly status: 201; readonly body: WorktreeSummary }>;
   get(
     userId: string,

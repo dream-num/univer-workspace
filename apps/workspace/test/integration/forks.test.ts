@@ -4,8 +4,11 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { UniverCollabWorktreeService } from "@univerjs-pro/collaboration-worktree-service";
+import { UniverType } from "@univerjs/protocol";
 import { Client } from "pg";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { blankUnitData, collaborationCallOptions } from "../../server/src/integrations/univer/unit-store.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
 const applications: ProductTestApplication[] = [];
@@ -13,6 +16,7 @@ const servers: Server[] = [];
 const directories: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
@@ -186,6 +190,183 @@ describe("forks", () => {
   }, 60_000);
 });
 
+describe("writing through a fork", () => {
+  it("opens one private Team Worktree on the first write and adds the Unit at the current Trunk revision (A4.4)", async () => {
+    const { origin, database } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const fork = await createFork(origin, agent, team, "fix-totals");
+    await expectError(send(origin, "POST", `/api/forks/${fork}/units`, { source: "trunk", resourceId: budget.resourceId }, agent.cookie), 400, "INVALID_INPUT");
+
+    const before = await database.rowCounts();
+    const key = randomUUID();
+    const first = await writeThrough(origin, agent, fork, budget, key);
+    expect(first).toMatchObject({
+      status: 201,
+      worktree: { kind: "team", visibility: "private", name: "fix-totals", state: "draft", teamSpace: { id: team }, creator: { id: agent.id } },
+      unit: { unitId: budget.unitId, resourceId: budget.resourceId, source: "trunk", freshness: { label: "current", revisionsBehind: 0 } },
+    });
+    const after = await database.rowCounts();
+    expect(changedCounts(before, after)).toMatchObject({ worktrees: 1, worktree_units: 1 });
+    expect(await database.all("SELECT fork_id FROM worktrees WHERE id = $1", [first.worktree.id])).toEqual([{ fork_id: fork }]);
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "drafting", worktree: { id: first.worktree.id, state: "draft" } });
+
+    for (const retry of [key, randomUUID()]) {
+      expect(await writeThrough(origin, agent, fork, budget, retry)).toMatchObject({ status: 200, worktree: { id: first.worktree.id }, unit: { unitId: budget.unitId } });
+    }
+    expect(changedCounts(after, await database.rowCounts())).toEqual({});
+
+    const plain = await send(origin, "POST", "/api/worktrees", { kind: "team", teamSpaceId: team, visibility: "private", name: "by-hand", summary: null, forkId: fork },
+      agent.cookie, { "idempotency-key": randomUUID() });
+    expect(plain.status).toBe(201);
+    expect(await database.all("SELECT fork_id FROM worktrees WHERE id = $1", [((await plain.json()) as { id: string }).id])).toEqual([{ fork_id: null }]);
+  }, 60_000);
+
+  it("puts two concurrent first writes into one open Worktree, and the losing open leaves one empty Collaboration Worktree (A4.5)", async () => {
+    const { origin, database } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const [budget, forecast] = [await createSheet(origin, holder, team, "Budget"), await createSheet(origin, holder, team, "Forecast")];
+    const fork = await createFork(origin, agent, team, "fix-totals");
+    const create = UniverCollabWorktreeService.prototype.createWorktree;
+    const opened: { readonly sdk: UniverCollabWorktreeService; readonly worktreeId: string }[] = [];
+    let bothArrived!: () => void;
+    const arrived = new Promise<void>((resolve) => { bothArrived = resolve; });
+    // Both writes reach the Collaboration create only after both saw a clean fork, so the race always happens.
+    vi.spyOn(UniverCollabWorktreeService.prototype, "createWorktree").mockImplementation(async function (this: UniverCollabWorktreeService, input, options) {
+      opened.push({ sdk: this, worktreeId: input.worktreeID });
+      if (opened.length === 2) bothArrived();
+      await arrived;
+      return create.call(this, input, options);
+    });
+
+    const before = await database.rowCounts();
+    const writes = await Promise.all([writeThrough(origin, agent, fork, budget), writeThrough(origin, agent, fork, forecast)]);
+    expect(writes.map(({ status }) => status)).toEqual([201, 201]);
+    const worktreeId = writes[0]!.worktree.id;
+    expect(writes[1]!.worktree.id).toBe(worktreeId);
+    expect(await database.all("SELECT id FROM worktrees WHERE fork_id = $1 AND processed_at IS NULL", [fork])).toEqual([{ id: worktreeId }]);
+    expect((await worktreeDetail(origin, agent, worktreeId)).units.map((unit) => unit.resourceId).sort()).toEqual([budget.resourceId, forecast.resourceId].sort());
+
+    const changed = changedCounts(before, await database.rowCounts());
+    expect(changed.worktrees).toBe(1);
+    expect(Object.entries(changed).find(([table]) => /^collaboration\.(collaboration_)?worktrees$/.test(table))?.[1]).toBe(2);
+    expect(await database.all("SELECT state, last_error_message AS error FROM operations WHERE kind = 'create_worktree' ORDER BY state", []))
+      .toEqual([{ state: "completed", error: null }, { state: "failed", error: "The fork already has an open Worktree." }]);
+    const orphan = opened.find((entry) => entry.worktreeId !== worktreeId)!;
+    const options = collaborationCallOptions(agent.id);
+    expect((await orphan.sdk.getWorktree({ worktreeID: orphan.worktreeId }, options)).worktree).toMatchObject({ status: "draft", units: [] });
+    // The SDK refuses to create an existing Worktree ID, so racing writes cannot share a deterministic ID.
+    await expect(create.call(orphan.sdk, { worktreeID: worktreeId }, options)).rejects.toMatchObject({ code: "WORKTREE_ALREADY_EXISTS" });
+  }, 60_000);
+
+  it("refuses writes while proposed, takes them after reopen, and opens a new Worktree after the merge (A4.6, A4.7)", async () => {
+    const { origin } = await start();
+    const { holder, agent, editor, team } = await upstream(origin);
+    const [budget, forecast] = [await createSheet(origin, holder, team, "Budget"), await createSheet(origin, holder, team, "Forecast")];
+    const fork = await createFork(origin, agent, team, "fix-totals");
+    const { worktree } = await writeThrough(origin, agent, fork, budget);
+
+    expect(await transition(origin, worktree.id, "ready", agent)).toBe("ready");
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "proposed", worktree: { id: worktree.id } });
+    const refused = await expectError(send(origin, "POST", `/api/forks/${fork}/units`, { source: "trunk", resourceId: forecast.resourceId },
+      agent.cookie, { "idempotency-key": randomUUID() }), 409, "FORK_WORKTREE_NOT_DRAFT");
+    expect(refused.message).toMatch(/ready/);
+    expect(await transition(origin, worktree.id, "reopen", agent)).toBe("draft");
+    expect(await writeThrough(origin, agent, fork, forecast)).toMatchObject({ status: 201, worktree: { id: worktree.id }, unit: { resourceId: forecast.resourceId } });
+
+    expect(await transition(origin, worktree.id, "ready", agent)).toBe("ready");
+    expect(await transition(origin, worktree.id, "merge", editor)).toBe("merged");
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "clean", worktree: null });
+    const next = await writeThrough(origin, agent, fork, budget);
+    expect(next).toMatchObject({ status: 201, worktree: { state: "draft" }, unit: { resourceId: budget.resourceId, freshness: { revisionsBehind: 0 } } });
+    expect(next.worktree.id).not.toBe(worktree.id);
+  }, 60_000);
+
+  it("keeps a merged Unit upstream after a partial conflict, and redoes the other in a new Worktree after discard (A4.8)", async () => {
+    const { origin } = await start();
+    const { holder, agent, editor, team } = await upstream(origin);
+    const [totals, plan] = [await createSheet(origin, holder, team, "Totals"), await createSheet(origin, holder, team, "Plan")];
+    const fork = await createFork(origin, agent, team, "fix-totals");
+    const first = await writeThrough(origin, agent, fork, totals);
+    await committed(origin, agent, first.worktree.id, first.unit, [setCell(totals, 10, "fork-totals")]);
+    const second = await writeThrough(origin, agent, fork, plan);
+    await committed(origin, agent, first.worktree.id, second.unit, [setCell(plan, 10, "fork-plan")]);
+    await changeTrunk(origin, holder, team, plan, removeRow(plan, 10));
+
+    expect(await transition(origin, first.worktree.id, "ready", agent)).toBe("ready");
+    expect(await transition(origin, first.worktree.id, "merge", editor)).toBe("ready");
+    const results = Object.fromEntries((await worktreeDetail(origin, agent, first.worktree.id)).units.map((unit) => [unit.resourceId, unit.mergeResult]));
+    expect(results).toEqual({ [totals.resourceId]: "merged", [plan.resourceId]: "conflict" });
+    expect(await trunkText(origin, agent, totals)).toContain("fork-totals");
+    expect(await trunkText(origin, agent, plan)).not.toContain("fork-plan");
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "proposed", worktree: { id: first.worktree.id } });
+
+    expect(await transition(origin, first.worktree.id, "discard", agent)).toBe("discarded");
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "clean", worktree: null });
+    const redo = await writeThrough(origin, agent, fork, plan);
+    expect(redo.worktree.id).not.toBe(first.worktree.id);
+    await committed(origin, agent, redo.worktree.id, redo.unit, [setCell(plan, 10, "fork-plan-redone")]);
+    expect(await transition(origin, redo.worktree.id, "ready", agent)).toBe("ready");
+    expect(await transition(origin, redo.worktree.id, "merge", editor)).toBe("merged");
+    expect(await trunkText(origin, agent, plan)).toContain("fork-plan-redone");
+  }, 90_000);
+
+  it("stops every write through the fork once the upstream removes its owner (A4.9)", async () => {
+    const { origin } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const [budget, forecast] = [await createSheet(origin, holder, team, "Budget"), await createSheet(origin, holder, team, "Forecast")];
+    const [drafting, clean] = [await createFork(origin, agent, team, "fix-totals"), await createFork(origin, agent, team, "add-forecast")];
+    const { worktree, unit } = await writeThrough(origin, agent, drafting, budget);
+    expect((await send(origin, "DELETE", `/api/team-spaces/${team}/members/${agent.id}`, undefined, holder.cookie)).status).toBe(204);
+
+    for (const fork of [drafting, clean]) {
+      await expectError(send(origin, "POST", `/api/forks/${fork}/units`, { source: "trunk", resourceId: forecast.resourceId },
+        agent.cookie, { "idempotency-key": randomUUID() }), 404, "NOT_FOUND");
+    }
+    expect((await commit(origin, agent, worktree.id, unit, [setCell(budget, 1, "after-removal")])).status).toBe(403);
+
+    expect((await send(origin, "PATCH", `/api/spaces/${team}`, { publicRead: true }, holder.cookie)).status).toBe(200);
+    for (const [fork, resourceId] of [[drafting, budget.resourceId], [drafting, forecast.resourceId], [clean, forecast.resourceId]] as const) {
+      await expectError(send(origin, "POST", `/api/forks/${fork}/units`, { source: "trunk", resourceId },
+        agent.cookie, { "idempotency-key": randomUUID() }), 403, "FORBIDDEN");
+    }
+  }, 60_000);
+
+  it("gives each of two forks of one upstream its own Worktree (A4.11)", async () => {
+    const { origin } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const [budget, forecast] = [await createSheet(origin, holder, team, "Budget"), await createSheet(origin, holder, team, "Forecast")];
+    const [one, two] = [await createFork(origin, agent, team, "fix-totals"), await createFork(origin, agent, team, "add-forecast")];
+    const [first, second] = [await writeThrough(origin, agent, one, budget), await writeThrough(origin, agent, two, budget)];
+    expect(first.worktree.id).not.toBe(second.worktree.id);
+
+    expect(await transition(origin, first.worktree.id, "ready", agent)).toBe("ready");
+    expect(await writeThrough(origin, agent, two, forecast)).toMatchObject({ status: 201, worktree: { id: second.worktree.id } });
+    expect(await forkView(origin, agent, two)).toMatchObject({ state: "drafting", worktree: { id: second.worktree.id } });
+    expect(await forkView(origin, agent, one)).toMatchObject({ state: "proposed", worktree: { id: first.worktree.id } });
+    expect((await worktreeDetail(origin, agent, second.worktree.id)).units.map((entry) => entry.resourceId).sort()).toEqual([budget.resourceId, forecast.resourceId].sort());
+  }, 60_000);
+
+  it("links the Worktree to its fork when the failed opening Operation is retried", async () => {
+    const { origin, database } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const fork = await createFork(origin, agent, team, "fix-totals");
+    vi.spyOn(UniverCollabWorktreeService.prototype, "createWorktree").mockRejectedValueOnce(Object.assign(new Error("Collaboration is unavailable."), { code: "UNAVAILABLE" }));
+
+    const key = randomUUID();
+    await expectError(send(origin, "POST", `/api/forks/${fork}/units`, { source: "trunk", resourceId: budget.resourceId },
+      agent.cookie, { "idempotency-key": key }), 409, "CONFLICT");
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "clean" });
+    const [failed] = (await database.all("SELECT id FROM operations WHERE kind = 'create_worktree' AND state = 'failed'", [])) as { id: string }[];
+    const retried = await send(origin, "POST", `/api/operations/${failed!.id}/retry`, undefined, agent.cookie);
+    expect({ status: retried.status, body: await retried.json() }).toMatchObject({ status: 202, body: { state: "completed" } });
+    const { worktree } = (await forkView(origin, agent, fork)) as { worktree: { id: string } };
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "drafting", worktree: { id: worktree.id, unitCount: 0 } });
+    expect(await writeThrough(origin, agent, fork, budget, key)).toMatchObject({ status: 201, worktree: { id: worktree.id } });
+  }, 60_000);
+});
+
 interface TestDatabase {
   rowCounts(): Promise<Record<string, number>>;
   run(sql: string, values: readonly unknown[]): Promise<void>;
@@ -329,11 +510,20 @@ function setRole(origin: string, spaceId: string, actor: Actor, userId: string, 
   return send(origin, "PUT", `/api/team-spaces/${spaceId}/members/${userId}`, { role }, actor.cookie);
 }
 
-async function createSheet(origin: string, actor: Actor, spaceId: string, name: string): Promise<{ resourceId: string }> {
-  const response = await send(origin, "POST", "/api/resources", { kind: "univer", spaceId, parentNodeId: null, name, unitType: "sheet" },
+interface Sheet {
+  readonly resourceId: string;
+  readonly unitId: string;
+  readonly sheetId: string;
+}
+
+async function createSheet(origin: string, actor: Actor, spaceId: string, name: string): Promise<Sheet> {
+  const { data } = blankUnitData({ unitId: randomUUID(), unitType: "sheet", name }) as { data: { sheetOrder: string[] } };
+  const sheetId = data.sheetOrder[0]!;
+  const response = await send(origin, "POST", "/api/resources", { kind: "univer", spaceId, parentNodeId: null, name, unitType: "sheet", initialData: data },
     actor.cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 201) throw new Error(`File creation failed with ${response.status}: ${await response.text()}`);
-  return { resourceId: ((await response.json()) as { node: { resource: { id: string } } }).node.resource.id };
+  const { id, unitId } = ((await response.json()) as { node: { resource: { id: string; unitId: string } } }).node.resource;
+  return { resourceId: id, unitId, sheetId };
 }
 
 async function createFork(origin: string, actor: Actor, upstreamSpaceId: string, name: string): Promise<string> {
@@ -357,8 +547,71 @@ async function createPull(origin: string, actor: Actor, spaceId: string, resourc
   return id;
 }
 
-async function transition(origin: string, worktreeId: string, action: "ready" | "merge" | "discard", actor: Actor): Promise<string> {
+async function transition(origin: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard", actor: Actor): Promise<string> {
   const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/${action}`, undefined, actor.cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 200) throw new Error(`${action} failed with ${response.status}: ${await response.text()}`);
   return ((await response.json()) as { worktree: { state: string } }).worktree.state;
+}
+
+interface Unit {
+  readonly unitId: string;
+  readonly resourceId: string;
+  readonly draftHeadRevision: number;
+  readonly mergeResult: string;
+}
+
+async function upstream(origin: string) {
+  const [holder, agent, editor] = await Promise.all([person(origin, "holder"), person(origin, "agent"), person(origin, "editor")]);
+  const team = await createRepo(origin, holder, "Team");
+  expect((await setRole(origin, team, holder, agent.id, "viewer")).status).toBe(200);
+  expect((await setRole(origin, team, holder, editor.id, "editor")).status).toBe(200);
+  return { holder, agent, editor, team };
+}
+
+async function writeThrough(origin: string, actor: Actor, forkId: string, sheet: Sheet, key = randomUUID()) {
+  const response = await send(origin, "POST", `/api/forks/${forkId}/units`, { source: "trunk", resourceId: sheet.resourceId }, actor.cookie, { "idempotency-key": key });
+  if (response.status !== 200 && response.status !== 201) throw new Error(`Fork write failed with ${response.status}: ${await response.text()}`);
+  return { status: response.status, ...((await response.json()) as { worktree: { id: string; state: string }; unit: Unit }) };
+}
+
+async function forkView(origin: string, actor: Actor, forkId: string): Promise<unknown> {
+  return (await send(origin, "GET", `/api/forks/${forkId}`, undefined, actor.cookie)).json();
+}
+
+async function worktreeDetail(origin: string, actor: Actor, worktreeId: string): Promise<{ units: Unit[] }> {
+  return ((await (await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, actor.cookie)).json()) as { worktree: { units: Unit[] } }).worktree;
+}
+
+const setCell = (sheet: Sheet, row: number, value: string) => ({
+  id: "sheet.mutation.set-range-values",
+  data: JSON.stringify({ unitId: sheet.unitId, subUnitId: sheet.sheetId, cellValue: { [row]: { 1: { v: value } } } }),
+});
+
+const removeRow = (sheet: Sheet, row: number) => ({
+  id: "sheet.mutation.remove-rows",
+  data: JSON.stringify({ unitId: sheet.unitId, subUnitId: sheet.sheetId, range: { startRow: row, endRow: row, startColumn: 0, endColumn: 4 } }),
+});
+
+function commit(origin: string, actor: Actor, worktreeId: string, unit: Unit, mutations: readonly { id: string; data: string }[]): Promise<Response> {
+  return send(origin, "POST", `/api/worktrees/${worktreeId}/units/${unit.unitId}/changesets`, {
+    changeset: { unitID: unit.unitId, type: UniverType.UNIVER_SHEET, baseRev: unit.draftHeadRevision, revision: unit.draftHeadRevision + 1, sid: randomUUID(), reqId: 1, mutations },
+  }, actor.cookie);
+}
+
+async function committed(...args: Parameters<typeof commit>): Promise<void> {
+  const response = await commit(...args);
+  expect({ status: response.status, body: await response.json() }).toMatchObject({ status: 200, body: { status: "committed" } });
+}
+
+async function changeTrunk(origin: string, actor: Actor, spaceId: string, sheet: Sheet, mutation: { id: string; data: string }): Promise<void> {
+  const worktreeId = await createPull(origin, actor, spaceId, sheet.resourceId);
+  await committed(origin, actor, worktreeId, (await worktreeDetail(origin, actor, worktreeId)).units[0]!, [mutation]);
+  expect(await transition(origin, worktreeId, "ready", actor)).toBe("ready");
+  expect(await transition(origin, worktreeId, "merge", actor)).toBe("merged");
+}
+
+async function trunkText(origin: string, actor: Actor, sheet: Sheet): Promise<string> {
+  const response = await send(origin, "GET", `/universer-api/snapshot/${UniverType.UNIVER_SHEET}/unit/${sheet.unitId}/rev/0`, undefined, actor.cookie);
+  if (response.status !== 200) throw new Error(`Trunk read failed with ${response.status}`);
+  return response.text();
 }

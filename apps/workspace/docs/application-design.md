@@ -482,11 +482,16 @@ Issue 写入不是跨系统写入，不使用 Operation，也不接受 `Idempote
 
 ## Forks
 
-`modules/forks` 只读写产品数据库的 `forks` 行，不调用 Collaboration Service，因此创建与删除都不使用 Operation。
+`modules/forks` 的创建、读取与删除只读写产品数据库的 `forks` 行，不调用 Collaboration Service，因此不使用 Operation。
 创建以 `AccessResolver.resolveSpace` 解析 upstream：无法发现或为 Personal Space 返回 404，不是 `member` 返回 403。
 重复的同名同 upstream 创建返回已有行，所以不需要 `Idempotency-Key`。名字冲突检查、未认领 agent 的配额计数与插入在
 Repository 的同一事务内完成。读取以 owner 自己的身份经 Spaces 模块读 upstream（不可读时为 `null`），经 Worktrees
 模块读未处理的 Worktree，并由其状态推导 Fork 状态。删除只删行，外键把 Worktree 的 `fork_id` 置为 `NULL`。
+
+写入 `POST /api/forks/{forkId}/units` 不另建跨系统写入，只组合 Worktrees 模块现有的 `create` 与 `addUnit`，沿用它们的
+Operation、权限判定与幂等。Fork 没有未处理的 Worktree 时，服务以 owner 身份调用 `create`，带上只有本模块传入的
+`forkId`；打开用的 Operation ID 由 Fork ID 与请求的 `Idempotency-Key` 派生，加入 Unit 用 key 本身。打开失败时服务重新读取
+Fork，并发写入已经打开的 Worktree 就加入它，否则返回原错误。Worktree 不是 `draft` 时返回 409 `FORK_WORKTREE_NOT_DRAFT`。
 
 ## Operation Runner
 

@@ -2576,6 +2576,60 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/forks/{forkId}/units:
+    parameters:
+      - name: forkId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Forks
+      operationId: addForkUnit
+      summary: Write a Unit into the fork's open Worktree, opening that Worktree on the first write.
+      description: |
+        Takes the same body as `POST /api/worktrees/{worktreeId}/units`. When the fork has no open Worktree, the
+        server opens one: a private Team Worktree of the upstream, authored by the fork's owner and named after
+        the fork. Only this route links a Worktree to a fork, and `POST /api/worktrees` never does. A Trunk Resource
+        joins with its own Unit ID, and its baseline is the upstream Trunk revision at this moment. A Trunk
+        Resource already in the Worktree returns `200` and adds nothing. Two concurrent first writes end in one
+        open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
+        `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
+        finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
+        Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. The
+        Unit's content is then written through the Worktree, as in any other Worktree.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddWorktreeUnit'
+      responses:
+        '200':
+          description: The Trunk Resource was already in the fork's open Worktree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForkUnitWrite'
+        '201':
+          description: The Unit joined the fork's open Worktree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForkUnitWrite'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/spaces/{spaceId}/nodes:
     parameters:
       - name: spaceId
@@ -7402,8 +7456,8 @@ components:
       description: |
         Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
         `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
-        an interrupted merge or discard still has to finish. Nothing opens a fork's Worktree yet, so every
-        fork reads `clean`.
+        an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
+        (`POST /api/forks/{forkId}/units`), and only a `drafting` fork takes writes.
     ForkList:
       type: object
       additionalProperties: false
@@ -7439,6 +7493,60 @@ components:
           oneOf:
             - $ref: '#/components/schemas/WorktreeSummary'
             - type: 'null'
+    AddTrunkUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - resourceId
+      properties:
+        source:
+          const: trunk
+        resourceId:
+          type: string
+    CreateWorktreeLocalUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - name
+        - unitType
+        - targetSpaceId
+        - targetParentNodeId
+      properties:
+        source:
+          const: worktree
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        targetSpaceId:
+          type: string
+        targetParentNodeId:
+          type:
+            - string
+            - 'null'
+        initialData:
+          type: object
+          description: Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision.
+          additionalProperties: true
+    AddWorktreeUnit:
+      oneOf:
+        - $ref: '#/components/schemas/AddTrunkUnit'
+        - $ref: '#/components/schemas/CreateWorktreeLocalUnit'
+    ForkUnitWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - worktree
+        - unit
+      properties:
+        worktree:
+          $ref: '#/components/schemas/WorktreeSummary'
+        unit:
+          $ref: '#/components/schemas/WorktreeUnit'
     ResourceCapabilities:
       type: object
       additionalProperties: false
@@ -8770,49 +8878,6 @@ components:
           maxLength: 1000
         visibility:
           $ref: '#/components/schemas/WorktreeVisibility'
-    AddTrunkUnit:
-      type: object
-      additionalProperties: false
-      required:
-        - source
-        - resourceId
-      properties:
-        source:
-          const: trunk
-        resourceId:
-          type: string
-    CreateWorktreeLocalUnit:
-      type: object
-      additionalProperties: false
-      required:
-        - source
-        - name
-        - unitType
-        - targetSpaceId
-        - targetParentNodeId
-      properties:
-        source:
-          const: worktree
-        name:
-          type: string
-          minLength: 1
-          maxLength: 255
-        unitType:
-          $ref: '#/components/schemas/UnitType'
-        targetSpaceId:
-          type: string
-        targetParentNodeId:
-          type:
-            - string
-            - 'null'
-        initialData:
-          type: object
-          description: Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision.
-          additionalProperties: true
-    AddWorktreeUnit:
-      oneOf:
-        - $ref: '#/components/schemas/AddTrunkUnit'
-        - $ref: '#/components/schemas/CreateWorktreeLocalUnit'
     WorktreeUnitEnvelope:
       type: object
       additionalProperties: false
