@@ -38,8 +38,8 @@ test('every relative link in the skill resolves to a file and a heading', () => 
 });
 
 test('the sections that brief names exist in SKILL.md', () => {
-  const helper = readFileSync(join(skill, 'bin/verify-uvw'), 'utf8');
-  const [, first, second] = helper.match(/Read the (\w+) and (\w+) sections of \.agents\/skills\/verify-uvw\/SKILL\.md/);
+  const brief = readFileSync(join(skill, 'bin/journeys.mjs'), 'utf8');
+  const [, first, second] = brief.match(/Read the (\w+) and (\w+) sections of \.agents\/skills\/verify-uvw\/SKILL\.md/);
   const headings = anchors(join(skill, 'SKILL.md'));
   for (const name of [first, second]) assert.ok(headings.has(name.toLowerCase()), `SKILL.md has no "## ${name}"`);
 });

@@ -7,11 +7,13 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fold, loadFeatures, plan, readRuns } from './journeys.mjs';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
 const repo = join(skill, '../../..');
 const MAX_JOBS = 3;
-const FAILED = new Set(['no-report', 'timeout', 'infra-error', 'secret-leak']);
+const FAILED = new Set(['timeout', 'infra-error', 'secret-leak']);
+const VERDICTS = ['PASS', 'FAIL', 'DRIFT', 'BLOCKED', 'MISSING'];
 const USAGE = 'usage: verify-uvw runner [--jobs 1|2|3] [--keep] <feature[:ID,ID]>... | verify-uvw runner --check [feature[:ID,ID]...]';
 
 export function parseArgs(argv) {
@@ -71,11 +73,11 @@ async function refusal({ key }) {
 }
 
 export function exitCode(results) {
-  if (results.some((r) => FAILED.has(r.status))) return 4;
+  if (results.some((r) => FAILED.has(r.status) || r.result === 'INCOMPLETE')) return 4;
   return results.some((r) => r.status === 'host-only') ? 3 : 0;
 }
 
-// The verdict is the last `RESULT:` line of the final result record; the report's run paths become batch paths.
+// The report is the final result record, with its run paths moved to the batch. The verdicts come from the journals.
 // A final record that is Claude Code's own `API Error: …` (a refused key, an empty balance) is an error, not a report.
 export function readTranscript(text, runsDir) {
   const record = text.split('\n').filter((line) => line.includes('"type":"result"'))
@@ -87,7 +89,6 @@ export function readTranscript(text, runsDir) {
   return {
     report,
     error: record.is_error && /^API Error/.test(record.result) ? record.result : null,
-    result: [...report.matchAll(/RESULT:\s*(PASS|ISSUES)\b/g)].at(-1)?.[1] ?? null,
     turns: record.num_turns ?? null,
     usage: u ? { input: u.input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0 } : null,
   };
@@ -138,8 +139,9 @@ export function finish(task, dir, wallSeconds, key) {
   const status = holds(out, key) ? 'secret-leak'
     : claudeExit === '124' ? 'timeout'
       : claudeExit === undefined || transcript?.error ? 'infra-error'
-        : transcript?.result ? 'reported' : 'no-report';
-  const result = { task: task.id, status, result: transcript?.result ?? null, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, secretCheckFail };
+        : 'finished';
+  const { journeys, result: verdict } = fold(task.expected, readRuns(join(out, 'runs')));
+  const result = { task: task.id, status, result: verdict, journeys, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, secretCheckFail };
   writeFileSync(join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
@@ -148,17 +150,21 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
   const n = (v) => (v == null ? '' : String(v));
   const errors = results.filter((r) => r.error).map((r) => `- ${r.task}: ${r.error}`);
   const flagged = results.flatMap((r) => (r.secretCheckFail ?? []).map((name) => `- ${dir}/${r.task}/${name}`));
-  const rows = results.map((r) => `| ${r.task} | ${r.status} | ${n(r.result)} | ${n(r.turns)} | ${r.wallSeconds} s | ${n(r.usage?.input)} | ${n(r.usage?.cacheRead)} | ${n(r.usage?.output)} |`);
+  const count = (r, verdict) => (r.journeys ? r.journeys.filter((j) => j.verdict === verdict).length : '');
+  const open = results.flatMap((r) => (r.journeys ?? []).filter((j) => j.verdict !== 'PASS')
+    .map((j) => `- ${r.task} ${j.id} ${j.verdict}${j.note ? `: ${j.note.replace(/\s+/g, ' ')}` : ''}`));
+  const rows = results.map((r) => `| ${r.task} | ${r.status} | ${n(r.result)} | ${n(r.journeys?.length)} | ${VERDICTS.map((v) => count(r, v)).join(' | ')} | ${n(r.turns)} | ${r.wallSeconds} s | ${n(r.usage?.input)} | ${n(r.usage?.cacheRead)} | ${n(r.usage?.output)} |`);
   return [
     `# verify runner batch ${batch}`,
     '',
     `Snapshot ${sha} of HEAD ${head}, image ${image}, ${key}, ${jobs} runner(s), ${wallSeconds} s in total.`,
     `Runner setup: ${setup.map((s, k) => `r${k + 1} ${s == null ? 'failed' : `${s} s`}`).join(', ')}.`,
     '',
-    '| Task | Status | Result | Turns | Wall | Input tokens | Cache read tokens | Output tokens |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    `| Task | Status | Result | Journeys | ${VERDICTS.join(' | ')} | Turns | Wall | Input tokens | Cache read tokens | Output tokens |`,
+    `|${' --- |'.repeat(VERDICTS.length + 9)}`,
     ...rows,
     '',
+    ...(open.length ? ['Journeys that are not PASS:', '', ...open, ''] : []),
     `Each task's report is ${dir}/<task>/report.md, and its runs are under ${dir}/<task>/runs/.`,
     ...(errors.length ? ['', 'These tasks stopped on an API error:', '', ...errors] : []),
     // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
@@ -172,17 +178,18 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
 const readKey = () => findKey(process.env, existsSync(join(repo, '.env')) ? readFileSync(join(repo, '.env'), 'utf8') : '');
 const imageTag = () => `uvw-verify-runner:${createHash('sha256').update(readFileSync(join(skill, 'runner/Dockerfile'))).digest('hex').slice(0, 12)}`;
 
-// `brief --own` owns the (host only) rule: it exits 3 for a marked task and names the marked journeys it skips.
+// Each task expects the journeys its feature's headings select for the runner; (host only) ones go to a host run.
 function split(tasks) {
   const hostOnly = [], queue = [], skipped = [];
+  let features;
+  try { features = loadFeatures(); } catch (error) { fail(2, error.message); }
   for (const t of tasks) {
-    if (!existsSync(join(skill, 'features', `${t.feature}.md`))) fail(2, `no features/${t.feature}.md`);
-    const brief = capture('bash', [join(skill, 'bin/verify-uvw'), 'brief', '--own', t.id, t.feature, ...t.journeys]);
-    if (brief.status === 3) hostOnly.push(t);
-    else if (brief.status === 0) queue.push(t);
-    else fail(2, brief.stderr.trim());
-    const skip = /Do not run (.+?)\. They run only on the host\./.exec(brief.stdout)?.[1];
-    if (skip) skipped.push({ feature: t.feature, journeys: skip.split(', ') });
+    const feature = features.get(t.feature) ?? fail(2, `no features/${t.feature}.md`);
+    let p;
+    try { p = plan(feature, t.journeys, { where: 'runner' }); } catch (error) { fail(2, error.message); }
+    if (!p.partitions.length) hostOnly.push(t);
+    for (const partition of p.partitions) queue.push({ ...t, expected: partition.journeys });
+    if (p.partitions.length && p.host.length) skipped.push({ feature: t.feature, journeys: p.host.map((j) => j.id) });
   }
   return { hostOnly, queue, skipped };
 }
@@ -212,7 +219,7 @@ async function main() {
   try { options = parseArgs(process.argv.slice(2)); } catch (error) { fail(2, error.message); }
   if (options.check) return check(options.tasks);
   const { keep, tasks } = options;
-  const { hostOnly, queue } = split(tasks);
+  const { hostOnly, queue, skipped } = split(tasks);
 
   const found = readKey();
   if (!found) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
@@ -283,7 +290,7 @@ async function main() {
   for (const t of queue) results.set(t.id, { task: t.id, status: 'infra-error', result: null, turns: null, wallSeconds: 0, usage: null });
 
   const ordered = tasks.map((t) => results.get(t.id));
-  const text = summary({ batch, sha, head, image, key: keyName(found), jobs, dir, results: ordered, hostOnly, setup, wallSeconds: seconds(started) });
+  const text = summary({ batch, sha, head, image, key: keyName(found), jobs, dir, results: ordered, hostOnly: [...hostOnly, ...skipped], setup, wallSeconds: seconds(started) });
   writeFileSync(join(dir, 'summary.md'), text);
   process.stdout.write(text);
   if (keep) console.error(`kept containers; remove them with: docker rm -f $(docker ps -aq --filter label=uvw-verify.batch=${batch})`);

@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { allowed, fold, loadFeatures, parseFeature, plan } from './journeys.mjs';
 
+const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const drive = '## Driving it with agent-browser and uvw';
 const recipe = (journeys, h1 = '# Feature') =>
   `${h1}\n\nWhat it does.\n\n## Sub-features\n\n### Not a journey\n\n${drive}\n\nSetup.\n\n\`\`\`bash\n### a comment in a block\n\`\`\`\n\n${journeys}\n\n## Gotchas\n\n### Not one either\n`;
@@ -82,4 +85,58 @@ test('fold: a journey without an allowed verdict is MISSING and makes the result
 
   const forged = fold(expected, [...all, v('A2', 'BLOCKED')]);
   assert.deepEqual([forged.journeys[1].verdict, forged.result], ['MISSING', 'INCOMPLETE'], 'a journal line the command would refuse counts as no verdict');
+});
+
+test('$V verdict records only known journeys and allowed verdicts, and $V journeys prints the plan, then the coverage', () => {
+  const root = mkdtempSync(join(tmpdir(), 'verify-uvw-verdict-'));
+  const env = { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test' };
+  delete env.VERIFY_UVW_RUNNER;
+  delete env.VERIFY_UVW_EVIDENCE_ROOT;
+  const v = (...args) => spawnSync('bash', [helper, ...args], { env, encoding: 'utf8' });
+  const journal = join(root, 'test/evidence/journeys.jsonl');
+  try {
+    const before = v('journeys', 'issues');
+    assert.equal(before.status, 0, before.stderr);
+    assert.match(before.stdout, /^issues: 5 journeys in \.agents\/skills\/verify-uvw\/features\/issues\.md\nIS1 {2}Create repo\n/);
+    assert.match(v('journeys', 'sheet-lens').stdout, /^SLM1 +Regression against the base \(host only\)$/m, 'the host plan includes host-only journeys');
+    assert.notEqual(v('journeys', 'issues', 'IS9').status, 0);
+
+    mkdirSync(join(root, 'test/evidence'), { recursive: true });
+    writeFileSync(join(root, 'test/run.env'), 'RUN_ID=test\nWEB_PORT=1\n');
+    for (const [args, why] of [[['IS9', 'PASS'], /no journey IS9/], [['IS1', 'SKIP'], /one of PASS, FAIL, DRIFT, BLOCKED/],
+      [['IS1', 'FAIL'], /FAIL needs a note/], [['IS1', 'BLOCKED', ' '], /BLOCKED needs a note/], [['IS1'], /usage/]]) {
+      const refused = v('verdict', ...args);
+      assert.notEqual(refused.status, 0, args.join(' '));
+      assert.match(refused.stderr, why);
+    }
+    assert.ok(!existsSync(journal), 'a refused verdict writes nothing');
+
+    assert.equal(v('verdict', 'IS1', 'PASS').status, 0);
+    const recorded = v('verdict', 'IS2', 'FAIL', 'number', 'is', '2');
+    assert.equal(recorded.status, 0, recorded.stderr);
+    assert.equal(recorded.stdout, `recorded IS2 FAIL in ${journal}\n`);
+    const partial = v('journeys', 'issues');
+    assert.equal(partial.status, 1, 'INCOMPLETE exits 1');
+    assert.match(partial.stdout, /^issues in run test: 2 of 5 journeys have a verdict$/m);
+    assert.match(partial.stdout, /^IS2 {2}FAIL {5}number is 2$/m);
+    assert.match(partial.stdout, /^IS3 {2}MISSING$/m);
+    assert.match(partial.stdout, /RESULT: INCOMPLETE\n$/);
+    assert.match(v('journeys', 'issues', 'IS1').stdout, /RESULT: PASS\n$/, 'coverage follows the selected journeys');
+
+    for (const id of ['IS3', 'IS4', 'IS5']) assert.equal(v('verdict', id, 'PASS').status, 0);
+    const complete = v('journeys', 'issues');
+    assert.equal(complete.status, 0);
+    assert.match(complete.stdout, /RESULT: ISSUES\n$/);
+
+    // In a runner container, coverage spans every run the task started, as the runner folds it, and skips host-only journeys.
+    mkdirSync(join(root, 'slc/evidence'), { recursive: true });
+    writeFileSync(join(root, 'slc/run.env'), 'RUN_ID=slc\nWEB_PORT=1\n');
+    assert.equal(spawnSync('bash', [helper, 'verdict', 'SLC1', 'PASS'], { env: { ...env, VERIFY_UVW_RUN: 'slc' } }).status, 0);
+    assert.equal(v('verdict', 'SLC2', 'PASS').status, 0);
+    const runner = spawnSync('bash', [helper, 'journeys', 'sheet-lens'], { env: { ...env, VERIFY_UVW_RUNNER: '1', VERIFY_UVW_EVIDENCE_ROOT: root }, encoding: 'utf8' });
+    assert.match(runner.stdout, /^sheet-lens in run test: 2 of 19 journeys have a verdict$/m);
+    assert.match(runner.stdout, /^SLM1 run only on the host$/m);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

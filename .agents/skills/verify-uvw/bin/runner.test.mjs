@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -8,10 +8,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
+import { loadFeatures, plan } from './journeys.mjs';
 import { exitCode, findKey, finish, parseArgs, readTranscript, summary } from './runner.mjs';
 
-const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const transcript = readFileSync(fileURLToPath(new URL('../fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
+const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.map((j) => `### ${j}\n`).join('\n')}`;
 
 test('a task is a feature or a feature with journeys, and repeated features get distinct run ids', () => {
   const { jobs, keep, tasks } = parseArgs(['link-sharing:LS1,LS2', 'auth', 'link-sharing']);
@@ -60,10 +61,10 @@ test('runner --check names the key source and fingerprint, proves the key with o
     mkdirSync(join(skill, 'features'));
     mkdirSync(join(skill, 'runner'));
     copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(bin, 'runner.mjs'));
-    copyFileSync(helper, join(bin, 'verify-uvw'));
+    copyFileSync(fileURLToPath(new URL('./journeys.mjs', import.meta.url)), join(bin, 'journeys.mjs'));
     writeFileSync(join(skill, 'runner/Dockerfile'), `FROM scratch\nENV ANTHROPIC_BASE_URL=http://127.0.0.1:${endpoint.address().port} \\\n    ANTHROPIC_MODEL='stub-model[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=other-model\n`);
-    writeFileSync(join(skill, 'features/whole.md'), '# Whole feature (host only)\n\n### W1. One\n');
-    writeFileSync(join(skill, 'features/plain.md'), '# Plain feature\n\n### P1. One\n\n### P2. Two (host only)\n\n### P3. Three (host only)\n');
+    writeFileSync(join(skill, 'features/whole.md'), recipe('Whole feature (host only)', 'W1. One'));
+    writeFileSync(join(skill, 'features/plain.md'), recipe('Plain feature', 'P1. One', 'P2. Two (host only)', 'P3. Three (host only)'));
     const node = (args, env) => promisify(execFile)(process.execPath, [join(bin, 'runner.mjs'), ...args],
       { env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } })
       .then((r) => ({ status: 0, ...r }), (e) => ({ status: e.code, stdout: e.stdout, stderr: e.stderr }));
@@ -99,6 +100,9 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain')).stdout, /^host {2}plain:P2,P3 is marked \(host only\); run it in host mode$/m);
     assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P1,P3')).stdout, /^host {2}plain:P3 is marked/m);
     assert.equal((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'missing')).status, 2);
+    const unknownId = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P9');
+    assert.equal(unknownId.status, 2);
+    assert.match(unknownId.stderr, /no journey P9 in features\/plain\.md/);
 
     await new Promise((resolve) => endpoint.close(resolve));
     const unreachable = await check({ DEEPSEEK_API_KEY: 'good-key' });
@@ -122,14 +126,50 @@ test('the key comes from the environment first, then from a DEEPSEEK_API_KEY lin
   assert.equal(findKey({}, undefined), null);
 });
 
-test('the exit code is 4 for any failed task, then 3 for any host-only task, else 0', () => {
-  const as = (...statuses) => statuses.map((status) => ({ status }));
-  assert.equal(exitCode(as('reported', 'reported')), 0);
-  assert.equal(exitCode(as('reported', 'host-only')), 3);
-  for (const failed of ['no-report', 'timeout', 'infra-error', 'secret-leak']) {
-    assert.equal(exitCode(as('reported', failed)), 4, failed);
+test('the exit code is 4 for any failed or INCOMPLETE task, then 3 for any host-only task, else 0', () => {
+  const as = (...statuses) => statuses.map((status) => ({ status, result: status === 'host-only' ? null : 'PASS' }));
+  assert.equal(exitCode(as('finished', 'finished')), 0);
+  assert.equal(exitCode([{ status: 'finished', result: 'ISSUES' }]), 0, 'findings with every journey covered are a finished verification');
+  assert.equal(exitCode(as('finished', 'host-only')), 3);
+  assert.equal(exitCode([...as('host-only'), { status: 'finished', result: 'INCOMPLETE' }]), 4);
+  for (const failed of ['timeout', 'infra-error', 'secret-leak']) {
+    assert.equal(exitCode(as('finished', failed)), 4, failed);
     assert.equal(exitCode(as('host-only', failed)), 4, `${failed} wins over host-only`);
   }
+});
+
+test('a task with an expected journey that has no verdict is INCOMPLETE and exits 4, whatever its report claims', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-coverage-'));
+  const expected = plan(loadFeatures().get('issues'), [], { where: 'runner' }).partitions[0].journeys;
+  const out = join(dir, 'issues');
+  const verdicts = (run, ...entries) => {
+    mkdirSync(join(out, 'runs', run, 'evidence'), { recursive: true });
+    writeFileSync(join(out, 'runs', run, 'evidence/journeys.jsonl'), entries.map(([at, journey, verdict, note = '']) =>
+      `${JSON.stringify({ kind: 'verdict', at, run, feature: 'issues', journey, verdict, note })}\n`).join(''));
+  };
+  try {
+    mkdirSync(out);
+    writeFileSync(join(out, 'claude.exit'), '0\n');
+    writeFileSync(join(out, 'transcript.jsonl'), `${JSON.stringify({ type: 'result', num_turns: 30, result: 'IS1: PASS\nRESULT: PASS' })}\n`);
+    verdicts('issues', ['2026-11-24T10:00:01Z', 'IS1', 'PASS'], ['2026-11-24T10:00:03Z', 'IS2', 'FAIL', 'number is 2'],
+      ['2026-11-24T10:00:04Z', 'IS3', 'PASS'], ['2026-11-24T10:00:05Z', 'IS4', 'BLOCKED', 'the Comment\nbutton never rendered']);
+    verdicts('other', ['2026-11-24T10:00:02Z', 'IS2', 'PASS']);
+
+    const incomplete = finish({ id: 'issues', expected }, dir, 95, 'the-key');
+    assert.deepEqual([incomplete.status, incomplete.result], ['finished', 'INCOMPLETE']);
+    assert.deepEqual(incomplete.journeys.map((j) => j.verdict), ['PASS', 'FAIL', 'PASS', 'BLOCKED', 'MISSING'], 'the later FAIL from another run wins');
+    assert.equal(exitCode([incomplete]), 4);
+    assert.deepEqual(JSON.parse(readFileSync(join(out, 'result.json'), 'utf8')).journeys[4], { id: 'IS5', verdict: 'MISSING', note: '' });
+
+    const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [incomplete], hostOnly: [], setup: [90], wallSeconds: 100 });
+    assert.match(text, /^\| Task \| Status \| Result \| Journeys \| PASS \| FAIL \| DRIFT \| BLOCKED \| MISSING \| Turns \|/m);
+    assert.match(text, /^\| issues \| finished \| INCOMPLETE \| 5 \| 2 \| 1 \| 0 \| 1 \| 1 \| 30 \| 95 s \|/m);
+    assert.match(text, /^Journeys that are not PASS:\n\n- issues IS2 FAIL: number is 2\n- issues IS4 BLOCKED: the Comment button never rendered\n- issues IS5 MISSING\n/m);
+
+    verdicts('late', ['2026-11-24T10:00:06Z', 'IS5', 'PASS']);
+    const complete = finish({ id: 'issues', expected }, dir, 95, 'the-key');
+    assert.deepEqual([complete.result, exitCode([complete])], ['ISSUES', 0]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a session that ends on an API error is an infra-error, and summary.md shows the error', () => {
@@ -138,7 +178,7 @@ test('a session that ends on an API error is an infra-error, and summary.md show
     mkdirSync(join(dir, id));
     writeFileSync(join(dir, id, 'claude.exit'), `${exit}\n`);
     writeFileSync(join(dir, id, 'transcript.jsonl'), `${JSON.stringify({ type: 'result', num_turns: 120, ...record })}\n`);
-    return finish({ id }, dir, 681, 'the-key');
+    return finish({ id, expected: [{ id: 'X1' }] }, dir, 681, 'the-key');
   };
   try {
     const balance = task('sheet-lens', 1, { is_error: true, result: 'API Error: 402 Insufficient Balance (request_id: r-1)' });
@@ -147,21 +187,20 @@ test('a session that ends on an API error is an infra-error, and summary.md show
     assert.equal(JSON.parse(readFileSync(join(dir, 'sheet-lens/result.json'), 'utf8')).status, 'infra-error');
     assert.equal(exitCode([balance]), 4);
     const quoted = task('auth', 0, { is_error: false, result: 'API Error: 402 was in the log.\nauth: PASS\nRESULT: PASS' });
-    assert.deepEqual([quoted.status, quoted.error], ['reported', null], 'a report that quotes an API error is still a report');
-    assert.equal(task('issues', 1, { is_error: true, result: 'Reached max turns' }).status, 'no-report');
+    assert.deepEqual([quoted.status, quoted.error], ['finished', null], 'a report that quotes an API error is still a report');
+    assert.deepEqual([task('issues', 1, { is_error: true, result: 'Reached max turns' }).status, quoted.result], ['finished', 'INCOMPLETE']);
 
     const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'DEEPSEEK_API_KEY from .env (sha256 0123abcd)', jobs: 1, dir,
       results: [balance, quoted], hostOnly: [], setup: [90], wallSeconds: 700 });
     assert.match(text, /^Snapshot s of HEAD h, image i, DEEPSEEK_API_KEY from \.env \(sha256 0123abcd\), 1 runner/m);
-    assert.match(text, /^\| sheet-lens \| infra-error \| {2}\| 120 \|/m);
+    assert.match(text, /^\| sheet-lens \| infra-error \| INCOMPLETE \| 1 \| 0 \| 0 \| 0 \| 0 \| 1 \| 120 \|/m);
     assert.match(text, /^These tasks stopped on an API error:\n\n- sheet-lens: API Error: 402 Insufficient Balance \(request_id: r-1\)$/m);
     assert.doesNotMatch(text, /- auth:/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('the report, verdict, turns and usage come from the last result record, with run paths moved to the batch', () => {
+test('the report, turns and usage come from the last result record, with run paths moved to the batch', () => {
   const read = readTranscript(transcript, '/batch/link-sharing/runs');
-  assert.equal(read.result, 'PASS');
   assert.equal(read.turns, 18);
   assert.deepEqual(read.usage, { input: 30388, cacheRead: 388864, output: 4708 });
   assert.ok(!read.report.includes('/tmp/verify-uvw/'));
@@ -169,56 +208,7 @@ test('the report, verdict, turns and usage come from the last result record, wit
 
   assert.equal(readTranscript(transcript.split('\n').filter((line) => !line.includes('"type":"result"')).join('\n'), '/x'), null);
   const record = (result) => JSON.stringify({ type: 'result', result, num_turns: 2 });
-  assert.equal(readTranscript(`${record('RESULT: ISSUES')}\n${record('no verdict yet')}\n`, '/x').result, null);
-  assert.equal(readTranscript(`${record('MX1: FAIL\nRESULT: ISSUES')}\nnot json\n`, '/x').result, 'ISSUES');
+  assert.equal(readTranscript(`${record('first')}\n${record('last')}\nnot json\n`, '/x').report, 'last');
   assert.equal(readTranscript(`${record('See /tmp/verify-uvw-slc/slc/evidence/a.png and /tmp/verify-uvw/t/evidence/b.png')}\n`, '/b/runs').report,
     'See /b/runs/slc/evidence/a.png and /b/runs/t/evidence/b.png');
-});
-
-test('brief --own refuses a host-only feature or journey set, skips marked journeys, and the host brief ignores marks', () => {
-  const root = mkdtempSync(join(tmpdir(), 'verify-uvw-runner-'));
-  const skill = join(root, '.agents/skills/verify-uvw');
-  const fake = join(skill, 'bin/verify-uvw');
-  const feature = (name, text) => writeFileSync(join(skill, 'features', `${name}.md`), text);
-  const own = (...args) => spawnSync('bash', [fake, 'brief', '--own', 'task-1', ...args], { encoding: 'utf8', env: { ...process.env, VERIFY_UVW_ROOT: join(root, 'runs') } });
-  try {
-    mkdirSync(join(skill, 'bin'), { recursive: true });
-    mkdirSync(join(skill, 'features'));
-    copyFileSync(helper, fake);
-    feature('whole', '# Whole feature (host only)\n\n### W1. One\n');
-    feature('parts', '# Parts\n\n### P1. Runs anywhere\n### P2. Stops a container (host only)\n### P3. Kills a process (host only)\n');
-    feature('plain', '# Plain\n\n### Q1. Runs anywhere\n');
-
-    assert.equal(own('whole').status, 3);
-    assert.equal(own('whole', 'W1').status, 3);
-    assert.equal(own('parts', 'P2', 'P3').status, 3);
-
-    const all = own('parts');
-    assert.equal(all.status, 0, all.stderr);
-    assert.match(all.stdout, /then run every step\.\n {3}Do not run P2, P3\. They run only on the host\. Report each as `<id>: SKIP \(host only\)`\./);
-    assert.ok(all.stdout.includes(`export VERIFY_UVW_ROOT=${join(root, 'runs')} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
-    assert.match(all.stdout, /This container is disposable and yours\. Start the instance yourself\./);
-    assert.match(all.stdout, /do not run `down` for it/);
-    assert.match(all.stdout, /Never print a cookie, token, password or environment variable/);
-    assert.ok(all.stdout.includes(`Name each evidence file by its full path, such as ${join(root, 'runs')}/task-1/evidence/<file>.`));
-
-    const mixed = own('parts', 'P1', 'P2');
-    assert.equal(mixed.status, 0, mixed.stderr);
-    assert.match(mixed.stdout, /then run P1 as written, and skip its other steps\.\n {3}Do not run P2\./);
-
-    const plain = own('plain');
-    assert.equal(plain.status, 0, plain.stderr);
-    assert.doesNotMatch(plain.stdout, /Do not run/);
-
-    assert.notEqual(own('missing').status, 0);
-    assert.notEqual(spawnSync('bash', [fake, 'brief', '--own', 'Bad Id', 'plain']).status, 0);
-
-    mkdirSync(join(root, 'runs/host'), { recursive: true });
-    writeFileSync(join(root, 'runs/host/run.env'), 'RUN_ID=host\nWEB_PORT=1\n');
-    const host = spawnSync('bash', [fake, 'brief', 'whole'], { encoding: 'utf8', env: { ...process.env, VERIFY_UVW_ROOT: join(root, 'runs'), VERIFY_UVW_RUN: 'host' } });
-    assert.equal(host.status, 0, host.stderr);
-    assert.match(host.stdout, /features\/whole\.md\. Set up its preconditions, then run every step\./);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
 });
