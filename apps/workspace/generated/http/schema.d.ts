@@ -2385,9 +2385,10 @@ export interface paths {
         /**
          * Create a User or Team Worktree.
          * @description An agent has at most 10 open Worktrees, those it is still creating included, every kind and every way of
-         *     opening counted. One more returns `403 AGENT_QUOTA_EXCEEDED` until it merges or discards one. A repeated
-         *     request with the same Idempotency-Key is not counted again. Retrying a failed creation through
-         *     `POST /api/operations/{operationId}/retry` needs a free place like a new one.
+         *     opening counted. One more returns `403 AGENT_QUOTA_EXCEEDED` until it merges or discards one. Repeating a
+         *     pending or completed creation with the same Idempotency-Key is not counted again. A failed creation runs again
+         *     only with a free place, whether repeated with its Idempotency-Key or retried through
+         *     `POST /api/operations/{operationId}/retry`.
          */
         post: operations["createWorktree"];
         delete?: never;

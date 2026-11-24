@@ -99,14 +99,18 @@ export function createWorktreesModule(options: {
   }
 
   async function executeReserved<T>(
-    operationId: string,
+    operation: WorktreeOperationRow,
     action: () => Promise<T>
   ): Promise<T> {
+    // Running a failed Operation again is a retry, so it takes its place again or is refused before it runs.
+    if (operation.state === "failed") {
+      await options.repository.retryOperation(operation.id, operation.actor_user_id, now());
+    }
     try {
       return await action();
     } catch (error) {
       await options.repository.failOperation(
-        operationId,
+        operation.id,
         operationFailure(error),
         now()
       );
@@ -431,7 +435,7 @@ export function createWorktreesModule(options: {
       }>(reserved.row, "create_worktree", userId);
       assertSameCreate({ ...input, forkId }, stable);
       if (reserved.row.state !== "completed") {
-        await executeReserved(operationId, async () => {
+        await executeReserved(reserved.row, async () => {
           await backendCall(() =>
             options.backend.createWorktree(stable.worktreeId, userId)
           );
@@ -582,7 +586,7 @@ export function createWorktreesModule(options: {
           resourceId: stable.resourceId,
         });
         if (reserved.row.state !== "completed") {
-          await executeReserved(operationId, async () => {
+          await executeReserved(reserved.row, async () => {
             await backendCall(() =>
               options.backend.addUnit(
                 worktreeId,
@@ -656,7 +660,7 @@ export function createWorktreesModule(options: {
           : { initialData: stable.initialData }),
       });
       if (reserved.row.state !== "completed") {
-        await executeReserved(operationId, async () => {
+        await executeReserved(reserved.row, async () => {
           const created = await backendCall(() =>
             options.backend.createUnit(
               {
@@ -876,7 +880,7 @@ export function createWorktreesModule(options: {
       assertJsonIntent(payload, { worktreeId: stable.worktreeId, pageDraftIds: stable.pageDraftIds ?? pageDraftIds });
       let operation = reserved.row;
       if (operation.state !== "completed") {
-        operation = await executeReserved(operationId, async () => {
+        operation = await executeReserved(operation, async () => {
           if (value.row.processed_at !== null && resumeMerged) {
             return options.repository.completeOperation(
               operationId,
@@ -964,7 +968,7 @@ export function createWorktreesModule(options: {
       if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
       let operation = reserved.row;
       if (operation.state !== "completed") {
-        operation = await executeReserved(operationId, async () => {
+        operation = await executeReserved(operation, async () => {
           const data = await backendCall(() =>
             options.backend.discard(worktreeId, userId)
           );

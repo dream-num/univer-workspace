@@ -3,6 +3,7 @@ import { forbidden, forkAlreadyOpen, notFound } from "../../../modules/worktrees
 import { checkCreateTarget, checkProposalTarget } from "../access/resource-target.js";
 import { type PostgresAccessRepository, assertAgentBudget, assertFileQuota, assertProposalQuota, ownerSuspendedSql, ownsSpaceSql, proposesSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
+import { retryFailed } from "../operations/operations.repository.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
 import type { PublicUser } from "../../../modules/permissions/index.js";
@@ -666,6 +667,10 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
         completedAt,
         operationId
       );
+  }
+
+  async retryOperation(operationId: string, actorUserId: string, retriedAt: number): Promise<void> {
+    await this._database.transaction(async (db) => await retryFailed(db, operationId, actorUserId, retriedAt));
   }
 
   async failOperation(

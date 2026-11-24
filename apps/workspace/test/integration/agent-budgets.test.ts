@@ -19,14 +19,14 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-it("holds an agent to 10 open pull requests however it opens them, replays a creation, and leaves people alone (A6.6)", async () => {
+it("holds an agent to 10 open pull requests however it opens them or runs a failed creation again, and leaves people alone (A6.6)", async () => {
   const origin = (await start())[0]!;
   const me = await agent(origin);
   expect(await budget(origin, me)).toEqual({ openWorktrees: { used: 0, limit: 10 }, merges: { used: 0, limit: 50 } });
-  vi.spyOn(UniverCollabWorktreeService.prototype, "createWorktree")
-    .mockRejectedValueOnce(Object.assign(new Error("Collaboration is unavailable."), { code: "UNAVAILABLE" }));
-  const failed = randomUUID();
-  expect((await openPull(origin, me, failed)).status).toBe(409);
+  const unavailable = Object.assign(new Error("Collaboration is unavailable."), { code: "UNAVAILABLE" });
+  vi.spyOn(UniverCollabWorktreeService.prototype, "createWorktree").mockRejectedValueOnce(unavailable).mockRejectedValueOnce(unavailable);
+  const [failed, replayed] = [randomUUID(), randomUUID()];
+  for (const failing of [failed, replayed]) expect((await openPull(origin, me, failing)).status).toBe(409);
   expect(await budget(origin, me), "a failed creation holds no place").toMatchObject({ openWorktrees: { used: 0 } });
 
   const repo = await created<{ id: string }>(send(origin, "POST", "/api/team-spaces", me, { name: "Plans" }));
@@ -41,13 +41,18 @@ it("holds an agent to 10 open pull requests however it opens them, replays a cre
   await refused(openPull(origin, me), /at most 10 open pull requests\. Merge or discard one/);
   await refused(send(origin, "POST", `/api/forks/${second}/worktree`, me), /at most 10 open pull requests/);
   expect(await created(openPull(origin, me, key)), "a replayed creation is the same pull request").toMatchObject({ id: pulls[0] });
+  await refused(openPull(origin, me, replayed), /at most 10 open pull requests/);
   await refused(send(origin, "POST", `/api/operations/${failed}/retry`, me), /at most 10 open pull requests/);
+  expect(await budget(origin, me), "a refused replay or retry takes no place").toMatchObject({ openWorktrees: { used: 10 } });
 
   await transition(origin, me, pulls[0]!, "discard");
   expect(await budget(origin, me)).toMatchObject({ openWorktrees: { used: 9, limit: 10 } });
   const retried = await send(origin, "POST", `/api/operations/${failed}/retry`, me);
   expect({ status: retried.status, body: await retried.json() }).toMatchObject({ status: 202, body: { state: "completed" } });
   expect(await budget(origin, me)).toMatchObject({ openWorktrees: { used: 10, limit: 10 } });
+  await transition(origin, me, pulls[1]!, "discard");
+  await created(openPull(origin, me, replayed));
+  expect(await budget(origin, me), "a replayed failed creation takes the freed place").toMatchObject({ openWorktrees: { used: 10 } });
 
   const human = await person(origin, "person");
   for (let pull = 0; pull < 11; pull++) await created(openPull(origin, human));

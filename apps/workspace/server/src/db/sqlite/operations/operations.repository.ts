@@ -1,6 +1,33 @@
 import { assertAgentBudget, assertFileQuota } from "../access/access.repository.js";
+import type { DatabaseSync } from "node:sqlite";
 import type { SqliteDatabase } from "../connection.js";
 import type { OperationRow, OperationsRepository } from "../../../modules/operations/operations.repository.js";
+
+/** Puts a failed Operation back to pending and counts again the place it takes, in the caller's transaction. */
+export function retryFailed(db: DatabaseSync, operationId: string, actorUserId: string, retriedAt: number): boolean {
+  const row = db
+    .prepare(
+      `UPDATE operations
+       SET state = 'pending',
+           next_attempt_at = ?,
+           last_error_code = NULL,
+           last_error_message = NULL,
+           lease_owner = 'product-api',
+           lease_expires_at = ?,
+           updated_at = ?
+       WHERE id = ? AND actor_user_id = ? AND state = 'failed' RETURNING kind`
+    )
+    .get(
+      retriedAt,
+      retriedAt + 60_000,
+      retriedAt,
+      operationId,
+      actorUserId
+    );
+  if (row?.kind === "create_worktree_unit") assertFileQuota(db, actorUserId, 0);
+  if (row?.kind === "create_worktree") assertAgentBudget(db, actorUserId, "openWorktree", retriedAt, 0);
+  return Boolean(row);
+}
 
 export class SqliteOperationsRepository implements OperationsRepository {
   constructor(private readonly _database: SqliteDatabase) {}
@@ -16,30 +43,7 @@ export class SqliteOperationsRepository implements OperationsRepository {
   }
 
   async retry(operationId: string, actorUserId: string, retriedAt: number): Promise<boolean> {
-    return this._database.transaction((db) => {
-      const row = db
-        .prepare(
-          `UPDATE operations
-           SET state = 'pending',
-               next_attempt_at = ?,
-               last_error_code = NULL,
-               last_error_message = NULL,
-               lease_owner = 'product-api',
-               lease_expires_at = ?,
-               updated_at = ?
-           WHERE id = ? AND actor_user_id = ? AND state = 'failed' RETURNING kind`
-        )
-        .get(
-          retriedAt,
-          retriedAt + 60_000,
-          retriedAt,
-          operationId,
-          actorUserId
-        );
-      if (row?.kind === "create_worktree_unit") assertFileQuota(db, actorUserId, 0);
-      if (row?.kind === "create_worktree") assertAgentBudget(db, actorUserId, "openWorktree", retriedAt, 0);
-      return Boolean(row);
-    });
+    return this._database.transaction((db) => retryFailed(db, operationId, actorUserId, retriedAt));
   }
 
   async fail(
