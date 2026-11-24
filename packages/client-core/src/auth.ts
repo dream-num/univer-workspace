@@ -154,11 +154,17 @@ export async function createGuestAgent(
   return { agent: { id: agent["id"], username: agent["username"] }, cookie, origin: http.origin };
 }
 
+/** What an agent has used of the limits every agent works within. People have none. */
+export interface WorkspaceBudget {
+  readonly openWorktrees: { readonly used: number; readonly limit: number };
+  readonly merges: { readonly used: number; readonly limit: number };
+}
+
 export async function whoami(
   http: WorkspaceHttp,
-): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject }> {
-  const { origin, subject } = await sessionIdentity(http);
-  return { origin, subject };
+): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject; readonly budget?: WorkspaceBudget }> {
+  const { origin, subject, budget } = await sessionIdentity(http);
+  return { origin, subject, ...(budget ? { budget } : {}) };
 }
 
 /** whoami plus whether the Workspace operator granted the User the shared MCP executor. */
@@ -166,6 +172,7 @@ export async function sessionIdentity(http: WorkspaceHttp): Promise<{
   readonly origin: string;
   readonly subject: WorkspaceSubject;
   readonly executorAccess: boolean;
+  readonly budget?: WorkspaceBudget;
 }> {
   const body = await http.json("/api/session");
   if (body["authenticated"] !== true) {
@@ -178,6 +185,7 @@ export async function sessionIdentity(http: WorkspaceHttp): Promise<{
     origin: http.origin,
     subject: parseSubject(body["user"]),
     executorAccess: body["executorAccess"] === true,
+    ...(body["budget"] === undefined ? {} : { budget: parseBudget(body["budget"]) }),
   };
 }
 
@@ -221,6 +229,17 @@ function parseSubject(value: unknown): WorkspaceSubject {
   return value["kind"] === "agent"
     ? { ...subject, kind: "agent", claimed: value["claimed"] === true }
     : subject;
+}
+
+function parseBudget(value: unknown): WorkspaceBudget {
+  const use = (entry: unknown) => {
+    if (!isWorkspaceRecord(entry) || !Number.isInteger(entry["used"]) || !Number.isInteger(entry["limit"])) {
+      throw responseError("Workspace response contains an invalid budget.");
+    }
+    return { used: entry["used"] as number, limit: entry["limit"] as number };
+  };
+  if (!isWorkspaceRecord(value)) throw responseError("Workspace response contains an invalid budget.");
+  return { openWorktrees: use(value["openWorktrees"]), merges: use(value["merges"]) };
 }
 
 function requiredString(value: unknown, field: string): string {

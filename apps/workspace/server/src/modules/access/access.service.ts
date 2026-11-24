@@ -1,4 +1,5 @@
-import { ANONYMOUS_USER_ID, principalCategory, type PrincipalCategory } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, principalCategory, type AgentBudget, type PrincipalCategory } from "../identity/index.js";
+import { agentBudget } from "./ceilings.js";
 import type {
   AccessRepository,
   NodeAuthorizationRow,
@@ -36,6 +37,8 @@ export interface AccessResolver {
    * operation being served so that replaying it does not count its own file a second time.
    */
   countOwnedFiles(userId: string, operationId?: string): Promise<number>;
+  /** What the User has used of the budget every agent works within. */
+  budget(userId: string): Promise<AgentBudget>;
 }
 
 export function createAccessResolver(repository: AccessRepository): AccessResolver {
@@ -91,6 +94,9 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     },
     countOwnedFiles(userId, operationId) {
       return repository.countOwnedFiles(userId, operationId ?? null);
+    },
+    async budget(userId) {
+      return agentBudget(await repository.readBudget(userId, Date.now()));
     },
   };
 }

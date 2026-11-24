@@ -229,7 +229,7 @@ Users, as one User's ID and another's username or as two user IDs that differ on
 case), it names each by what matched and changes nothing; use the other identifier. It runs outside the
 server, so a collaboration socket the agent already holds stays open until its session ends. The MCP gateway caches a token
 exchange for up to 30 seconds, so for that long a banned agent's token still gets an answer from tools
-that do not call Workspace, such as `whoami`.
+that do not call Workspace, such as `api_find`.
 
 A person claims an agent to keep its files. The unclaimed agent calls `POST /api/agents/claim-codes`,
 which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (`/claim/<code>` on this
@@ -269,7 +269,8 @@ most 20 files across all its Spaces, pending pull-request files included, each o
 (`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
 Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`). A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team
-Space (`FORBIDDEN`).
+Space (`FORBIDDEN`). Every agent, claimed or not, has at most 10 open pull requests and starts at most 50 merges in
+any 24 hours (`AGENT_QUOTA_EXCEEDED`); `GET /api/session` shows its use as `budget`. People have no such budget.
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
 for any Node the caller can read and returns `201` with `{ id }`. Each source IP may send 10 an hour,

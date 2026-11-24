@@ -446,6 +446,7 @@ export function createWorkspaceApplication(
         ? { discordBotApiKey: config.discordBotApiKey }
         : {}),
       emailSourceLimits: config.trustProxy !== undefined,
+      budget: access.budget,
     })
   );
   const authorizationStore = new Map<string, IssuedAuthorization>();

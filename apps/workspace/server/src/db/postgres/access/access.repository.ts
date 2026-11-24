@@ -1,4 +1,4 @@
-import { assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import { AGENT_MERGE_WINDOW_MS, assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
 import type { PoolClient } from "pg";
 import type { PostgresDatabase, PostgresStatement } from "../connection.js";
 import type {
@@ -155,6 +155,34 @@ export async function assertProposalQuota(database: PostgresDatabase, userId: st
   assertCeiling(requesterCategory(row), "openProposal", { open: row.open });
 }
 
+/**
+ * Worktrees the User created and has not merged or discarded, creations whose Worktree row is not
+ * written yet included, and the merges it started within the window.
+ */
+async function readBudget(database: PostgresDatabase, userId: string, now: number) {
+  return await database.prepare(`SELECT ${requesterColumns},
+    (SELECT COUNT(*)::integer FROM worktrees WHERE creator_user_id = $userId AND processed_at IS NULL)
+    + (SELECT COUNT(*)::integer FROM operations
+       WHERE actor_user_id = $userId AND kind = 'create_worktree' AND state = 'pending'
+         AND NOT EXISTS (SELECT 1 FROM worktrees WHERE id = operations.payload_json::jsonb ->> 'worktreeId')) AS open,
+    (SELECT COUNT(*)::integer FROM operations
+     WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since) AS merged`)
+    .get({ userId, since: now - AGENT_MERGE_WINDOW_MS }) as
+    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly open: number; readonly merged: number };
+}
+
+/** Counted in the transaction that records the next create or merge, so concurrent ones cannot pass an agent's budget. */
+export async function assertAgentBudget(
+  database: PostgresDatabase,
+  userId: string,
+  action: "openWorktree" | "mergeWorktree",
+  now: number,
+  adding = 1,
+): Promise<void> {
+  const row = await readBudget(database, userId, now);
+  assertCeiling(requesterCategory(row), action, { open: row.open, merged: row.merged, adding });
+}
+
 export class PostgresAccessRepository implements AccessRepository {
   // Reuse SQL compilation, not authorization results. Every execution binds
   // the current actor and reads current data on this repository's connection.
@@ -230,6 +258,10 @@ export class PostgresAccessRepository implements AccessRepository {
 
   async countOwnedFiles(userId: string, operationId: string | null): Promise<number> {
     return await countOwnedFiles(this._database, userId, operationId);
+  }
+
+  async readBudget(userId: string, now: number): Promise<{ readonly open: number; readonly merged: number }> {
+    return await readBudget(this._database, userId, now);
   }
 
   async resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null> {

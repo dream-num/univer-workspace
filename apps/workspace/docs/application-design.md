@@ -263,11 +263,18 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 | `searchUsers` | 主体是未认领 agent | `AGENT_NOT_ALLOWED` |
 | `createFiles` | 主体是未认领 agent，它持有的全部 Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
+| `openWorktree` | 主体是 agent（认领与否），未结束的 Worktree 将超过 10 个 | `AGENT_QUOTA_EXCEEDED` |
+| `mergeWorktree` | 主体是 agent（认领与否），最近 24 小时发起的合入将超过 50 次 | `AGENT_QUOTA_EXCEEDED` |
 | `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
 | `publishSpace` | 主体是人，Session 由个人访问令牌或 OAuth Grant 换出，且创建或更新 Space 时请求 `publicRead: true` | `INTERACTIVE_SESSION_REQUIRED` |
 
 文件数包括 Trash 之外有 Resource 的 Node、未完成 Pull request 中的新建文件和仍在进行的创建 Operation；
-重放同一个 Operation 不重复计数。Team Space 的数量在创建它的同一个事务里读取，并发的创建不会越过上限。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
+重放同一个 Operation 不重复计数。Team Space 的数量在创建它的同一个事务里读取，并发的创建不会越过上限。
+agent 的预算按产品数据计数：未结束的 Worktree 是它创建、`processed_at` 为空的 `worktrees` 行，加上还没写出 Worktree 行的
+`pending` `create_worktree` Operation；合入次数是它最近 24 小时创建的 `merge_worktree` Operation，不论结果。两者都在
+预留 Operation 的同一个事务里读取，所以并发的创建或合入在多个副本上也只放行到上限。同一个 Idempotency-Key 的重放读到已有的
+Operation，不再计数；经 `POST /api/operations/{operationId}/retry` 重试失败的创建要先有空位。`GET /api/session` 给 agent 返回
+`budget`，即这两项的 `used` 和 `limit`。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
 Personal Space 的 Node，因为分享 Capability 只给 Personal Space 的 Owner。用户搜索只返回人。
 
 `POST /api/nodes/{nodeId}/reports` 接受对请求者可读 Node 的举报，登录与否均可，按来源 IP 每小时最多 10 次，

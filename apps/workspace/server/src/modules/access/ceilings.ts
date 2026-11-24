@@ -1,6 +1,6 @@
 import client from "prom-client";
 import { ApplicationError, type ApplicationErrorCode } from "../../middleware/errors.js";
-import type { PrincipalCategory } from "../identity/index.js";
+import type { AgentBudget, PrincipalCategory } from "../identity/index.js";
 import type { AccessRole } from "./access.types.js";
 
 const UNCLAIMED_AGENT_MAX_FILES = 20;
@@ -8,6 +8,17 @@ const UNCLAIMED_AGENT_MAX_TEAM_SPACES = 3;
 const UNCLAIMED_AGENT_MAX_FORKS = 3;
 const UNCLAIMED_AGENT_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const NON_MEMBER_MAX_OPEN_PROPOSALS = 3;
+// Phase 0 measured each active Worktree at about one worker. The merge count is a first estimate.
+const AGENT_MAX_OPEN_WORKTREES = 10;
+const AGENT_MAX_MERGES = 50;
+export const AGENT_MERGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** An agent's open Worktrees, those still being created included, the merges it started within the window, and what the action adds. */
+export interface BudgetUse {
+  readonly open: number;
+  readonly merged: number;
+  readonly adding: number;
+}
 
 /** What each action tells the ceilings about its target and its session. */
 export interface CeilingContexts {
@@ -17,6 +28,8 @@ export interface CeilingContexts {
   readonly createFork: { readonly held: number };
   /** `open` counts the principal's open proposals in a Team Space it is not a member of. */
   readonly openProposal: { readonly open: number };
+  readonly openWorktree: BudgetUse;
+  readonly mergeWorktree: BudgetUse;
   readonly updateSpace: { readonly publicRead: boolean };
   readonly addTeamMember: { readonly member: PrincipalCategory; readonly role: AccessRole; readonly owner: PrincipalCategory };
   readonly searchUsers: Readonly<Record<never, never>>;
@@ -59,6 +72,17 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     code: "FORBIDDEN",
     message: `Someone who is not a Space Member can have at most ${NON_MEMBER_MAX_OPEN_PROPOSALS} open proposals in a Team Space.`,
     forbids: (_principal, { open }) => open >= NON_MEMBER_MAX_OPEN_PROPOSALS,
+  },
+  // No person watches an agent between the grant and the merge, so its volume needs a limit of its own.
+  openWorktree: {
+    code: "AGENT_QUOTA_EXCEEDED",
+    message: `An agent can have at most ${AGENT_MAX_OPEN_WORKTREES} open pull requests. Merge or discard one before you open another.`,
+    forbids: (principal, { open, adding }) => isAgent(principal) && open + adding > AGENT_MAX_OPEN_WORKTREES,
+  },
+  mergeWorktree: {
+    code: "AGENT_QUOTA_EXCEEDED",
+    message: `An agent can start at most ${AGENT_MAX_MERGES} merges in 24 hours. Merge again once the oldest of them is 24 hours old.`,
+    forbids: (principal, { merged, adding }) => isAgent(principal) && merged + adding > AGENT_MAX_MERGES,
   },
   updateSpace: {
     code: "AGENT_NOT_ALLOWED",
@@ -129,6 +153,14 @@ export function assertCeiling<A extends CeilingAction>(
     denials.inc({ action, code: ceiling.code, principal_category: principal });
     throw new ApplicationError(ceiling.code, 403, ceiling.message);
   }
+}
+
+/** An agent's budget as `whoami` shows it. */
+export function agentBudget({ open, merged }: Pick<BudgetUse, "open" | "merged">): AgentBudget {
+  return {
+    openWorktrees: { used: open, limit: AGENT_MAX_OPEN_WORKTREES },
+    merges: { used: merged, limit: AGENT_MAX_MERGES },
+  };
 }
 
 /** Count held files only for principals subject to the file quota. */

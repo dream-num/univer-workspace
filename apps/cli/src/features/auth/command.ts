@@ -162,7 +162,10 @@ export function createAuthCommand(auth: WorkspaceAuth): Command {
     .option("--json", "write structured JSON")
     .action(async (options: JsonOption) => {
       const result = await executeCommand(status, async () => await auth.whoami());
-      present(status, options, result, `${result.origin}\nLogged in as ${result.subject.name} (${result.subject.id})`);
+      const budget = result.budget
+        ? `\nBudget: ${result.budget.openWorktrees.used}/${result.budget.openWorktrees.limit} open pull requests, ${result.budget.merges.used}/${result.budget.merges.limit} merges in the last 24 hours`
+        : "";
+      present(status, options, result, `${result.origin}\nLogged in as ${result.subject.name} (${result.subject.id})${budget}`);
     });
 
   const logout = new Command("logout")

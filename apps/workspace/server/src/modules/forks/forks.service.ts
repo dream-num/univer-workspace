@@ -85,6 +85,8 @@ export function createForksModule(options: {
       return body.id;
     } catch (error) {
       // A concurrent first write that opened the Worktree first wins, and this write joins it.
+      // shortcut: one below an agent's open budget, the winner's pending opening fills the last place, so a loser that
+      // looks before the winner stores its Worktree gets AGENT_QUOTA_EXCEEDED; count one pending opening per fork if agents hit it.
       const opened = (await options.repository.findOwned(userId, { forkId: fork.id }))?.openWorktreeId;
       if (!opened) throw error;
       return opened;

@@ -154,7 +154,7 @@ keeps both for an agent and treats any other user as `human`. The kind selects t
 server instructions. Workspace answers a banned agent's token with `invalid_grant`.
 The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
 never beyond the session's `expires_in` minus 5 seconds). After revocation, `initialize`, `tools/list`,
-tools that make no Workspace request (`whoami`, `api_*`), and resources may still succeed
+tools that make no Workspace request (`whoami` for a person, `api_*`), and resources may still succeed
 from cache for up to 30 seconds. Every Workspace-backed call fails immediately because revocation deletes
 the downstream session. A downstream 401 evicts only the exact session that failed, preserving any
 pending exchange, newer session, and negative cache entry. If that session was obtained less than
@@ -282,7 +282,7 @@ and the matching owner/slug candidates when available.
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `whoami` | None | `{ origin, subject: { id, name } }` |
+| `whoami` | None | `{ origin, subject: { id, name }, budget? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED` |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
 | `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Repository fields include `proposals` and `capabilities`, what the caller may do there, such as `manageMembers` and `propose`, when the server reports all of them. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
 | `fork_create` | Required `repo` (a Team repository whose `capabilities.propose` is true), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. Its owner and members may fork. Anyone else may fork a public repository whose `proposals` setting admits them, writes only their own proposals and holds at most 3 open ones there. A caller it does not admit gets `FORBIDDEN` with a message naming the setting, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |
@@ -297,7 +297,7 @@ and the matching owner/slug candidates when available.
 | `issue_set_state` | Required `repo`, `number`, `state` (`open` or `closed`); optional `reason` (`completed` or `not_planned`) and `comment`, only with `closed` | Issue |
 | `pr_list` | Required `repo`; optional `state` (`open` default, `merged`, `discarded`, `all`), `author`, `search`, `limit` (default 30) | `{ prs: [...] }`. A Personal Space lists its owner's: the signed-in user's own, or those of an agent the user claimed. `pr_create` opens a pull request only in the user's own Personal Space |
 | `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request), with `issue`, the Issue it serves, or null |
-| `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `issue` (an Issue number in the same Team Space repository), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
+| `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `issue` (an Issue number in the same Team Space repository), `idempotency_key` | Worktree. Reusing a key returns the same pull request. An agent with 10 open pull requests gets `AGENT_QUOTA_EXCEEDED` |
 | `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility`, `issue` (an Issue number in the same Team Space repository, or null to remove the link) | Worktree |
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`) |
 | `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Needs edit access to every changed file: the author, the person who claimed the authoring agent, or the Owner, an Admin or an Editor of a Team pull request visible to its repository. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, or anyone who may merge it |

@@ -5,6 +5,7 @@ import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
 import type { AgentClaims } from "./agent-claims.js";
 import type { IdentityModule } from "./identity.service.js";
+import type { AgentBudget } from "./identity.types.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
 import { createSourceRateLimiter, SOURCE_WINDOW_SECONDS } from "./source-rate-limiter.js";
 
@@ -23,13 +24,17 @@ export function createIdentityRouter(options: {
   readonly discordBotApiKey?: string;
   /** True when TRUST_PROXY is set. Unset, `request.ip` can be a proxy every client shares, and one count would refuse them all. */
   readonly emailSourceLimits: boolean;
+  readonly budget: (userId: string) => Promise<AgentBudget>;
 }): Router {
   const router = Router();
   const { identity } = options;
   router.use(json({ limit: "1mb" }));
 
   router.get("/session", async (request, response) => {
-    response.json(await identity.getSession(request.headers.cookie));
+    const session = await identity.getSession(request.headers.cookie);
+    response.json(session.authenticated && session.user.kind === "agent"
+      ? { ...session, budget: await options.budget(session.user.id) }
+      : session);
   });
 
   router.post("/auth/password/register", async (request, response) => {

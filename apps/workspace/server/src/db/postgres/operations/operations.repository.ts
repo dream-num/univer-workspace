@@ -1,4 +1,4 @@
-import { assertFileQuota } from "../access/access.repository.js";
+import { assertAgentBudget, assertFileQuota } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
 import type { OperationRow, OperationsRepository } from "../../../modules/operations/operations.repository.js";
 
@@ -37,6 +37,7 @@ export class PostgresOperationsRepository implements OperationsRepository {
           actorUserId
         );
       if (row?.kind === "create_worktree_unit") await assertFileQuota(db, actorUserId, 0);
+      if (row?.kind === "create_worktree") await assertAgentBudget(db, actorUserId, "openWorktree", retriedAt, 0);
       return Boolean(row);
     });
   }

@@ -126,6 +126,9 @@ token or an OAuth grant cannot create or update a Space with `publicRead: true`
 never returns unclaimed or stopped agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
 A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team Space
 (`FORBIDDEN`), counted in the transaction that opens the next one.
+Every agent, claimed or not, has at most 10 open Worktrees and starts at most 50 merges in any
+24 hours (`AGENT_QUOTA_EXCEEDED`), each counted in the transaction that records the next creation
+or merge. People have no such budget. `GET /api/session` shows an agent its `budget`.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.

@@ -347,6 +347,23 @@ describe("Workspace authentication protocol", () => {
     await expect(whoami(http)).resolves.toEqual({ origin, subject: { id: "user-1", name: "Alice" } });
   });
 
+  it("reads an agent's budget from the session, and rejects a malformed one", async () => {
+    const budget = { openWorktrees: { used: 10, limit: 10 }, merges: { used: 3, limit: 50 } };
+    const session = (sent: unknown) => new WorkspaceHttp({
+      cookie: "workspace_session=test",
+      fetcher: async () => Response.json({ authenticated: true, user: { ...validUser(), kind: "agent", claimed: true }, budget: sent }),
+      origin,
+      role: "client",
+    });
+    await expect(whoami(session(budget))).resolves.toEqual({
+      origin,
+      subject: { id: "user-1", name: "Alice", kind: "agent", claimed: true },
+      budget,
+    });
+    await expect(whoami(session({ openWorktrees: { used: "10", limit: 10 }, merges: budget.merges })))
+      .rejects.toMatchObject({ code: "workspace-invalid-response" });
+  });
+
   it("creates a guest agent and returns its Session without sending the current one", async () => {
     let request: Request | undefined;
     const http = new WorkspaceHttp({

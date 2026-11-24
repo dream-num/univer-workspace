@@ -1,4 +1,4 @@
-import { assertFileQuota } from "../access/access.repository.js";
+import { assertAgentBudget, assertFileQuota } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { OperationRow, OperationsRepository } from "../../../modules/operations/operations.repository.js";
 
@@ -37,6 +37,7 @@ export class SqliteOperationsRepository implements OperationsRepository {
           actorUserId
         );
       if (row?.kind === "create_worktree_unit") assertFileQuota(db, actorUserId, 0);
+      if (row?.kind === "create_worktree") assertAgentBudget(db, actorUserId, "openWorktree", retriedAt, 0);
       return Boolean(row);
     });
   }

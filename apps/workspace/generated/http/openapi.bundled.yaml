@@ -2641,8 +2641,9 @@ paths:
         finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
         Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. An owner
         who may no longer propose in the upstream gets `403 FORBIDDEN`, and so does one who is not a Space Member
-        and already holds 3 open proposals there. The Unit's content is then written through the Worktree, as in
-        any other Worktree.
+        and already holds 3 open proposals there. Opening the Worktree counts against an agent's 10 open Worktrees
+        (`403 AGENT_QUOTA_EXCEEDED`), as `POST /api/worktrees` does. The Unit's content is then written through the
+        Worktree, as in any other Worktree.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:
@@ -2692,7 +2693,8 @@ paths:
         The Collaboration SDK readies and merges a Worktree with no Unit, so a proposal of pages alone is a pull
         request like any other. When the open Worktree is not a draft, the request returns
         `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, and a fork whose upstream its owner
-        can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`.
+        can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`,
+        and an agent already at 10 open Worktrees `403 AGENT_QUOTA_EXCEEDED`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       responses:
@@ -2788,7 +2790,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, `HTML_VIEW_DRAFT_REQUIRED` for a page, or `AGENT_QUOTA_EXCEEDED` when an unclaimed agent stores a file above 10 MB.
+          description: Insufficient permission, `HTML_VIEW_DRAFT_REQUIRED` for a page, or `AGENT_QUOTA_EXCEEDED` when an unclaimed agent stores a file above 10 MB or an agent at 10 open Worktrees writes to a `clean` fork.
           content:
             application/json:
               schema:
@@ -4362,6 +4364,11 @@ paths:
         - Worktrees
       operationId: createWorktree
       summary: Create a User or Team Worktree.
+      description: |
+        An agent has at most 10 open Worktrees, those it is still creating included, every kind and every way of
+        opening counted. One more returns `403 AGENT_QUOTA_EXCEEDED` until it merges or discards one. A repeated
+        request with the same Idempotency-Key is not counted again. Retrying a failed creation through
+        `POST /api/operations/{operationId}/retry` needs a free place like a new one.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:
@@ -4693,7 +4700,8 @@ paths:
         the merger needs edit access to every Unit and to each of those page targets. The merge Operation records
         their IDs, so a replay or an Operation retry publishes the same drafts, and a draft that turns pending later
         waits for its author. A page whose target changed since its draft is left `conflicted` while the Units still
-        merge.
+        merge. An agent starts at most 50 merges in 24 hours; one more returns `403 AGENT_QUOTA_EXCEEDED` until the
+        oldest of them is 24 hours old. A replay or retry of a started merge is not counted again.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:
@@ -6310,6 +6318,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExternalIdentitySummary'
+    BudgetUse:
+      type: object
+      additionalProperties: false
+      required:
+        - used
+        - limit
+      properties:
+        used:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+    AgentBudget:
+      type: object
+      additionalProperties: false
+      description: |
+        Present only for an agent, on `GET /api/session`. What it has used of the limits every agent works
+        within; people have none. A create or merge past a limit is refused with `403 AGENT_QUOTA_EXCEEDED`.
+      required:
+        - openWorktrees
+        - merges
+      properties:
+        openWorktrees:
+          $ref: '#/components/schemas/BudgetUse'
+          description: |
+            Worktrees (pull requests) the agent created that are not merged or discarded, those still being
+            created included. Merging or discarding one frees its place.
+        merges:
+          $ref: '#/components/schemas/BudgetUse'
+          description: Merges the agent started in the last 24 hours. Each leaves the count 24 hours after it started.
     AuthenticatedSession:
       type: object
       additionalProperties: false
@@ -6346,6 +6385,8 @@ components:
         executorAccess:
           const: true
           description: Present only when an operator granted this User the shared MCP executor with `db:executor-access`.
+        budget:
+          $ref: '#/components/schemas/AgentBudget'
     McpScope:
       type: string
       enum:
@@ -9709,7 +9750,8 @@ components:
         Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
         `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
         keep more than 20 files across its Spaces, pending pull-request files included, or store one file
-        above 10 MiB) and
+        above 10 MiB, and any agent would have more than 10 open Worktrees or start more than 50 merges in
+        24 hours) and
         `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
         or updates a Space with `publicRead: true`).
       content:
