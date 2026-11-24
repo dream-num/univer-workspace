@@ -70,6 +70,9 @@ instructions only from the working directory upward and never see these files.
   holds only their identity, metadata, and recovery state.
 - No transaction spans the product database, the Collaboration Service, and `BlobStore`.
   Cross-boundary writes converge through persisted Operations, idempotency, and recovery.
+- The Workspace server must stay correct with more than one replica. Keep correctness state, such
+  as locks, one-time codes, rate counts, and idempotency records, in the product database or
+  another shared store, not in process memory. A cache any replica can rebuild may stay in memory.
 - The server derives the user, role, Resource, Unit, Worktree, and confirmed revision from the
   authenticated session and product data. It never accepts them from a Browser or CLI client.
 - An HTML View is a small app bound to live Sheet data. Rendering, sharing, and preview always
