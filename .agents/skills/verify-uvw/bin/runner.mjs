@@ -106,18 +106,19 @@ function finish(task, dir, wallSeconds, key) {
   const claudeExit = read('claude.exit')?.trim();
   const transcript = readTranscript(read('transcript.jsonl') ?? '', join(out, 'runs'));
   if (transcript) writeFileSync(join(out, 'report.md'), transcript.report.endsWith('\n') ? transcript.report : `${transcript.report}\n`);
-  const checks = readdirSync(out).filter((name) => name.startsWith('secret-check-')).map((name) => read(name));
-  const status = holds(out, key) || checks.some((text) => /^FAIL/m.test(text)) ? 'secret-leak'
+  const secretCheckFail = readdirSync(out).filter((name) => name.startsWith('secret-check-') && /^FAIL/m.test(read(name)));
+  const status = holds(out, key) ? 'secret-leak'
     : claudeExit === '124' ? 'timeout'
       : claudeExit === undefined ? 'infra-error'
         : transcript?.result ? 'reported' : 'no-report';
-  const result = { task: task.id, status, result: transcript?.result ?? null, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null };
+  const result = { task: task.id, status, result: transcript?.result ?? null, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, secretCheckFail };
   writeFileSync(join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
 
 function summary({ batch, sha, head, image, jobs, dir, results, hostOnly, setup, wallSeconds }) {
   const n = (v) => (v == null ? '' : String(v));
+  const flagged = results.flatMap((r) => (r.secretCheckFail ?? []).map((name) => `- ${dir}/${r.task}/${name}`));
   const rows = results.map((r) => `| ${r.task} | ${r.status} | ${n(r.result)} | ${n(r.turns)} | ${r.wallSeconds} s | ${n(r.usage?.input)} | ${n(r.usage?.cacheRead)} | ${n(r.usage?.output)} |`);
   return [
     `# verify runner batch ${batch}`,
@@ -130,6 +131,8 @@ function summary({ batch, sha, head, image, jobs, dir, results, hostOnly, setup,
     ...rows,
     '',
     `Each task's report is ${dir}/<task>/report.md, and its runs are under ${dir}/<task>/runs/.`,
+    // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
+    ...(flagged.length ? ['', 'secret-check printed FAIL lines. Read them before you share these files:', '', ...flagged] : []),
     ...(hostOnly.length ? ['', 'Run these on the host, as SKILL.md "Hand the driving to another agent" says:', '',
       ...hostOnly.map((t) => `- \`$V brief ${[t.feature, ...t.journeys].join(' ')}\``)] : []),
     '',

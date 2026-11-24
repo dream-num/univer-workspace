@@ -189,8 +189,9 @@ $V runner --jobs 3 --keep issues auth create-document
   `FAIL`.
 - Exit codes: `0` when every task reported, `3` when Docker is missing or a task is host only, `4` when a
   task has no report, timed out, failed in the runner or leaked a secret (it wins over `3`), and `5` with no
-  key. A task leaks a secret when its output holds the key or a run's `secret-check` fails. Its files stay
-  for you to delete.
+  key. A task leaks a secret when its output holds the key. Its files stay for you to delete. `summary.md`
+  also lists every `secret-check` file with a `FAIL` line, without changing the status. The transcript
+  holds recipe code with the same shapes, so read those lines before you share the files.
 - The runner removes its containers at the end and on Ctrl-C. `--keep` leaves them for `docker exec`.
 
 ## Cleanup

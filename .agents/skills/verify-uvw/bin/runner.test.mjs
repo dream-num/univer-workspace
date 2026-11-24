@@ -91,7 +91,7 @@ test('brief --own refuses a host-only feature or journey set, skips marked journ
     assert.ok(all.stdout.includes(`export VERIFY_UVW_ROOT=${join(root, 'runs')} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
     assert.match(all.stdout, /This container is disposable and yours\. Start the instance yourself\./);
     assert.match(all.stdout, /do not run `down` for it/);
-    assert.match(all.stdout, /Never print a cookie, token or password/);
+    assert.match(all.stdout, /Never print a cookie, token, password or environment variable/);
     assert.ok(all.stdout.includes(`Name each evidence file by its full path, such as ${join(root, 'runs')}/task-1/evidence/<file>.`));
 
     const mixed = own('parts', 'P1', 'P2');

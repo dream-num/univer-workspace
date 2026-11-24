@@ -733,7 +733,7 @@ EOF
   cat <<EOF
 4. Reply with one line per step, \`<step>: PASS\` or \`<step>: FAIL\`. After each line give the values you read from the command output and the evidence files, not the values the recipe expects. Name each evidence file by its full path, such as $ROOT/$id/evidence/<file>. End with \`RESULT: PASS\` when every step matched the recipe, and with \`RESULT: ISSUES\` when any step did not.
 
-Leave run $id running when you reply: do not run \`down\` for it. The runner checks its evidence, then stops it. Never print a cookie, token or password, for example with \`agent-browser cookies get\`: the runner fails a task whose transcript holds one. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next step.
+Leave run $id running when you reply: do not run \`down\` for it. The runner checks its evidence, then stops it. Never print a cookie, token, password or environment variable, for example with \`agent-browser cookies get\` or \`env\`: your transcript is kept, and the runner fails a task whose files hold its API key. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next step.
 EOF
 }
 
