@@ -1,11 +1,11 @@
 # Agent Mode 阶段 6 的 Trunk restore 探针
 
 > 日期 2026-11-24。[规格](spec.zh-CN.md) 6.7 的撤回打算在本仓库用 Trunk 的 restore 组合出来，不改上游。这个做法依赖的 SDK 行为原先只来自类型声明、界面文字和压缩后的代码。本文在已安装的 SDK 1.6.1（`@univerjs-pro/collaboration` 和 `@univerjs-pro/collaboration-service`）上逐条运行复核，是 P6-8 开工前的闸，作用和 [阶段 0 结果](phase-0-results.zh-CN.md) 相同。
-> 每个结论都来自提交 `529b6edd` 上的脚本输出。两次完整运行的结论逐条相同，`errors` 都是 0。下文用“记录 `id`”指 `scenarios.restore.records` 里的一行，用字段名指它的 `observed`。
+> 每个结论都来自提交 `529b6edd` 上的脚本输出。两次完整运行的结论逐条相同，`errors` 都是 0。下文用“记录 `id`”指 `scenarios.restore.records` 里的一行，用字段名指它的 `observed`。文中的“计划”指协调者的阶段 6 工作计划，不在仓库里，它采纳的结论已写进规格 6.7。
 
 ## 1. 结论
 
-- **P6-8 的闸没有通过。** restore 只需要整个 Unit 的 Edit 权限，SDK 不按受保护的区域计算权限。一个没有区域编辑权的 editor 用 restore 覆盖了受保护的单元格，还删掉了保护规则本身，之后这个 editor 可以直接改那个单元格（第 8 节）。计划推断“受保护的区域会让整个 restore 被拒绝”，结果相反。计划里“能验收并能编辑每个 Unit 的主体可以撤回”这条规则，在有区域保护的 Unit 上不够，P6-8 开工前要先定规则（第 11 节）。另有一条推断，没有运行。Browser 的 History 界面今天就能这样绕过区域保护，不需要 Agent Mode。
+- **P6-8 的闸没有通过。** restore 只需要整个 Unit 的 Edit 权限，SDK 不按受保护的区域计算权限。一个没有区域编辑权的 editor 用 restore 覆盖了受保护的单元格，还删掉了保护规则本身，之后这个 editor 可以直接改那个单元格（第 8 节）。计划推断“受保护的区域会让整个 restore 被拒绝”，结果相反。计划里“能验收并能编辑每个 Unit 的主体可以撤回”这条规则，在有区域保护的 Unit 上不够，P6-8 开工前要先定规则（第 11 节）。Browser 的 History 界面挡住了这条路：没有区域编辑权的 editor 看到的“Restore this version”是禁用的（第 8 节）。但这个检查只在客户端，服务端照样接受这样的 restore，绕开界面直接提交的客户端，以及 P6-8 以撤回者身份在服务端提交的 restore，都不受它约束。
 - **Sheet 和 Doc 一样，restore 只能在 head 上提交。** 计划说 restore 的 transform 只有 Sheet 有。实际上 Sheet 的 restore 在过期的 base revision 上同样得到 `OT_CONFLICT`，而同一个 base 上的普通修改能 transform 并提交。反方向也一样，restore 落地之后，基于更早 revision 的普通修改得到 `OT_CONFLICT`，Sheet 和 Doc 都是（第 5 节）。
 - **restore 本身符合规格 6.7。** Sheet 和 Doc 都能恢复到合入之前的 revision。restore 追加一个新的 revision，内容等于合入之前（Sheet 只差一个空资源的写法，见第 2 节），历史同时保留合入和 restore。它替换整个 Unit，合入之后别人的修改一起消失（第 3、4、7 节）。
 - **幂等成立，前提是原样重交。** 同一个 `sid` 和 `reqId` 原样重交返回 `already-committed`。head 前进之后、应用重启之后结果都一样。同样的 `sid` 和 `reqId` 换一个 base revision 重交，得到 `retry` 和 `REVISION_MISMATCH`，不生效。换一个 `reqId` 会再执行一次（第 6 节）。
@@ -137,7 +137,7 @@ editor 能通过，原因在权限计算。产品的 `commitChangeset` 中间件
 
 restore mutation 和它的权限分析（`enableUnitPermissionAnalysis`）归上游，所以这是上游的缺陷。产品可以在自己的中间件里加一道检查作为 workaround，按根 `AGENTS.md` 写明原因、影响和移除条件。
 
-下面一段是推断，没有运行。Browser 在 Trunk 上加载 History 界面（`apps/workspace/web/src/features/editor/collaboration-editor.tsx`），它的 restore 经实时 endpoint 进入同一个 Trunk 服务和同一组中间件。所以今天任何 editor 都能在 Browser 里用 History 的 restore 覆盖受保护的区域并删除保护，与 Agent Mode 无关。
+独立复核在真实应用里用 Browser 走了一遍（PR 575 的复核评论）。H 在 B2 上加了只有自己能编辑的区域保护，E 是 editor。E 改不了 B2；E 在 Trunk 的 History 界面里，对保护之前和之后的每个版本，“Restore this version” 都是禁用的，点击没有反应，Trunk 不变。H 的同一个按钮可用，同一个 E 在没有保护的 Sheet 上也可用。原因在 SDK 1.6.1 的界面层：`sheets-history` 的 `canRevert` 和 `sheets-history-ui` 的 `_checkCanRevert` 要求 Unit、每个 worksheet 和每条区域保护规则的 Edit，`edit-history-ui` 的 `restore()` 在 `canRestore` 为 false 时直接返回。所以今天的 Browser 界面不会让 editor 绕过区域保护。服务端没有对应的检查，上面的脚本结果说明绕开界面直接提交的 restore 会被接受。经实时 endpoint 伪造这样的提交，没有在真实应用里运行。
 
 ## 9. 问题 7：恢复到哪个 revision
 
@@ -178,7 +178,7 @@ SDK 不为 `unchanged` 的 Unit 记录 `trunkRevision`（`unit-comparison.ts:204
 本节是根据上面的结果给出的建议，没有运行。
 
 1. **先定受保护区域的规则。** 这是唯一的阻断项。任务撤回由服务端以撤回者的身份提交 restore。按现在的权限计算，一个 editor 或 editor 角色的 agent 能用撤回覆盖它改不了的区域，并删除保护。可选的做法有两种，由维护者决定：
-   - 本仓库加一个 workaround。在 Trunk 的 `commitChangeset` 中间件里，遇到 restore changeset 而 Unit 绑定了内容保护对象时，要求提交者对每个对象都有 Edit，否则拒绝。它同时堵住今天的 History restore。写成一处隔离的 workaround，移除条件是上游修好权限分析。
+   - 本仓库加一个 workaround。在 Trunk 的 `commitChangeset` 中间件里，遇到 restore changeset 而 Unit 绑定了内容保护对象时，要求提交者对每个对象都有 Edit，否则拒绝。这和 Browser 界面已有的检查一致，也挡住绕开界面直接提交的客户端。写成一处隔离的 workaround，移除条件是上游修好权限分析。
    - 上游修权限分析。restore 的权限分析按 head 和目标 revision 之间的差异列出受影响的对象，或者要求每个保护对象的管理权。这一项加到计划 2.5 的上游需求里。
 2. **每个 restore 都在刚读到的 head 上提交。** 收到 `OT_CONFLICT` 时重读 head，重新检查有没有新的作者，再重交。Sheet 也要这样做。撤回落地时，正在编辑这个 Unit 的人还没提交的修改会被拒绝，撤回页面应该提示这一点。
 3. **Operation 先存下完整的 changeset，再提交。** 每个 Unit 存 `sid`、`reqId`、`baseRev` 和目标 revision。恢复执行时原样重交。结果是 `committed` 或 `already-committed` 就完成。结果是 `OT_CONFLICT` 说明它从未生效，这时把新的一次尝试（新的 `reqId`，base 是新的 head）写进 Operation，再提交。不要用同样的 `reqId` 配新的 base，那样只会得到 `REVISION_MISMATCH`。也不要在原样重交之前换 `reqId`，否则同一个 restore 可能执行两次。
@@ -190,7 +190,7 @@ SDK 不为 `unchanged` 的 Unit 记录 `trunkRevision`（`unit-comparison.ts:204
 
 - Slide、Board、Base 和 PDF 的 restore。只测了 Sheet 和 Doc。
 - Doc、Slide 等对象级保护和 worksheet 保护。只测了 Sheet 的区域保护。
-- Browser。History 界面的 restore 发出的 changeset 是否和脚本相同，界面是否对 editor 隐藏按钮，以及客户端收到 restore 之后的 `OT_CONFLICT` 时怎样处理。
+- Browser。History 界面的 restore 发出的 changeset 是否和脚本相同，以及客户端收到 restore 之后的 `OT_CONFLICT` 时怎样处理。界面对没有区域编辑权的 editor 禁用 restore，这一点已由独立复核确认（第 8 节）。
 - 实时 endpoint（WebSocket）这条路径。脚本直接调用 `UniverCollabService.submitChangeset`。
 - 历史很长或 Unit 很大时 restore 的耗时。
 - 同一个 `sid` 里 `reqId` 能否跳号，以及去重记录会不会过期。
