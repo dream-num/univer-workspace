@@ -36,6 +36,19 @@ it("waits for draft expiry, Asset recovery and Blob maintenance on concurrent di
   expect(finished).toHaveBeenCalledTimes(2);
 });
 
+it("runs Blob maintenance when Asset recovery keeps failing", async () => {
+  const failure = new Error("publish failed");
+  const univerAssets = { recoverInterruptedUploads: vi.fn(() => Promise.reject(failure)) };
+  const ran = deferred<number>();
+  const blobs = { runMaintenance: vi.fn(() => { ran.resolve(1); return ran.promise; }) };
+  const onError = vi.fn();
+  const job = startBlobMaintenance(blobs, { univerAssets, onError });
+  await ran.promise;
+  await job.dispose();
+  expect(onError).toHaveBeenCalledWith(failure);
+  expect(blobs.runMaintenance).toHaveBeenCalledOnce();
+});
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((complete) => { resolve = complete; });
