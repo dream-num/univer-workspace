@@ -29,7 +29,7 @@ and exit codes.
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Use Bash for these commands. Prerequisites are the baseline CLI build and dependencies,
 Docker Desktop or OrbStack, `jq`, and opencode for M11. Each MCP call
@@ -43,6 +43,8 @@ eval "$($V env)"
 RUN="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN"
 $V doctor > "$EVIDENCE/mcp-doctor.txt"
 echo $? > "$EVIDENCE/mcp-doctor.exit"
+test "$(cat "$EVIDENCE/mcp-doctor.exit")" = 0
+grep FAIL "$EVIDENCE/mcp-doctor.txt"; test $? -eq 1
 ```
 
 Pass when doctor exits 0 and has no `FAIL` lines. In the `image` start mode it prints an `ok` for every MCP
@@ -214,6 +216,8 @@ variables in its log. The probe container is removed even when the assertion fai
 
 ### M11. opencode
 
+Run: agent.
+
 ```bash
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 (cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
@@ -230,6 +234,8 @@ event has outcome `ok` and null client name. Keep the JSONL. It contains the fou
 fragment types, not developer plugins, skills or credentials.
 
 ### M12. Cleanup (host only)
+
+Run: agent.
 
 ```bash
 for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-before.txt"

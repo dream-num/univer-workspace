@@ -25,7 +25,7 @@ hands its `page_url` to a person who uploads in the browser. It then calls `impo
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -98,7 +98,7 @@ $V mcp mf-page-reserve file_upload_create '{"purpose":"blob","file_name":"never-
 MF_PAGE=$(jq -r '.upload.page_url' "$EVIDENCE/mf-page-reserve.out")
 curl -fsS -D "$EVIDENCE/mf-page.headers" "$MF_PAGE" > "$EVIDENCE/mf-page.html"
 grep -q "default-src 'none'; script-src 'nonce-" "$EVIDENCE/mf-page.headers"
-! grep -q 'never-render-this-name' "$EVIDENCE/mf-page.html"
+grep -q 'never-render-this-name' "$EVIDENCE/mf-page.html"; test $? -eq 1
 MF_WRONG=$(jq -r '.upload.upload_url | sub("token=.*"; "token=" + ("0" * 64))' "$EVIDENCE/mf-page-reserve.out")
 test "$(curl -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Length: 15' --data-binary 'gateway upload
 ' "$MF_WRONG")" = 404

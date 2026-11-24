@@ -26,7 +26,7 @@ An MCP client connected to `$MCP_URL` calls `execute` and `inspect` from the def
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -101,7 +101,8 @@ if agent-browser get url | grep -q '/login'; then
   agent-browser wait --url '**/home'
 fi
 agent-browser open "$(jq -r '.unit.url' "$EVIDENCE/mx-unit.out")"
-agent-browser wait canvas
+# The Sheet renders inside the review panel's same-origin iframe.
+agent-browser wait --fn "Boolean(document.querySelector('iframe')?.contentDocument?.querySelector('canvas'))"
 agent-browser wait 4000
 agent-browser screenshot "$EVIDENCE/mx-pull-request.png"
 ```
@@ -245,6 +246,8 @@ of a new Slide, and inspection reads the diagram text. Evidence uses the `mcp-sv
 is no SVG retry key; an unknown write outcome requires inspection before another apply.
 
 ### MT2. Typst job verification
+
+Run: agent.
 
 After the default-budget journeys, run `down` and start a fresh stack with
 `MCP_SYNC_BUDGET_MS=1 $V up --reuse --for mcp-executor MT2`, then `user` and `doctor`.

@@ -25,7 +25,7 @@ owner reviews the draft at `/drafts/<id>` in the browser. A reviewer opens the p
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -135,6 +135,8 @@ preview and published page. Wait for the preview to load before clicking Publish
 
 ### MHV5. A reviewer lists the pages a pull request carries
 
+Run: agent.
+
 The run user O authors the page over MCP. A reviewer R holds a Team Space where O is an Editor, and has a
 Personal-Space Sheet that O cannot read. Register R and sign R's uvw in from its own home, because `$V`
 resets `UNIVER_HOME` to O's home. Keep R's password and cookie out of `$EVIDENCE`:
@@ -199,6 +201,8 @@ one pending draft by O, and the `Pages` section shows `Budget.univer.html`, `by 
 
 ### MHV6. The reviewer's preview is read-only and refuses an undeclared Sheet
 
+Run: agent.
+
 ```bash
 agent-browser find role link click --name Preview
 agent-browser wait --url '**/drafts/**'
@@ -214,6 +218,8 @@ and the page shows `North: 42` and `Refused: This preview loads only the Sheets 
 No request names `RU`, and `reviewer secret` appears nowhere.
 
 ### MHV7. A ready pull request takes no page changes until it is reopened
+
+Run: agent.
 
 ```bash
 $V cli mhr-ready pr ready "$P" -R "$R/page-review" --json state,visibility

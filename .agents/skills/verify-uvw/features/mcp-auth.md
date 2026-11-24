@@ -22,7 +22,7 @@ token for `$MCP_URL`. `$V user` creates the run's default PAT and `$V mcp-token`
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -157,7 +157,8 @@ agent-browser find label Name fill "browser-pat-$VERIFY_UVW_RUN"
 agent-browser screenshot "$EVIDENCE/mcp-pat-browser-form.png"
 agent-browser find role button click --name 'Create token'
 agent-browser wait --text 'Copy and save this token now'
-(umask 077 && agent-browser get value 'input[readonly], textarea' > "$RUN/home/mcp-token")
+install -m 600 /dev/null "$RUN/home/mcp-token"
+agent-browser get value 'input[readonly], textarea' > "$RUN/home/mcp-token"
 grep -q '^uvw_pat_' "$RUN/home/mcp-token"
 curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" |
   jq -r --arg name "browser-pat-$VERIFY_UVW_RUN" '.tokens[] | select(.name == $name) | .id' > "$RUN/home/mcp-token-id"
@@ -209,6 +210,8 @@ usage event, the instructions leave merging to the user, the CLI still shows the
 discard with the restored full-scope PAT succeeds.
 
 ### MA8. Existing sign-in clients (host only)
+
+Run: agent.
 
 MCP OAuth must not change how the Browser, uvw and the Workspace
 Agent sign in, so run these in an MCP-enabled run, where the MCP OAuth code paths are active.

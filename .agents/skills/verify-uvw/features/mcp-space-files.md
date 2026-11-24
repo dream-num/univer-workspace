@@ -30,7 +30,7 @@ operations exist in `uvw`.
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.

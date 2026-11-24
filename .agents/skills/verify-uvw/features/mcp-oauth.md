@@ -18,7 +18,7 @@ opens the Workspace consent page in the browser; after `Allow` it calls the gate
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -33,6 +33,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 ```
 
 ### MO1. OAuth sign-in from opencode
+
+Run: agent.
 
 Run after `up` with MCP enabled and `user`.
 The script uses the run's browser session and a separate opencode project with no Authorization
@@ -180,6 +182,8 @@ redeemed without `resource` return 200 and the token works through the gateway; 
 `resource` gets `invalid_grant` for both, and the refused refresh leaves the grant usable.
 
 ### MO3. HTTPS Client ID Metadata Documents
+
+Run: agent.
 
 Requires outbound HTTPS. Run before MO1/MO2 because step 5 starts fresh data.
 The helper detects fake-IP DNS at `up`; it never exempts loopback or link-local addresses.

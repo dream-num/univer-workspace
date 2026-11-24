@@ -20,7 +20,7 @@ equivalents are `uvw screenshot`, `uvw print-pdf`, `uvw lint` and `uvw compile-s
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -28,6 +28,8 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 MR12 also needs opencode.
 
 ### MR9. renderer role
+
+Run: agent.
 
 The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. `screenshot`
 (MR10), `print_pdf` and `lint` (MR11) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
@@ -108,7 +110,9 @@ $V cli mr10-pr2 pr create -R "$O/personal" -t 'Screenshot deck' --json
 MR10_W2=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 $V cli mr10-deck unit create --worktree "$MR10_W2" --space "$MR10_SPACE" --type slide --name 'Shot deck' --json
 MR10_D=$(jq -r .unit.unitId "$EVIDENCE/mr10-deck.out")
-for n in 1 2; do (V=$(realpath "$V") && cd "$FIX/deck" && $V cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json); done
+pushd "$FIX/deck" >/dev/null
+for n in 1 2; do "$OLDPWD/$V" cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json; done
+popd >/dev/null
 $V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck-shot screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
 jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck-shot.result.json"
 jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck-shot.out"
@@ -120,6 +124,7 @@ magick "$EVIDENCE/mr10-deck-page-01.png" -resize 40% "$EVIDENCE/mr10-deck-page-0
 $V mcp mr10-badrange screenshot "$(jq -nc --arg u "$MR10_U" '{unit:$u,trunk:true,range:"ZZZ99:A1"}')"
 test $? -eq 1
 $V cli mr10-badrange-cli screenshot --trunk --unit "$MR10_U" --range ZZZ99:A1 --out "$FIX/cli-bad" --json
+test $? -eq 1
 test "$(jq -r .message "$EVIDENCE/mr10-badrange.out")" = "$(sed 's/^INVALID_INPUT: //' "$EVIDENCE/mr10-badrange-cli.err" | head -n1)"
 $V mcp mr10-baddeck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w,range:"A1"}')"
 test $? -eq 1
@@ -190,6 +195,7 @@ jq -e '.tool == "print_pdf" and .unit_type == "doc" and (.repo | type) == "strin
 $V mcp --toolsets all mr11-base-pdf print_pdf "$(jq -nc --arg u "$MR11_BASE" --arg w "$MR11_W" '{unit:$u,worktree:$w}')"
 test $? -eq 1
 $V cli mr11-base-pdf-cli print-pdf "$FIX/cli-base.pdf" --worktree "$MR11_W" --unit "$MR11_BASE" --json
+test $? -eq 1
 test "$(jq -r '"\(.code): \(.message)"' "$EVIDENCE/mr11-base-pdf.out")" = "$(head -n1 "$EVIDENCE/mr11-base-pdf-cli.err")"
 # A missing scope is rejected before any render
 $V mcp --toolsets all mr11-noscope print_pdf "$(jq -nc --arg u "$MR11_DOC" '{unit:$u}')"
@@ -231,6 +237,7 @@ jq -e '.code == "workspace-argument-invalid" and .message == "Invalid page selec
 $V mcp --toolsets all mr11-lint-sheet lint "$(jq -nc --arg u "$MR11_SHEET" --arg w "$MR11_W" '{unit:$u,worktree:$w}')"
 test $? -eq 1
 $V cli mr11-lint-sheet-cli lint --worktree "$MR11_W" --unit "$MR11_SHEET" --json
+test $? -eq 1
 test "$(jq -r '"\(.code): \(.message)"' "$EVIDENCE/mr11-lint-sheet.out")" = "$(head -n1 "$EVIDENCE/mr11-lint-sheet-cli.err")"
 ```
 
@@ -249,6 +256,8 @@ Pass when:
 - The lint rejections exit 1 with the CLI's text, and the Sheet keeps the CLI's code `workspace-unit-layout-lint-unit-type-unsupported`.
 
 ### MR12. opencode screenshot
+
+Run: agent.
 
 An agent reads a screenshot through `screenshot`, so the image must reach the model and the model must describe it correctly. The model is
 `$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). `screenshot` is a core tool, so opencode runs from

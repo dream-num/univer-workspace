@@ -25,7 +25,7 @@ An MCP client connected to `$MCP_URL` reads the initialize instructions, calls `
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp.
+Mode: mcp. Run: helper.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -75,8 +75,8 @@ jq -e '.resources | length > 0 and all(.[]; .readCommand | startswith("Call skil
 $V mcp mcp-skills-core skills_read '{"name":"core"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-core.out" > "$EVIDENCE/mcp-skills-core.md"
 cmp "$EVIDENCE/mcp-skills-core.md" apps/mcp/skills/core/SKILL.md
-! cmp -s "$EVIDENCE/mcp-skills-core.md" apps/cli/skill-data/core/SKILL.md
-! rg -n '\buvw\b' "$EVIDENCE/mcp-skills-core.md"
+cmp -s "$EVIDENCE/mcp-skills-core.md" apps/cli/skill-data/core/SKILL.md; test $? -eq 1
+grep -nw uvw "$EVIDENCE/mcp-skills-core.md"; test $? -eq 1
 jq -e '.tool == "skills_read" and .outcome == "ok"' "$EVIDENCE/mcp-skills-read.event.json"
 ```
 
@@ -286,7 +286,7 @@ Space ID, with no Skill content. `mr14-summary.json` records the asserted result
 
 ### MR15. Import a pinned external Skill and publish after review
 
-Mode: mcp-same-origin.
+Mode: mcp-same-origin. Run: agent.
 
 It needs live GitHub network access.
 
