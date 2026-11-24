@@ -25,6 +25,12 @@ exact quoted ETag from `download.etag` and a new stable idempotency key. Replace
 immediately and preserves the Node, Resource, name, location, ACL and original URL; it is not a
 Worktree edit. The replacement result is `replacement: { operationId, resourceId, etag }`.
 
+To work on an upstream file through your fork, give `blob download` and `blob replace` the fork's address
+`<you>/<fork>` as the Worktree. The replacement becomes a draft in the fork's pull request and the upstream keeps
+its bytes until that pull request merges; the result is `draft` instead of `replacement`. The download returns
+your pending draft of the file, or the upstream file, and the upstream ETag either way. A fork replaces existing files only,
+and a page (`.univer.html`) needs an HTML View draft.
+
 On `PRECONDITION_FAILED`, download a fresh original and reconcile the latest bytes before starting
 a new replacement with a new key. Never apply a new ETag to an unreconciled older file. After a lost
 response, use the `core` Skill's recovery handling; `workspace-result-unknown` identifies the uncertain Operation. Inspect that Operation before retrying the exact same file, ETag and key. A pending

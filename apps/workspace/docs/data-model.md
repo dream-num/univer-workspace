@@ -437,7 +437,7 @@ User Worktree 在 `owner/personal` 下的归属用于编号与列表；该 Perso
 
 `fork_id`（V28，`TEXT`，可空）指向它所属的 Fork，外键 `ON DELETE SET NULL`。CHECK 要求非空时 `kind = 'team'`，
 部分唯一索引 `worktrees_open_fork`（`fork_id IS NOT NULL AND processed_at IS NULL`）保证一个 Fork 至多有一个未处理的
-Worktree。只有 Fork 的写入路径（`POST /api/forks/{forkId}/units` 与 `POST /api/forks/{forkId}/worktree`）在创建 Worktree 时写入 `fork_id`，`POST /api/worktrees`
+Worktree。只有 Fork 的写入路径（`POST /api/forks/{forkId}/units`、`POST /api/forks/{forkId}/worktree` 与 `PUT /api/forks/{forkId}/blob-resources/{resourceId}/content`）在创建 Worktree 时写入 `fork_id`，`POST /api/worktrees`
 不接受它；`create_worktree` Operation 的 payload 记下 `forkId`，重试时沿用。插入事务先读这个 Fork 未处理的 Worktree，
 已有一个时拒绝插入，部分唯一索引兜底。
 
@@ -488,7 +488,7 @@ Fork 回到 `clean`，下一次写入打开新的 Worktree。
 落后距离为 `headRevision - baselineTrunkRevision`；落后超过 100 个修订或加入超过 7 天为 `stale`，
 落后为零为 `current`，其余为 `behind`。阈值是服务端常量，标签只是提示，不拦截合入。
 
-`resource_id` 对 Trunk Unit 只允许指向已有 Univer Resource；Blob 第一版不进入 Worktree。
+`resource_id` 对 Trunk Unit 只允许指向已有 Univer Resource；Blob 不作为 Unit 进入 Worktree，经 Fork 的替换是文件草稿。
 对尚未激活的 Worktree-local Unit，它是预留 Resource ID，此时核心 `resources` 表中还没有
 对应行。
 
@@ -601,7 +601,8 @@ Node。
 仍表示字节校验值。版本不匹配返回 412，旧对象与旧内容保留。
 失败请求标记 Failed，并写 `blob_upload_abandoned` 删除任务；启动阶段将中断的 Pending 替换
 按同样方式收敛。Completed Key 只回放记录结果，不重复写入；Pending 不可并发重入，Failed
-必须用新 Key 重试。Operation 查询用于确认未知结果。Blob 不进入 Worktree，也不保存历史版本。
+必须用新 Key 重试。Operation 查询用于确认未知结果。Blob 不作为 Unit 进入 Worktree，也不保存历史版本；
+经 Fork 替换 Blob 是挂在 Worktree 上的文件草稿，见「HTML View 草稿」的「文件草稿」。
 
 ### 创建与读取 Univer Asset
 
@@ -823,6 +824,23 @@ CLI、PAT、OAuth 合并，以及不带 `pageDraftIds` 的 Browser 合并，返�
 列表不回填历史结果。中断后重放或恢复只尝试 Operation 里记下的草稿，集合固定之后才变为 pending 的草稿保持 pending，由作者发布。
 没有 `pageDraftIds` 的 merge Operation 是这条规则之前保存的，重放时不发布页面。服务端提交时只校验绑定的 Unit 可读，
 工作表与范围由客户端校验；发布时不重新校验，发布后仍连接实时 trunk。
+
+### 文件草稿
+
+同一张表也保存经 Fork 对 upstream 其他 Blob（PDF、图片等不是页面的文件）的替换，行为 `kind = 'replace'`，没有新增列或迁移。
+`PUT /api/forks/{forkId}/blob-resources/{resourceId}/content` 像 Fork 的 Unit 写入一样打开 Fork 的 Worktree，不是 `draft` 时返回
+409 `FORK_WORKTREE_NOT_DRAFT`。目标必须是 upstream 中调用者能读的 Blob，否则 404；页面返回 403 `HTML_VIEW_DRAFT_REQUIRED`，
+不可用返回 409，`If-Match` 不是当前 ETag 返回 412。请求先插入 `receiving` 行（SHA-256 暂为 64 个 `0`），把字节流式写入草稿
+object key，收完后改为 `pending` 并记下 SHA-256、媒体类型和存储 ETag。同一 Idempotency-Key 的重复请求只看库里的行：已经
+`pending` 且意图相同时返回同一草稿和 200，仍为 `receiving`（还在接收或上次失败）时返回 409，失败后要换新 key；服务进程不保存
+接收状态。新草稿 supersede 同一作者在同一 Worktree 里同一目标的 pending 草稿，20 份上限由页面和文件合计。只支持替换，Fork 不新增文件。
+
+一行是否是页面由行和目标推导，不落库：create 行、名称以 `.univer.html` 结尾的行、目标原始文件名以 `.univer.html` 结尾的行是页面，
+其余 replace 行是文件草稿，视图字段 `page` 为 false。原始文件名不会改变，所以页面改名去掉后缀后仍是页面。发布时 `decide()` 要求
+目标与行仍是同一类，文件草稿的目标改名成页面时为冲突。文件草稿与页面使用同一套合并规则：固定集合、合并者的目标写权限、
+foreign 检查与 `PAGE_REVIEW_REQUIRED`、`PAGES_CHANGED`、`publishedPages`；upstream ETag 变化时这一份变为 `conflicted`，upstream 字节
+不变，Sheet 照常合入。内容路由把文件草稿作为 `application/octet-stream` 附件返回，同样带 `Content-Security-Policy: sandbox` 和
+`X-Content-Type-Options: nosniff`。Browser 评审面板列出文件草稿的名称、大小和下载链接，不预览，`/drafts/{id}` 也只给下载。
 
 ## Skill 草稿（V20）
 

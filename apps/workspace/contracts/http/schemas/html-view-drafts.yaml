@@ -1,6 +1,6 @@
 HtmlViewDraft:
   type: object
-  required: [id, author, kind, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published, supersededBy]
+  required: [id, author, kind, page, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published, supersededBy]
   properties:
     id:
       type: string
@@ -9,6 +9,12 @@ HtmlViewDraft:
     kind:
       type: string
       enum: [create, replace]
+    page:
+      type: boolean
+      description: |
+        True for an HTML View draft. False for a `replace` draft of another file (a Blob such as a PDF or an image)
+        made through a fork, which has no page preview: its content route serves it as an attachment, and its merge
+        replaces the file's bytes by the same rules as a page.
     state:
       type: string
       enum: [pending, published, rejected, expired, conflicted, superseded]
@@ -67,7 +73,7 @@ HtmlViewDraftList:
   properties:
     drafts:
       type: array
-      description: Every draft attached to the pull request, oldest first, except superseded revisions.
+      description: Every draft attached to the pull request, pages and files, oldest first, except superseded revisions.
       items:
         $ref: '#/HtmlViewDraft'
 SubmitHtmlViewDraft:

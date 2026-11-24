@@ -740,7 +740,7 @@ describe("publishing a pull request's pages when it merges", () => {
         status: 409,
         error: {
           code: "PAGE_REVIEW_REQUIRED",
-          message: `A person must merge this pull request in the browser, because its author cannot publish these pages alone: Budget page.univer.html, Forecast page.univer.html. Review it at /spaces/${s.id}/pulls/${worktree.number}.`,
+          message: `A person must merge this pull request in the browser, because its author cannot publish these pages or files alone: Budget page.univer.html, Forecast page.univer.html. Review it at /spaces/${s.id}/pulls/${worktree.number}.`,
         },
       });
     }
@@ -949,7 +949,7 @@ describe("publishing a pull request's pages when it merges", () => {
       status: 409,
       error: {
         code: "PAGES_CHANGED",
-        message: `The pages of this pull request changed since you reviewed it. Review them again at /spaces/${s.id}/pulls/${worktree.number}.`,
+        message: `The pages or files of this pull request changed since you reviewed it. Review them again at /spaces/${s.id}/pulls/${worktree.number}.`,
       },
     });
     const token = await post(origin, await patSession(origin, application, editor), `/api/worktrees/${pull}/merge`, stale);

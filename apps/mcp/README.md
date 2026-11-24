@@ -340,7 +340,8 @@ When more remains, `next` is `{ tool, arguments }`. Pass `arguments` unchanged t
 The final text line gives the same next call in neutral tool syntax.
 
 A fork address `<owner>/<name>` from `fork_create` works as `worktree` in `execute`, `unit_list`, `unit_add`, `unit_create`,
-`import`, `inspect`, `outline`, `read`, `find`, `screenshot`, `print_pdf`, `html_view_read` and `html_view_save`. The gateway resolves it through Client Core before
+`import`, `inspect`, `outline`, `read`, `find`, `screenshot`, `print_pdf`, `html_view_read` and `html_view_save`, and is the only
+`worktree` that `blob_download` and `blob_replace` take. The gateway resolves it through Client Core before
 the tool runs, so the executor and the result see a Worktree ID or trunk. A reading tool reads the fork's open Worktree when
 it holds the Unit, and the upstream trunk otherwise, so `scope` and `next` say `trunk` for a file the fork has not changed.
 Such a file also reads its formulas and embeds from trunk, even when they point at a file the fork changed. `execute`,
@@ -377,8 +378,8 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | --- | --- | --- |
 | `blob_get` | Required `resource` | `{ node, resource }` |
 | `blob_upload` | Required `upload_id`, `space`, `idempotency_key`; optional `name` (defaults to uploaded file name), `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
-| `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
-| `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key` | `{ replacement: { operationId, resourceId, etag } }`. Destructive, requires `publish` |
+| `blob_download` | `resource`; optional `worktree` (fork address only) | `{ download: { url, expires_at, file_name, media_type, size }, etag, draft? }`. With a fork, the bytes are the caller's pending draft of the file in the fork's pull request, named by `draft`, or the upstream file; `etag` is the upstream's either way |
+| `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key`; optional `worktree` (fork address only) | `{ replacement: { operationId, resourceId, etag } }`. With a fork, `{ draft }`: the bytes become a draft in the fork's pull request, which its merge publishes, and the upstream does not change. A page is `HTML_VIEW_DRAFT_REQUIRED`. Destructive, requires `publish` |
 | `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
 | `compile_markdown` | `markdown`; optional `assets_upload_id`, `title`; target options imply `apply: true` when omitted; explicit `false` rejects them | CLI compile result with `committed`, `targetUnitId`, diagnostics and materialized `sourceMap`; compile-only also returns `javascript` |
 | `compile_typst` | `bundle_upload_id`; optional `apply`, `worktree`, `space`, `parent`, `idempotency_key`; destination options imply `apply: true` when omitted; explicit `false` rejects them | Compile-only returns `javascript`, `diagnostics`, `previews`, `compiledTargetUnitId`, `committed: false`; apply returns `committed: true` and `unit`. May return a job handle |

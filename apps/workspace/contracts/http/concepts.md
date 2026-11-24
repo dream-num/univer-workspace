@@ -344,7 +344,10 @@ by hand. While the pull request is `ready` or `merging`, creating or revising a 
 to it gets `409`; reopen it first. A pull request holds at most 20 pending drafts. Every Unit a
 page binds must be in the pull request or readable by the draft's author when it is saved,
 otherwise `403`. The author of a Team pull request proposes a page in its Team Space as it
-proposes a Unit: reading the page, or its destination, is enough.
+proposes a Unit: reading the page, or its destination, is enough. A fork's pull request also
+carries file drafts (`page: false`), new bytes for an upstream Blob that is not a page; the
+section on forks below says how they are made. They are listed, counted and merged with the
+pages, under the same rules, and their content is served as a download, never as a page.
 
 A merge fixes the drafts that are pending and unexpired when it begins, records their IDs in its
 Operation, and publishes them as the merger. A replay or an Operation retry publishes the same
@@ -398,6 +401,16 @@ refuses a Worktree that is not a draft with `409 FORK_WORKTREE_NOT_DRAFT` as a U
 A Worktree with no Unit readies and merges like any other, so pages alone make a pull request.
 The draft itself is saved with `POST /api/html-view-drafts` and the Worktree as
 `sourceWorktreeId`, under the page rules of Worktrees above.
+
+Another file of the upstream changes through a fork as a file draft.
+`PUT /api/forks/{forkId}/blob-resources/{resourceId}/content` takes the request of a Blob
+replacement, `Idempotency-Key`, `If-Match` with the file's current ETag and the raw bytes, opens
+the fork's Worktree as a Unit write does, and returns `{ worktree, draft }`. The upstream does
+not change until the pull request merges. Only replacement exists: a fork does not add files.
+A page is refused with `403 HTML_VIEW_DRAFT_REQUIRED`, and a stale ETag with `412`. A new file
+draft supersedes the owner's pending draft of the same file in that Worktree. The merge
+publishes it as it publishes a page: an upstream file changed since the draft ends `conflicted`
+and keeps its bytes, and a draft whose author cannot write the file needs a person's browser merge.
 
 ## Repository names and numbers
 

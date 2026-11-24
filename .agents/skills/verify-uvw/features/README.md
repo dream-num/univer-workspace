@@ -50,7 +50,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,
-  Blobs and Assets; MX7-MX10 Office round trips and import retries; MM1-MM2 Markdown.
+  Blobs and Assets; MF10-MF11 replacing files through a fork; MX7-MX10 Office round trips and import retries;
+  MM1-MM2 Markdown.
 - [Skills and the Facade API reference over MCP](./mcp-skills-api.md): MR1-MR8 cover Skills, resources,
   instructions and API paging; MR13-MR15 custom Skills, drafts and pinned imports.
 - [MCP sign-in with personal access tokens](./mcp-auth.md): MA1-MA8 cover PAT scopes, revocation, metadata,

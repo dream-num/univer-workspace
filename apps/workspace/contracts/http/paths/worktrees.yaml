@@ -415,9 +415,9 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         description: |
-          The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's author cannot write
-          its target, so only a person signed in to the browser who sends `pageDraftIds` may merge. The message
-          names the pages and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
+          The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's or file's author
+          cannot write its target, so only a person signed in to the browser who sends `pageDraftIds` may merge. The
+          message names the pages and files and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
           merge would publish, so the merger must review the pages again. The message names the pull request URL.
           A request that could get both gets `PAGE_REVIEW_REQUIRED`, which a newer review cannot clear outside the
           browser. Nothing changes.

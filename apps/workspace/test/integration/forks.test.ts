@@ -410,6 +410,132 @@ describe("pages through a fork", () => {
   }, 60_000);
 });
 
+describe("files through a fork", () => {
+  it("lets a viewer replace a PDF and a PNG through a fork, which only an editor's reviewed browser merge publishes", async () => {
+    const { origin, application } = await start();
+    const { holder, editor, team, agent } = await upstream(origin);
+    const pdf = await uploadedFile(origin, holder, team, "report.pdf", "%PDF-1.4 holder");
+    const png = await uploadedFile(origin, holder, team, "chart.png", "\x89PNG holder");
+    const page = await publishedPage(origin, holder, team, "Holder");
+    const fork = await createFork(origin, agent, team, "fix-files");
+    const key = randomUUID();
+
+    const first = await replaceThrough(origin, agent, fork, pdf, "%PDF-1.4 agent", key);
+    expect(first).toMatchObject({ status: 201, draft: { kind: "replace", page: false, state: "pending", name: "report.pdf", targetResourceId: pdf.resourceId, baseEtag: pdf.etag } });
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "drafting", worktree: { id: first.worktree.id, unitCount: 0, pendingPageDrafts: 1 } });
+    expect(await replaceThrough(origin, agent, fork, pdf, "%PDF-1.4 agent", key)).toMatchObject({ status: 200, draft: { id: first.draft.id } });
+    await expectError(replaceRequest(origin, agent, fork, page, "<html></html>"), 403, "HTML_VIEW_DRAFT_REQUIRED");
+    await expectError(replaceRequest(origin, agent, fork, { ...png, etag: pdf.etag }, "stale"), 412, "PRECONDITION_FAILED");
+    const chart = await replaceThrough(origin, agent, fork, png, "\x89PNG agent");
+    expect(chart).toMatchObject({ status: 201, worktree: { id: first.worktree.id }, draft: { page: false, name: "chart.png" } });
+
+    expect(await transition(origin, first.worktree.id, "ready", agent)).toBe("ready");
+    expect((await expectError(replaceRequest(origin, agent, fork, png, "late"), 409, "FORK_WORKTREE_NOT_DRAFT")).message).toMatch(/is ready/);
+    const listed = (await (await send(origin, "GET", `/api/worktrees/${first.worktree.id}/html-view-drafts`, undefined, editor.cookie)).json()) as { drafts: { id: string; page: boolean }[] };
+    expect(listed.drafts.map(({ id, page }) => ({ id, page }))).toEqual([{ id: first.draft.id, page: false }, { id: chart.draft.id, page: false }]);
+    const content = await send(origin, "GET", `/api/html-view-drafts/${first.draft.id}/content`, undefined, editor.cookie);
+    expect({
+      type: content.headers.get("content-type"), disposition: content.headers.get("content-disposition"),
+      csp: content.headers.get("content-security-policy"), sniff: content.headers.get("x-content-type-options"), body: await content.text(),
+    }).toEqual({ type: "application/octet-stream", disposition: expect.stringMatching(/^attachment; filename="report\.pdf"/), csp: "sandbox", sniff: "nosniff", body: "%PDF-1.4 agent" });
+
+    const merge = (actor: Actor, pageDraftIds?: string[]) =>
+      send(origin, "POST", `/api/worktrees/${first.worktree.id}/merge`, pageDraftIds && { pageDraftIds }, actor.cookie, { "idempotency-key": randomUUID() });
+    const reviewed = [first.draft.id, chart.draft.id];
+    expect((await expectError(merge(await patSession(origin, application, editor), reviewed), 409, "PAGE_REVIEW_REQUIRED")).message)
+      .toMatch(/cannot publish these pages or files alone: report\.pdf, chart\.png\./);
+    await expectError(merge(editor, [first.draft.id]), 409, "PAGES_CHANGED");
+    expect(await fileBytes(origin, holder, pdf)).toEqual({ body: "%PDF-1.4 holder", etag: pdf.etag });
+
+    const merged = await merge(editor, reviewed);
+    expect({ status: merged.status, body: await merged.json() }).toMatchObject({
+      status: 200, body: { worktree: { state: "merged" }, publishedPages: [{ draftId: first.draft.id, name: "report.pdf" }, { draftId: chart.draft.id, name: "chart.png" }] },
+    });
+    for (const [file, bytes, draftId] of [[pdf, "%PDF-1.4 agent", first.draft.id], [png, "\x89PNG agent", chart.draft.id]] as const) {
+      const { draft } = (await (await send(origin, "GET", `/api/html-view-drafts/${draftId}`, undefined, agent.cookie)).json()) as { draft: { state: string; published: { etag: string } } };
+      expect(draft.state).toBe("published");
+      expect(await fileBytes(origin, holder, file)).toEqual({ body: bytes, etag: draft.published.etag });
+    }
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "clean" });
+  }, 90_000);
+
+  it("leaves a file someone replaced after the fork's draft conflicted with their bytes, and merges the Sheet in the same pull request", async () => {
+    const { origin } = await start();
+    const { holder, editor, team, agent } = await upstream(origin);
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const pdf = await uploadedFile(origin, holder, team, "report.pdf", "%PDF-1.4 holder");
+    const fork = await createFork(origin, agent, team, "fix-report");
+    const { worktree, unit } = await writeThrough(origin, agent, fork, budget);
+    await committed(origin, agent, worktree.id, unit, [setCell(budget, 1, "agent-value")]);
+    const { draft } = await replaceThrough(origin, agent, fork, pdf, "%PDF-1.4 agent");
+
+    const replaced = await send(origin, "PUT", `/api/blob-resources/${pdf.resourceId}/content`, undefined, holder.cookie, {
+      "idempotency-key": randomUUID(), "if-match": pdf.etag, "content-type": "application/octet-stream",
+    }, "%PDF-1.4 holder again");
+    expect(replaced.status).toBe(200);
+    expect(await transition(origin, worktree.id, "ready", agent)).toBe("ready");
+    const merged = await send(origin, "POST", `/api/worktrees/${worktree.id}/merge`, { pageDraftIds: [draft.id] }, editor.cookie, { "idempotency-key": randomUUID() });
+    expect({ status: merged.status, body: await merged.json() }).toMatchObject({ status: 200, body: { worktree: { state: "merged" }, publishedPages: [] } });
+    expect((await fileBytes(origin, holder, pdf)).body).toBe("%PDF-1.4 holder again");
+    expect(await trunkText(origin, holder, budget)).toContain("agent-value");
+    const { drafts } = (await (await send(origin, "GET", `/api/worktrees/${worktree.id}/html-view-drafts`, undefined, agent.cookie)).json()) as { drafts: { id: string; state: string }[] };
+    expect(drafts).toEqual([expect.objectContaining({ id: draft.id, state: "conflicted" })]);
+  }, 90_000);
+
+  it("keeps a page renamed without its suffix a page, which a file replacement refuses and a page draft publishes", async () => {
+    const { origin } = await start();
+    const { holder, editor, team, agent } = await upstream(origin);
+    const page = await publishedPage(origin, holder, team, "Holder");
+    const { node } = (await (await send(origin, "GET", `/api/resources/${page.resourceId}`, undefined, holder.cookie)).json()) as { node: { id: string } };
+    expect((await send(origin, "PATCH", `/api/nodes/${node.id}`, { name: "Page" }, holder.cookie)).status).toBe(200);
+    const fork = await createFork(origin, agent, team, "fix-page");
+    await expectError(replaceRequest(origin, agent, fork, page, "<html></html>"), 403, "HTML_VIEW_DRAFT_REQUIRED");
+
+    const { worktree } = (await (await send(origin, "POST", `/api/forks/${fork}/worktree`, undefined, agent.cookie, { "idempotency-key": randomUUID() })).json()) as { worktree: { id: string } };
+    const saved = await send(origin, "POST", "/api/html-view-drafts", { kind: "replace", ...page, html: html("Proposed"), sourceWorktreeId: worktree.id },
+      agent.cookie, { "idempotency-key": randomUUID() });
+    const { draft } = (await saved.json()) as { draft: { id: string; name: string; page: boolean } };
+    expect({ status: saved.status, name: draft.name, page: draft.page }).toEqual({ status: 201, name: "Page", page: true });
+    expect(await transition(origin, worktree.id, "ready", agent)).toBe("ready");
+    const merged = await send(origin, "POST", `/api/worktrees/${worktree.id}/merge`, { pageDraftIds: [draft.id] }, editor.cookie, { "idempotency-key": randomUUID() });
+    expect({ status: merged.status, body: await merged.json() }).toMatchObject({ status: 200, body: { publishedPages: [{ draftId: draft.id, name: "Page" }] } });
+    expect((await fileBytes(origin, holder, page)).body).toContain("Proposed");
+  }, 60_000);
+
+  it("answers a second request with the same key from the stored draft while the first still streams, and supersedes the author's earlier draft of the file", async () => {
+    const { origin, database } = await start();
+    const { holder, team, agent } = await upstream(origin);
+    const pdf = await uploadedFile(origin, holder, team, "report.pdf", "%PDF-1.4 holder");
+    const fork = await createFork(origin, agent, team, "fix-report");
+    const earlier = await replaceThrough(origin, agent, fork, pdf, "%PDF-1.4 first");
+    const key = randomUUID();
+    const bytes = "%PDF-1.4 second";
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const streaming = send(origin, "PUT", `/api/forks/${fork}/blob-resources/${pdf.resourceId}/content`, undefined, agent.cookie, {
+      "idempotency-key": key, "if-match": pdf.etag, "content-type": "application/octet-stream", "content-length": String(bytes.length),
+    }, new ReadableStream({
+      async start(controller) {
+        controller.enqueue(new TextEncoder().encode(bytes.slice(0, 4)));
+        await held;
+        controller.enqueue(new TextEncoder().encode(bytes.slice(4)));
+        controller.close();
+      },
+    }));
+    await vi.waitFor(async () => expect(await database.all("SELECT state FROM html_view_drafts WHERE idempotency_key = $1", [key])).toEqual([{ state: "receiving" }]));
+    expect((await expectError(replaceRequest(origin, agent, fork, pdf, bytes, key), 409, "CONFLICT")).message).toMatch(/still receiving its bytes/);
+    release();
+    const done = await streaming;
+    const { draft } = (await done.json()) as { draft: { id: string; state: string } };
+    expect({ status: done.status, state: draft.state }).toEqual({ status: 201, state: "pending" });
+    expect(await replaceThrough(origin, agent, fork, pdf, bytes, key)).toMatchObject({ status: 200, draft: { id: draft.id } });
+    const { drafts } = (await (await send(origin, "GET", `/api/worktrees/${earlier.worktree.id}/html-view-drafts`, undefined, agent.cookie)).json()) as { drafts: { id: string }[] };
+    expect(drafts.map(({ id }) => id)).toEqual([draft.id]);
+    expect(await (await send(origin, "GET", `/api/html-view-drafts/${earlier.draft.id}`, undefined, agent.cookie)).json())
+      .toMatchObject({ draft: { state: "superseded", supersededBy: draft.id } });
+  }, 60_000);
+});
+
 describe("proposals from readers who are not Space Members", () => {
   it("admits each kind of reader by the proposals setting, and none while the Space is not public", async () => {
     const { origin } = await start();
@@ -685,15 +811,17 @@ async function start() {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Server did not expose a TCP address");
-  return { origin: `http://127.0.0.1:${address.port}`, database: testDatabase(application.databaseConfig) };
+  return { origin: `http://127.0.0.1:${address.port}`, database: testDatabase(application.databaseConfig), application };
 }
 
-function send(origin: string, method: string, path: string, body?: unknown, cookie?: string, headers: Record<string, string> = {}): Promise<Response> {
+function send(origin: string, method: string, path: string, body?: unknown, cookie?: string, headers: Record<string, string> = {},
+  raw?: string | Buffer | ReadableStream<Uint8Array>): Promise<Response> {
   return fetch(`${origin}${path}`, {
     method,
     headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...(cookie ? { cookie } : {}), ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+    ...(raw === undefined ? {} : { body: raw, duplex: "half" }),
+  } as RequestInit);
 }
 
 async function expectError(request: Promise<Response>, status: number, code: string): Promise<{ message: string }> {
@@ -816,6 +944,51 @@ async function publishedPage(origin: string, actor: Actor, spaceId: string, titl
   if (published.status !== 200) throw new Error(`Publish failed with ${published.status}: ${await published.text()}`);
   const { resourceId, etag } = ((await published.json()) as { draft: { published: { resourceId: string; etag: string } } }).draft.published;
   return { resourceId, etag };
+}
+
+interface StoredFile {
+  readonly resourceId: string;
+  readonly etag: string;
+}
+
+async function uploadedFile(origin: string, actor: Actor, spaceId: string, name: string, text: string): Promise<StoredFile> {
+  const bytes = Buffer.from(text);
+  const reserved = await send(origin, "POST", "/api/blob-upload-sessions", { spaceId, parentNodeId: null, name, originalFilename: name, byteSize: bytes.length },
+    actor.cookie, { "idempotency-key": randomUUID() });
+  if (reserved.status !== 201) throw new Error(`Upload reservation failed with ${reserved.status}: ${await reserved.text()}`);
+  const { upload } = (await reserved.json()) as { upload: { id: string; resourceId: string } };
+  const put = await send(origin, "PUT", `/api/blob-upload-sessions/${upload.id}/content`, undefined, actor.cookie, { "content-type": "application/octet-stream" }, bytes);
+  if (put.status !== 204) throw new Error(`Upload failed with ${put.status}: ${await put.text()}`);
+  const completed = await send(origin, "POST", `/api/blob-upload-sessions/${upload.id}/complete`, undefined, actor.cookie);
+  if (completed.status !== 201) throw new Error(`Upload completion failed with ${completed.status}: ${await completed.text()}`);
+  return { resourceId: upload.resourceId, etag: (await fileBytes(origin, actor, upload)).etag };
+}
+
+async function fileBytes(origin: string, reader: Actor, file: { readonly resourceId: string }): Promise<{ body: string; etag: string }> {
+  const response = await send(origin, "GET", `/api/blob-resources/${file.resourceId}/content`, undefined, reader.cookie);
+  if (response.status !== 200) throw new Error(`File read failed with ${response.status}`);
+  return { body: await response.text(), etag: response.headers.get("etag")! };
+}
+
+function replaceRequest(origin: string, actor: Actor, forkId: string, file: StoredFile, text: string, key = randomUUID()): Promise<Response> {
+  return send(origin, "PUT", `/api/forks/${forkId}/blob-resources/${file.resourceId}/content`, undefined, actor.cookie,
+    { "idempotency-key": key, "if-match": file.etag, "content-type": "application/octet-stream" }, text);
+}
+
+async function replaceThrough(origin: string, actor: Actor, forkId: string, file: StoredFile, text: string, key = randomUUID()) {
+  const response = await replaceRequest(origin, actor, forkId, file, text, key);
+  if (response.status !== 200 && response.status !== 201) throw new Error(`Fork file write failed with ${response.status}: ${await response.text()}`);
+  return { status: response.status, ...((await response.json()) as { worktree: { id: string }; draft: { id: string } }) };
+}
+
+/** The same person through a personal access token, as an MCP connection holds it. */
+async function patSession(origin: string, application: ProductTestApplication, actor: Actor): Promise<Actor> {
+  const created = await send(origin, "POST", "/api/auth/tokens", { name: "agent" }, actor.cookie);
+  if (created.status !== 201) throw new Error(`Token creation failed with ${created.status}: ${await created.text()}`);
+  const { record } = (await created.json()) as { record: { id: string } };
+  const { user } = await application.identity.requireSession(actor.cookie);
+  const issued = await application.identity.issueSession(user, "agent", { issuedFor: { kind: "pat", id: record.id } });
+  return { ...actor, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
 }
 
 async function forkView(origin: string, actor: Actor, forkId: string): Promise<unknown> {

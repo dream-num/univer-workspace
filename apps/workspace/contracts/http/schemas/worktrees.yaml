@@ -541,8 +541,9 @@ MergeWorktree:
       type: array
       description: |
         IDs of the drafts the merger reviewed in `GET /api/worktrees/{worktreeId}/html-view-drafts` with state
-        `pending` or `conflicted`, which for an unmerged pull request are its pending, unexpired drafts. Order does
-        not matter. Omit it when the merger did not review the pages.
+        `pending` or `conflicted`, which for an unmerged pull request are its pending, unexpired drafts, pages and
+        files alike. Order does not matter. Omit it when the merger did not review the pages. The name predates
+        file drafts and is kept for existing clients.
       items:
         type: string
         minLength: 1
@@ -558,7 +559,7 @@ WorktreeMergeResponse:
       $ref: "#/WorktreeSummary"
     publishedPages:
       type: array
-      description: Pages this merge published as the merger. Already published drafts are omitted on replay.
+      description: Pages and files this merge published as the merger. Already published drafts are omitted on replay.
       items:
         type: object
         additionalProperties: false

@@ -172,7 +172,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read unpublished draft bytes as inert text, as the author or a reviewer of the source pull request. */
+        /**
+         * Read unpublished draft bytes as inert text, as the author or a reviewer of the source pull request.
+         * @description A page draft is served as `text/plain`. A file draft (`page: false`) is served as an `application/octet-stream`
+         *     attachment named after the file, so it never renders on the reviewer's origin.
+         */
         get: operations["getHtmlViewDraftContent"];
         put?: never;
         post?: never;
@@ -230,8 +234,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the HTML View drafts a pull request carries, for anyone who may review it.
-         * @description Includes drafts by any author and terminal drafts, so a reviewer sees each page's result. Callers without `review` on the pull request get `404`.
+         * List the HTML View and file drafts a pull request carries, for anyone who may review it.
+         * @description Includes drafts by any author and terminal drafts, so a reviewer sees each page's and file's result. Callers without `review` on the pull request get `404`.
          */
         get: operations["listWorktreeHtmlViewDrafts"];
         put?: never;
@@ -1505,6 +1509,41 @@ export interface paths {
          *     can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`.
          */
         post: operations["openForkWorktree"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/forks/{forkId}/blob-resources/{resourceId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forkId: string;
+                resourceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Propose new bytes for an upstream file through the fork, as a draft its pull request's merge publishes.
+         * @description Takes the request of `PUT /api/blob-resources/{resourceId}/content`, but never writes the upstream. The bytes
+         *     become a `replace` draft (`page: false`) attached to the fork's open Worktree, which a `clean` fork opens as
+         *     `POST /api/forks/{forkId}/units` does. When that Worktree is not a draft the request returns
+         *     `409 FORK_WORKTREE_NOT_DRAFT`. The Resource must be a ready Blob of the upstream that the caller can read,
+         *     otherwise `404`. A page (`.univer.html`) is refused with `403 HTML_VIEW_DRAFT_REQUIRED`; pages change through
+         *     HTML View drafts. `If-Match` must be the file's current ETag, otherwise `412`. The draft supersedes the
+         *     caller's pending draft of the same file in that Worktree, and a pull request holds at most 20 pending drafts,
+         *     pages and files together (`409`). Repeating a request with the same Idempotency-Key, target, `If-Match` and
+         *     `Content-Length` returns its draft with `200` and does not read the new body. While the first request still
+         *     receives bytes, or after it failed, the key returns `409`; use a new key after a failure. Merging the pull
+         *     request publishes the draft as the merger, by the rules for pages: the merger needs edit access to the file,
+         *     a file whose upstream ETag changed after intake ends `conflicted` and keeps the upstream bytes, and when the
+         *     draft's author cannot write the file, only a person merging in the browser with the reviewed list publishes it.
+         */
+        put: operations["replaceForkBlobContent"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3012,6 +3051,12 @@ export interface components {
             author: components["schemas"]["PublicUser"];
             /** @enum {string} */
             kind: "create" | "replace";
+            /**
+             * @description True for an HTML View draft. False for a `replace` draft of another file (a Blob such as a PDF or an image)
+             *     made through a fork, which has no page preview: its content route serves it as an attachment, and its merge
+             *     replaces the file's bytes by the same rules as a page.
+             */
+            page: boolean;
             /** @enum {string} */
             state: "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
             /**
@@ -3047,7 +3092,7 @@ export interface components {
             draft: components["schemas"]["HtmlViewDraft"];
         };
         HtmlViewDraftList: {
-            /** @description Every draft attached to the pull request, oldest first, except superseded revisions. */
+            /** @description Every draft attached to the pull request, pages and files, oldest first, except superseded revisions. */
             drafts: components["schemas"]["HtmlViewDraft"][];
         };
         AnonymousSession: {
@@ -3661,7 +3706,8 @@ export interface components {
          * @description Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
          *     `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
          *     an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
-         *     (`POST /api/forks/{forkId}/units`, or `POST /api/forks/{forkId}/worktree` for a page draft), and only a
+         *     (`POST /api/forks/{forkId}/units`, `PUT /api/forks/{forkId}/blob-resources/{resourceId}/content` for a file,
+         *     or `POST /api/forks/{forkId}/worktree` for a page draft), and only a
          *     `drafting` fork takes writes.
          * @enum {string}
          */
@@ -3705,6 +3751,10 @@ export interface components {
         };
         ForkWorktree: {
             worktree: components["schemas"]["WorktreeSummary"];
+        };
+        ForkBlobWrite: {
+            worktree: components["schemas"]["WorktreeSummary"];
+            draft: components["schemas"]["HtmlViewDraft"];
         };
         ResourceCapabilities: {
             openContent: boolean;
@@ -4267,15 +4317,16 @@ export interface components {
         MergeWorktree: {
             /**
              * @description IDs of the drafts the merger reviewed in `GET /api/worktrees/{worktreeId}/html-view-drafts` with state
-             *     `pending` or `conflicted`, which for an unmerged pull request are its pending, unexpired drafts. Order does
-             *     not matter. Omit it when the merger did not review the pages.
+             *     `pending` or `conflicted`, which for an unmerged pull request are its pending, unexpired drafts, pages and
+             *     files alike. Order does not matter. Omit it when the merger did not review the pages. The name predates
+             *     file drafts and is kept for existing clients.
              */
             pageDraftIds?: string[];
         };
         WorktreeMergeResponse: {
             operation: components["schemas"]["OperationView"];
             worktree: components["schemas"]["WorktreeSummary"];
-            /** @description Pages this merge published as the merger. Already published drafts are omitted on replay. */
+            /** @description Pages and files this merge published as the merger. Already published drafts are omitted on replay. */
             publishedPages: {
                 draftId: string;
                 name: string;
@@ -4820,10 +4871,13 @@ export interface operations {
                     "Content-Security-Policy"?: "sandbox";
                     "X-Content-Type-Options"?: "nosniff";
                     "Cache-Control"?: "private, no-store";
+                    /** @description Present for a file draft only. */
+                    "Content-Disposition"?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "text/plain; charset=utf-8": string;
+                    "application/octet-stream": string;
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -7022,6 +7076,71 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    replaceForkBlobContent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+                /** @description Exactly one quoted strong ETag of the upstream file, as Blob content or `blob_download` returns it. */
+                "If-Match": string;
+                "Content-Length": number;
+            };
+            path: {
+                forkId: string;
+                resourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The draft this Idempotency-Key already made. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkBlobWrite"];
+                };
+            };
+            /** @description The new draft, attached to the fork's open Worktree. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkBlobWrite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient permission, `HTML_VIEW_DRAFT_REQUIRED` for a page, or `AGENT_QUOTA_EXCEEDED` when an unclaimed agent stores a file above 10 MB. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description The upstream file changed since the supplied ETag. Download it through the fork again. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+        };
+    };
     listSpaceRootNodes: {
         parameters: {
             query?: {
@@ -8919,9 +9038,9 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /**
-             * @description The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's author cannot write
-             *     its target, so only a person signed in to the browser who sends `pageDraftIds` may merge. The message
-             *     names the pages and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
+             * @description The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's or file's author
+             *     cannot write its target, so only a person signed in to the browser who sends `pageDraftIds` may merge. The
+             *     message names the pages and files and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
              *     merge would publish, so the merger must review the pages again. The message names the pull request URL.
              *     A request that could get both gets `PAGE_REVIEW_REQUIRED`, which a newer review cannot clear outside the
              *     browser. Nothing changes.

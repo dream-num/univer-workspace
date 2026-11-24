@@ -233,7 +233,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createSpaceCommand(spaces, product.repoContext, forks),
     createUnitCommand(units, forks, product.repoContext, product.origin),
     ...createWorkspaceUnitExchangeCommands(exchange),
-    createBlobCommand(blobs),
+    createBlobCommand(blobs, forks),
     createHtmlViewCommand(
       new WorkspaceHtmlViewFeature({
         authenticatedHttp,

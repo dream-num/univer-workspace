@@ -11,6 +11,7 @@ import { draftContentQueryOptions, htmlViewDraftQueryOptions, usePublishDraft, u
 import { useDraftMessages } from "./messages";
 import { worktreeQueryOptions } from "../../worktrees/worktrees.queries";
 import { useHtmlViewSources } from "../use-html-view-sources";
+import { formatSkillFileSize } from "../../skill-drafts/review-presentation";
 
 const DraftPreview = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftPreview })));
 const DraftVersions = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftVersions })));
@@ -31,15 +32,27 @@ export function HtmlViewDraftReview({ draftId, presentation, replaced = false, o
       !draft.data ? <p role="status" className="p-5">{m.loading}</p> :
         draft.data.state === "pending" && replaced ? <div className="p-5">
           <h1 className="text-lg font-semibold">{draft.data.name}</h1><p role="status">{m.replaced}</p>
-        </div> : draft.data.state === "pending" ? <PendingDraft key={draftId} draft={draft.data} presentation={presentation}
+        </div> : draft.data.state === "pending" && draft.data.page === false ? <FileDraft draft={draft.data} /> : draft.data.state === "pending" ? <PendingDraft key={draftId} draft={draft.data} presentation={presentation}
           onRequestChanges={presentation === "card" ? onRequestChanges : undefined} requestChangesDisabled={requestChangesDisabled} /> :
           <div className="p-5">
             <h1 className="text-lg font-semibold">{draft.data.name}</h1>
-            <p role="status">{draft.data.state === "conflicted" && draft.data.kind === "create" && draft.data.sourceWorktreeId ? m.sourceDiscarded : m[draft.data.state]}</p>
+            <p role="status">{draft.data.state === "conflicted" && draft.data.kind === "create" && draft.data.sourceWorktreeId ? m.sourceDiscarded
+              : draft.data.state === "conflicted" && draft.data.page === false ? m.fileConflicted : m[draft.data.state]}</p>
             {draft.data.state === "superseded" && draft.data.supersededBy && <a className="text-primary underline" href={`/drafts/${encodeURIComponent(draft.data.supersededBy)}`}>{m.openSuccessor}</a>}
-            {draft.data.state === "published" && draft.data.published && <a className="text-primary underline" href={`/nodes/${encodeURIComponent(draft.data.published.nodeId)}?view=immersive`}>{m.openPage}</a>}
+            {draft.data.state === "published" && draft.data.published && <a className="text-primary underline" href={`/nodes/${encodeURIComponent(draft.data.published.nodeId)}${draft.data.page === false ? "" : "?view=immersive"}`}>{draft.data.page === false ? m.openFile : m.openPage}</a>}
           </div>}
   </section>;
+}
+
+/** Someone's bytes for a file that is not a page, which the reviewer downloads and never renders. */
+function FileDraft({ draft }: { readonly draft: HtmlViewDraft }) {
+  const m = useDraftMessages();
+  return <div className="p-5">
+    <h1 className="text-lg font-semibold">{draft.name}</h1>
+    <p className="text-sm text-muted-foreground">{m.replaceFile} · {m.pending} · {formatSkillFileSize(draft.byteSize)}</p>
+    <p className="mt-3 text-sm text-muted-foreground">{m.fileReviewNotice(draft.author.displayName)}</p>
+    <a className="mt-3 inline-block text-primary underline" href={`/api/html-view-drafts/${encodeURIComponent(draft.id)}/content`} download={draft.name}>{m.download}</a>
+  </div>;
 }
 
 function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDisabled }: {

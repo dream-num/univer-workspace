@@ -250,3 +250,65 @@ describe("Workspace forks", () => {
     });
   });
 });
+
+describe("files through a fork", () => {
+  const report = {
+    availability: "ready", byteSize: 8, capabilities: { downloadContent: true, editContent: false, openContent: true },
+    id: "r9", kind: "blob", mediaType: "application/pdf",
+  };
+  const reportNode = {
+    accessRole: "viewer", hasChildren: false, id: "n9", name: "report.pdf", parentNodeId: null, spaceId: "s1", updatedAt: "2026-11-23T00:00:00.000Z",
+    capabilities: { browseChildren: false, createChildren: false, move: false, rename: false, share: false, trash: false },
+    resource: report,
+  };
+  const draft = (overrides: Record<string, unknown> = {}) => ({
+    id: "d1", author: { id: "a1", username: "agent", displayName: "Agent", avatarUrl: null }, kind: "replace", page: false, state: "pending",
+    spaceId: "s1", parentNodeId: null, name: "report.pdf", targetResourceId: "r9", baseEtag: '"v1"', byteSize: 5,
+    createdAt: "2026-11-23T00:00:00.000Z", expiresAt: "2026-11-30T00:00:00.000Z", decidedAt: null, published: null, supersededBy: null,
+    sourceWorktreeId: "w1", publishWhen: "merge", ...overrides,
+  });
+
+  function files(state: "clean" | "drafting", drafts: readonly Record<string, unknown>[], upstreamSpace = "s1") {
+    const requests: { method: string; path: string; headers: Headers; body: string }[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname + new URL(request.url).search;
+      requests.push({ method: request.method, path, headers: request.headers, body: await request.text() });
+      if (path === "/api/forks/lookup?name=fix&owner=agent") return Response.json(fork(state));
+      if (path === "/api/resources/r9") return Response.json({ node: { ...reportNode, spaceId: upstreamSpace }, resource: report });
+      if (path === "/api/worktrees/w1/html-view-drafts") return Response.json({ drafts });
+      if (path === "/api/html-view-drafts/d1/content") return new Response("%PDF-a1", { headers: { "content-length": "7", "content-type": "application/octet-stream" } });
+      if (path === "/api/blob-resources/r9/download") return new Response("%PDF-old", { headers: { "content-length": "8", "content-type": "application/pdf", etag: '"v1"' } });
+      if (path === "/api/forks/f1/blob-resources/r9/content")
+        return Response.json({ worktree: { id: "w1", name: "fix", number: 7, state: "draft", teamSpace: { id: "s1" } }, draft: draft() }, { status: 201 });
+      return Response.json({ error: { code: "NOT_FOUND", message: "Not found." } }, { status: 404 });
+    };
+    const http = new WorkspaceHttp({ cookie: "workspace_session=test", fetcher, origin: "https://workspace.test", role: "client" });
+    return { requests, forks: new WorkspaceForkFeature(async () => http) };
+  }
+  const read = async (stream: { content: AsyncIterable<Uint8Array> }) => {
+    let text = "";
+    for await (const chunk of stream.content) text += new TextDecoder().decode(chunk);
+    return text;
+  };
+
+  it("sends the bytes, the upstream ETag and the key to the fork route, and returns the draft and its Worktree", async () => {
+    const { requests, forks } = files("clean", []);
+    const result = await forks.replaceBlob("agent/fix", { resourceId: "r9", etag: '"v1"', idempotencyKey: "k1", fileName: "report.pdf", bytes: new TextEncoder().encode("%PDF-a1") });
+    expect(result).toMatchObject({ worktree: { id: "w1" }, draft: { id: "d1", kind: "replace", targetResourceId: "r9", previewUrl: "https://workspace.test/drafts/d1", status: { state: "pending" } } });
+    const put = requests.find((request) => request.method === "PUT")!;
+    expect({ path: put.path, ifMatch: put.headers.get("if-match"), key: put.headers.get("idempotency-key"), body: put.body })
+      .toEqual({ path: "/api/forks/f1/blob-resources/r9/content", ifMatch: '"v1"', key: "k1", body: "%PDF-a1" });
+  });
+
+  it("reads the owner's pending draft of a file with the upstream ETag, the upstream bytes otherwise, and refuses another repository's file", async () => {
+    const drafted = await files("drafting", [draft({ author: { id: "other", username: "eve", displayName: "Eve", avatarUrl: null }, id: "d0" }), draft()]).forks.openBlob("agent/fix", "r9");
+    expect({ draft: drafted.draft?.id, etag: drafted.etag, byteSize: drafted.byteSize, body: await read(drafted) }).toEqual({ draft: "d1", etag: '"v1"', byteSize: 7, body: "%PDF-a1" });
+
+    for (const [state, drafts] of [["clean", []], ["drafting", [draft({ state: "conflicted" })]]] as const) {
+      const upstream = await files(state, drafts).forks.openBlob("agent/fix", "r9");
+      expect({ draft: upstream.draft, etag: upstream.etag, body: await read(upstream) }).toEqual({ draft: null, etag: '"v1"', body: "%PDF-old" });
+    }
+    await expect(files("clean", [], "s2").forks.openBlob("agent/fix", "r9")).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+  });
+});

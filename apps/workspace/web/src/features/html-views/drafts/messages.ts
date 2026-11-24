@@ -21,6 +21,9 @@ export const draftMessages = {
     notFound: "Draft not found, or you cannot review it.", openPage: "Open page",
     pages: "Pages", previewPage: "Preview", conflictedState: "Conflicted", byAuthor: (name: string) => `by ${name}`,
     reviewNotice: (name: string) => `${name} wrote this page. The preview is read-only and loads only the Sheets it declares.`,
+    pagesAndFiles: "Pages and files", replaceFile: "Replace file", download: "Download", openFile: "Open file",
+    fileConflicted: "The file changed since the Agent drafted it. Ask the Agent to revise it.",
+    fileReviewNotice: (name: string) => `${name} uploaded this file. It has no preview; download it to review.`,
   },
   "zh-CN": {
     publishPage: "发布新页面", replacePage: "替换页面", publish: "发布", reject: "拒绝",
@@ -42,6 +45,9 @@ export const draftMessages = {
     notFound: "草稿不存在，或者你不能评审它。", openPage: "打开页面",
     pages: "页面", previewPage: "预览", conflictedState: "有冲突", byAuthor: (name: string) => `${name} 提交`,
     reviewNotice: (name: string) => `这个页面由 ${name} 编写。预览为只读，只加载页面声明的 Sheet。`,
+    pagesAndFiles: "页面和文件", replaceFile: "替换文件", download: "下载", openFile: "打开文件",
+    fileConflicted: "文件在 Agent 起草后已更改，请让 Agent 修改草稿。",
+    fileReviewNotice: (name: string) => `这个文件由 ${name} 上传，没有预览，请下载后审阅。`,
   },
 };
 

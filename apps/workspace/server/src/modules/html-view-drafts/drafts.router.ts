@@ -1,4 +1,4 @@
-import { pipeBlobContent } from "../../integrations/blob/blob-http.js";
+import { contentDisposition, pipeBlobContent } from "../../integrations/blob/blob-http.js";
 import { json, Router } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "../identity/index.js";
@@ -51,7 +51,12 @@ export function createHtmlViewDraftsRouter(options: {
   router.get("/html-view-drafts/:draftId/content", async (request, response) => {
     const actor = await options.identity.requireSession(request.headers.cookie);
     const opened = await options.drafts.openContent(actor.user.id, String(request.params.draftId));
-    response.setHeader("Content-Type", "text/plain; charset=utf-8");
+    // A file draft is someone's untyped bytes, so it never renders on the reviewer's origin.
+    if (opened.page) response.setHeader("Content-Type", "text/plain; charset=utf-8");
+    else {
+      response.setHeader("Content-Type", "application/octet-stream");
+      response.setHeader("Content-Disposition", contentDisposition("attachment", opened.name));
+    }
     response.setHeader("Content-Security-Policy", "sandbox");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Cache-Control", "private, no-store");

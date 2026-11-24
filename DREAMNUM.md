@@ -139,7 +139,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   bucket. Switching stores on an existing deployment requires copying objects under their original keys. Database rows
   retain their identities, metadata, and recovery state. The [offline cutover command](apps/workspace/docs/storage-migration.md) migrates SQLite and local files to PostgreSQL and S3 together during one outage.
   Blob content replacement preserves Resource identity
-  and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
+  and publishes directly; it does not use Worktree review, except a replacement through a fork, which waits as a
+  draft attached to the fork's Worktree until that pull request merges. Sessions issued by token exchange (the MCP gateway)
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
   An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent and the human who claimed it.
@@ -168,7 +169,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   interactive session cookie, a one-hour `uvw_at_` grant for the first-party `univer-workspace-agents` client bound to the
   same-origin `/mcp` resource, with only `read` or `read write`, and returns no refresh token.
 - Product V19 adds HTML View drafts through a backed-up V18 → V19 startup migration that backfills nothing.
-  A draft is a `.univer.html` create or revision whose bytes wait in the BlobStore; only its author can publish
+  A draft is a `.univer.html` create or revision, or a replacement of another Blob made through a fork, whose bytes
+  wait in the BlobStore; only its author can publish
   or reject it, from an interactive session, at `/api/html-view-drafts`. Publishing adopts the stored bytes in one
   transaction; rejected, expired and stale drafts release them. Pending drafts expire after 7 days.
 - Product V21 adds `users.kind` (`human` or `agent`) and the `agents` and `node_reports` tables through a backed-up

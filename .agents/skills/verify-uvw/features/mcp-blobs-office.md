@@ -7,6 +7,8 @@ key returns the first result, other owners cannot use an upload, and size and pa
 ## Sub-features
 
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
+- MF10 replaces a PDF and a PNG through a fork as a Viewer agent, and an Editor reviews and merges them in the browser.
+- MF11 keeps a file someone replaced after the fork's draft, and merges the Sheet beside it.
 - MX7 and MX8 round-trip xlsx and docx through Office import and export.
 - MX9 retries an Office import with the same upload and key and gets the original result.
 - MX10 rejects a reused import key with a different upload.
@@ -18,7 +20,8 @@ key returns the first result, other owners cannot use an upload, and size and pa
 An MCP client connected to `$MCP_URL` calls `file_upload_create` and uploads to the returned capability URL, or
 hands its `page_url` to a person who uploads in the browser. It then calls `import` and `export` from the default
 `core` toolset, or `blob_upload`, `blob_replace`, `blob_download`, `asset_download`, `compile_markdown` and
-`export_markdown` from `files`.
+`export_markdown` from `files`. An agent that works through a fork passes the fork address `<owner>/<fork>` as
+`worktree` to `blob_download` and `blob_replace`, and a person reviews the replacement in the pull request.
 
 ## Driving it with agent-browser and uvw
 
@@ -279,6 +282,167 @@ done
 ```
 
 Pass when both oversized requests receive HTTP 413 through the normalized MCP route.
+
+### MF10. A Viewer agent replaces a PDF and a PNG through a fork, and an Editor merges in the browser
+
+A holder H owns a public Team Space whose `proposals` setting is `accountable`, with a PDF, a PNG, a page and a
+Sheet on Trunk. A claimed agent A is a Viewer and works only through its fork, and E is an Editor. Register H and
+E and sign their uvw in as in [MHV8](mcp-html-view.md#mhv8-a-readers-page-publishes-when-an-editor-merges-in-the-browser-and-not-through-the-cli),
+unless this run already did, and define `uh`, `ue`, `H`, `HH` and `EH` as it does. MF10 and MF11 use one
+`principal`, which counts toward the 5 agents per hour:
+
+```bash
+uh repo create fork-files --name "Fork files" --public --proposals accountable --json id > "$EVIDENCE/mff-team.out"; T=$(jq -r .id "$EVIDENCE/mff-team.out")
+$V principal filefork mff-a
+AID=$(jq -r .agent.id "$EVIDENCE/principal-filefork.json")
+$V mcp --as filefork mff-claim claim '{}'
+```
+
+Open the `claimUrl` from `mff-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
+code in `mff-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. H adds A as a
+Viewer and E as an Editor, uploads the files and a page, and puts a Sheet with B2 `42` on Trunk:
+
+```bash
+for pair in "$AID:viewer" "$(jq -r .user.id "$EH/register.json"):editor"; do
+  curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PUT -H 'content-type: application/json' -d "{\"role\":\"${pair#*:}\"}" "$ORIGIN/api/team-spaces/$T/members/${pair%%:*}"
+done
+$V mcp --as filefork mff-role repo_view "{\"repo\":\"$H/fork-files\"}"
+printf '%%PDF-1.4\n%% holder report\n%%%%EOF\n' > "$EVIDENCE/mff-h.pdf"
+printf '\x89PNG\r\n\x1a\nholder chart\n' > "$EVIDENCE/mff-h.png"
+printf '<!DOCTYPE html><html><body><h1>Holder page</h1></body></html>\n' > "$EVIDENCE/mff-h.univer.html"
+uh blob upload --file "$EVIDENCE/mff-h.pdf" --space "$T" --name report.pdf --idempotency-key "$(uuidgen)" --json > "$EVIDENCE/mff-h-pdf.out"
+uh blob upload --file "$EVIDENCE/mff-h.png" --space "$T" --name chart.png --idempotency-key "$(uuidgen)" --json > "$EVIDENCE/mff-h-png.out"
+uh html-view create --file "$EVIDENCE/mff-h.univer.html" --space "$T" --name Page --idempotency-key "mff-h-page-$VERIFY_UVW_RUN-0001-abcdef" --json > "$EVIDENCE/mff-h-page.out"
+PDF=$(jq -r .upload.resourceId "$EVIDENCE/mff-h-pdf.out"); PNG=$(jq -r .upload.resourceId "$EVIDENCE/mff-h-png.out"); PAGE=$(jq -r .resourceId "$EVIDENCE/mff-h-page.out")
+uh pr create -R "$H/fork-files" -t Budget --json > "$EVIDENCE/mff-h-pr.out"; HW=$(jq -r .id "$EVIDENCE/mff-h-pr.out"); HN=$(jq -r .number "$EVIDENCE/mff-h-pr.out")
+uh unit create --worktree "$HW" --space "$H/fork-files" --type sheet --name Budget --json > "$EVIDENCE/mff-h-unit.out"; U=$(jq -r .unit.unitId "$EVIDENCE/mff-h-unit.out")
+uh execute --worktree "$HW" --unit "$U" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("A1:B2").setValues([["Region","Total"],["North",42]]); return 1;'
+uh pr ready "$HN" -R "$H/fork-files" --json state; uh pr merge "$HN" -R "$H/fork-files" --json state
+```
+
+A forks the Space and reads the PDF through the fork. It stages its own PDF and PNG and replaces both through the
+fork, retrying the PDF with the same key, then reads the PDF through the fork again. A replacement of the page and
+one after the pull request is ready are refused:
+
+```bash
+$V mcp --as filefork mff-fork fork_create "{\"repo\":\"$H/fork-files\",\"name\":\"files\"}"
+F=$(jq -r .fullName "$EVIDENCE/mff-fork.out")
+mf(){ node .agents/skills/verify-uvw/bin/mcp-file.mjs "$@"; }
+$V mcp --as filefork --toolsets files mff-read-pdf blob_download "{\"resource\":\"$PDF\",\"worktree\":\"$F\"}"
+mf get "$EVIDENCE/mff-read-pdf.out" "$EVIDENCE/mff-read-pdf.bin"; cmp "$EVIDENCE/mff-h.pdf" "$EVIDENCE/mff-read-pdf.bin"
+stage(){ # label file name media-type
+  $V mcp --as filefork "$1-reserve" file_upload_create "$(jq -nc --arg name "$3" --arg type "$4" --argjson size "$(wc -c < "$2" | tr -d ' ')" '{purpose:"blob",file_name:$name,size:$size,media_type:$type}')"
+  mf put "$EVIDENCE/$1-reserve.out" "$2"
+}
+replace(){ # label resource upload-label etag-label
+  jq -nc --arg r "$2" --arg u "$(jq -r .upload.upload_id "$EVIDENCE/$3-reserve.out")" --arg e "$(jq -r .etag "$EVIDENCE/$4.out")" --arg w "$F" --arg k "$1-$(uuidgen)" \
+    '{resource:$r,upload_id:$u,etag:$e,worktree:$w,idempotency_key:$k}' > "$EVIDENCE/$1.args.json"
+  $V mcp --as filefork --toolsets files "$1" blob_replace "$(cat "$EVIDENCE/$1.args.json")"
+}
+printf '%%PDF-1.4\n%% agent report, revised\n%%%%EOF\n' > "$EVIDENCE/mff-a.pdf"
+printf '\x89PNG\r\n\x1a\nagent chart, revised\n' > "$EVIDENCE/mff-a.png"
+stage mff-up-pdf "$EVIDENCE/mff-a.pdf" report.pdf application/pdf
+stage mff-up-png "$EVIDENCE/mff-a.png" chart.png image/png
+replace mff-replace-pdf "$PDF" mff-up-pdf mff-read-pdf
+$V mcp --as filefork --toolsets files mff-replace-pdf-retry blob_replace "$(cat "$EVIDENCE/mff-replace-pdf.args.json")"
+diff "$EVIDENCE/mff-replace-pdf.out" "$EVIDENCE/mff-replace-pdf-retry.out"
+$V mcp --as filefork --toolsets files mff-read-pdf-draft blob_download "{\"resource\":\"$PDF\",\"worktree\":\"$F\"}"
+mf get "$EVIDENCE/mff-read-pdf-draft.out" "$EVIDENCE/mff-read-pdf-draft.bin"; cmp "$EVIDENCE/mff-a.pdf" "$EVIDENCE/mff-read-pdf-draft.bin"
+$V mcp --as filefork --toolsets files mff-read-png blob_download "{\"resource\":\"$PNG\",\"worktree\":\"$F\"}"
+replace mff-replace-png "$PNG" mff-up-png mff-read-png
+$V mcp --as filefork --toolsets files mff-read-page blob_download "{\"resource\":\"$PAGE\",\"worktree\":\"$F\"}"
+replace mff-replace-page "$PAGE" mff-up-png mff-read-page; test $? -eq 1
+uh blob download "$EVIDENCE/mff-upstream-before.pdf" --resource "$PDF" --force --json > "$EVIDENCE/mff-upstream-before.out"
+cmp "$EVIDENCE/mff-h.pdf" "$EVIDENCE/mff-upstream-before.pdf"; ! cmp -s "$EVIDENCE/mff-a.pdf" "$EVIDENCE/mff-upstream-before.pdf"
+sha256sum "$EVIDENCE/mff-h.pdf" "$EVIDENCE/mff-a.pdf" "$EVIDENCE/mff-upstream-before.pdf" > "$EVIDENCE/mff-sha256-before.txt"
+$V mcp --as filefork mff-view fork_view "{\"fork\":\"$F\"}"
+P=$(jq -r .worktree.number "$EVIDENCE/mff-view.out"); W=$(jq -r .worktree.id "$EVIDENCE/mff-view.out"); D1=$(jq -r .draft.id "$EVIDENCE/mff-replace-pdf.out")
+$V mcp --as filefork mff-ready pr_ready "{\"repo\":\"$H/fork-files\",\"number\":$P}"
+replace mff-frozen "$PNG" mff-up-png mff-read-png; test $? -eq 1
+```
+
+E's CLI merge is refused, and so is a browser-session merge whose reviewed list holds only the PDF. Then read the
+list and the PDF draft's content with E's session:
+
+```bash
+ue pr merge "$P" -R "$H/fork-files" --json > "$EVIDENCE/mff-e-cli-merge.out" 2> "$EVIDENCE/mff-e-cli-merge.err"; test $? -ne 0
+curl -sS -b "$EH/cookies" -H "Origin: $ORIGIN" -H 'content-type: application/json' -H "Idempotency-Key: $(uuidgen)" -X POST \
+  -d "{\"pageDraftIds\":[\"$D1\"]}" -o "$EVIDENCE/mff-e-stale.out" -w '%{http_code}\n' "$ORIGIN/api/worktrees/$W/merge" > "$EVIDENCE/mff-e-stale.status"
+curl --fail-with-body -sS -b "$EH/cookies" "$ORIGIN/api/worktrees/$W/html-view-drafts" > "$EVIDENCE/mff-list.json"
+curl --fail-with-body -sS -b "$EH/cookies" -D "$EVIDENCE/mff-e-content.headers" -o "$EVIDENCE/mff-e-content.pdf" "$ORIGIN/api/html-view-drafts/$D1/content"
+cmp "$EVIDENCE/mff-a.pdf" "$EVIDENCE/mff-e-content.pdf"
+```
+
+In E's browser session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-editor`), set the language, view and
+onboarding as in [MHV5](mcp-html-view.md) and sign in as E with `$EH/pw`. Open `$ORIGIN/spaces/$T/pulls/$P`, scroll
+to `section[aria-label="Pages and files"]` and save `mff-e-files.png`. Download the PDF with
+`agent-browser download "a[href=\"/api/html-view-drafts/$D1/content\"]" "$EVIDENCE/mff-e-download/report.pdf"`
+and `cmp` it with `mff-a.pdf`. Open `$ORIGIN/drafts/$D1` and save `mff-e-draft-page.png`. Back on the pull request,
+click `Confirm merge`, save `mff-e-merge-dialog.png`, confirm, and save `mff-e-merged.png` while the toast shows.
+Then:
+
+```bash
+uh blob download "$EVIDENCE/mff-upstream-after.pdf" --resource "$PDF" --force --json > "$EVIDENCE/mff-upstream-after.out"
+uh blob download "$EVIDENCE/mff-upstream-after.png" --resource "$PNG" --force --json > "$EVIDENCE/mff-upstream-after-png.out"
+cmp "$EVIDENCE/mff-a.pdf" "$EVIDENCE/mff-upstream-after.pdf"; cmp "$EVIDENCE/mff-a.png" "$EVIDENCE/mff-upstream-after.png"
+sha256sum "$EVIDENCE/mff-a.pdf" "$EVIDENCE/mff-upstream-after.pdf" "$EVIDENCE/mff-a.png" "$EVIDENCE/mff-upstream-after.png" > "$EVIDENCE/mff-sha256-after.txt"
+$V mcp --as filefork mff-published html_view_draft_get "{\"draft\":\"$D1\"}"
+$V mcp --as filefork mff-view-after fork_view "{\"fork\":\"$F\"}"
+```
+
+Pass when `mff-role` says `viewer` and `mff-fork` is `clean`. `mff-read-pdf` is H's PDF with its `etag` and no
+`draft`. `mff-replace-pdf` is a pending `replace` draft of `report.pdf` with `publishWhen: "merge"`, and the retry is
+identical. `mff-read-pdf-draft` returns that draft's id as `draft`, the `etag` of `mff-read-pdf` and A's bytes.
+`mff-replace-page` has `code: "HTML_VIEW_DRAFT_REQUIRED"`. Before the merge, H downloads H's PDF. `mff-view` is
+`drafting`, so the first replace opened the fork's pull request; `mff-ready` has `visibility: "space"`, and
+`mff-frozen` has `code: "FORK_WORKTREE_NOT_DRAFT"`. `mff-e-cli-merge.err` starts with `PAGE_REVIEW_REQUIRED` and
+names `report.pdf, chart.png`. `mff-e-stale.status` is `409` with `code: "PAGES_CHANGED"`. The list holds both drafts,
+pending, by A, with `page: false`. The content is A's PDF with `content-type: application/octet-stream`,
+`content-disposition: attachment; filename="report.pdf"`, `content-security-policy: sandbox` and
+`x-content-type-options: nosniff`. The `Pages and files` section lists `report.pdf` and `chart.png` with A's name,
+`Pending review`, `39 B` and `29 B` and a `Download` link, and the browser download is A's PDF. The draft page reads
+`Replace file · Pending review · 39 B` and `<A> uploaded this file. It has no preview; download it to review.`
+The dialog says `Merging will replace 2 files.` and the toast `Replaced 2 files`. After the merge both upstream
+files are A's bytes, the upstream `etag` equals the `etag` of `mff-published`, which is `published`, and the fork is
+`clean`.
+
+### MF11. Through a fork, a file someone replaced since its draft stays as it was, and the Sheet merges
+
+Continue from MF10. A's fork is clean, so its next write opens a new pull request. A changes B2 and replaces the PDF
+again, and then H replaces the PDF:
+
+```bash
+$V mcp --as filefork mffc-edit execute "$(jq -nc --arg w "$F" --arg u "$U" '{worktree:$w,unit:$u,code:"univerAPI.getActiveWorkbook().getActiveSheet().getRange(\"B2\").setValue(99); return univerAPI.getActiveWorkbook().getActiveSheet().getRange(\"B2\").getValue();"}')"
+$V mcp --as filefork --toolsets files mffc-read blob_download "{\"resource\":\"$PDF\",\"worktree\":\"$F\"}"
+printf '%%PDF-1.4\n%% agent report, second revision\n%%%%EOF\n' > "$EVIDENCE/mffc-a.pdf"
+stage mffc-up "$EVIDENCE/mffc-a.pdf" report.pdf application/pdf
+replace mffc-replace "$PDF" mffc-up mffc-read
+D2=$(jq -r .draft.id "$EVIDENCE/mffc-replace.out")
+printf '%%PDF-1.4\n%% holder report, corrected\n%%%%EOF\n' > "$EVIDENCE/mffc-h.pdf"
+uh blob download "$EVIDENCE/mffc-h-base.pdf" --resource "$PDF" --force --json > "$EVIDENCE/mffc-h-base.out"
+uh blob replace --resource "$PDF" --file "$EVIDENCE/mffc-h.pdf" --etag "$(jq -r .download.etag "$EVIDENCE/mffc-h-base.out")" --idempotency-key "$(uuidgen)" --json > "$EVIDENCE/mffc-h-replace.out"
+$V mcp --as filefork mffc-view fork_view "{\"fork\":\"$F\"}"
+P2=$(jq -r .worktree.number "$EVIDENCE/mffc-view.out")
+$V mcp --as filefork mffc-ready pr_ready "{\"repo\":\"$H/fork-files\",\"number\":$P2}"
+```
+
+In E's session open `$ORIGIN/spaces/$T/pulls/$P2`, save `mffc-e-review.png` at the `Pages and files` section,
+open the merge dialog and save `mffc-e-merge-dialog.png`, then confirm and save `mffc-e-merged.png`. Then:
+
+```bash
+uh inspect range B2 --unit "$U" --trunk --worksheet index:1 > "$EVIDENCE/mffc-trunk-b2.out"
+uh blob download "$EVIDENCE/mffc-upstream-after.pdf" --resource "$PDF" --force --json > "$EVIDENCE/mffc-upstream-after.out"
+cmp "$EVIDENCE/mffc-h.pdf" "$EVIDENCE/mffc-upstream-after.pdf"
+sha256sum "$EVIDENCE/mffc-h.pdf" "$EVIDENCE/mffc-a.pdf" "$EVIDENCE/mffc-upstream-after.pdf" > "$EVIDENCE/mffc-sha256.txt"
+$V mcp --as filefork mffc-draft html_view_draft_get "{\"draft\":\"$D2\"}"
+```
+
+Pass when `mffc-edit` returns `99`, `mffc-read` has the `etag` MF10 published and no `draft`, and `mffc-replace` is
+pending. The `Pages and files` section shows `report.pdf` as `Conflicted` before the merge, and the dialog counts no
+file. The merge ends with `The task was merged into the official version.` and no `Replaced` line, Trunk B2 is
+`99`, the upstream PDF is H's correction with the `etag` of `mffc-h-replace.out`, and the draft is `conflicted`.
+Before `$V down`, close E's browser session and run `uh daemon stop` and `ue daemon stop`. After it,
+`rm -rf "$HH" "$EH"`.
 
 ### MX7. Office xlsx round trip
 

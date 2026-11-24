@@ -1,5 +1,5 @@
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
-import type { NodeAccess, ResourceAccess, SpaceAccess } from "../access/index.js";
+import type { BlobResourceAccess, NodeAccess, ResourceAccess, SpaceAccess } from "../access/index.js";
 import type { StoredBlob } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { DraftRow } from "./drafts.types.js";
@@ -10,7 +10,7 @@ export interface HtmlViewDraftsRepository {
   listForWorktree(worktreeId: string): Promise<DraftRow[]>;
   find(id: string): Promise<DraftRow | undefined>;
   findKey(userId: string, key: string): Promise<DraftRow | undefined>;
-  currentEtag(resourceId: string): Promise<string | undefined>;
+  currentTarget(resourceId: string): Promise<{ readonly etag: string; readonly originalFilename: string } | undefined>;
   reserve(
     input: Pick<
       DraftRow,
@@ -56,15 +56,30 @@ export function assertDraftDestination(target: NodeAccess | SpaceAccess | null, 
     throw new ApplicationError("FORBIDDEN", 403, "Cannot create at the draft destination.");
 }
 
-export function requireDraftResource(target: ResourceAccess | null, capability: "editContent" | "openContent" = "editContent") {
+/**
+ * Whether a draft changes a page rather than another file. A replacement changes a page when its target was one at
+ * intake, by the name it recorded or by the target's original filename, which never changes after upload.
+ */
+export function changesPage(row: Pick<DraftRow, "kind" | "name">, originalFilename: string | undefined): boolean {
+  return row.kind === "create" || isHtmlViewFilename(row.name) || (originalFilename !== undefined && isHtmlViewFilename(originalFilename));
+}
+
+/** A page draft needs a page target, and a file draft a target that is still not a page. Without `row` the target must be a page. */
+export function requireDraftResource(
+  target: ResourceAccess | null,
+  capability: "editContent" | "openContent" = "editContent",
+  row?: Pick<DraftRow, "kind" | "name">,
+) {
   if (!target || target.kind !== "blob")
     throw new ApplicationError("NOT_FOUND", 404, "Draft target not found.");
   if (!target.capabilities[capability])
     throw new ApplicationError("FORBIDDEN", 403, "Cannot edit draft target.");
-  if (
-    target.availability !== "ready" ||
-    !(isHtmlViewFilename(target.node.name) || isHtmlViewFilename(target.originalFilename))
-  )
-    throw draftConflict("Draft target is not an available HTML View.");
+  const page = row === undefined || changesPage(row, target.originalFilename);
+  if (target.availability !== "ready" || isPage(target) !== page)
+    throw draftConflict(page ? "Draft target is not an available HTML View." : "Draft target is not an available file, or it became a page.");
   return target;
+}
+
+export function isPage(target: Pick<BlobResourceAccess, "node" | "originalFilename">): boolean {
+  return isHtmlViewFilename(target.node.name) || isHtmlViewFilename(target.originalFilename);
 }

@@ -7,6 +7,15 @@ export function createForksRouter(options: {
   readonly forks: ForksModule;
 }): Router {
   const router = Router();
+  // Raw bytes, so this route comes before the JSON body parser.
+  router.put("/forks/:forkId/blob-resources/:resourceId/content", async (request, response) => {
+    const actor = await options.identity.requireSession(request.headers.cookie);
+    const result = await options.forks.replaceBlob(actor, request.params.forkId, request.params.resourceId, request.headers["idempotency-key"], {
+      ifMatch: request.headers["if-match"],
+      contentLength: request.headers["content-length"],
+    }, request);
+    response.status(result.status).json(result.body);
+  });
   router.use(json({ limit: "1mb" }));
 
   router.post("/forks", async (request, response) => {

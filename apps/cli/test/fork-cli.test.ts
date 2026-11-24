@@ -1,11 +1,13 @@
 import { Command, type OutputConfiguration } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import type {
+  WorkspaceBlobFeature,
   WorkspaceFork,
   WorkspaceSpaceFeature,
   WorkspaceUnitFeature,
 } from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "../src/errors.js";
+import { createBlobCommand } from "../src/features/blob/command.js";
 import { createForkCommand } from "../src/features/fork/command.js";
 import { createRepoCommand } from "../src/features/repo/command.js";
 import { createSpaceCommand } from "../src/features/space/command.js";
@@ -123,6 +125,26 @@ describe("uvw forks", () => {
     await expect(
       run(unitCommand, ["create", "--worktree", "agent/fix", "--space", "hana/team", "--type", "doc", "--name", "Copy", "--from", "node-1"]),
     ).rejects.toMatchObject({ message: expect.stringContaining("--from needs a Worktree ID") });
+  });
+
+  it("replaces and downloads an upstream file through a fork address only, as a draft of the fork's pull request", async () => {
+    const draft = { id: "draft-1", kind: "replace", targetResourceId: "resource-1" };
+    const forks = {
+      downloadBlob: vi.fn(async () => ({ outputPath: "/tmp/report.pdf", etag: '"v1"', draft })),
+      replaceBlob: vi.fn(async () => ({ worktree: FORK.worktree, draft })),
+    };
+    const blobs = { download: vi.fn(), replace: vi.fn() };
+    const command = createBlobCommand(blobs as unknown as WorkspaceBlobFeature, forks as never);
+    const replace = ["replace", "--resource", "resource-1", "--file", "edited.pdf", "--etag", '"v1"', "--idempotency-key", "key-1"];
+    expect(JSON.parse(await run(command, [...replace, "--worktree", "agent/fix", "--json"]))).toEqual({ draft });
+    expect(forks.replaceBlob).toHaveBeenCalledWith("agent/fix", { etag: '"v1"', filePath: "edited.pdf", idempotencyKey: "key-1", resourceId: "resource-1" });
+    await run(command, ["download", "report.pdf", "--resource", "resource-1", "--worktree", "agent/fix"]);
+    expect(forks.downloadBlob).toHaveBeenCalledWith("agent/fix", { outputPath: "report.pdf", resourceId: "resource-1" });
+    for (const args of [[...replace, "--worktree", "wt-1"], ["download", "report.pdf", "--resource", "resource-1", "--worktree", "wt-1"]]) {
+      await expect(run(command, args)).rejects.toMatchObject({ message: expect.stringContaining("--worktree takes a fork's owner/name.") });
+    }
+    expect(blobs.replace).not.toHaveBeenCalled();
+    expect(blobs.download).not.toHaveBeenCalled();
   });
 
   it("creates, lists, shows and deletes forks, naming the upstream and the pull request", async () => {

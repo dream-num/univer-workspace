@@ -181,12 +181,12 @@ uvw blob upload \
   --file <source> --space <space-id> [--parent <node-id>] \
   [--name <node-name>] [--media-type <mime>] [--idempotency-key <key>] --json
 uvw blob get <resource-id> --json
-uvw blob download <output> --resource <resource-id> [--force] --json
+uvw blob download <output> --resource <resource-id> [--force] [--worktree <you>/<fork>] --json
 uvw blob replace --resource <resource-id> --file <edited-source> \
-  --etag '"<downloaded-etag>"' --idempotency-key <key> --json
+  --etag '"<downloaded-etag>"' --idempotency-key <key> [--worktree <you>/<fork>] --json
 ```
 
-Blob upload and replacement publish immediately, outside Worktree review. For important retries use a unique `--idempotency-key`, reused only for the identical intent after an uncertain result. Downloads require an explicit output path and refuse overwrite by default. Use `--force` only when replacing the destination is intended. Destination replacement occurs only after the complete stream is written. Blob commands never print binary bytes to stdout. Downloads require a quoted strong ETag and reject malformed responses before replacing local files.
+Blob upload and replacement publish immediately, outside Worktree review, except a replacement with `--worktree <fork>`, which waits as a draft in the fork's pull request until it merges. For important retries use a unique `--idempotency-key`, reused only for the identical intent after an uncertain result. Downloads require an explicit output path and refuse overwrite by default. Use `--force` only when replacing the destination is intended. Destination replacement occurs only after the complete stream is written. Blob commands never print binary bytes to stdout. Downloads require a quoted strong ETag and reject malformed responses before replacing local files.
 
 Download the existing Blob, edit the local file, then replace it with the exact quoted `download.etag` and a new stable key. JSON returns `replacement: { operationId, resourceId, etag }`. On `PRECONDITION_FAILED`, download to a fresh path and reconcile before using a new ETag and key. Never attach a new ETag to unreconciled older bytes.
 

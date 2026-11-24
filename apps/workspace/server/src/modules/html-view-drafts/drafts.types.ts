@@ -5,6 +5,8 @@ export interface HtmlViewDraftView {
   readonly id: string;
   readonly author: User;
   readonly kind: "create" | "replace";
+  /** False for a replacement of another file (Blob) through a fork, which has no page preview. */
+  readonly page: boolean;
   readonly state: HtmlViewDraftState;
   readonly publishWhen?: "merge" | "publish";
   readonly supersededBy: string | null;

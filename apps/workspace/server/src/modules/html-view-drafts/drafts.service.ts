@@ -5,10 +5,10 @@ import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewDoc
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { logger } from "../../logging/logger.js";
 import type { WorktreeDetail, WorktreesModule } from "../worktrees/index.js";
-import type { IdentityModule } from "../identity/index.js";
+import { principalCategory, type IdentityModule, type Principal } from "../identity/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver } from "../access/index.js";
-import { type HtmlViewDraftsRepository, assertDraftDestination, requireDraftResource, requirePendingDraft, draftConflict } from "./drafts.repository.js";
+import { assertCeiling, type AccessResolver } from "../access/index.js";
+import { type HtmlViewDraftsRepository, assertDraftDestination, changesPage, isPage, requireDraftResource, requirePendingDraft, draftConflict } from "./drafts.repository.js";
 import type { DraftRow, HtmlViewDraftView, PublishedPage } from "./drafts.types.js";
 
 const id = z.string().trim().min(1).max(255);
@@ -39,6 +39,8 @@ const keySchema = z
   .max(200)
   .regex(/^[A-Za-z0-9_-]+$/);
 const PENDING_PAGES_PER_PULL_REQUEST = 20;
+// A file draft learns its SHA-256 only once its streamed bytes are stored.
+const UNKNOWN_SHA256 = "0".repeat(64);
 export type HtmlViewDraftsModule = ReturnType<typeof createHtmlViewDraftsModule>;
 
 export function createHtmlViewDraftsModule(options: {
@@ -47,10 +49,12 @@ export function createHtmlViewDraftsModule(options: {
   store: BlobStore;
   worktrees: Pick<WorktreesModule, "get">;
   users: Pick<IdentityModule, "findUsers">;
+  maxBlobBytes?: number;
   now?: () => number;
 }) {
   const { repository, access, store } = options;
   const now = options.now ?? Date.now;
+  const maxBlobBytes = options.maxBlobBytes ?? 512 * 1024 * 1024;
   // Concurrent retries for the same draft must share one object upload.
   const receiving = new Map<string, Promise<DraftRow>>();
   const draftNotFound = () => new ApplicationError("NOT_FOUND", 404, "Draft not found.");
@@ -83,14 +87,14 @@ export function createHtmlViewDraftsModule(options: {
         : await access.resolveNode(userId, parentNodeId);
     assertDraftDestination(target, spaceId, proposes);
   }
-  async function validateReplace(userId: string, resourceId: string, proposes = (_spaceId: string) => false) {
+  async function validateReplace(userId: string, resourceId: string, proposes = (_spaceId: string) => false, row?: DraftRow) {
     const target = await access.resolveResource(userId, resourceId);
-    return requireDraftResource(target, target && proposes(target.node.spaceId) ? "openContent" : "editContent");
+    return requireDraftResource(target, target && proposes(target.node.spaceId) ? "openContent" : "editContent", row);
   }
   async function mayWrite(userId: string, row: DraftRow): Promise<boolean> {
     try {
       if (row.kind === "create") await validateCreate(userId, row.space_id, row.parent_node_id);
-      else await validateReplace(userId, row.target_resource_id!);
+      else await validateReplace(userId, row.target_resource_id!, undefined, row);
       return true;
     } catch (error) {
       if (error instanceof ApplicationError) return false;
@@ -100,6 +104,10 @@ export function createHtmlViewDraftsModule(options: {
   async function livePages(worktreeId: string, draftIds?: readonly string[]): Promise<DraftRow[]> {
     return (await repository.pendingForWorktree(worktreeId))
       .filter((row) => row.expires_at > now() && (draftIds === undefined || draftIds.includes(row.id)));
+  }
+  async function requireRoom(source: WorktreeDetail, replaced: string | undefined) {
+    if ((await livePages(source.id)).filter((draft) => draft.id !== replaced).length >= PENDING_PAGES_PER_PULL_REQUEST)
+      throw draftConflict(`Pull request #${source.number ?? source.id} already has ${PENDING_PAGES_PER_PULL_REQUEST} pending pages and files. Revise one of them instead.`);
   }
   async function sourceWorktree(userId: string, worktreeId: string) {
     const worktree = await reviewable(userId, worktreeId);
@@ -118,17 +126,16 @@ export function createHtmlViewDraftsModule(options: {
     let state: HtmlViewDraftView["state"] = row.state;
     const source = state === "pending" && row.source_worktree_id !== null
       ? known ?? await sourceWorktree(readerId, row.source_worktree_id) : undefined;
+    const target = row.kind === "replace" ? await repository.currentTarget(row.target_resource_id!) : undefined;
     if (source?.state === "discarded") state = "conflicted";
     if (state === "pending" && row.expires_at <= now()) state = "expired";
-    else if (state === "pending" && row.kind === "replace") {
-      const etag = await repository.currentEtag(row.target_resource_id!);
-      if (etag !== undefined && etag !== row.base_etag) state = "conflicted";
-    }
+    else if (state === "pending" && target !== undefined && target.etag !== row.base_etag) state = "conflicted";
     const [author] = await options.users.findUsers([row.author_user_id]);
     return {
       id: row.id,
       author: author!,
       kind: row.kind,
+      page: changesPage(row, target?.originalFilename),
       state,
       ...(state === "pending" ? { publishWhen: source && source.state !== "merged" ? "merge" as const : "publish" as const } : {}),
       supersededBy: row.superseded_by,
@@ -220,8 +227,7 @@ export function createHtmlViewDraftsModule(options: {
       let created = false;
       if (!row) {
         await requireReadableBindings(userId, document, source);
-        if (source && (await livePages(source.id)).filter((draft) => draft.id !== previous?.id).length >= PENDING_PAGES_PER_PULL_REQUEST)
-          throw draftConflict(`Pull request #${source.number ?? source.id} already has ${PENDING_PAGES_PER_PULL_REQUEST} pending pages. Revise one of them instead.`);
+        if (source) await requireRoom(source, previous?.id);
         // The author of a Team pull request proposes pages in its Space as it proposes Units; whoever merges needs edit access.
         const proposes = (spaceId: string) =>
           source?.kind === "team" && source.teamSpace?.id === spaceId && source.capabilities.editDraft;
@@ -316,9 +322,86 @@ export function createHtmlViewDraftsModule(options: {
     },
     async openContent(userId: string, draftId: string) {
       const { row, source } = await readableDraft(userId, draftId);
-      if (row.state !== "pending" || !["pending", "conflicted"].includes((await view(row, userId, source)).state))
+      const draft = row.state === "pending" ? await view(row, userId, source) : undefined;
+      if (draft?.state !== "pending" && draft?.state !== "conflicted")
         throw draftConflict("Draft bytes are no longer available.");
-      return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
+      return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size, name: row.name, page: draft.page };
+    },
+    /**
+     * Receives new bytes for an upstream file as a draft attached to `source`, the fork's open Worktree, whose merge
+     * publishes it. It supersedes the author's pending draft of the same file there. A second request with the key
+     * while the first still streams is refused from the stored state, so every replica answers it the same way.
+     */
+    async replaceBlob(
+      actor: Principal,
+      keyValue: unknown,
+      input: { readonly resourceId: string; readonly ifMatch: unknown; readonly contentLength: unknown },
+      source: WorktreeDetail,
+      body: Readable,
+    ) {
+      const userId = actor.user.id;
+      const key = keySchema.safeParse(keyValue);
+      if (!key.success) throw new ApplicationError("INVALID_INPUT", 400, "Idempotency-Key is invalid.", "Idempotency-Key");
+      const { ifMatch } = input;
+      if (typeof ifMatch !== "string" || !/^"[^"\r\n]+"$/.test(ifMatch) || ifMatch.length > 200)
+        throw new ApplicationError("INVALID_INPUT", 400, "If-Match must contain one quoted strong ETag.", "If-Match");
+      const byteSize = Number(input.contentLength);
+      if (input.contentLength === undefined || !Number.isSafeInteger(byteSize) || byteSize < 0)
+        throw new ApplicationError("INVALID_INPUT", 400, "Content-Length is required.", "Content-Length");
+      if (byteSize > maxBlobBytes) throw new ApplicationError("PAYLOAD_TOO_LARGE", 413, "Blob exceeds the configured byte limit.");
+      assertCeiling(principalCategory(actor.user), "storeFile", { byteSize });
+      const etag = ifMatch.slice(1, -1);
+      let row = await repository.findKey(userId, key.data);
+      let created = false;
+      if (!row) {
+        const target = await access.resolveResource(userId, input.resourceId);
+        if (!target || target.kind !== "blob" || target.node.spaceId !== source.teamSpace?.id || !target.capabilities.openContent)
+          throw new ApplicationError("NOT_FOUND", 404, "The file is not in the upstream of this fork.");
+        if (isPage(target))
+          throw new ApplicationError("HTML_VIEW_DRAFT_REQUIRED", 403, "Pages (.univer.html) change through HTML View drafts. Save the page with html_view_save and this fork as worktree.");
+        if (target.availability !== "ready") throw draftConflict("Blob content is not currently available.");
+        if (target.etag !== etag)
+          throw new ApplicationError("PRECONDITION_FAILED", 412, "Blob content has changed; download it again before replacing.");
+        const previous = (await livePages(source.id)).find((draft) => draft.author_user_id === userId && draft.target_resource_id === target.id);
+        await requireRoom(source, previous?.id);
+        const reservation = await repository.reserve({
+          author_user_id: userId,
+          idempotency_key: key.data,
+          kind: "replace",
+          revises_draft_id: previous?.id ?? null,
+          space_id: target.node.spaceId,
+          source_worktree_id: source.id,
+          parent_node_id: null,
+          name: target.node.name,
+          target_resource_id: target.id,
+          base_etag: etag,
+          sha256: UNKNOWN_SHA256,
+          byte_size: byteSize,
+        }, now());
+        row = reservation.row;
+        created = reservation.created;
+      }
+      if (row.kind !== "replace" || changesPage(row, undefined) || row.target_resource_id !== input.resourceId ||
+          row.base_etag !== etag || row.byte_size !== byteSize || row.source_worktree_id !== source.id)
+        throw draftConflict("Idempotency-Key belongs to another draft intent.");
+      if (!created) {
+        if (row.state === "receiving")
+          throw draftConflict("This draft is still receiving its bytes, or that upload failed. After a failed upload, retry with a new Idempotency-Key.");
+        body.resume();
+        return { status: 200 as const, draft: await view(row, userId, source) };
+      }
+      let stored;
+      try {
+        stored = await store.put({ objectKey: row.object_key, body, expectedByteSize: byteSize });
+      } catch (error) {
+        throw draftConflict(error instanceof Error ? error.message : "Draft upload failed.");
+      }
+      row = await repository.markPending(row.id, stored, now());
+      if (row.state === "receiving") {
+        await repository.decide(row.id, userId, "reject", now());
+        throw draftConflict("Draft expired; use a new Idempotency-Key.");
+      }
+      return { status: 201 as const, draft: await view(row, userId, source) };
     },
     publish,
     async pending(worktreeId: string, before = Infinity): Promise<string[]> {

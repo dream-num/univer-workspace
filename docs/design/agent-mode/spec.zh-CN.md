@@ -113,7 +113,7 @@ upstream repo (someone else's Team Space)        agent
 | R16  | 每个来自 Trunk 的 Worktree Unit 返回落后距离和加入时间。超过阈值时标记为 stale，提示重做 | SDK 暴露基线和 Trunk 的当前修订。产品不返回                                         | 2    |
 | R17  | 落后距离大于零时，验证在 merge preview 上做，不在草稿上做                                | `mergePreview` 打开方式已有。没有地方要求这样做                                     | 2    |
 | R18  | HTML View 的修改覆盖写。上游的内容在草稿创建之后变了，就不覆盖                           | 已有。`replace` 草稿的 `base_etag` 不一致时只有这一页 `conflicted`，Sheet 照常合入  | 5    |
-| R19  | 其他 Blob 在 fork 里的修改覆盖写，规则同 R18                                             | 没有。Blob 不进 Worktree，也没有草稿                                                | 5    |
+| R19  | 其他 Blob 在 fork 里的修改覆盖写，规则同 R18                                             | 已有。经 fork 替换的 Blob 是挂在 Worktree 上的文件草稿，`base_etag` 不一致时只有这一份 `conflicted`，Sheet 照常合入。只能替换，不能新增 | 5    |
 
 ### 4.5 隔离
 
@@ -138,7 +138,7 @@ upstream repo (someone else's Team Space)        agent
 | D5   | 一个 fork 至多一个未结束的 Worktree，由唯一索引保证        | 两个并发的首次写入不会各建一个 Worktree                                                                                                                                                                |
 | D6   | 没改过的文件直接读上游 Trunk，不记录 fork 的时刻           | 不存任何东西。基线取在第一次写入时，比 fork 的时刻离上游更近                                                                                                                                           |
 | D7   | 过期只提示，不同步                                         | SDK 没有修改基线的接口。agent 重做一次的代价很低                                                                                                                                                       |
-| D8   | HTML View 沿用现有草稿。其他 Blob 第一版不能在 fork 里修改 | 草稿已经有覆盖写、`base_etag` 和挂在 Worktree 上的能力。其他 Blob 需要一个同样形状的对象，放到阶段 5                                                                                                   |
+| D8   | HTML View 沿用现有草稿，其他 Blob 也用同一张草稿表 | 草稿已经有覆盖写、`base_etag` 和挂在 Worktree 上的能力，表里没有只属于 HTML 的列，所以其他 Blob 的替换复用它，不需要迁移 |
 | D9   | 不建新的工具集。内容工具的 `worktree` 参数，以及只读的浏览、查找和查看工具的 `repo` 参数，接受 fork 的地址 | agent 不用学第二套工具。内容工具没有 `repo` 参数，它们用 `worktree` 或 `trunk` 指定读写的范围。写 Trunk 的工具不接受 fork 的地址，所以经 fork 没有写上游 Trunk 的路径。新增的只有创建、列出、查看和删除 fork |
 | D10  | 第一版的提议只针对 Team Space                              | Personal Space 的所有者没有地方看到别人针对他的文件创建的 Worktree                                                                                                                                     |
 | D11  | agent 能持有的最高角色，看仓库的所有者是人还是 agent       | `addTeamMember` 上限保护的是所有者的组织。在 agent 持有的仓库里，admin 能触及的只有这个仓库，它的所有者是 agent 和认领它的人。人想让 agent 管理一个仓库，做法是让 agent 创建并持有它，再认领这个 agent |
@@ -317,11 +317,11 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 草稿 7 天过期。提议等待超过 7 天，页面要由 agent 重新保存。
 
-其他 Blob 今天没有草稿。阶段 5 开工前再决定是放宽 `html_view_drafts`，还是建一个同样形状的对象。
+其他 Blob 也用 `html_view_drafts`，没有新表和迁移。`PUT /api/forks/{forkId}/blob-resources/{resourceId}/content` 带 `If-Match`、Idempotency-Key 和原始字节，像 Unit 写入一样打开 fork 的 Worktree，把新字节存成挂在这个 Worktree 上的 `replace` 草稿，上游在合入前不变。页面要走 HTML View 草稿，这个路由对 `.univer.html` 返回 403 `HTML_VIEW_DRAFT_REQUIRED`。文件草稿（视图里 `page` 为 false）和页面一起计数、一起列出，合入时按上面同一套规则发布：上游的 ETag 在草稿之后变了，这一份 `conflicted`，上游字节不变；作者自己写不了这个文件时，要人在 Browser 里带着评审过的草稿 ID 合入。Browser 的评审面板列出文件草稿的名称、大小和下载链接，不预览；内容路由把它作为附件返回。同一个 Idempotency-Key 在字节还没收完时再次请求得到 409，这个判断只看数据库里的行。只能替换已有的文件，fork 不新增文件。
 
 ### 5.8 接口
 
-- HTTP contract 的来源是 `apps/workspace/contracts/http`。阶段 2 给 Worktree Unit 加上 5.6 的三个字段和标签。阶段 4 加上 fork 的创建、列出、读取和删除，以及经 fork 写入 Unit 的 `POST /api/forks/{forkId}/units`。阶段 5 加上为页面草稿打开 fork Worktree 的 `POST /api/forks/{forkId}/worktree`。
+- HTTP contract 的来源是 `apps/workspace/contracts/http`。阶段 2 给 Worktree Unit 加上 5.6 的三个字段和标签。阶段 4 加上 fork 的创建、列出、读取和删除，以及经 fork 写入 Unit 的 `POST /api/forks/{forkId}/units`。阶段 5 加上为页面草稿打开 fork Worktree 的 `POST /api/forks/{forkId}/worktree`，以及经 fork 替换其他 Blob 的 `PUT /api/forks/{forkId}/blob-resources/{resourceId}/content`。
 - MCP 和 CLI 不新建工具集。内容工具的 `worktree` 参数（CLI 的 `--worktree`）接受 fork 的地址，读走 5.5 的读路径，写走 5.5 的写路径。MCP 的 `space_browse`、`space_find`（CLI 的 `space browse`、`space find`）按 5.5 列出 fork 的目录，MCP 的 `repo_view` 显示 fork 的上游。其他指向仓库的参数只接受仓库，遇到 fork 的地址就报错，错误里给出上游和 pull request 编号。还没接 fork 的内容工具（如 `export`）同样报错，要求改用 fork 的 Worktree ID。新增的只有创建、列出、查看和删除 fork：MCP 的 `fork_create`、`fork_list`、`fork_view`、`fork_delete`，CLI 的 `uvw fork create|list|view|delete`。
 - MCP 网关的说明文字由授予的 scope 和 `capabilities` 决定走哪个变体，不再按主体类别写死。
 
@@ -477,7 +477,7 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 - fork 视图读挂在 Worktree 上的 HTML View 草稿。已做到：MCP 的 `html_view_read` 带 `worktree`（Worktree ID 或 fork 地址）时，返回调用者挂在这个 pull request 上的这个页面的 pending 草稿，没有就返回上游页面。
 - 页面运行时按 fork 的范围读数据。已做到，见 5.7。MCP 的 `html_view_save` 带 `worktree` 把草稿挂到 fork 的 Worktree，`dryRun` 按同样的范围取样。CLI 不存页面草稿：`html-view validate --worktree <fork>` 按 fork 的范围校验，`html-view create` 拒绝 fork。
 - token 会话合入时，草稿的发布跟着合入权走。已做到，作者自己写不了目标的草稿仍要人在 Browser 里合入，见 5.7。
-- 其他 Blob 的覆盖写。
+- 其他 Blob 的覆盖写。已做到，见 5.7。MCP 的 `blob_replace` 和 `blob_download`、CLI 的 `blob replace` 和 `blob download` 带 `worktree`（`--worktree`），只接受 fork 地址：替换存成 fork 的 pull request 上的文件草稿，下载返回调用者挂在这个 pull request 上的这个文件的 pending 草稿，没有就返回上游文件，ETag 都是上游的。
 
 完成标准的骨架：A 在 fork 里修改一个 HTML View 和它绑定的 Sheet，提议。E 合入后页面发布，显示新的数据。上游的页面在草稿创建之后被别人改过时，这一项的结果是 `conflicted`，上游的页面不变，同一个 Worktree 里的 Sheet 照常合入。
 

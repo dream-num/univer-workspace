@@ -319,8 +319,11 @@ export function createWorkspaceApplication(
     publicOrigin: config.publicOrigin ?? null,
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
-  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees, users: identity });
-  const forks = createForksModule({ repository: repositories.forks, access, spaces, worktrees });
+  const htmlViewDrafts = createHtmlViewDraftsModule({
+    repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees, users: identity,
+    ...(config.maxBlobBytes === undefined ? {} : { maxBlobBytes: config.maxBlobBytes }),
+  });
+  const forks = createForksModule({ repository: repositories.forks, access, spaces, worktrees, drafts: htmlViewDrafts });
   const activity = createActivityModule({ access, worktrees, issues });
   const univerAssets = createUniverAssetsModule({
     repository: univerAssetsRepository,
