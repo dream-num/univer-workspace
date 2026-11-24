@@ -11,7 +11,7 @@ the opencode client and cleanup. Each tool family has its own `mcp-*.md` file in
 - M2 and M3 read identity over the 2026-07-28 and 2025-11-25 protocols.
 - M4 and M5 compare repository lists and details with uvw.
 - M6 preserves a missing-repository error and its usage event.
-- M7 checks the ordered tool list of every toolset selection, schemas, per-tool annotations, descriptions that never name `uvw`, and the shared `idempotency_key` rule.
+- M7 checks the ordered tool lists of `core`, `files`, `admin`, `core,admin` and `all`, schemas, per-tool annotations, descriptions that never name `uvw`, and the shared `idempotency_key` rule.
 - M8 rejects missing and invalid credentials in both protocols.
 - M9 rejects an untrusted Origin.
 - M10 refuses development authentication in production.
@@ -155,7 +155,7 @@ jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.pro
 
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
-destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
+destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`, `blob_replace`); the core list equals the
 first 43 tools of `all`; the immediate-effect descriptions, the leave-to-the-user `pr_discard` description and the
 `pr_merge` description that defers to the server instructions are present; no tool description
 names `uvw`; the 12 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown

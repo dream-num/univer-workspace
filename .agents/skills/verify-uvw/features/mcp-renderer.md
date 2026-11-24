@@ -29,7 +29,7 @@ MR12 also needs opencode.
 ### MR9 renderer role
 
 The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. `screenshot`
-(MR10) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
+(MR10), `print_pdf` and `lint` (MR11) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
 
 ```bash
 B=.agents/skills/verify-uvw/bin
@@ -245,8 +245,8 @@ Pass when:
 ### MR12 opencode screenshot
 
 An agent reads a screenshot through `screenshot`, so the image must reach the model and the model must describe it correctly. The model is
-`$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). The default MCP URL lists only the core tools, so the journey
-runs opencode from a copy of the project whose URL adds `?toolsets=all`. opencode wraps MCP tools in its `execute` tool, so the MCP call is
+`$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). `screenshot` is a core tool, so opencode runs from
+`$MCP_OPENCODE_DIR` with the default MCP URL, as in M11. opencode wraps MCP tools in its `execute` tool, so the MCP call is
 recorded under `part.state.metadata.metadata.toolCalls`, and opencode renders an MCP `image` result as a `file` part with MIME `image/png`.
 Run it after MR10 (the download-link half reuses MR10's two-page deck) and use a parallel run id when another run is active.
 
@@ -270,14 +270,11 @@ return { images: sheet.getImages().length };
 $V cli mr12-write execute --worktree "$MR12_W" --unit "$MR12_U" --script "$FIX/sheet-script.js" --json
 jq -e '.committed == true and .value.images == 1' "$EVIDENCE/mr12-write.out"
 
-MR12_DIR="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/home/opencode-mr12"
-rm -rf "$MR12_DIR"; mkdir -m 700 "$MR12_DIR"
-jq '.mcp["verify-uvw"].url += "?toolsets=all"' "$MCP_OPENCODE_DIR/opencode.json" > "$MR12_DIR/opencode.json"; chmod 600 "$MR12_DIR/opencode.json"
 shot_call='select(.type == "tool_use" and any(.part.state.metadata.metadata.toolCalls[]?; .tool == "verify-uvw.screenshot" and .status == "completed"))'
 
 # A Sheet in a Worktree: the image reaches the model and the description is right
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-(cd "$MR12_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
+(cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
   "Call the screenshot tool of the verify-uvw MCP server once with unit \"$MR12_U\", worktree \"$MR12_W\" and range \"A1:J12\". Then describe exactly what the picture shows: every piece of cell text you can read, and the image you can see, with its colours and where each colour sits." < /dev/null) > "$EVIDENCE/mr12-opencode.jsonl"
 echo $? > "$EVIDENCE/mr12-opencode.exit"
 test "$(cat "$EVIDENCE/mr12-opencode.exit")" = 0
@@ -292,7 +289,7 @@ jq -e 'length >= 1 and all(.[]; .outcome == "ok" and .cost.render_pages == 1 and
 # A two-page deck above 1 MiB (MR10): download links, no image part, and the model reports them
 MR12_DECK=$(jq -r .unitId "$EVIDENCE/mr10-deck.out"); MR12_DECK_W=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-(cd "$MR12_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
+(cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
   "Call the screenshot tool of the verify-uvw MCP server once with unit \"$MR12_DECK\" and worktree \"$MR12_DECK_W\". Report how many images came back and, for each one, its page, size in bytes, and whether the result gave a download link. Do not repeat any URL." < /dev/null) > "$EVIDENCE/mr12-opencode-deck.jsonl"
 echo $? > "$EVIDENCE/mr12-opencode-deck.exit"
 test "$(cat "$EVIDENCE/mr12-opencode-deck.exit")" = 0
@@ -320,9 +317,9 @@ Pass when both opencode runs exit 0 and:
 ### MV2. Real-font SVG measurement through the renderer
 
 Run it after `doctor` passes, with the
-`eval "$($V env)"` variables set. The first measurement after the renderer starts launches
-Chromium (6 s measured with another stack running, and above the 9 s budget once), so a cold
-first call can return the retryable `workspace-renderer-timeout`; rerun it.
+`eval "$($V env)"` variables set. The renderer launches one browser at startup. If that warm-up
+failed, the first measurement starts Chromium and can return the retryable
+`workspace-renderer-timeout`; rerun it.
 
 ```bash
 node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg-real

@@ -53,11 +53,11 @@ $V mcp-tools --toolsets all mb-star-before
 $V mcp-allow-users '*'
 $V mcp-tools --toolsets all mb-star-after
 jq -e 'map(.name) | index("execute") == null and length == 47' "$EVIDENCE/mb-star-before.out"
-jq -e 'map(.name) | index("execute") != null and length == 62' "$EVIDENCE/mb-star-after.out"
+jq -e 'map(.name) | index("execute") != null and length == 60' "$EVIDENCE/mb-star-after.out"
 $V doctor
 ```
 
-Pass when the run user, outside an explicit allowlist, gets the 47 non-executor tools, then all 62 renderer-less tools with
+Pass when the run user, outside an explicit allowlist, gets the 47 non-executor tools, then all 60 renderer-less tools with
 `*`, and doctor reports the allowlist matches the run. Running `$V user` again keeps `*`.
 
 ### MB6. Workspace grants
@@ -75,7 +75,7 @@ G revoke "verify-$VERIFY_UVW_RUN"
 
 Before the grant, `mcp-tools --toolsets all` lists 47 tools without `execute` and the instructions contain
 `Editing document contents is not enabled for this account`. About 35 s after `grant` (the gateway caches the
-exchange for 30 s), the list has 65 tools with the renderer (62 without) and `execute` runs. About 35 s after
+exchange for 30 s), the list has 63 tools with the renderer (60 without) and `execute` runs. About 35 s after
 `revoke` it is back to 47 and `execute` fails with `Tool execute not found`. No container restarts. `list`
 prints `username<TAB>id<TAB>kind<TAB>granted-at`.
 

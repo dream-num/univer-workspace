@@ -85,7 +85,7 @@ PAT_ID=$(cat "$RUN/home/mcp-token-id")
 $V mcp mcp-pat-before-revoke repo_list
 curl -sS -o /dev/null -w '%{http_code}\n' -X DELETE -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" \
   -H "Origin: $ORIGIN" "$ORIGIN/api/auth/tokens/$PAT_ID" > "$EVIDENCE/mcp-pat-revoke.status"
-grep -Eq '^(200|204)$' "$EVIDENCE/mcp-pat-revoke.status"
+grep -qx 204 "$EVIDENCE/mcp-pat-revoke.status"
 $V mcp mcp-pat-after-revoke repo_list
 test $? -eq 4
 jq -e '.status == 401 and (.www_authenticate | contains("resource_metadata"))' "$EVIDENCE/mcp-pat-after-revoke.out"
@@ -94,7 +94,7 @@ test $? -eq 4
 $V mcp-token > "$EVIDENCE/mcp-token-restored.id"
 ```
 
-Pass when the call before revocation exits 0, the revoke answers 200 or 204, and the first Workspace-backed
+Pass when the call before revocation exits 0, the revoke answers 204, and the first Workspace-backed
 call afterwards exits 4 with HTTP 401 (the revoked session fails downstream, which evicts the cache), as does the
 next one (the exchange now answers `invalid_grant`). Use a tool that reaches Workspace: the gateway serves
 `whoami` from its 30-second exchange cache. The last command restores a working default PAT.
@@ -131,6 +131,8 @@ The plaintext PAT goes straight to `home/mcp-token` (mode 0600) and never into e
 agent-browser cookies clear
 agent-browser open "$ORIGIN/login"
 agent-browser storage local set univer-workspace-language en-US
+agent-browser storage local set univer-workspace-view-onboarding-complete true
+agent-browser storage local set univer-workspace-layout-theme repository
 agent-browser reload
 agent-browser wait --text Username
 agent-browser find label Username fill "verify-$VERIFY_UVW_RUN"
@@ -223,7 +225,7 @@ RUN=/tmp/verify-uvw/$VERIFY_UVW_RUN
 
 Keep this shell open until `down` so command-runner cleanup cannot stop its background services.
 Keep `VERIFY_UVW_RUN` exported on every later call. First run every step of
-[Accounts and sign-in](auth.md) as written: Browser registration and sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
+[Accounts and sign-in](auth.md) as written: Browser registration and sign-in, `uvw auth login --username … --password-stdin`, `auth status`, and the wrong-password case. Then the
 Browser-approved `uvw auth login`, which prints an approval URL and exits; the raw URL and code stay
 in the run's `home/` and never reach evidence. Leave private files there until `$V down`
 removes the disposable home; journey steps do not delete files from it.

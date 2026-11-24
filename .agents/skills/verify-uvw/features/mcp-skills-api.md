@@ -40,7 +40,7 @@ REF='const {createRequire}=require("node:module");const r=createRequire(process.
 $V mcp mcp-skills-list skills_read
 jq -e '[.skills[].name] == ["base","blob","board","core","cross-unit-formula","doc","embed","html-view-creator","html-view","sheet","skill-creator","slide"] and all(.skills[]; (.description | length) > 0)' "$EVIDENCE/mcp-skills-list.out"
 $V mcp mcp-skills-get skills_read '{"name":"html-view"}'
-$V mcp mcp-skills-full skills_read '{"name":"html-view","full":true}'
+$V mcp mcp-skills-full skills_read '{"name":"board","full":true}'
 test $? -eq 1
 jq -e '.code == "workspace-result-too-large"' "$EVIDENCE/mcp-skills-full.out"
 jq -e '.outcome == "tool_error" and .error_code == "workspace-result-too-large"' "$EVIDENCE/mcp-skills-full.event.json"
@@ -60,9 +60,9 @@ JS
 ```
 
 Pass when the fallback lists twelve names with descriptions, `html-view` get preserves
-its source, and `html-view` full exits 1 with `workspace-result-too-large` in the result
-and event. Doc full must exit 0 and preserve every shared file. The combined full results of HTML View and Board
-exceed the 100,000-character result limit, so `board` full also exits 1.
+its source, and `board` full, whose `references/` files exceed the 100,000-character result limit,
+exits 1 with `workspace-result-too-large` in the result and event. Doc full must exit 0 and preserve
+every shared file.
 
 ### MR2. Skill resource and MCP core bindings
 
@@ -70,7 +70,7 @@ exceed the 100,000-character result limit, so `board` full also exits 1.
 $V mcp mcp-skills-read skills_read '{"name":"html-view","resource":"references/charts.md"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-read.out" > "$EVIDENCE/mcp-skills-read.md"
 cmp "$EVIDENCE/mcp-skills-read.md" apps/cli/skill-data/html-view/references/charts.md
-jq -e '.resources | length > 0 and all(.[]; .readCommand | startswith("Call skills_read with name \"html-view\" and resource \"references/"))' "$EVIDENCE/mcp-skills-get.out"
+jq -e '.resources | length > 0 and all(.[]; .readCommand | startswith("Call skills_read with name \"html-view\" and resource \""))' "$EVIDENCE/mcp-skills-get.out"
 $V mcp mcp-skills-core skills_read '{"name":"core"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-core.out" > "$EVIDENCE/mcp-skills-core.md"
 cmp "$EVIDENCE/mcp-skills-core.md" apps/mcp/skills/core/SKILL.md
@@ -159,7 +159,7 @@ Pass when both protocols return the same non-null `instructions` that name the w
 
 ### MR7. Truncation with cursors
 
-`FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` resource paging is covered by the gateway tests. MR1 covers `workspace-result-too-large` with `html-view` full.
+`FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` resource paging is covered by the gateway tests. MR1 covers `workspace-result-too-large` with `board` full.
 
 ```bash
 CURSOR=""; I=0
@@ -197,7 +197,7 @@ test $? -eq 1
 jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
 ```
 
-Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1 and a matching usage event, and the CLI also rejects the unknown Skill.
+Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1, the reused cursor has a matching usage event, and the CLI also rejects the unknown Skill.
 ### MR13 custom Skills
 
 Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.

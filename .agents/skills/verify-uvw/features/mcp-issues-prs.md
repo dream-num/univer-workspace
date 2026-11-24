@@ -12,7 +12,7 @@ shows for the same object, errors keep their Workspace codes, and every call lea
 - MI5 edits an Issue and compares it with the CLI view.
 - MI6 comments on an Issue and compares it with the CLI timeline.
 - MI7 and MI8 close an Issue as not planned and reopen it.
-- MI9 preserves a missing-Issue-number error and its usage event.
+- MI9 preserves a malformed-Issue-number error and its usage event.
 - MI10 preserves a nonexistent-Issue error from the Workspace and its usage event.
 - MI11 returns a structured `workspace-argument-invalid` for an invalid argument and records its usage event.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
@@ -228,8 +228,8 @@ jq -e '.code == "CONFLICT" and (.message | contains("Idempotency-Key"))' "$EVIDE
 
 Pass when every command exits 0 except the reused key, the CLI view equals the MCP result without `url`, the retry
 with the same key returns an identical pull request (same `id` and `number`), the `url` is
-the Personal Space pull request address, and the event carries the resolved Space ID. The same key with a different
-title is a new operation: it exits 1 with `CONFLICT` and creates nothing.
+the Personal Space pull request address, and the event carries the resolved Space ID. Reusing the key with a different
+title exits 1 with `CONFLICT` and creates nothing.
 
 ### MP2. Pull request view by number
 

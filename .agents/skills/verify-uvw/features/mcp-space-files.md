@@ -93,7 +93,7 @@ fails in both with the same code (`workspace-argument-invalid`).
 ### MS3. Space find
 
 ```bash
-$V mcp --toolsets all mcp-space-find space_find "{\"space\":\"$O/verify-team\",\"query\":\"budget\"}"
+$V mcp --toolsets all mcp-space-find space_find "{\"repo\":\"$O/verify-team\",\"query\":\"budget\"}"
 $V cli mcp-space-find-cli space find budget --space "$O/verify-team" --json
 diff <(jq -S '.nodes | map(del(.url))' "$EVIDENCE/mcp-space-find.out") <(jq -S '.nodes' "$EVIDENCE/mcp-space-find-cli.out")
 jq -e '.nodes | length == 1 and .[0].name == "Budget"' "$EVIDENCE/mcp-space-find.out"
@@ -295,7 +295,8 @@ jq -e '.state == "discarded"' "$EVIDENCE/mcp-pr-discard.out"
 jq -e --arg repo "$T" '.tool == "pr_discard" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-discard.event.json"
 ```
 
-Pass when the ready pull request merges and the draft pull request `AN` from MS7 is discarded with results equal to the CLI view. Lifecycle transitions (ready, merge, discard) return the Worktree with an empty `units`, as the matching `uvw pr` commands do; the CLI view lists the Units, so `units` is compared through the view
+Pass when the ready pull request merges and the draft pull request `AN` from MS7 is discarded with results equal to the CLI view. Ready and discard return the Worktree with an empty `units`, and merge returns it read back with the merged
+Units, so `units` is compared through the CLI view, which lists them, and the rest of the result through the view
 without `url`, the merged Unit appears in the Space as `Forecast`, merging a second time as the same user
 succeeds in MCP and CLI and returns the same merged pull request, and the events carry the Team Space ID.
 

@@ -300,7 +300,6 @@ node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs docx
 
 Pass with the same upload, import, inspection and export checks for a Doc containing text,
 using a reserved size upper bound larger than the actual file.
-The same base binary-upload defect may block this journey before import.
 
 ### MX9. Office import idempotent retry
 

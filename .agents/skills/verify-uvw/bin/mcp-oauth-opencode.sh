@@ -36,9 +36,13 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 # Browser and CLI errors can include OAuth URLs, so redact the entire transcript too.
 exec > "$oauth_dir/journey.out" 2>&1
+# The model credential, exported once per run as stories do, then imported only into this opencode.
+credential="$RUN/home/opencode-credential.json"
+[[ -s "$credential" ]] || opencode auth export 'OpenCode Console' --standalone < /dev/null > "$credential"
 export XDG_DATA_HOME="$oauth_dir/data" XDG_CONFIG_HOME="$oauth_dir/config"
 export XDG_STATE_HOME="$oauth_dir/state" XDG_CACHE_HOME="$oauth_dir/cache"
 mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
+opencode auth import --standalone "$credential" < /dev/null
 jq -n --arg url "$MCP_URL" '{mcp:{ws:{type:"remote",url:$url,enabled:true}},permission:{edit:"deny",bash:"deny",webfetch:"deny"}}' > "$oauth_dir/opencode.json"
 
 status=$(curl -sS -D "$EVIDENCE/mcp-oauth-challenge.headers" -o "$EVIDENCE/mcp-oauth-challenge.out" \

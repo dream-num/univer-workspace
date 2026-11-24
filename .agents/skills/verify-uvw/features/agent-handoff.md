@@ -89,7 +89,7 @@ Preconditions:
 
 ### MH. Agent principals, claims and public Spaces
 
-Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per instance.
+Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per source IP.
 Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
 Idempotency keys need 16 to 200 URL-safe characters, so pad them for short run IDs.
 
@@ -107,17 +107,17 @@ $V mcp --as bot1 mh-bot1-claim claim '{}'
   `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
 - **MH2. Claimed agent.** Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
   gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 43 tools (no `claim`),
-  and the instructions start `This connection is an agent identity that a person has claimed.`
+  and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
 - **MH3. Claimer decisions.** bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
   `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
-  `$V mcp <label> pr_merge '{"repo":…,"number":…,"idempotency_key":…}'` merges it. The run user's `pr_create` there fails with
+  `$V mcp <label> pr_merge '{"repo":…,"number":…}'` merges it. The run user's `pr_create` there fails with
   `Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
   Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
   [pull requests](./pull-requests.md) for that refusal in a Team Space).
 - **MH4. Public Spaces.** `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
   with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
   and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
-  the same call on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
+  the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
   `AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
 - **MH5. Copy a shared file.** With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
   `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with

@@ -35,7 +35,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 
 Run after `up` with MCP enabled and `user`.
 The script uses the run's browser session and a separate opencode project with no Authorization
-header, with opencode's XDG directories inside it. Raw auth output and opencode's OAuth
+header, with opencode's XDG directories inside it and the run's model credential imported as stories do
+(`home/opencode-credential.json`). Raw auth output and opencode's OAuth
 storage stay in a mode-0700 temporary directory under `$RUN/home`; on success or failure the script
 saves only transcripts redacted by `secrets.mjs redact-sign-in` and deletes that directory. Do not run
 it with shell tracing or record raw authorize or callback URLs.
@@ -229,7 +230,7 @@ Pass when `mcp-cimd-vscode.json` records 200 and the consent text includes `vsco
 with `mcp-cimd-vscode.png` showing the consent page.
 
 4. Refuse private addresses, malformed identity and mismatched metadata; prove anonymous
-requests never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
+authorize and consent requests never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
 when it resolves to 127.0.0.1, adds a query to Claude's URL, and upper-cases the host in Claude's URL. The server fetches
 the same real document for `https://CLAUDE.ai/…`, but its `client_id` is the lower-case URL, so the
 error page must name the `client_id` mismatch.
