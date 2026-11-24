@@ -29,6 +29,39 @@ test('a task is a feature or a feature with journeys, and repeated features get 
   assert.throws(() => parseArgs(['--fast', 'auth']), /unknown option --fast/);
   assert.throws(() => parseArgs(['Auth']), /bad task Auth/);
   assert.throws(() => parseArgs(['auth:']), /bad task auth:/);
+  assert.deepEqual(parseArgs(['--check']), { check: true, tasks: [] });
+  assert.deepEqual(parseArgs(['--check', 'auth']).tasks, [{ id: 'auth', feature: 'auth', journeys: [] }]);
+  assert.throws(() => parseArgs(['--check', '--keep', 'auth']), /--check takes only tasks/);
+});
+
+test('runner --check names what is missing and the host-only tasks, and exits 5 without a key, else 3 without Docker', () => {
+  const root = mkdtempSync(join(tmpdir(), 'verify-uvw-check-'));
+  const skill = join(root, '.agents/skills/verify-uvw');
+  const bin = join(skill, 'bin');
+  try {
+    mkdirSync(bin, { recursive: true });
+    mkdirSync(join(skill, 'features'));
+    copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(bin, 'runner.mjs'));
+    copyFileSync(helper, join(bin, 'verify-uvw'));
+    writeFileSync(join(skill, 'features/whole.md'), '# Whole feature (host only)\n\n### W1. One\n');
+    writeFileSync(join(skill, 'features/plain.md'), '# Plain feature\n\n### P1. One\n\n### P2. Two (host only)\n\n### P3. Three (host only)\n');
+    const check = (env, ...tasks) => spawnSync(process.execPath, [join(bin, 'runner.mjs'), '--check', ...tasks],
+      { encoding: 'utf8', env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } });
+    const noKey = check({});
+    assert.equal(noKey.status, 5);
+    assert.match(noKey.stdout, /^FAIL {2}DEEPSEEK_API_KEY not found/m);
+    assert.match(noKey.stdout, /^FAIL {2}docker is not available$/m);
+    const noDocker = check({ DEEPSEEK_API_KEY: 'test-key' });
+    assert.equal(noDocker.status, 3);
+    assert.match(noDocker.stdout, /^ok {4}DEEPSEEK_API_KEY found$/m);
+    assert.doesNotMatch(noDocker.stdout, /test-key/);
+    const tasks = check({ DEEPSEEK_API_KEY: 'test-key' }, 'whole', 'plain:P1');
+    assert.match(tasks.stdout, /^host {2}whole is marked \(host only\); run it in host mode$/m);
+    assert.doesNotMatch(tasks.stdout, /plain/);
+    assert.match(check({ DEEPSEEK_API_KEY: 'test-key' }, 'plain').stdout, /^host {2}plain:P2,P3 is marked \(host only\); run it in host mode$/m);
+    assert.match(check({ DEEPSEEK_API_KEY: 'test-key' }, 'plain:P1,P3').stdout, /^host {2}plain:P3 is marked/m);
+    assert.equal(check({ DEEPSEEK_API_KEY: 'test-key' }, 'missing').status, 2);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('the key comes from the environment first, then from a DEEPSEEK_API_KEY line in .env', () => {

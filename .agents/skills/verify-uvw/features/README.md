@@ -47,7 +47,7 @@ The host flow ignores the marker.
   recent and pages views.
 - [Issues](./issues.md): Team Space repo creation, Issue open via uvw, comment and close
   in the browser, timeline readback via uvw.
-- [MCP gateway](./mcp.md): M1-M12 start the Docker gateway and cover both protocols, identity, repository
+- [MCP gateway](./mcp.md): M1-M12 start the MCP gateway and cover both protocols, identity, repository
   parity, tool lists, credential, Origin and production refusals, opencode, and cleanup. Every other `mcp-*`
   file runs in this MCP mode.
 - [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull

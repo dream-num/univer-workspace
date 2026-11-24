@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Runs verify-uvw journeys in disposable Linux containers, each task driven by Claude Code on deepseek-flash.
-// Usage: verify-uvw runner [--jobs N] [--keep] <feature[:ID,ID]>...
+// Usage: verify-uvw runner [--jobs N] [--keep] <feature[:ID,ID]>... | verify-uvw runner --check [feature[:ID,ID]...]
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,18 +12,20 @@ const skill = fileURLToPath(new URL('..', import.meta.url));
 const repo = join(skill, '../../..');
 const MAX_JOBS = 3;
 const FAILED = new Set(['no-report', 'timeout', 'infra-error', 'secret-leak']);
-const USAGE = 'usage: verify-uvw runner [--jobs 1|2|3] [--keep] <feature[:ID,ID]>...';
+const USAGE = 'usage: verify-uvw runner [--jobs 1|2|3] [--keep] <feature[:ID,ID]>... | verify-uvw runner --check [feature[:ID,ID]...]';
 
 export function parseArgs(argv) {
-  let jobs, keep = false;
+  let jobs, keep = false, check = false;
   const specs = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--keep') keep = true;
+    else if (argv[i] === '--check') check = true;
     else if (argv[i] === '--jobs') jobs = Number(argv[++i]);
     else if (argv[i].startsWith('-')) throw new Error(`unknown option ${argv[i]}\n${USAGE}`);
     else specs.push(argv[i]);
   }
-  if (!specs.length) throw new Error(USAGE);
+  if (check && (keep || jobs !== undefined)) throw new Error(`--check takes only tasks\n${USAGE}`);
+  if (!specs.length && !check) throw new Error(USAGE);
   const seen = new Map();
   const tasks = specs.map((spec) => {
     const [, feature, ids] = /^([a-z0-9][a-z0-9-]*)(?::([A-Za-z0-9-]+(?:,[A-Za-z0-9-]+)*))?$/.exec(spec)
@@ -32,6 +34,7 @@ export function parseArgs(argv) {
     seen.set(feature, n);
     return { id: n === 1 ? feature : `${feature}-${n}`, feature, journeys: ids ? ids.split(',') : [] };
   });
+  if (check) return { check, tasks };
   jobs ??= Math.min(tasks.length, MAX_JOBS);
   if (!Number.isInteger(jobs) || jobs < 1 || jobs > MAX_JOBS) throw new Error(`--jobs takes 1 to ${MAX_JOBS}\n${USAGE}`);
   return { jobs, keep, tasks };
@@ -139,24 +142,54 @@ function summary({ batch, sha, head, image, jobs, dir, results, hostOnly, setup,
   ].join('\n');
 }
 
-async function main() {
-  let options;
-  try { options = parseArgs(process.argv.slice(2)); } catch (error) { fail(2, error.message); }
-  const { keep, tasks } = options;
-  for (const t of tasks) if (!existsSync(join(skill, 'features', `${t.feature}.md`))) fail(2, `no features/${t.feature}.md`);
+const readKey = () => findKey(process.env, existsSync(join(repo, '.env')) ? readFileSync(join(repo, '.env'), 'utf8') : '');
+const imageTag = () => `uvw-verify-runner:${createHash('sha256').update(readFileSync(join(skill, 'runner/Dockerfile'))).digest('hex').slice(0, 12)}`;
 
-  const key = findKey(process.env, existsSync(join(repo, '.env')) ? readFileSync(join(repo, '.env'), 'utf8') : '');
-  if (!key) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
-  const info = capture('docker', ['info', '--format', '{{.NCPU}}']);
-  if (info.status !== 0) fail(3, 'docker is not available; run the journeys on the host (SKILL.md, "Hand the driving to another agent")');
-
-  const hostOnly = [], queue = [];
+// `brief --own` owns the (host only) rule: it exits 3 for a marked task and names the marked journeys it skips.
+function split(tasks) {
+  const hostOnly = [], queue = [], skipped = [];
   for (const t of tasks) {
+    if (!existsSync(join(skill, 'features', `${t.feature}.md`))) fail(2, `no features/${t.feature}.md`);
     const brief = capture('bash', [join(skill, 'bin/verify-uvw'), 'brief', '--own', t.id, t.feature, ...t.journeys]);
     if (brief.status === 3) hostOnly.push(t);
     else if (brief.status === 0) queue.push(t);
     else fail(2, brief.stderr.trim());
+    const skip = /Do not run (.+?)\. They run only on the host\./.exec(brief.stdout)?.[1];
+    if (skip) skipped.push({ feature: t.feature, journeys: skip.split(', ') });
   }
+  return { hostOnly, queue, skipped };
+}
+
+// What a batch needs, checked without starting anything. SKILL.md chooses between runner and host mode from it.
+function check(tasks) {
+  const key = readKey();
+  const docker = capture('docker', ['info', '--format', '{{.NCPU}}']);
+  const { hostOnly, queue, skipped } = split(tasks);
+  console.log(key ? 'ok    DEEPSEEK_API_KEY found' : 'FAIL  DEEPSEEK_API_KEY not found; set it or add a DEEPSEEK_API_KEY= line to .env');
+  if (docker.status !== 0) console.log('FAIL  docker is not available');
+  else console.log(`ok    docker answers with ${docker.stdout.trim()} CPUs`);
+  for (const t of [...hostOnly, ...skipped]) console.log(`host  ${t.feature}${t.journeys.length ? `:${t.journeys.join(',')}` : ''} is marked (host only); run it in host mode`);
+  const runnable = !tasks.length || queue.length;
+  if (docker.status === 0 && runnable) {
+    const image = imageTag();
+    console.log(capture('docker', ['image', 'inspect', image]).status === 0 ? `ok    image ${image} is built`
+      : `todo  image ${image} is not built; the next batch builds it, about 2 minutes and 4 GB`);
+  }
+  process.exitCode = !key ? 5 : docker.status !== 0 || !runnable ? 3 : 0;
+}
+
+async function main() {
+  let options;
+  try { options = parseArgs(process.argv.slice(2)); } catch (error) { fail(2, error.message); }
+  if (options.check) return check(options.tasks);
+  const { keep, tasks } = options;
+  const { hostOnly, queue } = split(tasks);
+
+  const key = readKey();
+  if (!key) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
+  const info = capture('docker', ['info', '--format', '{{.NCPU}}']);
+  if (info.status !== 0) fail(3, 'docker is not available; run the journeys in host mode (SKILL.md, "Choose runner or host")');
+
   if (!queue.length) {
     console.error(`verify-uvw runner: every task runs only on the host:\n${hostOnly.map((t) => `  $V brief ${[t.feature, ...t.journeys].join(' ')}`).join('\n')}`);
     process.exit(3);
@@ -175,12 +208,11 @@ async function main() {
   };
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { removeContainers(); process.exit(signal === 'SIGINT' ? 130 : 143); });
 
-  const dockerfile = readFileSync(join(skill, 'runner/Dockerfile'));
-  const image = `uvw-verify-runner:${createHash('sha256').update(dockerfile).digest('hex').slice(0, 12)}`;
+  const image = imageTag();
   if (capture('docker', ['image', 'inspect', image]).status !== 0) {
     console.error(`building ${image} (about 95 s); log: ${dir}/image-build.log`);
     const log = openSync(join(dir, 'image-build.log'), 'a');
-    if (spawnSync('docker', ['build', '-t', image, '-'], { input: dockerfile, stdio: ['pipe', log, log] }).status !== 0) fail(4, `image build failed; see ${dir}/image-build.log`);
+    if (spawnSync('docker', ['build', '-t', image, '-'], { input: readFileSync(join(skill, 'runner/Dockerfile')), stdio: ['pipe', log, log] }).status !== 0) fail(4, `image build failed; see ${dir}/image-build.log`);
   }
   const sha = snapshot(batch);
   const head = git(['rev-parse', 'HEAD']);

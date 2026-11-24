@@ -1,6 +1,6 @@
 ---
 name: verify-uvw
-description: Verify Univer Workspace changes end to end in a disposable local instance, covering the web app and server (apps/workspace), the uvw CLI (apps/cli), the MCP gateway, the browser Agent and real-model stories. Starts an isolated server and web app with a throwaway user, drives them with agent-browser and the source-built uvw, records evidence, and tears down without touching the developer's own instance, .data/ files or ~/.univer-workspace-cli. Use when you need to prove a Workspace, CLI or MCP change works in the real app, not just in tests.
+description: Verify Univer Workspace changes end to end in a disposable local instance, covering the web app and server (apps/workspace), the uvw CLI (apps/cli), the MCP gateway, the browser Agent and real-model stories. Starts an isolated server and web app with a throwaway user, drives them with agent-browser and the source-built uvw, records evidence, and tears down without touching the developer's own instance, .data/ files or ~/.univer-workspace-cli. Use when you need to prove a Workspace, CLI or MCP change works in the real app, not just in tests. Runs journeys in disposable Linux containers by default (mode:runner), or on this machine (mode:host).
 ---
 
 # verify-uvw
@@ -19,6 +19,7 @@ $V open-anon <label> <url>     # open a link with no cookies: screenshot, video,
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
 $V brief <feature> [journey-id...]   # print the brief for an agent that drives this run
 $V runner <feature[:ID,ID]>...       # run journeys in disposable Linux containers, no instance of yours
+$V runner --check [feature[:ID,ID]...]   # can these run in runner mode here? starts nothing
 $V down      # stop what this run started; delete data; keep evidence + logs
 ```
 
@@ -43,6 +44,32 @@ feature file as the recipe. Read more only for the mode you need:
 | Agent principals and real-model stories (`principal`, `story`) | [references/stories.md](references/stories.md) |
 | Browser Agent mock model | `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help`, then AS1 in [Browser Agent skills](features/agent-skills.md) |
 | HTML View style thumbnails, after changing a built-in template | `node .agents/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --help` |
+
+## Choose runner or host
+
+Journeys run in one of two modes. A request can name one first, as in
+`/verify-uvw mode:host check link sharing after my change`.
+
+| Mode | Who drives the journeys | Where the instance runs | Read |
+| --- | --- | --- | --- |
+| `runner`, the default | A new Claude Code session for each task | In a disposable Linux container | [Run journeys in the runner](#run-journeys-in-the-runner) |
+| `host` | You, or a subagent you brief | On this machine | [Launch](#launch) through [Hand the driving to another agent](#hand-the-driving-to-another-agent) |
+
+First pick the features and journeys from [the index](features/README.md). Behavior no journey covers needs
+`host`, because the runner follows recipes and does not design checks. When the request names no mode, run
+`$V runner --check <feature[:ID,ID]>...` with the rest and act on what it prints:
+
+- A `host` line: that feature or those journeys are marked `(host only)`. Run them in `host` mode, whatever else
+  the check says, and decide the rest of the request by the lines below. The runner skips them.
+- Exit `5` or `3` with a `FAIL` line: the key or Docker is missing. Use `host`, and tell the user in one sentence
+  what runner mode needs.
+- A `todo  image` line: the runner image for the current `runner/Dockerfile` is not built yet. Ask the user once
+  whether to build it now, giving the time and size from that line, or to use `host`.
+- Otherwise use `runner`.
+
+With `mode:runner`, `(host only)` work still runs in `host` mode; name it to the user, then run it there. Run
+`$V runner` for the rest. It builds a missing image without asking. A missing key or Docker is different: tell
+the user and offer `host` rather than switching on your own.
 
 ## Launch
 
@@ -153,9 +180,8 @@ subagent, give it the journey and keep your own turns for choosing what to verif
 4. Stop the instance yourself with `$V down`.
 
 Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
-design checks. When the runner can run the feature, prefer [the runner](#run-journeys-in-the-runner): it
-needs no instance of yours and gives every developer the same Linux machine. Otherwise this section applies,
-and it names no model, harness or host for the verifier. The developer chooses the model in their own
+design checks. This section is `host` mode ([Choose runner or host](#choose-runner-or-host)), and it names no
+model, harness or host for the verifier. The developer chooses the model in their own
 configuration, outside this repository, and the harness default applies otherwise. The subagent runs where
 `up` ran, because the instance listens only on `127.0.0.1`. On the host, MCP mode and `uvw` stories need
 macOS.
