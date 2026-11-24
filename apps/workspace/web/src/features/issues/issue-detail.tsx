@@ -30,6 +30,7 @@ import {
   MenuItem,
   MenuRoot,
   MenuTrigger,
+  Segmented,
   Spinner,
   toast,
 } from "../../shared/ui";
@@ -37,7 +38,8 @@ import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { NodeIcon } from "../nodes";
 import { spaceQueryOptions } from "../spaces";
-import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment, useIssueVerdict } from "./issues.commands";
+import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment } from "./issues.commands";
+import { IssueAcceptancePanel } from "./issue-acceptance-panel";
 import { IssueComposer } from "./issue-composer";
 import { IssueLabelChip } from "./issue-label";
 import { IssueMarkdown } from "./issue-markdown";
@@ -54,6 +56,7 @@ const PULL_STATE_LABELS: Record<components["schemas"]["WorktreeState"], MessageK
 type TimelineComment = components["schemas"]["IssueTimelineComment"];
 type TimelineEvent = components["schemas"]["IssueTimelineEvent"];
 type PublicUser = components["schemas"]["PublicUser"];
+type IssueView = "conversation" | "acceptance";
 
 export interface IssueDetailProps {
   readonly presentation: "standard" | "compact";
@@ -74,12 +77,11 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
   const [editingBody, setEditingBody] = useState(false);
   const [body, setBody] = useState("");
   const [comment, setComment] = useState("");
-  const [reason, setReason] = useState("");
+  const [chosenView, setView] = useState<IssueView>();
   const [picker, setPicker] = useState<"labels" | "assignees" | "references" | null>(null);
 
   const patch = useUpdateIssue(spaceId, number);
   const postComment = useAddIssueComment(spaceId, number);
-  const verdict = useIssueVerdict(spaceId, number);
   const onError = (error: Error) => toast.error(error.message);
 
   if (issueQuery.isPending) {
@@ -103,6 +105,10 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
   const role = spaces.data?.accessRole;
   const canManageComments = role === "owner" || role === "admin";
   const busy = patch.isPending || postComment.isPending;
+  const acceptanceTab = issue.pullRequests.length > 0 || issue.acceptance !== null;
+  const view = acceptanceTab
+    ? (chosenView ?? (issue.state === "open" && issue.acceptance?.kind === "submitted" ? "acceptance" : "conversation"))
+    : "conversation";
 
   const closeIssue = async (reason: "completed" | "not_planned") => {
     try {
@@ -222,210 +228,196 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
           className={compact ? "order-last" : "order-first lg:order-last"}
         />
         <div className="grid min-w-0 gap-4">
-          <h2 className="sr-only">{t("issueBody")}</h2>
-          <Card
-            author={issue.author}
-            date={formatRelativeDate(issue.createdAt, language)}
-            opened
-            actions={
-              issue.capabilities.edit && !editingBody ? (
-                <MenuRoot>
-                  <MenuTrigger
-                    render={
-                      <Button variant="ghost" size="icon-sm" aria-label={t("issueMoreActions")}>
-                        <Ellipsis />
-                      </Button>
-                    }
-                  />
-                  <MenuContent align="end">
-                    <MenuItem
-                      onClick={() => {
-                        setBody(issue.body);
-                        setEditingBody(true);
-                      }}
-                    >
-                      <Pencil />
-                      {t("editItem")}
-                    </MenuItem>
-                  </MenuContent>
-                </MenuRoot>
-              ) : null
-            }
-          >
-            {editingBody ? (
-              <div className="grid gap-3">
-                <IssueComposer value={body} onChange={setBody} ariaLabel={t("issueBody")} />
-                <div className="flex justify-end gap-2">
-                  <Button variant="secondary" onClick={() => setEditingBody(false)}>
-                    {t("cancel")}
-                  </Button>
-                  <Button
-                    disabled={busy}
-                    onClick={() =>
-                      patch.mutate({ body }, { onError, onSuccess: () => setEditingBody(false) })
-                    }
-                  >
-                    {t("save")}
-                  </Button>
-                </div>
-              </div>
-            ) : issue.body.trim() ? (
-              <IssueMarkdown text={issue.body} />
-            ) : (
-              <p className="m-0 text-sm text-muted-foreground italic">{t("issueNoDescription")}</p>
-            )}
-          </Card>
-
-          <section aria-label={t("issueActivity")} className="grid gap-4">
-            {timeline.isPending ? (
-              <div className="grid place-items-center py-6">
-                <Spinner />
-              </div>
-            ) : timeline.error ? (
-              <p role="alert" className="m-0 text-sm text-destructive">
-                {timeline.error.message}
-              </p>
-            ) : (
-              timeline.data.map((item) =>
-                item.type === "comment" ? (
-                  <CommentCard
-                    key={item.id}
-                    comment={item}
-                    canEdit={me === item.author.id && issue.capabilities.comment}
-                    canDelete={
-                      (me === item.author.id && issue.capabilities.comment) || canManageComments
-                    }
-                  />
-                ) : (
-                  <EventLine key={item.id} event={item} />
-                ),
-              )
-            )}
-          </section>
-
-          {issue.state === "open" && issue.acceptance?.kind === "submitted" && issue.capabilities.close ? (
-            <section
-              aria-label={t("issueAcceptanceReview")}
-              className={cn(
-                "grid gap-3 rounded-lg border border-border p-4",
-                compact && "rounded-none border-x-0 border-b-0 px-0 pt-6",
-              )}
-            >
-              <h2 className="m-0 text-base font-semibold">{t("issueAcceptanceReview")}</h2>
-              <IssueComposer
-                value={reason}
-                onChange={setReason}
-                ariaLabel={t("issueSendBackReason")}
-                placeholder={t("issueSendBackPlaceholder")}
-                rows={3}
-              />
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  variant="secondary"
-                  disabled={verdict.isPending || !reason.trim()}
-                  onClick={() =>
-                    verdict.mutate({ kind: "sent_back", body: reason }, { onError, onSuccess: () => setReason("") })
-                  }
-                >
-                  <Undo2 />
-                  {t("issueSendBack")}
-                </Button>
-                <Button
-                  disabled={verdict.isPending}
-                  onClick={() => verdict.mutate({ kind: "accepted" }, { onError })}
-                >
-                  <CircleCheck />
-                  {t("issueAccept")}
-                </Button>
-              </div>
-            </section>
+          {acceptanceTab ? (
+            <Segmented<IssueView>
+              aria-label={t("issueViewSwitch")}
+              className="w-fit max-w-full"
+              value={view}
+              onValueChange={setView}
+              options={[
+                { label: t("issueViewConversation"), value: "conversation" },
+                { label: t("issueAcceptance"), value: "acceptance" },
+              ]}
+            />
           ) : null}
-
-          {issue.capabilities.comment ? (
-            <section
-              aria-label={t("issueAddComment")}
-              className={cn(
-                "grid gap-3 rounded-lg border border-border p-4",
-                compact && "rounded-none border-x-0 border-b-0 px-0 pt-6",
-              )}
-            >
-              <h2 className="m-0 flex items-center gap-2 text-base font-semibold">
-                {session.data?.authenticated ? (
-                  <Avatar
-                    src={session.data.user.avatarUrl}
-                    name={session.data.user.displayName}
-                    size="xs"
-                  />
-                ) : null}
-                {t("issueAddComment")}
-              </h2>
-              <IssueComposer
-                value={comment}
-                onChange={setComment}
-                ariaLabel={t("issueAddComment")}
-                placeholder={t("issueCommentPlaceholder")}
-                rows={4}
-                onSubmit={() => void submitComment()}
-              />
-              <div className="flex flex-wrap justify-end gap-2">
-                {issue.capabilities.close ? (
-                  issue.state === "open" ? (
-                    <div className="flex">
-                      <Button
-                        variant="secondary"
-                        className="rounded-r-none"
-                        disabled={busy}
-                        onClick={() => void closeIssue("completed")}
-                      >
-                        <CircleCheck className="text-state-merged" />
-                        {comment.trim() ? t("issueCloseWithComment") : t("issueClose")}
+          {view === "conversation" ? (
+            <>
+              <h2 className="sr-only">{t("issueBody")}</h2>
+              <Card
+                author={issue.author}
+                date={formatRelativeDate(issue.createdAt, language)}
+                opened
+                actions={
+                  issue.capabilities.edit && !editingBody ? (
+                    <MenuRoot>
+                      <MenuTrigger
+                        render={
+                          <Button variant="ghost" size="icon-sm" aria-label={t("issueMoreActions")}>
+                            <Ellipsis />
+                          </Button>
+                        }
+                      />
+                      <MenuContent align="end">
+                        <MenuItem
+                          onClick={() => {
+                            setBody(issue.body);
+                            setEditingBody(true);
+                          }}
+                        >
+                          <Pencil />
+                          {t("editItem")}
+                        </MenuItem>
+                      </MenuContent>
+                    </MenuRoot>
+                  ) : null
+                }
+              >
+                {editingBody ? (
+                  <div className="grid gap-3">
+                    <IssueComposer value={body} onChange={setBody} ariaLabel={t("issueBody")} />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" onClick={() => setEditingBody(false)}>
+                        {t("cancel")}
                       </Button>
-                      <MenuRoot>
-                        <MenuTrigger
-                          render={
-                            <Button
-                              variant="secondary"
-                              size="icon"
-                              className="h-9 rounded-l-none border-l-0"
-                              aria-label={t("issueCloseOptions")}
-                              disabled={busy}
-                            >
-                              <ChevronDown />
-                            </Button>
-                          }
-                        />
-                        <MenuContent align="end">
-                          <MenuItem onClick={() => void closeIssue("completed")}>
-                            <CircleCheck className="text-state-merged" />
-                            {t("issueCloseAsCompleted")}
-                          </MenuItem>
-                          <MenuItem onClick={() => void closeIssue("not_planned")}>
-                            <CircleSlash />
-                            {t("issueCloseAsNotPlanned")}
-                          </MenuItem>
-                        </MenuContent>
-                      </MenuRoot>
+                      <Button
+                        disabled={busy}
+                        onClick={() =>
+                          patch.mutate({ body }, { onError, onSuccess: () => setEditingBody(false) })
+                        }
+                      >
+                        {t("save")}
+                      </Button>
                     </div>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => patch.mutate({ state: "open" }, { onError })}
-                    >
-                      <CircleDot className="text-state-open" />
-                      {t("issueReopen")}
-                    </Button>
+                  </div>
+                ) : issue.body.trim() ? (
+                  <IssueMarkdown text={issue.body} />
+                ) : (
+                  <p className="m-0 text-sm text-muted-foreground italic">{t("issueNoDescription")}</p>
+                )}
+              </Card>
+
+              <section aria-label={t("issueActivity")} className="grid gap-4">
+                {timeline.isPending ? (
+                  <div className="grid place-items-center py-6">
+                    <Spinner />
+                  </div>
+                ) : timeline.error ? (
+                  <p role="alert" className="m-0 text-sm text-destructive">
+                    {timeline.error.message}
+                  </p>
+                ) : (
+                  timeline.data.map((item) =>
+                    item.type === "comment" ? (
+                      <CommentCard
+                        key={item.id}
+                        comment={item}
+                        canEdit={me === item.author.id && issue.capabilities.comment}
+                        canDelete={
+                          (me === item.author.id && issue.capabilities.comment) || canManageComments
+                        }
+                      />
+                    ) : (
+                      <EventLine key={item.id} event={item} />
+                    ),
                   )
-                ) : null}
-                <Button disabled={busy || !comment.trim()} onClick={() => void submitComment()}>
-                  {t("issueComment")}
-                </Button>
-              </div>
-            </section>
-          ) : (
-            <p className="m-0 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-              {t("issueMembersOnly")}
+                )}
+              </section>
+
+              {issue.capabilities.comment ? (
+                <section
+                  aria-label={t("issueAddComment")}
+                  className={cn(
+                    "grid gap-3 rounded-lg border border-border p-4",
+                    compact && "rounded-none border-x-0 border-b-0 px-0 pt-6",
+                  )}
+                >
+                  <h2 className="m-0 flex items-center gap-2 text-base font-semibold">
+                    {session.data?.authenticated ? (
+                      <Avatar
+                        src={session.data.user.avatarUrl}
+                        name={session.data.user.displayName}
+                        size="xs"
+                      />
+                    ) : null}
+                    {t("issueAddComment")}
+                  </h2>
+                  <IssueComposer
+                    value={comment}
+                    onChange={setComment}
+                    ariaLabel={t("issueAddComment")}
+                    placeholder={t("issueCommentPlaceholder")}
+                    rows={4}
+                    onSubmit={() => void submitComment()}
+                  />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {issue.capabilities.close ? (
+                      issue.state === "open" ? (
+                        <div className="flex">
+                          <Button
+                            variant="secondary"
+                            className="rounded-r-none"
+                            disabled={busy}
+                            onClick={() => void closeIssue("completed")}
+                          >
+                            <CircleCheck className="text-state-merged" />
+                            {comment.trim() ? t("issueCloseWithComment") : t("issueClose")}
+                          </Button>
+                          <MenuRoot>
+                            <MenuTrigger
+                              render={
+                                <Button
+                                  variant="secondary"
+                                  size="icon"
+                                  className="h-9 rounded-l-none border-l-0"
+                                  aria-label={t("issueCloseOptions")}
+                                  disabled={busy}
+                                >
+                                  <ChevronDown />
+                                </Button>
+                              }
+                            />
+                            <MenuContent align="end">
+                              <MenuItem onClick={() => void closeIssue("completed")}>
+                                <CircleCheck className="text-state-merged" />
+                                {t("issueCloseAsCompleted")}
+                              </MenuItem>
+                              <MenuItem onClick={() => void closeIssue("not_planned")}>
+                                <CircleSlash />
+                                {t("issueCloseAsNotPlanned")}
+                              </MenuItem>
+                            </MenuContent>
+                          </MenuRoot>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() => patch.mutate({ state: "open" }, { onError })}
+                        >
+                          <CircleDot className="text-state-open" />
+                          {t("issueReopen")}
+                        </Button>
+                      )
+                    ) : null}
+                    <Button disabled={busy || !comment.trim()} onClick={() => void submitComment()}>
+                      {t("issueComment")}
+                    </Button>
+                  </div>
+                </section>
+              ) : (
+                <p className="m-0 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  {t("issueMembersOnly")}
+                </p>
+              )}
+            </>
+          ) : timeline.error ? (
+            <p role="alert" className="m-0 text-sm text-destructive">
+              {timeline.error.message}
             </p>
+          ) : timeline.data ? (
+            <IssueAcceptancePanel issue={issue} timeline={timeline.data} />
+          ) : (
+            <Spinner />
           )}
         </div>
       </div>

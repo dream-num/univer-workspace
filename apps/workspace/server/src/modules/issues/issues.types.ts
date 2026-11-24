@@ -1,5 +1,5 @@
 import type { WriteSource, WriteSourceView } from "../identity/index.js";
-import type { PublicUser } from "../permissions/index.js";
+import type { AccessChanges, PublicUser } from "../permissions/index.js";
 import type { WorktreeState } from "../worktrees/worktrees.types.js";
 
 export type IssueState = "open" | "closed";
@@ -195,6 +195,8 @@ export interface IssuesModule {
   ): Promise<IssueTimelinePage>;
   createComment(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueCommentView>;
   verdict(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueView>;
+  /** Who may read content now, as each current assignee set it after its latest assignment. */
+  accessChanges(userId: string, spaceId: string, number: unknown): Promise<AccessChanges>;
   updateComment(userId: string, commentId: string, input: unknown): Promise<IssueCommentView>;
   deleteComment(userId: string, commentId: string): Promise<void>;
   listLabels(userId: string, spaceId: string): Promise<{ readonly labels: readonly IssueLabelUsageView[] }>;

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { checkCommentWrite, checkCreateRelations, requireIssueSpace } from "./issue-changes.js";
 import { writeSourceView } from "../identity/index.js";
 import type { AccessResolver, NodeAccess, SpaceAccess } from "../access/index.js";
-import type { PublicUser } from "../permissions/index.js";
+import type { AccessChanges, PublicUser } from "../permissions/index.js";
 import type {
   IssuesRepository,
   IssueDetail,
@@ -52,6 +52,11 @@ export function createIssuesModule(options: {
   readonly now?: () => number;
   readonly onChanged?: (change: IssueProductChange) => void;
   readonly pullRequests?: (userId: string, issueId: string) => Promise<readonly IssuePullRequestView[]>;
+  readonly accessChanges: (
+    userId: string,
+    spaceId: string,
+    actors: readonly { readonly userId: string; readonly since: number }[],
+  ) => Promise<AccessChanges>;
 }): IssuesModule {
   const { repository, access } = options;
   const now = options.now ?? Date.now;
@@ -284,6 +289,13 @@ export function createIssuesModule(options: {
       });
       await notify(spaceId);
       return issueView(userId, detail);
+    },
+
+    async accessChanges(userId, spaceId, number) {
+      await requireSpace(userId, spaceId);
+      const issue = await requireIssue(spaceId, number);
+      const assignments = await repository.assignments(issue.id);
+      return options.accessChanges(userId, spaceId, assignments.map((row) => ({ userId: row.user_id, since: row.assigned_at })));
     },
 
     async updateComment(userId, commentId, input) {

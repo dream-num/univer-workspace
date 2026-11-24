@@ -1,4 +1,4 @@
-import type { SqliteAccessRepository } from "../access/access.repository.js";
+import { ownsSpaceSql, type SqliteAccessRepository } from "../access/access.repository.js";
 import { conflict, forbidden, notFound, requireManageMembers, requireShare, requireTeam } from "../../../modules/permissions/permissions.policy.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { GrantRole, PublicUser, TeamRole } from "../../../modules/permissions/permissions.types.js";
@@ -8,6 +8,7 @@ import type {
   LinkSharingRow,
   NodeOwnerRow,
   PermissionsRepository,
+  PersonalSharingRow,
 } from "../../../modules/permissions/permissions.repository.js";
 
 export class SqlitePermissionsRepository implements PermissionsRepository {
@@ -244,6 +245,39 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
         )
         .get(nodeId) as LinkSharingRow | undefined) ?? null
     );
+  }
+
+  async listPersonalSharing(readerUserId: string, actorUserId: string, since: number, limit: number): Promise<PersonalSharingRow[] | null> {
+    const connection = this._database.connection;
+    if (!connection.prepare(`SELECT 1 FROM users WHERE id = ? AND ${ownsSpaceSql("users.id", "?")}`).get(actorUserId, readerUserId, readerUserId)) {
+      return null;
+    }
+    const links = connection
+      .prepare(
+        `SELECT 'link' AS kind, nodes.id AS node_id, nodes.name AS node_name, sharing.role, sharing.enabled, sharing.updated_at
+         FROM node_link_sharing AS sharing
+         JOIN nodes ON nodes.id = sharing.node_id
+         JOIN spaces ON spaces.id = nodes.space_id
+         WHERE spaces.type = 'personal' AND spaces.owner_user_id = ?
+           AND ((sharing.updated_by = ? AND sharing.updated_at > ?) OR (sharing.created_by = ? AND sharing.created_at > ?))
+         ORDER BY sharing.updated_at DESC, nodes.id
+         LIMIT ?`
+      )
+      .all(actorUserId, actorUserId, since, actorUserId, since, limit);
+    const grants = connection
+      .prepare(
+        `SELECT 'grant' AS kind, nodes.id AS node_id, nodes.name AS node_name, grants.role, grants.updated_at,
+           grantee.id AS user_id, grantee.username, grantee.display_name, grantee.avatar_url
+         FROM node_grants AS grants
+         JOIN nodes ON nodes.id = grants.node_id
+         JOIN spaces ON spaces.id = nodes.space_id
+         JOIN users AS grantee ON grantee.id = grants.user_id
+         WHERE spaces.type = 'personal' AND spaces.owner_user_id = ? AND grants.granted_by = ? AND grants.updated_at > ?
+         ORDER BY grants.updated_at DESC, nodes.id, grantee.id
+         LIMIT ?`
+      )
+      .all(actorUserId, actorUserId, since, limit);
+    return [...links, ...grants] as unknown as PersonalSharingRow[];
   }
 
   async findNodeOwner(nodeId: string): Promise<NodeOwnerRow> {

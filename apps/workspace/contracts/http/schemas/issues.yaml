@@ -269,6 +269,108 @@ IssuePullRequest:
         - $ref: ./identity.yaml#/PublicUser
         - type: "null"
 
+IssueAccessChanges:
+  type: object
+  additionalProperties: false
+  required: [publicRead, members, membersTruncated, personalSharing]
+  properties:
+    publicRead:
+      type: boolean
+      description: Whether the Team Space reads publicly now. The product does not record who set it.
+    members:
+      type: array
+      maxItems: 50
+      description: |
+        Memberships of this Team Space whose latest grant came from an assignee after its latest
+        assignment, newest first: the 50 most recent.
+      items:
+        $ref: ./permissions.yaml#/TeamMembership
+    membersTruncated:
+      type: boolean
+      description: True when more memberships matched than `members` holds.
+    personalSharing:
+      oneOf:
+        - $ref: "#/IssuePersonalSharing"
+        - type: "null"
+      description: |
+        Link Sharing settings and Node Grants that an assignee created or last changed after its
+        latest assignment, in its own Personal Space. It covers only the assignees the caller is or
+        claimed, and is `null` when the caller is none of them.
+
+IssuePersonalSharing:
+  type: object
+  additionalProperties: false
+  required: [items, truncated]
+  properties:
+    items:
+      type: array
+      maxItems: 50
+      description: Newest first, the 50 most recent.
+      items:
+        $ref: "#/IssuePersonalSharingChange"
+    truncated:
+      type: boolean
+
+IssuePersonalSharingChange:
+  oneOf:
+    - $ref: "#/IssueLinkSharingChange"
+    - $ref: "#/IssueNodeGrantChange"
+  discriminator:
+    propertyName: kind
+    mapping:
+      link: "#/IssueLinkSharingChange"
+      grant: "#/IssueNodeGrantChange"
+
+IssueSharedNode:
+  type: object
+  additionalProperties: false
+  required: [id, name]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+
+IssueLinkSharingChange:
+  type: object
+  additionalProperties: false
+  required: [kind, actor, node, role, enabled, updatedAt]
+  properties:
+    kind:
+      type: string
+      const: link
+    actor:
+      $ref: ./identity.yaml#/PublicUser
+    node:
+      $ref: "#/IssueSharedNode"
+    role:
+      $ref: ./permissions.yaml#/GrantRole
+    enabled:
+      type: boolean
+    updatedAt:
+      type: string
+      format: date-time
+
+IssueNodeGrantChange:
+  type: object
+  additionalProperties: false
+  required: [kind, actor, node, role, user, updatedAt]
+  properties:
+    kind:
+      type: string
+      const: grant
+    actor:
+      $ref: ./identity.yaml#/PublicUser
+    node:
+      $ref: "#/IssueSharedNode"
+    role:
+      $ref: ./permissions.yaml#/GrantRole
+    user:
+      $ref: ./identity.yaml#/PublicUser
+    updatedAt:
+      type: string
+      format: date-time
+
 IssueList:
   type: object
   additionalProperties: false

@@ -16,6 +16,7 @@ import type {
   LabelRow,
   CommentRow,
   TimelineRow,
+  AssignmentRow,
   IssueFilter,
   IssueListPage,
   TimelineCursor,
@@ -399,6 +400,18 @@ export class PostgresIssuesRepository implements IssuesRepository {
        ) ${keyset} ORDER BY created_at, rank, id LIMIT ?`,
       ...params,
     ) as unknown as TimelineRow[];
+  }
+
+  async assignments(issueId: string): Promise<AssignmentRow[]> {
+    return await this._all(
+      `SELECT assignees.user_id, MAX(events.created_at) AS assigned_at
+       FROM issue_assignees AS assignees
+       JOIN issue_events AS events ON events.issue_id = assignees.issue_id AND events.kind = 'assigned'
+         AND events.payload_json::jsonb ->> 'userId' = assignees.user_id
+       WHERE assignees.issue_id = ?
+       GROUP BY assignees.user_id`,
+      issueId,
+    ) as unknown as AssignmentRow[];
   }
 
   async listLabels(spaceId: string): Promise<Array<LabelRow & { open_issue_count: number }>> {

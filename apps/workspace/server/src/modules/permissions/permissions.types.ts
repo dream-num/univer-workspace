@@ -39,3 +39,25 @@ export interface NodeLinkSharing {
   /** When the link suspends because its owner is an unclaimed agent that expires; null otherwise. */
   readonly expiresAt: string | null;
 }
+
+export type PersonalSharingChange = {
+  readonly actor: PublicUser;
+  readonly node: { readonly id: string; readonly name: string };
+  readonly role: GrantRole;
+  readonly updatedAt: string;
+} & (
+  | { readonly kind: "link"; readonly enabled: boolean }
+  | { readonly kind: "grant"; readonly user: PublicUser }
+);
+
+/** Who may read content now, as some actors last set it, each after its own time. Not a history. */
+export interface AccessChanges {
+  readonly publicRead: boolean;
+  readonly members: readonly TeamMembership[];
+  readonly membersTruncated: boolean;
+  /** Null when the reader owns none of the actors' Personal Spaces. */
+  readonly personalSharing: {
+    readonly items: readonly PersonalSharingChange[];
+    readonly truncated: boolean;
+  } | null;
+}

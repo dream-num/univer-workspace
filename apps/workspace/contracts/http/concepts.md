@@ -499,6 +499,16 @@ Issue without writing, so it is safe to retry, and concurrent verdicts write onc
 `Issue.acceptance` is the latest verdict, and `acceptance=submitted|sent_back` filters both Issue
 lists by it.
 
+`GET /api/spaces/{spaceId}/issues/{number}/access-changes` returns who may read content now
+because of the assignees, for anyone who may read the Issue. It is current state, not a history,
+and each list holds at most 50 rows, newest first. `members` are the Team Space memberships whose
+latest grant an assignee made after its own latest assignment, and `publicRead` is the Space's
+current setting without an actor. `personalSharing` holds the Link Sharing and Node Grants an
+assignee created or last changed in its own Personal Space after that assignment. It is `null`
+unless the caller is that assignee or the user who claimed it, because a link-shared Node's ID is
+its access link. The pages and files the linked pull requests published come from
+`GET /api/worktrees/{worktreeId}/html-view-drafts`, under that pull request's own rules.
+
 The timeline merges comments, events and verdicts in chronological order. A verdict appears as
 an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`. Event payloads are
 snapshots (label name and color, user names, file names), so they stay readable after a

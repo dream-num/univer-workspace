@@ -2337,6 +2337,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/{spaceId}/issues/{number}/access-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Show who may read content now, as the Issue's assignees set it after they were assigned.
+         * @description For each current assignee, counted from its latest assignment: the memberships of this Team
+         *     Space it granted, and the Link Sharing settings and Node Grants it set in its own Personal
+         *     Space. Only a reader who is that assignee, or who claimed that agent, gets the Personal Space
+         *     rows, because a link-shared Node's ID is its access link. Every row is the current setting, not
+         *     a history: a later change by someone else replaces it, and a removed grant disappears.
+         */
+        get: operations["getIssueAccessChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/issue-comments/{commentId}": {
         parameters: {
             query?: never;
@@ -4344,6 +4371,59 @@ export interface components {
             kind: components["schemas"]["IssueVerdictKind"];
             /** @description Required and not blank for `submitted` and `sent_back`; optional for `accepted`. */
             body?: string;
+        };
+        IssueSharedNode: {
+            id: string;
+            name: string;
+        };
+        IssueLinkSharingChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "link";
+            actor: components["schemas"]["PublicUser"];
+            node: components["schemas"]["IssueSharedNode"];
+            role: components["schemas"]["GrantRole"];
+            enabled: boolean;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        IssueNodeGrantChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grant";
+            actor: components["schemas"]["PublicUser"];
+            node: components["schemas"]["IssueSharedNode"];
+            role: components["schemas"]["GrantRole"];
+            user: components["schemas"]["PublicUser"];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        IssuePersonalSharingChange: components["schemas"]["IssueLinkSharingChange"] | components["schemas"]["IssueNodeGrantChange"];
+        IssuePersonalSharing: {
+            /** @description Newest first, the 50 most recent. */
+            items: components["schemas"]["IssuePersonalSharingChange"][];
+            truncated: boolean;
+        };
+        IssueAccessChanges: {
+            /** @description Whether the Team Space reads publicly now. The product does not record who set it. */
+            publicRead: boolean;
+            /**
+             * @description Memberships of this Team Space whose latest grant came from an assignee after its latest
+             *     assignment, newest first: the 50 most recent.
+             */
+            members: components["schemas"]["TeamMembership"][];
+            /** @description True when more memberships matched than `members` holds. */
+            membersTruncated: boolean;
+            /**
+             * @description Link Sharing settings and Node Grants that an assignee created or last changed after its
+             *     latest assignment, in its own Personal Space. It covers only the assignees the caller is or
+             *     claimed, and is `null` when the caller is none of them.
+             */
+            personalSharing: components["schemas"]["IssuePersonalSharing"] | null;
         };
         IssueLabelUsage: components["schemas"]["IssueLabel"] & {
             openIssueCount: number;
@@ -8738,6 +8818,33 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getIssueAccessChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current settings each assignee changed, and the Space's public-read state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueAccessChanges"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };

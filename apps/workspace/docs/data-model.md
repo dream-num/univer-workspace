@@ -616,6 +616,11 @@ V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue �
 ### `issue_assignees` 与 `issue_node_refs`
 
 Assignee 指派时必须是 Space Owner 或成员，最多 10 人；成员离开 Space 后已有指派保留。
+指派时间取这个用户最新一条 `assigned` 事件（`issue_events.payload_json` 的 `userId`），不另存。
+`GET /api/spaces/{spaceId}/issues/{number}/access-changes` 用它筛出每个 Assignee 指派之后的访问变化，只读当前行，
+不是历史：`space_members` 中 `granted_by` 是这个 Assignee、`updated_at` 晚于指派的行（之后别人重新授权会覆盖
+`granted_by`，这一行随之消失）；它自己 Personal Space 里 `node_link_sharing` 由它创建或最后修改、`node_grants`
+由它最后授予，且时间晚于指派的行。Personal Space 的行只返回给这个 Assignee 和认领它的用户（`agents.owner_user_id`）。
 引用 Node 指派时必须在同一 Space 且不在回收站，最多 20 个；Node 被永久删除时引用级联删除，
 Node 在回收站时读取侧显示为不可用且不返回名称。
 

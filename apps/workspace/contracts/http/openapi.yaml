@@ -256,6 +256,8 @@ paths:
     $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1comments
   /api/spaces/{spaceId}/issues/{number}/verdicts:
     $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1verdicts
+  /api/spaces/{spaceId}/issues/{number}/access-changes:
+    $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1access-changes
   /api/issue-comments/{commentId}:
     $ref: ./paths/issues.yaml#/~1api~1issue-comments~1{commentId}
   /api/spaces/{spaceId}/issue-labels:

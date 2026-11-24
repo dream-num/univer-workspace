@@ -435,8 +435,9 @@ export function createCollaborationGateway(options: {
     async (request, response) => {
       const baseMode = request.query.baseMode ?? "trunk";
       const view = request.query.view ?? "draft";
-      if ((baseMode !== "trunk" && baseMode !== "base") ||
-          (view !== "draft" && view !== "merged" && view !== "preview")) {
+      if ((baseMode !== "trunk" && baseMode !== "base" && baseMode !== "parent") ||
+          (view !== "draft" && view !== "merged" && view !== "preview") ||
+          (baseMode === "parent" && view !== "merged")) {
         response.status(400).json({ message: "Invalid comparison mode." });
         return;
       }

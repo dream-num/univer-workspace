@@ -821,6 +821,57 @@ describe("collaboration gateway", () => {
     }
   }, 60_000);
 
+  it("compares a merged Unit with Trunk just before its merge, after later Trunk edits", async () => {
+    const { application, origin } = await startApplication();
+    const issued = await application.identity.registerWithPassword({
+      username: "acceptor", displayName: "Acceptor", password: "correct horse battery staple",
+    });
+    const userId = issued.view.user.id;
+    const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    const space = (await application.spaces.list(userId)).spaces[0]!;
+    const created = await application.resources.create(userId, "parent-resource-0001", {
+      kind: "univer", spaceId: space.id, parentNodeId: null, name: "Totals", unitType: "sheet",
+    });
+    if (created.status === 202) throw new Error("Resource creation pending");
+    const resourceId = created.body.node.resource!.id;
+    const cell = (side: { unitData: { sheets: Record<string, { cellData?: Record<number, Record<number, { v?: unknown }>> }> } }) =>
+      Object.values(side.unitData.sheets)[0]?.cellData?.[0]?.[0]?.v;
+    const mergeEdit = async (key: string, value: string) => {
+      const worktreeId = (await application.worktrees.create(userId, `parent-create-${key}-0001`, { kind: "user", name: key, summary: null })).body.id;
+      const unitId = (await application.worktrees.addUnit(userId, worktreeId, `parent-unit-${key}-0001`, { source: "trunk", resourceId })).body.unit.unitId;
+      const endpoint = `${origin}/universer-api/worktrees/${worktreeId}/units/${unitId}/comparison`;
+      const draft = await (await fetch(endpoint, { headers: { cookie } })).json();
+      const sheetId = draft.right.unitData.sheetOrder[0];
+      await application.worktrees.submitChangeset(userId, worktreeId, unitId, {
+        changeset: {
+          unitID: unitId, type: UniverType.UNIVER_SHEET, baseRev: draft.right.revision, revision: draft.right.revision + 1,
+          sid: `parent-${key}`, reqId: 1, userID: "", memberID: "", createTime: 1,
+          mutations: [{
+            id: "sheet.mutation.set-range-values",
+            data: JSON.stringify({ unitId, subUnitId: sheetId, cellValue: { 0: { 0: { v: value } } } }),
+          }],
+        },
+      });
+      expect((await fetch(`${endpoint}?baseMode=parent`, { headers: { cookie } })).status).toBe(400);
+      await application.worktrees.markReady(userId, worktreeId);
+      await application.worktrees.merge(userId, worktreeId, `parent-merge-${key}-0001`);
+      return endpoint;
+    };
+
+    const first = await mergeEdit("first", "before");
+    const second = await mergeEdit("second", "after");
+    await mergeEdit("third", "later");
+    const response = await fetch(`${second}?baseMode=parent&view=merged`, { headers: { cookie } });
+    expect(response.status).toBe(200);
+    const compared = await response.json();
+    expect(compared.left.revision).toBe(compared.right.revision - 1);
+    expect([cell(compared.left), cell(compared.right)]).toEqual(["before", "after"]);
+    const againstCurrent = await (await fetch(`${second}?view=merged`, { headers: { cookie } })).json();
+    expect([cell(againstCurrent.left), cell(againstCurrent.right)]).toEqual(["later", "after"]);
+    const firstMerge = await (await fetch(`${first}?baseMode=parent&view=merged`, { headers: { cookie } })).json();
+    expect([cell(firstMerge.left), cell(firstMerge.right)]).toEqual([undefined, "before"]);
+  }, 60_000);
+
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {
     const { application, origin, collaborationDatabaseFilename } =
       await startApplication();

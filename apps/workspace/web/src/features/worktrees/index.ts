@@ -5,7 +5,9 @@ export {
   worktreeListQueryOptions,
   worktreeQueryOptions,
   worktreesQueryKey,
+  worktreeUnitComparisonQueryOptions,
   worktreeUnitOpenQueryOptions,
 } from "./worktrees.queries";
+export { UnitChangeIcon, UnitTypeIcon, worktreeStateLabel, worktreeStateVariant } from "./worktree-review-panel";
 export { useWorktreeChangeFeed } from "./worktree-change-feed";
 export { useWorktreeLifecycle, useToggleUnitRemoval } from "./worktrees.commands";
