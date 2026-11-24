@@ -1,7 +1,8 @@
 # MCP mode
 
 Read this before a run that needs the MCP gateway, the renderer, or the Workspace Agent. The journeys
-and their pass conditions are in [the MCP journeys](../features/mcp.md).
+and their pass conditions start at [MCP gateway](../features/mcp.md), and each tool family has its own
+`mcp-*.md` file in [the feature map](../features/README.md).
 
 ## Start
 
@@ -20,7 +21,7 @@ These variables are read at `up` and saved in `run.env`:
 | `VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` | Builds the image from another checkout, such as a clean `git worktree` at `origin/main` that reuses the cached install layer. Its `apps/mcp`, `packages/client-core` and `apps/cli/skill-data` must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data` is empty). Doctor checks the image against that checkout's source digest. |
 | `VERIFY_UVW_AGENT_PORT=<port>` | Registers the Workspace Agent's OAuth client for `agent-up`. See [Workspace Agent](#workspace-agent). |
 | `EXECUTOR_MAX_WORKERS`, `EXECUTOR_IDLE_TTL_MS` | Size the executor pool (defaults 4 and 60000 ms), for both executors. They do not change product defaults. |
-| `MCP_SYNC_BUDGET_MS=1` | Turns long Office and Typst calls into jobs. See [Typst job verification](../features/mcp.md#typst-job-verification). |
+| `MCP_SYNC_BUDGET_MS=1` | Turns long Office and Typst calls into jobs. See [Typst job verification](../features/mcp-executor.md#typst-job-verification). |
 | `MCP_CIMD_ENABLED=0` | Passes through to the Workspace server. Unset means enabled. |
 
 With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the server for MCP OAuth. When
@@ -29,7 +30,7 @@ With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the 
 
 Which mode a journey needs:
 
-- Run [MB](../features/mcp.md#mb-deployment-and-per-account-tools) with `VERIFY_UVW_MCP_RENDERER=0` and
+- Run [MB](../features/mcp-production.md#mb-deployment-and-per-account-tools) with `VERIFY_UVW_MCP_RENDERER=0` and
   `VERIFY_UVW_MCP_PRODUCTION=1`.
 - Journeys that use `--auth dev`, MA5 and the session-based second-user client of MF4 need development
   mode, which is the default.
@@ -130,14 +131,14 @@ plugins, installs the pinned DSH runtime and profile under `home/agent/`, and st
 (`logs/agent-install.log`). The one-time browser URL is in `home/agent-url` and the raw logs in
 `home/agent-log.private`. Never copy either into evidence. Open the URL in the run's agent-browser session
 and confirm the onboarding service URL is `$ORIGIN` before signing in. `$V agent-down` stops it, and
-`down` also deletes its installation. MA8 in [the MCP journeys](../features/mcp.md) drives it.
+`down` also deletes its installation. MA8 in [PAT sign-in](../features/mcp-auth.md#ma8-existing-sign-in-clients) drives it.
 
 ## Benchmarks and probes
 
 - Executor sizing: `node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help` and
-  [the capacity benchmark](../features/mcp.md#executor-capacity-benchmark).
+  [the capacity benchmark](mcp-benchmarks.md#executor-capacity-benchmark).
 - Renderer sizing: `node .agents/skills/verify-uvw/bin/renderer-bench.mjs --help` and
-  [the renderer benchmark](../features/mcp.md#renderer-capacity-benchmark). It recreates the renderer many
+  [the renderer benchmark](mcp-benchmarks.md#renderer-capacity-benchmark). It recreates the renderer many
   times, so use a stack nothing else uses.
 - Isolation baseline: `node .agents/skills/verify-uvw/bin/mcp-security-probes.mjs [--only MG6,MG7]` and
   [the MCP security journeys](../features/mcp-security.md).

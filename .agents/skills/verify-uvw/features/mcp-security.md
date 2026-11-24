@@ -42,7 +42,7 @@ configuration refuses to start.
 ## How to get to it (user POV)
 
 An agent reaches these paths through the MCP gateway (`verify-uvw mcp ... execute`, `screenshot`) with a PAT. Isolation is invisible to a
-well-behaved user, so a hostile user is simulated: the probes send scripts exactly as an agent would (MX1 in [mcp.md](./mcp.md)). The run needs
+well-behaved user, so a hostile user is simulated: the probes send scripts exactly as an agent would ([MX1](./mcp-executor.md#mx1-executor-write-and-readback)). The run needs
 Docker Desktop, the default development MCP stack with the renderer (`VERIFY_UVW_MCP=1 $V up`) and the disposable user (`$V user`).
 MG9 and MG11 read the renderer container. In production mode the second user is not on the executor allowlist and its calls are refused; run `$V mcp-allow-users '*'` first.
 

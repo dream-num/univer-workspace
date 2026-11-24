@@ -101,6 +101,6 @@ Preconditions:
 - `Save my version` on a page in trial mode copies the page and the Sheets it binds; see HV6-HV7 in
   [HTML View](./html-view.md).
 - Making a Space public needs an interactive session. A uvw password login or the browser may; an MCP PAT or
-  OAuth session gets `INTERACTIVE_SESSION_REQUIRED` and an unclaimed agent `AGENT_NOT_ALLOWED` (MH4 in [mcp.md](./mcp.md)).
+  OAuth session gets `INTERACTIVE_SESSION_REQUIRED` and an unclaimed agent `AGENT_NOT_ALLOWED` ([MH4 in agent handoff](./agent-handoff.md#mh-agent-principals-claims-and-public-spaces)).
 - A malformed JSON body to the share API answers `400` with `INVALID_INPUT`
   (`The request body is not valid JSON.`).

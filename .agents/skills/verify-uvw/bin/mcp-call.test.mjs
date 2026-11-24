@@ -124,7 +124,7 @@ test('gateway file transfers record only the appropriate bytes with no executor'
 });
 
 test('OAuth transcript redaction preserves JSON strings with escaped quotes', () => {
-  const doc = readFileSync(new URL('../features/mcp.md', import.meta.url), 'utf8');
+  const doc = readFileSync(new URL('../features/mcp-oauth.md', import.meta.url), 'utf8');
   const code = doc.match(/mo1_redact\(\) \{[\s\S]*?<<'JS'\n([\s\S]*?)\nJS/)[1];
   const run = mkdtempSync(join(tmpdir(), 'verify-uvw-redact-'));
   try {
