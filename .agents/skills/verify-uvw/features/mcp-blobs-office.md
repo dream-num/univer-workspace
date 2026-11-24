@@ -1,4 +1,4 @@
-# Files, Office and Markdown exchange over MCP (host only)
+# Files, Office and Markdown exchange over MCP
 
 An agent stages bytes through upload capabilities, publishes and replaces Blobs, downloads Blobs and Worktree
 image Assets, imports and exports xlsx and docx, and applies Markdown to Docs. A retry with the same idempotency

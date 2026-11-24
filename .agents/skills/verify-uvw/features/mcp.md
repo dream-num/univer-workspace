@@ -1,4 +1,4 @@
-# MCP gateway (host only)
+# MCP gateway
 
 An agent connects to a disposable Docker gateway with a personal access token (PAT) that the gateway exchanges
 for a short-lived Workspace session, calls its tools through either MCP protocol, and leaves correlated usage
@@ -45,8 +45,11 @@ $V doctor > "$EVIDENCE/mcp-doctor.txt"
 echo $? > "$EVIDENCE/mcp-doctor.exit"
 ```
 
-Pass when doctor exits 0, has no `FAIL` lines, and prints an `ok` for every MCP check
-in [local verification section 6.2](../../../../docs/design/workspace-mcp/local-verification.zh-CN.md).
+Pass when doctor exits 0 and has no `FAIL` lines. In the `image` start mode it prints an `ok` for every MCP
+check in [local verification section 6.2](../../../../docs/design/workspace-mcp/local-verification.zh-CN.md).
+In the `dist` start mode ([MCP mode](../references/mcp-mode.md#start)) the container, image and network checks
+print `skip` lines instead, and every other MCP check prints `ok`: staging, gateway port and Workspace reach,
+metrics, whoami, PAT exchange, executor and renderer RPC, worker environment and the log scans.
 
 ### M2. Identity, new protocol
 
@@ -187,7 +190,7 @@ test "$(cat "$EVIDENCE/mcp-origin.txt")" = 403
 
 Pass when the response is 403.
 
-### M10. Production refusal
+### M10. Production refusal (host only)
 
 ```bash
 cid=$(docker run -d --network none --label "com.docker.compose.project=$MCP_PROJECT" \
@@ -226,7 +229,7 @@ Pass when opencode exits 0, a `tool_use` fragment records the completed
 event has outcome `ok` and null client name. Keep the JSONL. It contains the four output
 fragment types, not developer plugins, skills or credentials.
 
-### M12. Cleanup
+### M12. Cleanup (host only)
 
 ```bash
 for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-before.txt"
@@ -245,8 +248,10 @@ and developer PIDs are unchanged or absent both times. Evidence and logs survive
 ## Gotchas
 
 - MCP is opt-in at `up`. Setting `VERIFY_UVW_MCP` later does not change an existing run.
-- Only macOS Docker Desktop and OrbStack are supported. The container accesses the loopback Server
-  through `host.docker.internal`, bypassing Vite's host checks.
+- On the host, only macOS Docker Desktop and OrbStack are supported. The container accesses the loopback
+  Server through `host.docker.internal`, bypassing Vite's host checks. The runner uses the `dist` start mode
+  instead, where the roles are local processes that reach the Server at `127.0.0.1`, and the image gotchas
+  below do not apply.
 - `user` gets a separate session from the public CLI login endpoint. It never reads
   uvw's private session file. Every call to `user` creates a fresh opencode directory
   because opencode caches project configuration by directory.

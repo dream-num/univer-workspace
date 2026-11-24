@@ -11,11 +11,11 @@
 
 | # | 事项 | 决定 | 理由与影响 |
 | --- | --- | --- | --- |
-| R1 | 用哪个真实 agent 验证 MCP | 一律用本机 opencode，模型 `console-deepseek/deepseek-flash#high`，即 reasoning effort 为 high（界面上显示为 “DeepSeek V4.1 Flash 1017”，provider “Personal / DeepSeek”）。不用 Claude Code。`verify-uvw` 为每次运行生成一个目录，里面只有一个 `opencode.json`，在这个目录里执行 `opencode run` | 评审决定。opencode 的后台服务按目录加载项目配置，所以不需要修改开发者的全局配置（实测，附录 A.6）。阶段 A 验收条目“Claude Code 通过 `verify-uvw env` 给出的 `claude mcp add` 命令连上本地 MCP”相应改写，见第 8 节 |
+| R1 | 用哪个真实 agent 验证 MCP | 一律用本机 opencode，模型 `console-deepseek/deepseek-flash#high`，即 reasoning effort 为 high（界面上显示为 “DeepSeek V4.1 Flash 1017”，provider “Personal / DeepSeek”）。verify runner 的 Linux 容器里没有 OpenCode Console 凭据，那里的 opencode 用内置的 `deepseek` provider，模型 `deepseek/deepseek-flash#high`，由镜像里的 `VERIFY_UVW_OPENCODE_MODEL` 设置，key 取自 `DEEPSEEK_API_KEY`。不用 Claude Code。`verify-uvw` 为每次运行生成一个目录，里面只有一个 `opencode.json`，在这个目录里执行 `opencode run` | 评审决定。opencode 的后台服务按目录加载项目配置，所以不需要修改开发者的全局配置（实测，附录 A.6）。阶段 A 验收条目“Claude Code 通过 `verify-uvw env` 给出的 `claude mcp add` 命令连上本地 MCP”相应改写，见第 8 节 |
 | R2 | 列表类工具的 `structuredContent` 形状 | 两版协议都返回以名词为键的对象，例如 `repo_list` 返回 `{"repos": [...]}` | 2025-11-25 规定 `structuredContent` 必须是 JSON 对象，2026-07-28 允许任意 JSON 值。工具直接返回数组时，v2 SDK 对 2025-11-25 客户端自动包成 `{"result": [...]}`，对 2026-07-28 客户端保持数组（实测，附录 A.4）。同一个工具的结果形状于是随协议版本变化。显式使用名词键可以让两版协议得到同一个形状。[工具规格](tools.zh-CN.md) 1.2 节“产品命令返回裸对象或数组”需要随本文一起修订。对齐比较因此先在 MCP 一侧取出名词键，见 6.6 节 |
 | R3 | MCP SDK | 网关使用 v2 SDK：`@modelcontextprotocol/server` 2.4.0 与 `@modelcontextprotocol/node` 2.1.2。`verify-uvw` 的客户端使用 `@modelcontextprotocol/client` 2.4.0。全部精确版本 | v1 的 `@modelcontextprotocol/sdk` 1.32.2 最高只支持 2025-11-25。v2 用同一个处理函数服务两版协议（实测，附录 A.3） |
 | R4 | 开发认证的 session 来源 | `verify-uvw user` 另外调用一次 `POST /api/auth/cli/password/login`，把得到的 session 写入本次运行的 `home/mcp-session`。不读取 `uvw` 的 `session.json` | `session.json` 是 CLI 私有的存储格式（`apps/cli/AGENTS.md`）。独立的 session 让 `uvw auth logout` 之类的 CLI 旅程不会使 MCP 的证据失效。这个路由签发 `agent` 来源的 session，与 `uvw` 相同 |
-| R5 | 本地原型支持的 Docker 环境 | 只支持 macOS 上的 Docker Desktop。在其他环境下设置 `VERIFY_UVW_MCP=1` 时，`up` 在启动 Workspace 之前报错退出 | Linux Docker Engine 上，容器无法访问宿主只监听 `127.0.0.1` 的进程。OrbStack 没有实测 |
+| R5 | 本地原型支持的 Docker 环境 | 只支持 macOS 上的 Docker Desktop。在其他环境下设置 `VERIFY_UVW_MCP=1` 时，`up` 在启动 Workspace 之前报错退出。verify runner 的 Linux 容器里不用 Docker，改用 `dist` 启动方式（`VERIFY_UVW_MCP_FROM=dist`）：用 node 直接运行 `apps/mcp/dist`，每个角色是一个本地进程，经 `127.0.0.1` 访问 Workspace。`dist` 只在 runner 里可用（镜像设置 `VERIFY_UVW_RUNNER=1`），宿主上 `up` 拒绝启动 | Linux Docker Engine 上，容器无法访问宿主只监听 `127.0.0.1` 的进程。OrbStack 没有实测 |
 | R6 | MCP 是否默认启动 | 阶段 A 中 MCP 按需启动：只有设置 `VERIFY_UVW_MCP=1` 时，`up` 才构建镜像并启动网关。不设置时，所有命令与扩展前完全相同 | 默认启动会让现有用法失效：没有 Docker Desktop 的机器上 `up` 直接失败，每次 `up` 多出一次镜像构建，`SKILL.md` 中并行运行的示例会在 3930 端口上冲突。D13 要求“启动验证实例时一起启动 MCP”，在设置这个变量时成立。附录 A.5 测得热构建耗时后，可以再讨论是否改为默认启动。阶段 A 验收条目里的 `verify-uvw up` 相应写作 `VERIFY_UVW_MCP=1 verify-uvw up` |
 
 ## 2. 拓扑
@@ -251,7 +251,7 @@ $V mcp-allow-users <workspace-user-id> [<another-workspace-user-id> ...]
 命令先等待重建的 executor 健康，再重建 gateway，保证首次能力发现能看到执行层。不重建镜像，不重启 Workspace、Vite 或 renderer。失败时保留所选白名单，重试同一命令即可。
 `executor-allowed-user-ids` 与 `run.env` 一起保留以供审查；凭据仍只保存在 `home/` 并由 `down` 删除。
 
-MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp-production.md](../../../.agents/skills/verify-uvw/features/mcp-production.md#mb-deployment-and-per-account-tools)。
+MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp-production.md](../../../.agents/skills/verify-uvw/features/mcp-production.md#mb-deployment-and-per-account-tools-host-only)。
 MB1 比对七种 toolset 的显式有序列表，MB2 检查 instructions，MB3 用第二个非白名单用户验证 40 个纯 HTTP 工具与 unknown-tool 错误，MB4 用 PAT 完成 MX1 至 MX3，MB5 先验证 `/readyz` 为 200，再停止 executor 并通过 `$V mcp-gateway-restart` 仅重建 gateway，预期为 503 且命名 executor 检查；启动 executor 后十秒内恢复 200。已发现过兼容能力的 gateway 不因 executor 停止而未就绪，仍可服务 HTTP 工具。Workspace 的可选停机检查记录为未运行，因为 helper 没有独立的 server stop/restart 命令。
 若基线尚未合入该端点而返回 404，脚本记录 MB5 未运行，不能宣称就绪验收通过。
 

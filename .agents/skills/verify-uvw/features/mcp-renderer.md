@@ -1,4 +1,4 @@
-# Screenshots, PDF and lint over MCP (host only)
+# Screenshots, PDF and lint over MCP
 
 An agent sees a Unit through the renderer. `screenshot` returns PNG images, or download links when they are
 large, `print_pdf` returns a PDF, `lint` reports layout problems in a Slide deck, and `compile_svg` measures text
@@ -51,6 +51,11 @@ Pass when:
   while `mcp_renderer_jobs_total{kind="screenshot",outcome="ok"}` grows.
 - Killing the renderer's Chromium makes the next call return a retryable `workspace-renderer-failed` and the one after succeeds
   on a new runtime (`mcp_renderer_runtime_discards_total` 1).
+- In the runner (`dist` start mode) there is no container boundary. The doctor prints the renderer's isolation and
+  network checks as `skip`, and the `docker exec` reachability checks above do not apply; they run on the host.
+  Kill only the renderer's Chromium, a child of the renderer process:
+  `pkill -P "$(node .agents/skills/verify-uvw/bin/mcp-processes.mjs pid "$RUN" renderer)" chromium`. A plain
+  `pkill chromium` also kills the run's agent-browser.
 
 ### MR10 screenshot tool
 

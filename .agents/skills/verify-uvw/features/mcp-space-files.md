@@ -1,4 +1,4 @@
-# Space files, repositories and resources over MCP (host only)
+# Space files, repositories and resources over MCP
 
 An agent browses and finds files in a Space, creates, edits and renames repositories, manages labels, creates and
 adds Units in a pull request, reads uploaded files, creates, renames, moves and trashes Nodes, merges or discards

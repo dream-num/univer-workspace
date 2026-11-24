@@ -1,4 +1,4 @@
-# MCP sign-in with personal access tokens (host only)
+# MCP sign-in with personal access tokens
 
 An agent calls the gateway with a personal access token (PAT). Its scopes limit what it may do, revoking it stops
 the next call, and the protected-resource metadata tells a client where to sign in. Turning on MCP OAuth leaves
@@ -207,7 +207,7 @@ Pass when `pr_merge`, listed in the default `core`, exits 1 with `workspace-scop
 usage event, the instructions leave merging to the user, the CLI still shows the pull request `ready`, and the
 discard with the restored full-scope PAT succeeds.
 
-### MA8. Existing sign-in clients
+### MA8. Existing sign-in clients (host only)
 
 MCP OAuth must not change how the Browser, uvw and the Workspace
 Agent sign in, so run these in an MCP-enabled run, where the MCP OAuth code paths are active.

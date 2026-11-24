@@ -1,4 +1,4 @@
-# HTML View drafts over MCP (host only)
+# HTML View drafts over MCP
 
 An agent validates an HTML View against a populated Sheet, saves it as a pending draft, retries and revises the
 draft, and the owner previews and publishes it. Validation and missing-source errors match

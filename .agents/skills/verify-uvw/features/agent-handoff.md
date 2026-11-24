@@ -1,4 +1,4 @@
-# Agent handoff and claim (host only)
+# Agent handoff and claim
 
 A person who opens someone else's shared file can hand it to their own AI agent. The agent connects without an
 account as a guest agent, works in pull requests in its own Personal Space, and gives the person a claim link.

@@ -1,4 +1,4 @@
-# MCP production shape and per-account tools (host only)
+# MCP production shape and per-account tools
 
 In the production shape, with no renderer, PAT sign-in and an executor allowlist, each account sees only the
 tools it may use. A user outside the allowlist keeps the HTTP tools and has no `execute`, the instructions never
@@ -18,7 +18,7 @@ An operator deploys the gateway with `NODE_ENV=production` and an executor allow
 MB starts its own production run, as written below, so do not reuse a default MCP run. The other MCP-mode
 rules in [MCP gateway](mcp.md) still apply.
 
-### MB. Deployment and per-account tools
+### MB. Deployment and per-account tools (host only)
 
 Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
 

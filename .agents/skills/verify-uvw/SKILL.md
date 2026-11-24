@@ -131,7 +131,7 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   proof of the auth feature. The [auth journey](features/auth.md) proves that.
 - Nothing is mocked except the browser Agent's model provider in the Agent journeys. Collaboration,
   Office exchange, and the CLI daemon are all real. External OAuth providers (GitHub, Google, Discord)
-  need a real provider, so report them as skipped. MA8 in [PAT sign-in](features/mcp-auth.md#ma8-existing-sign-in-clients) drives
+  need a real provider, so report them as skipped. MA8 in [PAT sign-in](features/mcp-auth.md#ma8-existing-sign-in-clients-host-only) drives
   browser-approved `uvw auth login`.
 - Report an unreachable entry point with the command you tried and the unmet precondition. Do not
   report it as verified through a different path.
@@ -171,17 +171,22 @@ $V runner --jobs 3 --keep issues auth create-document
 ```
 
 - The runner image is the one exception to "names no model". It ships Claude Code pointed at DeepSeek's
-  Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high.
+  Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high, and opencode on
+  `deepseek/deepseek-flash#high` (`VERIFY_UVW_OPENCODE_MODEL`) for the MCP journeys.
 - It needs Docker and `DEEPSEEK_API_KEY`, from the environment or from a `DEEPSEEK_API_KEY=` line in the
   repository's `.env`. The key reaches each task only as a `docker exec` environment variable, never the image
   or a file.
 - It tests your working tree as it is. Tracked changes and untracked files go into a snapshot commit that no
   ref points at, and your index, status and refs stay as they were.
-- It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs and builds the
-  snapshot once, then takes tasks one at a time. Every task gets a new Claude Code session, which starts its
+- It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
+  builds the CLI and the MCP gateway once, then takes tasks one at a time. Every task gets a new Claude Code session, which starts its
   own instance from the brief that `$V brief --own <run-id> <feature> [journey-id...]` prints.
 - A feature or journey marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract)
-  does not run here. The runner lists it in `summary.md` for a host run. Every MCP-mode feature is marked today.
+  does not run here. The runner lists it in `summary.md` for a host run.
+- MCP features run here in the `dist` start mode of [MCP mode](references/mcp-mode.md#start), which starts the
+  gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
+  `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
+  journeys that call `docker` or `agent-up`, and the whole MCP security feature, are marked `(host only)`.
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/`: `summary.md`, and for each task
   `report.md` (its evidence paths open on the host), `transcript.jsonl`, `result.json`,
   `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
