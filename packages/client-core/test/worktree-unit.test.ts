@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { listPullRequests } from "../src/product.js";
 import {
   parseUnit,
   parseWorktree,
@@ -136,6 +137,45 @@ describe("Workspace Worktree model and workflow", () => {
     const listed = await feature.list({ creatorId: "u1", limit: 1, view: "all" });
 
     expect(listed.map((worktree) => worktree.id)).toEqual(["mine"]);
+  });
+
+  it("lists as reviewable only ready Team pull requests that others wrote and the user may merge, across pages", async () => {
+    const pull = (id: string, spaceId: string, creatorId: string, merge: boolean) => ({
+      ...rawWorktree(id, "ready"),
+      teamSpace: { id: spaceId, name: spaceId },
+      creator: { id: creatorId, username: creatorId },
+      capabilities: { review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge, discard: false },
+    });
+    const source = [
+      pull("own", "budget", "user-1", true),
+      pull("viewer-only", "budget", "u2", false),
+      ...Array.from({ length: 98 }, (_, index) => pull(`not-mine-to-merge-${index}`, "sales", "u3", false)),
+      pull("budget-proposal", "budget", "u2", true),
+      pull("sales-proposal", "sales", "u3", true),
+    ];
+    const queries: string[] = [];
+    const feature = worktrees(async (input, init) => {
+      const url = new URL(new Request(input, init).url);
+      queries.push(url.search);
+      const offset = Number(url.searchParams.get("cursor") ?? 0);
+      const end = offset + Number(url.searchParams.get("limit"));
+      return Response.json({ items: source.slice(offset, end), nextCursor: end < source.length ? String(end) : null });
+    });
+    const deps = { userId: async () => "user-1", worktrees: feature };
+
+    const listed = await listPullRequests(deps, { state: "open", reviewable: true, limit: 5 });
+
+    expect(listed.map(({ id, spaceId, capabilities }) => ({ id, spaceId, merge: capabilities?.merge }))).toEqual([
+      { id: "budget-proposal", spaceId: "budget", merge: true },
+      { id: "sales-proposal", spaceId: "sales", merge: true },
+    ]);
+    expect(queries).toEqual([
+      "?scope=active&kind=team&state=ready&limit=100",
+      "?scope=active&kind=team&state=ready&limit=100&cursor=100",
+    ]);
+    await expect(listPullRequests(deps, { state: "all", reviewable: true, limit: 5 })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+    });
   });
 
   it("rejects invalid Worktree lists as a whole", async () => {

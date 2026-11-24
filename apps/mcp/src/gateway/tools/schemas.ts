@@ -159,6 +159,19 @@ export const worktreeSchema = z.object({
   createdAt: z.string().optional(),
   createdVia: z.enum(["browser", "agent", "unknown"]).optional(),
   updatedAt: z.string().optional(),
+  capabilities: z
+    .object({
+      review: z.boolean(),
+      editDraft: z.boolean(),
+      addUnit: z.boolean(),
+      changeVisibility: z.boolean(),
+      markReady: z.boolean(),
+      reopen: z.boolean(),
+      merge: z.boolean(),
+      discard: z.boolean(),
+    })
+    .optional()
+    .describe("What you may do with this pull request now."),
   url: z.url(),
 });
 

@@ -60,18 +60,23 @@ export async function pullRequestSpace(
 /**
  * Pull requests of one repository (`space`) or, without `space`, of every repository the user can
  * see. A Personal Space lists the User Worktrees of its owner; a Team Space lists its Worktrees.
+ * `reviewable` keeps the ready Team pull requests that others wrote and the user may merge.
  */
 export async function listPullRequests(
   deps: { readonly userId: () => Promise<string>; readonly worktrees: Pick<WorkspaceWorktreeFeature, "list"> },
   input: {
     readonly author?: string;
     readonly limit: number;
+    readonly reviewable?: boolean;
     readonly search?: string;
     readonly space?: Pick<WorkspaceSpace, "id" | "owner" | "type">;
     readonly state: PullRequestState;
   },
 ): Promise<readonly WorkspaceWorktree[]> {
   const { space, author, search } = input;
+  if (input.reviewable === true && input.state !== "open") {
+    throw workspaceError("workspace-argument-invalid", "Reviewable pull requests are open; leave the state open.");
+  }
   return await deps.worktrees.list({
     ...(space === undefined
       ? {}
@@ -79,6 +84,9 @@ export async function listPullRequests(
         ? { scope: "user" as const, creatorId: space.owner?.id ?? (await deps.userId()) }
         : { scope: "space" as const, spaceId: space.id }),
     ...pullRequestView(input.state),
+    ...(input.reviewable === true
+      ? { scope: "space" as const, states: ["ready" as const], reviewerId: await deps.userId() }
+      : {}),
     limit: input.limit,
     ...(search === undefined ? {} : { search }),
     ...(author === undefined

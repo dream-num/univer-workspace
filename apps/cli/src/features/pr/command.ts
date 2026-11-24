@@ -24,6 +24,7 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 export const PR_JSON_FIELDS = [
   "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "createdVia", "updatedAt",
+  "capabilities",
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
 
 interface RepoOption {

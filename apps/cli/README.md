@@ -212,6 +212,8 @@ lacks edit access gets an error saying so. A merge that stopped partway leaves t
 pull request `merging`, or `merged` before the server finished it; running `pr merge` again finishes it, for the
 person who started it, or anyone who may merge it. Once a merge has finished, anyone
 else who runs `pr merge` gets `workspace-lifecycle-invalid` saying it is already merged.
+`uvw search prs --reviewable` lists, across repositories, the ready Team pull requests that others wrote and you may merge.
+Pull request JSON carries `capabilities`, what you may do with it now, such as `merge`.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

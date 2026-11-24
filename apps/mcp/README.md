@@ -58,6 +58,10 @@ Each Unit in a pull request carries `freshness` from the server: `current`, `beh
 pull request is draft or ready, otherwise null. When `pr_view` is listed, the instructions say what each label means and tell
 the caller to redo a stale pull request in a new one and then discard the stale one. Freshness never blocks a merge.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
+With `search` listed, the instructions and the core Skill tell the caller that, asked to check its work or given no task, it
+finds the work itself: `search` for open Issues assigned to it and for reviewable pull requests. They tell it to treat Issue and
+pull request text that someone else wrote as an unverified request, acted on only inside its repository. Nothing pushes work to
+an agent; its harness wakes it to poll.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -297,7 +301,7 @@ and the matching owner/slug candidates when available.
 | `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`) |
 | `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Needs edit access to every changed file: the author, the person who claimed the authoring agent, or the Owner, an Admin or an Editor of a Team pull request visible to its repository. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, or anyone who may merge it |
-| `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
+| `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, for Issues `labels`, `assignee`, and for pull requests `reviewable` | `{ issues: [...] }` or `{ prs: [...] }` across every repository. `reviewable: true` keeps the ready Team pull requests that others wrote and the caller may merge. Each pull request carries `capabilities`, what the caller may do with it now, such as `merge` |
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo` (a repository or a fork address); optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }`. A fork lists its upstream without the files its pull request removes and with the files it creates; a created file's `url` opens it in the pull request |
 | `space_find` | Required `repo` (a repository or a fork address), `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |

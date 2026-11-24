@@ -300,7 +300,7 @@ Client Core 不读取 CLI 的配置和环境变量。`UVW_REPO` 由 CLI 读取�
 | `uvw pr merge <n> [-R]` | `worktree merge` | 没有 `--squash` 等选项，也不提示确认；是否允许 merge 由 Skills 约束 Agent |
 | `uvw pr discard <n> [-R]` | `worktree discard` | 不可逆 |
 | `uvw search issues [-a @me] [-A] [-s] [-l] [-S] [-L] [--json]` | `issue list`（不带 `--space`） | 跨仓库查询；对应 gh `search issues`，使用现有的 `GET /api/issues` |
-| `uvw search prs [-A @me] [-s] [-S] [-L] [--json]` | `worktree list`（不带 `--space`） | 跨仓库列出可审阅的 Worktree；对应 gh `search prs`，使用现有的 `GET /api/worktrees`（不带 `teamSpaceId`）。`pr list` 必须有仓库上下文，原来跨仓库列出的能力由这个命令承接 |
+| `uvw search prs [-A @me] [-s] [-S] [--reviewable] [-L] [--json]` | `worktree list`（不带 `--space`） | 跨仓库列出可审阅的 Worktree；对应 gh `search prs`，使用现有的 `GET /api/worktrees`（不带 `teamSpaceId`）。`--reviewable` 只留下别人写的、自己能合入的 ready Team Worktree，Client Core 在翻页时按 `capabilities.merge` 和创建者过滤。`pr list` 必须有仓库上下文，原来跨仓库列出的能力由这个命令承接 |
 | `uvw browse [<n>] [-R] [--unit <id>]` | `open --worktree --unit` | 只**打印** URL，不打开浏览器（偏离 gh，以 Agent 为先）；`<n>` 可以是 issue 或 PR，共用编号所以没有歧义；有编号的 PR 输出 `/spaces/<id>/pulls/<n>`，没有编号的旧 Worktree 输出旧链接；`--unit` 映射为 `unit` 查询参数 |
 
 **`worktree` 命令组（`pr` 的别名，决策 7）**：保留原有子命令名。每个子命令与对应的 `pr` 子命令

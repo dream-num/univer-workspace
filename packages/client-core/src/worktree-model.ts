@@ -5,6 +5,20 @@ import { parseUnitType, type WorkspaceUnitType } from "./space-model.js";
 
 export type WorkspaceWorktreeState = "draft" | "ready" | "merging" | "merged" | "discarded";
 
+const WORKTREE_CAPABILITIES = [
+  "review",
+  "editDraft",
+  "addUnit",
+  "changeVisibility",
+  "markReady",
+  "reopen",
+  "merge",
+  "discard",
+] as const;
+export type WorkspaceWorktreeCapabilities = {
+  readonly [Name in (typeof WORKTREE_CAPABILITIES)[number]]: boolean;
+};
+
 export interface WorkspaceUnit {
   readonly activationState:
     | "notApplicable"
@@ -49,6 +63,8 @@ export interface WorkspaceWorktree {
   readonly updatedAt?: string;
   readonly state: WorkspaceWorktreeState;
   readonly units: readonly WorkspaceUnit[];
+  /** What the signed-in user may do with it now. Absent in responses that omit it. */
+  readonly capabilities?: WorkspaceWorktreeCapabilities;
 }
 
 export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWorktree {
@@ -71,6 +87,9 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
   if (!Array.isArray(units)) throw invalidResponse("Workspace Worktree contains invalid Units");
   const worktreeId = value["id"];
   const spaceId = parseTeamSpaceId(value["teamSpace"]);
+  const capabilities = value["capabilities"];
+  const hasCapabilities =
+    isWorkspaceRecord(capabilities) && WORKTREE_CAPABILITIES.every((name) => typeof capabilities[name] === "boolean");
   return {
     id: worktreeId,
     name: value["name"],
@@ -93,6 +112,13 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
     ...parseCreator(value["creator"]),
     ...(typeof value["createdAt"] === "string" ? { createdAt: value["createdAt"] } : {}),
     ...(typeof value["updatedAt"] === "string" ? { updatedAt: value["updatedAt"] } : {}),
+    ...(hasCapabilities
+      ? {
+          capabilities: Object.fromEntries(
+            WORKTREE_CAPABILITIES.map((name) => [name, capabilities[name]]),
+          ) as WorkspaceWorktreeCapabilities,
+        }
+      : {}),
   };
 }
 
