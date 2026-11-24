@@ -41,10 +41,33 @@ export function parseArgs(argv) {
 }
 
 export function findKey(env, dotenv) {
-  if (env.DEEPSEEK_API_KEY) return env.DEEPSEEK_API_KEY;
+  if (env.DEEPSEEK_API_KEY) return { key: env.DEEPSEEK_API_KEY, source: 'environment' };
   const values = [...(dotenv ?? '').matchAll(/^[ \t]*(?:export[ \t]+)?DEEPSEEK_API_KEY[ \t]*=[ \t]*(.*?)[ \t]*\r?$/gm)]
     .map(([, value]) => value.replace(/^(["'])(.*)\1$/, '$2'));
-  return values.at(-1) || null;
+  return values.at(-1) ? { key: values.at(-1), source: '.env' } : null;
+}
+
+const keyName = ({ key, source }) => `DEEPSEEK_API_KEY from ${source} (sha256 ${createHash('sha256').update(key).digest('hex').slice(0, 8)})`;
+
+// One 1-token request to the endpoint and model the image gives Claude Code, so a refused key stops a batch before
+// it starts. Returns why the key does not work, or null when it does.
+async function refusal({ key }) {
+  const dockerfile = readFileSync(join(skill, 'runner/Dockerfile'), 'utf8');
+  const url = /ANTHROPIC_BASE_URL=(\S+)/.exec(dockerfile)[1], model = /ANTHROPIC_MODEL='?([^'\s[]+)/.exec(dockerfile)[1];
+  try {
+    const response = await fetch(`${url}/v1/messages`, {
+      method: 'POST', signal: AbortSignal.timeout(15_000),
+      headers: { authorization: `Bearer ${key}`, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
+    });
+    const body = await response.text();
+    if (response.ok) return null;
+    let message = body.slice(0, 300);
+    try { message = JSON.parse(body).error?.message ?? message; } catch {}
+    return `${model} at ${url} answered HTTP ${response.status}: ${message.replaceAll(key, '<key>')}`;
+  } catch (error) {
+    return `${model} at ${url} did not answer: ${error.cause?.message ?? error.message}`;
+  }
 }
 
 export function exitCode(results) {
@@ -53,6 +76,7 @@ export function exitCode(results) {
 }
 
 // The verdict is the last `RESULT:` line of the final result record; the report's run paths become batch paths.
+// A final record that is Claude Code's own `API Error: …` (a refused key, an empty balance) is an error, not a report.
 export function readTranscript(text, runsDir) {
   const record = text.split('\n').filter((line) => line.includes('"type":"result"'))
     .map((line) => { try { return JSON.parse(line); } catch { return null; } })
@@ -62,6 +86,7 @@ export function readTranscript(text, runsDir) {
   const u = record.usage;
   return {
     report,
+    error: record.is_error && /^API Error/.test(record.result) ? record.result : null,
     result: [...report.matchAll(/RESULT:\s*(PASS|ISSUES)\b/g)].at(-1)?.[1] ?? null,
     turns: record.num_turns ?? null,
     usage: u ? { input: u.input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0 } : null,
@@ -103,7 +128,7 @@ function holds(dir, needle) {
     .some((entry) => entry.isFile() && readFileSync(join(entry.parentPath, entry.name)).includes(needle));
 }
 
-function finish(task, dir, wallSeconds, key) {
+export function finish(task, dir, wallSeconds, key) {
   const out = join(dir, task.id);
   const read = (name) => (existsSync(join(out, name)) ? readFileSync(join(out, name), 'utf8') : null);
   const claudeExit = read('claude.exit')?.trim();
@@ -112,21 +137,22 @@ function finish(task, dir, wallSeconds, key) {
   const secretCheckFail = readdirSync(out).filter((name) => name.startsWith('secret-check-') && /^FAIL/m.test(read(name)));
   const status = holds(out, key) ? 'secret-leak'
     : claudeExit === '124' ? 'timeout'
-      : claudeExit === undefined ? 'infra-error'
+      : claudeExit === undefined || transcript?.error ? 'infra-error'
         : transcript?.result ? 'reported' : 'no-report';
-  const result = { task: task.id, status, result: transcript?.result ?? null, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, secretCheckFail };
+  const result = { task: task.id, status, result: transcript?.result ?? null, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, secretCheckFail };
   writeFileSync(join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
 
-function summary({ batch, sha, head, image, jobs, dir, results, hostOnly, setup, wallSeconds }) {
+export function summary({ batch, sha, head, image, key, jobs, dir, results, hostOnly, setup, wallSeconds }) {
   const n = (v) => (v == null ? '' : String(v));
+  const errors = results.filter((r) => r.error).map((r) => `- ${r.task}: ${r.error}`);
   const flagged = results.flatMap((r) => (r.secretCheckFail ?? []).map((name) => `- ${dir}/${r.task}/${name}`));
   const rows = results.map((r) => `| ${r.task} | ${r.status} | ${n(r.result)} | ${n(r.turns)} | ${r.wallSeconds} s | ${n(r.usage?.input)} | ${n(r.usage?.cacheRead)} | ${n(r.usage?.output)} |`);
   return [
     `# verify runner batch ${batch}`,
     '',
-    `Snapshot ${sha} of HEAD ${head}, image ${image}, ${jobs} runner(s), ${wallSeconds} s in total.`,
+    `Snapshot ${sha} of HEAD ${head}, image ${image}, ${key}, ${jobs} runner(s), ${wallSeconds} s in total.`,
     `Runner setup: ${setup.map((s, k) => `r${k + 1} ${s == null ? 'failed' : `${s} s`}`).join(', ')}.`,
     '',
     '| Task | Status | Result | Turns | Wall | Input tokens | Cache read tokens | Output tokens |',
@@ -134,6 +160,7 @@ function summary({ batch, sha, head, image, jobs, dir, results, hostOnly, setup,
     ...rows,
     '',
     `Each task's report is ${dir}/<task>/report.md, and its runs are under ${dir}/<task>/runs/.`,
+    ...(errors.length ? ['', 'These tasks stopped on an API error:', '', ...errors] : []),
     // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
     ...(flagged.length ? ['', 'secret-check printed FAIL lines. Read them before you share these files:', '', ...flagged] : []),
     ...(hostOnly.length ? ['', 'Run these on the host, as SKILL.md "Hand the driving to another agent" says:', '',
@@ -161,11 +188,13 @@ function split(tasks) {
 }
 
 // What a batch needs, checked without starting anything. SKILL.md chooses between runner and host mode from it.
-function check(tasks) {
-  const key = readKey();
+async function check(tasks) {
+  const found = readKey();
   const docker = capture('docker', ['info', '--format', '{{.NCPU}}']);
   const { hostOnly, queue, skipped } = split(tasks);
-  console.log(key ? 'ok    DEEPSEEK_API_KEY found' : 'FAIL  DEEPSEEK_API_KEY not found; set it or add a DEEPSEEK_API_KEY= line to .env');
+  const refused = found && await refusal(found);
+  if (!found) console.log('FAIL  DEEPSEEK_API_KEY not found; set it or add a DEEPSEEK_API_KEY= line to .env');
+  else console.log(refused ? `FAIL  ${keyName(found)}: ${refused}` : `ok    ${keyName(found)} works`);
   if (docker.status !== 0) console.log('FAIL  docker is not available');
   else console.log(`ok    docker answers with ${docker.stdout.trim()} CPUs`);
   for (const t of [...hostOnly, ...skipped]) console.log(`host  ${t.feature}${t.journeys.length ? `:${t.journeys.join(',')}` : ''} is marked (host only); run it in host mode`);
@@ -175,7 +204,7 @@ function check(tasks) {
     console.log(capture('docker', ['image', 'inspect', image]).status === 0 ? `ok    image ${image} is built`
       : `todo  image ${image} is not built; the next batch builds it, about 2 minutes and 4 GB`);
   }
-  process.exitCode = !key ? 5 : docker.status !== 0 || !runnable ? 3 : 0;
+  process.exitCode = !found || refused ? 5 : docker.status !== 0 || !runnable ? 3 : 0;
 }
 
 async function main() {
@@ -185,8 +214,11 @@ async function main() {
   const { keep, tasks } = options;
   const { hostOnly, queue } = split(tasks);
 
-  const key = readKey();
-  if (!key) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
+  const found = readKey();
+  if (!found) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
+  const refused = await refusal(found);
+  if (refused) fail(5, `${keyName(found)}: ${refused}`);
+  const { key } = found;
   const info = capture('docker', ['info', '--format', '{{.NCPU}}']);
   if (info.status !== 0) fail(3, 'docker is not available; run the journeys in host mode (SKILL.md, "Choose runner or host")');
 
@@ -217,7 +249,7 @@ async function main() {
   const sha = snapshot(batch);
   const head = git(['rev-parse', 'HEAD']);
   const common = git(['rev-parse', '--path-format=absolute', '--git-common-dir']);
-  console.error(`batch ${batch}: ${queue.length} task(s) on ${jobs} runner(s), snapshot ${sha}; output ${dir}`);
+  console.error(`batch ${batch}: ${queue.length} task(s) on ${jobs} runner(s), snapshot ${sha}, ${keyName(found)}; output ${dir}`);
 
   // Keep two cores for the host: the runners must never take every CPU at once.
   const cpus = String(Math.max(1, Math.floor((Number(info.stdout) - 2) / jobs)));
@@ -251,7 +283,7 @@ async function main() {
   for (const t of queue) results.set(t.id, { task: t.id, status: 'infra-error', result: null, turns: null, wallSeconds: 0, usage: null });
 
   const ordered = tasks.map((t) => results.get(t.id));
-  const text = summary({ batch, sha, head, image, jobs, dir, results: ordered, hostOnly, setup, wallSeconds: seconds(started) });
+  const text = summary({ batch, sha, head, image, key: keyName(found), jobs, dir, results: ordered, hostOnly, setup, wallSeconds: seconds(started) });
   writeFileSync(join(dir, 'summary.md'), text);
   process.stdout.write(text);
   if (keep) console.error(`kept containers; remove them with: docker rm -f $(docker ps -aq --filter label=uvw-verify.batch=${batch})`);

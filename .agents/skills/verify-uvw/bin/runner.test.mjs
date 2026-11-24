@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { test } from 'node:test';
-import { exitCode, findKey, parseArgs, readTranscript } from './runner.mjs';
+import { exitCode, findKey, finish, parseArgs, readTranscript, summary } from './runner.mjs';
 
 const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const transcript = readFileSync(fileURLToPath(new URL('../fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
@@ -34,42 +37,85 @@ test('a task is a feature or a feature with journeys, and repeated features get 
   assert.throws(() => parseArgs(['--check', '--keep', 'auth']), /--check takes only tasks/);
 });
 
-test('runner --check names what is missing and the host-only tasks, and exits 5 without a key, else 3 without Docker', () => {
+test('runner --check names the key source and fingerprint, proves the key with one request, and names the host-only tasks', async () => {
   const root = mkdtempSync(join(tmpdir(), 'verify-uvw-check-'));
   const skill = join(root, '.agents/skills/verify-uvw');
   const bin = join(skill, 'bin');
+  const requests = [];
+  // Stands in for the Anthropic-compatible endpoint: it accepts good-key and echoes any other key in its refusal.
+  const endpoint = createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      requests.push({ path: req.url, authorization: req.headers.authorization, body: JSON.parse(body) });
+      const token = req.headers.authorization?.replace(/^Bearer /, '');
+      res.writeHead(token === 'good-key' ? 200 : 401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(token === 'good-key' ? { type: 'message', content: [{ type: 'text', text: 'p' }] }
+        : { type: 'error', error: { type: 'authentication_error', message: `Authentication Fails, Your api key: ${token} is invalid` } }));
+    });
+  });
   try {
+    await new Promise((resolve) => endpoint.listen(0, '127.0.0.1', resolve));
     mkdirSync(bin, { recursive: true });
     mkdirSync(join(skill, 'features'));
+    mkdirSync(join(skill, 'runner'));
     copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(bin, 'runner.mjs'));
     copyFileSync(helper, join(bin, 'verify-uvw'));
+    writeFileSync(join(skill, 'runner/Dockerfile'), `FROM scratch\nENV ANTHROPIC_BASE_URL=http://127.0.0.1:${endpoint.address().port} \\\n    ANTHROPIC_MODEL='stub-model[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=other-model\n`);
     writeFileSync(join(skill, 'features/whole.md'), '# Whole feature (host only)\n\n### W1. One\n');
     writeFileSync(join(skill, 'features/plain.md'), '# Plain feature\n\n### P1. One\n\n### P2. Two (host only)\n\n### P3. Three (host only)\n');
-    const check = (env, ...tasks) => spawnSync(process.execPath, [join(bin, 'runner.mjs'), '--check', ...tasks],
-      { encoding: 'utf8', env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } });
-    const noKey = check({});
+    const node = (args, env) => promisify(execFile)(process.execPath, [join(bin, 'runner.mjs'), ...args],
+      { env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } })
+      .then((r) => ({ status: 0, ...r }), (e) => ({ status: e.code, stdout: e.stdout, stderr: e.stderr }));
+    const check = (env, ...tasks) => node(['--check', ...tasks], env);
+    const sha = (key) => createHash('sha256').update(key).digest('hex').slice(0, 8);
+
+    const noKey = await check({});
     assert.equal(noKey.status, 5);
     assert.match(noKey.stdout, /^FAIL {2}DEEPSEEK_API_KEY not found/m);
     assert.match(noKey.stdout, /^FAIL {2}docker is not available$/m);
-    const noDocker = check({ DEEPSEEK_API_KEY: 'test-key' });
-    assert.equal(noDocker.status, 3);
-    assert.match(noDocker.stdout, /^ok {4}DEEPSEEK_API_KEY found$/m);
-    assert.doesNotMatch(noDocker.stdout, /test-key/);
-    const tasks = check({ DEEPSEEK_API_KEY: 'test-key' }, 'whole', 'plain:P1');
+    assert.equal(requests.length, 0);
+
+    const good = await check({ DEEPSEEK_API_KEY: 'good-key' });
+    assert.equal(good.status, 3, 'the key works, Docker is missing');
+    assert.ok(good.stdout.includes(`ok    DEEPSEEK_API_KEY from environment (sha256 ${sha('good-key')}) works\n`));
+    assert.deepEqual(requests, [{ path: '/v1/messages', authorization: 'Bearer good-key',
+      body: { model: 'stub-model', max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] } }]);
+
+    writeFileSync(join(root, '.env'), 'DEEPSEEK_API_KEY=good-key\n');
+    assert.ok((await check({})).stdout.includes(`ok    DEEPSEEK_API_KEY from .env (sha256 ${sha('good-key')}) works\n`));
+    const refused = await check({ DEEPSEEK_API_KEY: 'bad-key' });
+    assert.equal(refused.status, 5, 'the environment wins over .env, and a refused key exits 5');
+    assert.match(refused.stdout, new RegExp(`^FAIL {2}DEEPSEEK_API_KEY from environment \\(sha256 ${sha('bad-key')}\\): stub-model at http://127\\.0\\.0\\.1:\\d+ answered HTTP 401: Authentication Fails, Your api key: <key> is invalid$`, 'm'));
+    assert.doesNotMatch(refused.stdout + refused.stderr, /bad-key/);
+
+    const batch = await node(['plain:P1'], { DEEPSEEK_API_KEY: 'bad-key', VERIFY_UVW_ROOT: join(root, 'runs') });
+    assert.equal(batch.status, 5, 'a batch probes the key before it asks Docker for anything');
+    assert.match(batch.stderr, /^verify-uvw runner: DEEPSEEK_API_KEY from environment \(sha256 [0-9a-f]{8}\): stub-model at \S+ answered HTTP 401/m);
+
+    const tasks = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'whole', 'plain:P1');
     assert.match(tasks.stdout, /^host {2}whole is marked \(host only\); run it in host mode$/m);
     assert.doesNotMatch(tasks.stdout, /plain/);
-    assert.match(check({ DEEPSEEK_API_KEY: 'test-key' }, 'plain').stdout, /^host {2}plain:P2,P3 is marked \(host only\); run it in host mode$/m);
-    assert.match(check({ DEEPSEEK_API_KEY: 'test-key' }, 'plain:P1,P3').stdout, /^host {2}plain:P3 is marked/m);
-    assert.equal(check({ DEEPSEEK_API_KEY: 'test-key' }, 'missing').status, 2);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain')).stdout, /^host {2}plain:P2,P3 is marked \(host only\); run it in host mode$/m);
+    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P1,P3')).stdout, /^host {2}plain:P3 is marked/m);
+    assert.equal((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'missing')).status, 2);
+
+    await new Promise((resolve) => endpoint.close(resolve));
+    const unreachable = await check({ DEEPSEEK_API_KEY: 'good-key' });
+    assert.equal(unreachable.status, 5);
+    assert.match(unreachable.stdout, /^FAIL {2}DEEPSEEK_API_KEY from environment \(sha256 [0-9a-f]{8}\): stub-model at \S+ did not answer: .*ECONNREFUSED/m);
+  } finally {
+    endpoint.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
-test('the key comes from the environment first, then from a DEEPSEEK_API_KEY line in .env', () => {
-  assert.equal(findKey({ DEEPSEEK_API_KEY: 'from-env' }, 'DEEPSEEK_API_KEY=from-file\n'), 'from-env');
-  assert.equal(findKey({}, 'OTHER=1\nDEEPSEEK_API_KEY=from-file\n'), 'from-file');
-  assert.equal(findKey({}, 'DEEPSEEK_API_KEY="double"\n'), 'double');
-  assert.equal(findKey({}, "export DEEPSEEK_API_KEY='single'\r\n"), 'single');
-  assert.equal(findKey({}, '# DEEPSEEK_API_KEY=commented\nDEEPSEEK_API_KEY=real\n'), 'real');
+test('the key comes from the environment first, then from a DEEPSEEK_API_KEY line in .env, and says which', () => {
+  assert.deepEqual(findKey({ DEEPSEEK_API_KEY: 'from-env' }, 'DEEPSEEK_API_KEY=from-file\n'), { key: 'from-env', source: 'environment' });
+  assert.deepEqual(findKey({}, 'OTHER=1\nDEEPSEEK_API_KEY=from-file\n'), { key: 'from-file', source: '.env' });
+  assert.equal(findKey({}, 'DEEPSEEK_API_KEY="double"\n').key, 'double');
+  assert.equal(findKey({}, "export DEEPSEEK_API_KEY='single'\r\n").key, 'single');
+  assert.equal(findKey({}, '# DEEPSEEK_API_KEY=commented\nDEEPSEEK_API_KEY=real\n').key, 'real');
   assert.equal(findKey({}, '# DEEPSEEK_API_KEY=commented\n'), null);
   assert.equal(findKey({}, 'DEEPSEEK_API_KEY=\n'), null);
   assert.equal(findKey({ DEEPSEEK_API_KEY: '' }, ''), null);
@@ -84,6 +130,33 @@ test('the exit code is 4 for any failed task, then 3 for any host-only task, els
     assert.equal(exitCode(as('reported', failed)), 4, failed);
     assert.equal(exitCode(as('host-only', failed)), 4, `${failed} wins over host-only`);
   }
+});
+
+test('a session that ends on an API error is an infra-error, and summary.md shows the error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-finish-'));
+  const task = (id, exit, record) => {
+    mkdirSync(join(dir, id));
+    writeFileSync(join(dir, id, 'claude.exit'), `${exit}\n`);
+    writeFileSync(join(dir, id, 'transcript.jsonl'), `${JSON.stringify({ type: 'result', num_turns: 120, ...record })}\n`);
+    return finish({ id }, dir, 681, 'the-key');
+  };
+  try {
+    const balance = task('sheet-lens', 1, { is_error: true, result: 'API Error: 402 Insufficient Balance (request_id: r-1)' });
+    assert.equal(balance.status, 'infra-error');
+    assert.equal(balance.error, 'API Error: 402 Insufficient Balance (request_id: r-1)');
+    assert.equal(JSON.parse(readFileSync(join(dir, 'sheet-lens/result.json'), 'utf8')).status, 'infra-error');
+    assert.equal(exitCode([balance]), 4);
+    const quoted = task('auth', 0, { is_error: false, result: 'API Error: 402 was in the log.\nauth: PASS\nRESULT: PASS' });
+    assert.deepEqual([quoted.status, quoted.error], ['reported', null], 'a report that quotes an API error is still a report');
+    assert.equal(task('issues', 1, { is_error: true, result: 'Reached max turns' }).status, 'no-report');
+
+    const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'DEEPSEEK_API_KEY from .env (sha256 0123abcd)', jobs: 1, dir,
+      results: [balance, quoted], hostOnly: [], setup: [90], wallSeconds: 700 });
+    assert.match(text, /^Snapshot s of HEAD h, image i, DEEPSEEK_API_KEY from \.env \(sha256 0123abcd\), 1 runner/m);
+    assert.match(text, /^\| sheet-lens \| infra-error \| {2}\| 120 \|/m);
+    assert.match(text, /^These tasks stopped on an API error:\n\n- sheet-lens: API Error: 402 Insufficient Balance \(request_id: r-1\)$/m);
+    assert.doesNotMatch(text, /- auth:/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the report, verdict, turns and usage come from the last result record, with run paths moved to the batch', () => {

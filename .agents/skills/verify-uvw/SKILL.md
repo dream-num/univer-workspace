@@ -61,15 +61,16 @@ First pick the features and journeys from [the index](features/README.md). Behav
 
 - A `host` line: that feature or those journeys are marked `(host only)`. Run them in `host` mode, whatever else
   the check says, and decide the rest of the request by the lines below. The runner skips them.
-- Exit `5` or `3` with a `FAIL` line: the key or Docker is missing. Use `host`, and tell the user in one sentence
-  what runner mode needs.
+- Exit `5` or `3` with a `FAIL` line: the key is missing or refused, or Docker is missing. Use `host`, and tell the
+  user in one sentence what runner mode needs. For a refused key, quote the `FAIL` line: it names the key's source
+  and fingerprint and the API's answer.
 - A `todo  image` line: the runner image for the current `runner/Dockerfile` is not built yet. Ask the user once
   whether to build it now, giving the time and size from that line, or to use `host`.
 - Otherwise use `runner`.
 
 With `mode:runner`, `(host only)` work still runs in `host` mode; name it to the user, then run it there. Run
-`$V runner` for the rest. It builds a missing image without asking. A missing key or Docker is different: tell
-the user and offer `host` rather than switching on your own.
+`$V runner` for the rest. It builds a missing image without asking. A missing or refused key, or missing Docker,
+is different: tell the user and offer `host` rather than switching on your own.
 
 ## Launch
 
@@ -200,8 +201,13 @@ $V runner --jobs 3 --keep issues auth create-document
   Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high, and opencode on
   `deepseek/deepseek-flash#high` (`VERIFY_UVW_OPENCODE_MODEL`) for the MCP journeys.
 - It needs Docker and `DEEPSEEK_API_KEY`, from the environment or from a `DEEPSEEK_API_KEY=` line in the
-  repository's `.env`. The key reaches each task only as a `docker exec` environment variable, never the image
-  or a file.
+  repository's `.env`. The environment wins. The key reaches each task only as a `docker exec` environment
+  variable, never the image or a file.
+- `--check` and every batch name where the key came from and its sha256 fingerprint (8 hex characters, never the
+  key), then send one request for 1 token to the endpoint and model the image uses. A refused key, such as `401` or
+  `402 Insufficient Balance`, or an endpoint that does not answer gets a `FAIL` line with the HTTP status and the
+  API's message, and exit `5` before any image build or container. The batch header and `summary.md` name the key
+  the same way.
 - It tests your working tree as it is. Tracked changes and untracked files go into a snapshot commit that no
   ref points at, and your index, status and refs stay as they were.
 - It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
@@ -223,10 +229,12 @@ $V runner --jobs 3 --keep issues auth create-document
 - Treat a report as a claim, as in the previous section. Open the evidence before you repeat a `PASS` or a
   `FAIL`.
 - Exit codes: `0` when every task reported, `3` when Docker is missing or a task is host only, `4` when a
-  task has no report, timed out, failed in the runner or leaked a secret (it wins over `3`), and `5` with no
-  key. A task leaks a secret when its output holds the key. Its files stay for you to delete. `summary.md`
-  also lists every `secret-check` file with a `FAIL` line, without changing the status. The transcript
-  holds recipe code with the same shapes, so read those lines before you share the files.
+  task has no report, timed out, failed in the runner or leaked a secret (it wins over `3`), and `5` when the key
+  is missing or refused. A task whose session ended on an `API Error: …` from the endpoint failed in the runner
+  (`infra-error`), and `summary.md` lists that error. A task leaks a secret when its output holds the key. Its
+  files stay for you to delete. `summary.md` also lists every `secret-check` file with a `FAIL` line, without
+  changing the status. The transcript holds recipe code with the same shapes, so read those lines before you
+  share the files.
 - The runner removes its containers at the end and on Ctrl-C. `--keep` leaves them for `docker exec`.
 
 ## Cleanup
