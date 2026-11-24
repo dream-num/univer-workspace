@@ -2,8 +2,8 @@ import type { PublicUser } from "../permissions/index.js";
 import type { SpaceAccess } from "../access/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { forbidden, invalid, notFound } from "./issues.errors.js";
-import type { IssueRelations, IssueRow, IssueUpdate, LabelRow } from "./issues.repository.js";
-import type { IssueEventKind, IssueState, IssueStateReason } from "./issues.types.js";
+import type { IssueRelations, IssueRow, IssueUpdate, LabelRow, VerdictRow } from "./issues.repository.js";
+import type { IssueEventKind, IssueState, IssueStateReason, IssueVerdictKind } from "./issues.types.js";
 
 interface IssueEvent {
   readonly kind: IssueEventKind;
@@ -46,6 +46,37 @@ export function planIssueUpdate(row: IssueRow, patch: IssueUpdate, userId: strin
     events.push({ kind: "reopened", payload: {} });
   }
   return { text, state, events };
+}
+
+export function planVerdict(input: {
+  readonly issue: IssueRow;
+  readonly latest: VerdictRow | null;
+  readonly space: SpaceAccess;
+  readonly assignee: boolean;
+  readonly userId: string;
+  readonly kind: IssueVerdictKind;
+  readonly body: string;
+  readonly now: number;
+}): { readonly createdAt: number } | null {
+  const { issue, latest, space, kind } = input;
+  if (latest?.kind === kind && latest.actor_user_id === input.userId && latest.body === input.body) return null;
+  const allowed = kind === "submitted"
+    ? space.member && input.assignee
+    : space.member && (issue.author_user_id === input.userId || space.capabilities.triageIssues);
+  if (!allowed) {
+    throw new ApplicationError("FORBIDDEN", 403, kind === "submitted"
+      ? "Only an assignee of this Issue may submit it."
+      : "Only someone who may close this Issue may accept it or send it back.");
+  }
+  if (issue.state === "closed") throw new ApplicationError("ISSUE_CLOSED", 409, "This Issue is closed.");
+  if (kind === "submitted" && latest?.kind === "submitted") {
+    throw new ApplicationError("ISSUE_ALREADY_SUBMITTED", 409, "This Issue is already submitted for acceptance.");
+  }
+  if (kind !== "submitted" && latest?.kind !== "submitted") {
+    throw new ApplicationError("ISSUE_NOT_SUBMITTED", 409, "This Issue is not submitted for acceptance.");
+  }
+  // Replica clocks may disagree, and the latest verdict must stay the one with the greatest time.
+  return { createdAt: Math.max(input.now, (latest?.created_at ?? 0) + 1) };
 }
 
 const relationLimits = {

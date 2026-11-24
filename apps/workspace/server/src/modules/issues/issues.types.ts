@@ -4,6 +4,8 @@ import type { WorktreeState } from "../worktrees/worktrees.types.js";
 
 export type IssueState = "open" | "closed";
 export type IssueStateReason = "completed" | "not_planned";
+export const ISSUE_VERDICT_KINDS = ["submitted", "accepted", "sent_back"] as const;
+export type IssueVerdictKind = (typeof ISSUE_VERDICT_KINDS)[number];
 
 /** Palette keys; the Browser owns the light and dark values of each key. */
 export const ISSUE_LABEL_COLORS = [
@@ -80,6 +82,14 @@ export interface IssueView extends IssueSummaryView {
   readonly references: readonly IssueReferenceView[];
   readonly capabilities: IssueCapabilitiesView;
   readonly pullRequests: readonly IssuePullRequestView[];
+  readonly acceptance: IssueAcceptanceView | null;
+}
+
+export interface IssueAcceptanceView {
+  readonly kind: IssueVerdictKind;
+  readonly actor: PublicUser | null;
+  readonly body: string;
+  readonly createdAt: string;
 }
 
 export interface IssuePullRequestView {
@@ -120,7 +130,7 @@ export type IssueTimelineItem =
   | {
       readonly type: "event";
       readonly id: string;
-      readonly kind: IssueEventKind;
+      readonly kind: IssueEventKind | IssueVerdictKind;
       readonly actor: PublicUser;
       readonly payload: Readonly<Record<string, unknown>>;
       readonly createdAt: string;
@@ -150,6 +160,7 @@ export interface IssueListQuery {
   readonly assignee?: unknown;
   readonly author?: unknown;
   readonly q?: unknown;
+  readonly acceptance?: unknown;
   readonly sort?: unknown;
   readonly order?: unknown;
   readonly cursor?: unknown;
@@ -183,6 +194,7 @@ export interface IssuesModule {
     page: { readonly cursor?: unknown; readonly limit?: unknown },
   ): Promise<IssueTimelinePage>;
   createComment(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueCommentView>;
+  verdict(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueView>;
   updateComment(userId: string, commentId: string, input: unknown): Promise<IssueCommentView>;
   deleteComment(userId: string, commentId: string): Promise<void>;
   listLabels(userId: string, spaceId: string): Promise<{ readonly labels: readonly IssueLabelUsageView[] }>;

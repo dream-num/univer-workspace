@@ -200,6 +200,13 @@ describe("Issue tools and gateway infrastructure", () => {
         updatedAt: "2026-09-29T00:00:00.000Z",
       });
     }
+    if (target.pathname === "/api/spaces/team-1/issues/7/verdicts") {
+      const { kind, body } = JSON.parse(text) as { kind: string; body?: string };
+      return Response.json({
+        ...rawIssue(7),
+        acceptance: { kind, actor: user("user-1"), body: body ?? "", createdAt: "2026-09-29T00:00:00.000Z" },
+      });
+    }
     if (target.pathname === "/api/spaces/team-1/issues/7/timeline") {
       return Response.json({ items: [], nextCursor: null });
     }
@@ -613,6 +620,29 @@ describe("Issue tools and gateway infrastructure", () => {
       expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(events().map((event) => event["repo"])).toEqual([null, null, null, null, null]);
+  });
+
+  it("submits, sends back and accepts with issue_verdict, and searches Issues by acceptance", async () => {
+    await start();
+    const submitted = await call("issue_verdict", { repo: "team-1", number: "7", verdict: "submit", body: "Done" });
+    expect(submitted.structuredContent).toMatchObject({ number: 7, acceptance: { kind: "submitted", body: "Done" } });
+    await call("issue_verdict", { repo: "team-1", number: "7", verdict: "send_back", body: "West is missing" });
+    await call("issue_verdict", { repo: "team-1", number: "7", verdict: "accept" });
+    expect(writesOf()).toEqual(
+      [{ kind: "submitted", body: "Done" }, { kind: "sent_back", body: "West is missing" }, { kind: "accepted" }]
+        .map((body) => ({ method: "POST", path: "/api/spaces/team-1/issues/7/verdicts", body })),
+    );
+    listPages.set("", { items: [rawIssue(7)], counts: { open: 1, closed: 0 }, nextCursor: null });
+    await call("search", { kind: "issues", assignee: "@me", acceptance: "sent_back" });
+    expect(requests.find((r) => r.path.startsWith("/api/issues?"))!.path).toBe(
+      "/api/issues?state=open&assignee=me&acceptance=sent_back&limit=30",
+    );
+    for (const bad of [
+      { kind: "prs", acceptance: "submitted" },
+      { kind: "issues", acceptance: "accepted" },
+    ]) {
+      expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
+    }
   });
 
   it("finds the ready pull requests others wrote that the caller may merge, with what the caller may do", async () => {

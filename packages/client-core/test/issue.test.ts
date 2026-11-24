@@ -240,6 +240,26 @@ describe("Workspace Issue feature", () => {
     expect(calls[2]?.body).toEqual({ state: "closed", stateReason: "completed" });
   });
 
+  it("posts a verdict, filters by acceptance and reads an absent acceptance from older servers as null", async () => {
+    const acceptance = { kind: "sent_back", actor: user("u1"), body: "West is missing.", createdAt: "2026-09-29T00:00:00.000Z" };
+    const { feature: issues, calls } = feature(({ path }) => path.includes("?")
+      ? { items: [rawIssue()], nextCursor: null, counts: { open: 1, closed: 0 } }
+      : rawIssue({ acceptance }));
+    expect((await issues.verdict("s1", 7, "sent_back", "West is missing.")).acceptance).toEqual({
+      kind: "sent_back", actor: { id: "u1", username: "u1", displayName: "u1" }, body: "West is missing.", createdAt: "2026-09-29T00:00:00.000Z",
+    });
+    await issues.verdict("s1", 7, "accepted");
+    await issues.list({ assignee: "me", acceptance: "sent_back" });
+    expect(calls.map((call) => [call.method, call.path, call.body])).toEqual([
+      ["POST", "/api/spaces/s1/issues/7/verdicts", { kind: "sent_back", body: "West is missing." }],
+      ["POST", "/api/spaces/s1/issues/7/verdicts", { kind: "accepted" }],
+      ["GET", "/api/issues?assignee=me&acceptance=sent_back", undefined],
+    ]);
+    expect((await feature(() => rawIssue()).feature.get("s1", 7)).acceptance).toBeNull();
+    await expect(feature(() => rawIssue({ acceptance: { kind: "submitted" } })).feature.get("s1", 7))
+      .rejects.toMatchObject({ code: "workspace-invalid-response" });
+  });
+
   it("follows timeline cursors and rejects malformed items", async () => {
     const comment = (id: string) => ({
       type: "comment", id, author: user("u1"), body: id,

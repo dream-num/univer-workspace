@@ -11,6 +11,7 @@ import type {
   LabelFields,
   CommentRow,
   IssueFilter,
+  VerdictRow,
   IssueRelations,
   IssueUpdate,
   IssueRow,
@@ -18,6 +19,8 @@ import type {
 } from "./issues.repository.js";
 import {
   ISSUE_LABEL_COLORS,
+  ISSUE_VERDICT_KINDS,
+  type IssueAcceptanceView,
   type IssueCommentView,
   type IssueEventKind,
   type IssueLabelView,
@@ -29,6 +32,7 @@ import {
   type IssueSummaryView,
   type IssueTimelineItem,
   type IssuePullRequestView,
+  type IssueVerdictKind,
   type IssueView,
   type IssuesModule,
 } from "./issues.types.js";
@@ -40,6 +44,7 @@ const MAX_LABEL_NAME = 50;
 const MAX_LABEL_DESCRIPTION = 200;
 const MAX_SEARCH = 200;
 const MAX_LABEL_FILTERS = 10;
+const TIMELINE_RANKS = { comment: 0, event: 1, verdict: 2 } as const;
 
 export function createIssuesModule(options: {
   readonly repository: IssuesRepository;
@@ -91,7 +96,18 @@ export function createIssuesModule(options: {
     };
   }
 
-  async function issueView(userId: string, { row, space, summary, references }: IssueDetail): Promise<IssueView> {
+  async function acceptanceView(verdict: VerdictRow | null): Promise<IssueAcceptanceView | null> {
+    if (!verdict) return null;
+    const actor = verdict.actor_user_id;
+    return {
+      kind: verdict.kind,
+      actor: actor === null ? null : user(await repository.users([actor]), actor),
+      body: verdict.body,
+      createdAt: iso(verdict.created_at),
+    };
+  }
+
+  async function issueView(userId: string, { row, space, summary, references, acceptance }: IssueDetail): Promise<IssueView> {
     const editable = space.member && (row.author_user_id === userId || space.capabilities.triageIssues);
     return {
       ...summaryView(row, summary),
@@ -104,6 +120,7 @@ export function createIssuesModule(options: {
         comment: space.member,
       },
       pullRequests: await options.pullRequests?.(userId, row.id) ?? [],
+      acceptance: await acceptanceView(acceptance),
     };
   }
 
@@ -137,6 +154,7 @@ export function createIssuesModule(options: {
       assignee: query.assignee === undefined ? null : query.assignee === "none" ? "none" : { userId: userFilter(query.assignee, userId, "assignee") },
       authorUserId: query.author === undefined ? null : userFilter(query.author, userId, "author"),
       search: searchFilter(query.q),
+      acceptance: query.acceptance === undefined ? null : parseEnum(query.acceptance, ["submitted", "sent_back"] as const, "submitted", "acceptance"),
     };
     const limit = validLimit(query.limit, 50);
     const cursor = decodeCursor<{ ts: number; id: string }>(query.cursor, (value) =>
@@ -217,7 +235,7 @@ export function createIssuesModule(options: {
       const issue = await requireIssue(spaceId, number);
       const limit = validLimit(page.limit, 100);
       const cursor = decodeCursor<{ ts: number; rank: number; id: string }>(page.cursor, (value) =>
-        Number.isSafeInteger(value.ts) && (value.rank === 0 || value.rank === 1) && typeof value.id === "string" && value.id !== "");
+        Number.isSafeInteger(value.ts) && [0, 1, 2].includes(value.rank) && typeof value.id === "string" && value.id !== "");
       const rows = await repository.timeline(issue.id, cursor, limit + 1);
       const hasNext = rows.length > limit;
       const visible = hasNext ? rows.slice(0, limit) : rows;
@@ -229,14 +247,15 @@ export function createIssuesModule(options: {
               createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
             }
           : {
-              type: "event", id: row.id, kind: row.kind as IssueEventKind, actor: user(users, row.actor_user_id),
-              payload: JSON.parse(row.payload_json ?? "{}") as Record<string, unknown>, createdAt: iso(row.created_at),
+              type: "event", id: row.id, kind: row.kind as IssueEventKind | IssueVerdictKind, actor: user(users, row.actor_user_id),
+              payload: row.type === "verdict" ? { body: row.body ?? "" } : JSON.parse(row.payload_json ?? "{}") as Record<string, unknown>,
+              createdAt: iso(row.created_at),
             });
       const last = visible.at(-1);
       return {
         items,
         nextCursor: hasNext && last
-          ? encodeCursor({ ts: last.created_at, rank: last.type === "comment" ? 0 : 1, id: last.id })
+          ? encodeCursor({ ts: last.created_at, rank: TIMELINE_RANKS[last.type], id: last.id })
           : null,
       };
     },
@@ -251,6 +270,20 @@ export function createIssuesModule(options: {
       const comment = await repository.insertComment({ id, issueId: issue.id, authorUserId: userId, body, now: at });
       await notify(spaceId);
       return commentView(repository, comment);
+    },
+
+    async verdict(userId, spaceId, number, input) {
+      const fields = record(input, ["kind", "body"]);
+      if (!(ISSUE_VERDICT_KINDS as readonly unknown[]).includes(fields.kind)) {
+        throw invalid(`kind must be one of ${ISSUE_VERDICT_KINDS.join(", ")}.`, "kind");
+      }
+      const kind = fields.kind as IssueVerdictKind;
+      const body = validText(fields.body ?? "", "body", kind === "accepted");
+      const detail = await repository.recordVerdict({
+        id: randomUUID(), userId, spaceId, number: issueNumber(number), kind, body, now: now(),
+      });
+      await notify(spaceId);
+      return issueView(userId, detail);
     },
 
     async updateComment(userId, commentId, input) {

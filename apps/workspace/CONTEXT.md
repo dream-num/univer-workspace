@@ -133,6 +133,16 @@ The Issue a Team Worktree names as the one it serves, in the same Team Space. A 
 Worktree has at most one; an Issue lists the linked Team Worktrees its reader may discover.
 _Avoid_: Task link
 
+**Verdict**:
+One step of handing an Issue over: an assignee submits it, and whoever may close it accepts
+or sends it back with a reason. Verdicts are only appended; each has an actor, a body, and a time.
+_Avoid_: Review, Approval
+
+**Acceptance**:
+The state of an Issue's handover, read from its latest Verdict: submitted, accepted, or sent
+back. Accepting closes the Issue as completed. An Issue that was never submitted has none.
+_Avoid_: Task status, Ticket status
+
 ## Change preparation
 
 **Trunk**:

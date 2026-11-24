@@ -1,7 +1,7 @@
 import type { NodeAccess, SpaceAccess } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
-import type { IssueEventKind, IssueState, IssueStateReason } from "./issues.types.js";
+import type { IssueEventKind, IssueState, IssueStateReason, IssueVerdictKind } from "./issues.types.js";
 
 export interface IssueRow {
   readonly created_via: WriteSource | null;
@@ -38,12 +38,20 @@ export interface CommentRow {
   readonly updated_at: number;
 }
 
+export interface VerdictRow {
+  readonly id: string;
+  readonly kind: IssueVerdictKind;
+  readonly actor_user_id: string | null;
+  readonly body: string;
+  readonly created_at: number;
+}
+
 export interface TimelineRow {
-  readonly type: "comment" | "event";
+  readonly type: "comment" | "event" | "verdict";
   readonly id: string;
   readonly actor_user_id: string;
   readonly body: string | null;
-  readonly kind: IssueEventKind | null;
+  readonly kind: IssueEventKind | IssueVerdictKind | null;
   readonly payload_json: string | null;
   readonly created_at: number;
   readonly updated_at: number;
@@ -58,6 +66,7 @@ export interface IssueFilter {
   readonly assignee: { readonly userId: string } | "none" | null;
   readonly authorUserId: string | null;
   readonly search: string | null;
+  readonly acceptance: "submitted" | "sent_back" | null;
 }
 
 export interface IssueListPage {
@@ -111,6 +120,17 @@ export interface IssueDetail {
   readonly space: SpaceAccess;
   readonly summary: IssueSummaryData;
   readonly references: ReadonlyArray<{ nodeId: string; node: NodeAccess | null }>;
+  readonly acceptance: VerdictRow | null;
+}
+
+export interface RecordVerdict {
+  readonly id: string;
+  readonly userId: string;
+  readonly spaceId: string;
+  readonly number: number;
+  readonly kind: IssueVerdictKind;
+  readonly body: string;
+  readonly now: number;
 }
 
 export type LabelFields = Pick<LabelRow, "name" | "color" | "description">;
@@ -118,6 +138,7 @@ export type LabelFields = Pick<LabelRow, "name" | "color" | "description">;
 export interface IssuesRepository {
   createIssue(input: CreateIssue): Promise<IssueDetail>;
   updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
+  recordVerdict(input: RecordVerdict): Promise<IssueDetail>;
   findIssue(spaceId: string, number: number): Promise<IssueRow | null>;
   issueDetail(userId: string, spaceId: string, number: number): Promise<IssueDetail>;
   listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]>;

@@ -2309,6 +2309,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/{spaceId}/issues/{number}/verdicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit an Issue for acceptance, accept it, or send it back.
+         * @description An assignee of an open Issue submits it, with any member role. Whoever may close the Issue (the
+         *     author or a user with the triage capability, including an assigned agent) accepts a submitted
+         *     Issue, which closes it as completed, or sends it back with a reason. After a send-back an assignee
+         *     submits again. Repeating the latest verdict with the same body returns the Issue unchanged, so a
+         *     retry after an unknown result is safe. Other transitions return 409 with `ISSUE_CLOSED`,
+         *     `ISSUE_ALREADY_SUBMITTED` or `ISSUE_NOT_SUBMITTED`.
+         */
+        post: operations["recordIssueVerdict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/issue-comments/{commentId}": {
         parameters: {
             query?: never;
@@ -2769,6 +2797,8 @@ export interface components {
         Issue: components["schemas"]["IssueSummary"] & {
             /** @description Markdown. */
             body: string;
+            /** @description The latest verdict, or `null` when the Issue was never submitted. */
+            acceptance: components["schemas"]["IssueAcceptance"] | null;
             references: components["schemas"]["IssueReference"][];
             capabilities: components["schemas"]["IssueCapabilities"];
             /**
@@ -4142,6 +4172,16 @@ export interface components {
             /** @description Requires the triage capability. Nodes must be in the Space and not in Trash. */
             nodeIds?: string[];
         };
+        /** @enum {string} */
+        IssueVerdictKind: "submitted" | "accepted" | "sent_back";
+        IssueAcceptance: {
+            kind: components["schemas"]["IssueVerdictKind"];
+            actor: components["schemas"]["PublicUser"] | null;
+            /** @description Markdown. What was done, checked and assumed for `submitted`; the reason for `sent_back`. */
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
         IssueReference: {
             nodeId: string;
             /** @description False when the Node is in Trash, deleted or no longer readable by the caller. */
@@ -4206,7 +4246,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        IssueEventKind: "closed" | "reopened" | "renamed" | "labeled" | "unlabeled" | "assigned" | "unassigned" | "node_referenced" | "node_unreferenced";
+        IssueEventKind: "closed" | "reopened" | "renamed" | "labeled" | "unlabeled" | "assigned" | "unassigned" | "node_referenced" | "node_unreferenced" | "submitted" | "accepted" | "sent_back";
         IssueTimelineEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -4221,7 +4261,8 @@ export interface components {
              *     `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
              *     `labelId`, `name` and `color`; `assigned` and `unassigned` carry
              *     `userId`, `username` and `displayName`; `node_referenced` and
-             *     `node_unreferenced` carry `nodeId` and `name`.
+             *     `node_unreferenced` carry `nodeId` and `name`. The verdicts `submitted`,
+             *     `accepted` and `sent_back` carry `body`.
              */
             payload: {
                 [key: string]: unknown;
@@ -4245,6 +4286,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        CreateIssueVerdict: {
+            kind: components["schemas"]["IssueVerdictKind"];
+            /** @description Required and not blank for `submitted` and `sent_back`; optional for `accepted`. */
+            body?: string;
         };
         IssueLabelUsage: components["schemas"]["IssueLabel"] & {
             openIssueCount: number;
@@ -4585,6 +4631,8 @@ export interface components {
         IssueAuthorParameter: string;
         /** @description Case-insensitive substring match on title and body. */
         IssueSearchParameter: string;
+        /** @description Only Issues whose latest verdict is this one. */
+        IssueAcceptanceParameter: "submitted" | "sent_back";
         IssueSortParameter: "created" | "updated";
         IssueOrderParameter: "asc" | "desc";
     };
@@ -8351,6 +8399,8 @@ export interface operations {
                 author?: components["parameters"]["IssueAuthorParameter"];
                 /** @description Case-insensitive substring match on title and body. */
                 q?: components["parameters"]["IssueSearchParameter"];
+                /** @description Only Issues whose latest verdict is this one. */
+                acceptance?: components["parameters"]["IssueAcceptanceParameter"];
                 sort?: components["parameters"]["IssueSortParameter"];
                 order?: components["parameters"]["IssueOrderParameter"];
             };
@@ -8388,6 +8438,8 @@ export interface operations {
                 author?: components["parameters"]["IssueAuthorParameter"];
                 /** @description Case-insensitive substring match on title and body. */
                 q?: components["parameters"]["IssueSearchParameter"];
+                /** @description Only Issues whose latest verdict is this one. */
+                acceptance?: components["parameters"]["IssueAcceptanceParameter"];
                 sort?: components["parameters"]["IssueSortParameter"];
                 order?: components["parameters"]["IssueOrderParameter"];
             };
@@ -8558,6 +8610,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueComment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    recordIssueVerdict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssueVerdict"];
+            };
+        };
+        responses: {
+            /** @description The Issue with its new acceptance state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
                 };
             };
             400: components["responses"]["BadRequest"];

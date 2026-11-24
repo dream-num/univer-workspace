@@ -9,8 +9,11 @@ import {
   GitPullRequest,
   Paperclip,
   Pencil,
+  Send,
   Tag,
+  Undo2,
   User,
+  type LucideIcon,
 } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
@@ -34,7 +37,7 @@ import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { NodeIcon } from "../nodes";
 import { spaceQueryOptions } from "../spaces";
-import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment } from "./issues.commands";
+import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment, useIssueVerdict } from "./issues.commands";
 import { IssueComposer } from "./issue-composer";
 import { IssueLabelChip } from "./issue-label";
 import { IssueMarkdown } from "./issue-markdown";
@@ -71,10 +74,12 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
   const [editingBody, setEditingBody] = useState(false);
   const [body, setBody] = useState("");
   const [comment, setComment] = useState("");
+  const [reason, setReason] = useState("");
   const [picker, setPicker] = useState<"labels" | "assignees" | "references" | null>(null);
 
   const patch = useUpdateIssue(spaceId, number);
   const postComment = useAddIssueComment(spaceId, number);
+  const verdict = useIssueVerdict(spaceId, number);
   const onError = (error: Error) => toast.error(error.message);
 
   if (issueQuery.isPending) {
@@ -297,6 +302,44 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
               )
             )}
           </section>
+
+          {issue.state === "open" && issue.acceptance?.kind === "submitted" && issue.capabilities.close ? (
+            <section
+              aria-label={t("issueAcceptanceReview")}
+              className={cn(
+                "grid gap-3 rounded-lg border border-border p-4",
+                compact && "rounded-none border-x-0 border-b-0 px-0 pt-6",
+              )}
+            >
+              <h2 className="m-0 text-base font-semibold">{t("issueAcceptanceReview")}</h2>
+              <IssueComposer
+                value={reason}
+                onChange={setReason}
+                ariaLabel={t("issueSendBackReason")}
+                placeholder={t("issueSendBackPlaceholder")}
+                rows={3}
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={verdict.isPending || !reason.trim()}
+                  onClick={() =>
+                    verdict.mutate({ kind: "sent_back", body: reason }, { onError, onSuccess: () => setReason("") })
+                  }
+                >
+                  <Undo2 />
+                  {t("issueSendBack")}
+                </Button>
+                <Button
+                  disabled={verdict.isPending}
+                  onClick={() => verdict.mutate({ kind: "accepted" }, { onError })}
+                >
+                  <CircleCheck />
+                  {t("issueAccept")}
+                </Button>
+              </div>
+            </section>
+          ) : null}
 
           {issue.capabilities.comment ? (
             <section
@@ -550,6 +593,30 @@ const EVENT_MESSAGES: Readonly<Record<TimelineEvent["kind"], MessageKey>> = {
   unassigned: "issueEventUnassigned",
   node_referenced: "issueEventNodeReferenced",
   node_unreferenced: "issueEventNodeUnreferenced",
+  submitted: "issueEventSubmitted",
+  accepted: "issueEventAccepted",
+  sent_back: "issueEventSentBack",
+};
+
+const EVENT_ICONS: Readonly<Record<TimelineEvent["kind"], LucideIcon>> = {
+  closed: CircleCheck,
+  reopened: CircleDot,
+  renamed: Pencil,
+  labeled: Tag,
+  unlabeled: Tag,
+  assigned: User,
+  unassigned: User,
+  node_referenced: Paperclip,
+  node_unreferenced: Paperclip,
+  submitted: Send,
+  accepted: CircleCheck,
+  sent_back: Undo2,
+};
+
+const ACCEPTANCE_LABELS: Readonly<Record<components["schemas"]["IssueVerdictKind"], MessageKey>> = {
+  submitted: "issueAcceptanceSubmitted",
+  accepted: "issueAcceptanceAccepted",
+  sent_back: "issueAcceptanceSentBack",
 };
 
 /** Replaces `{name}` placeholders with nodes so each language keeps its own word order. */
@@ -580,45 +647,39 @@ function EventLine({ event }: { readonly event: TimelineEvent }) {
     user: strong(text(payload["displayName"]) || text(payload["username"])),
     name: strong(text(payload["name"])),
   };
-  const Icon =
-    event.kind === "closed"
-      ? notPlanned
-        ? CircleSlash
-        : CircleCheck
-      : event.kind === "reopened"
-        ? CircleDot
-        : event.kind === "renamed"
-          ? Pencil
-          : event.kind === "labeled" || event.kind === "unlabeled"
-            ? Tag
-            : event.kind === "assigned" || event.kind === "unassigned"
-              ? User
-              : Paperclip;
-  const tone =
-    event.kind === "closed"
-      ? notPlanned
-        ? "text-muted-foreground"
-        : "text-state-merged"
+  const body = text(payload["body"]);
+  const Icon = notPlanned ? CircleSlash : EVENT_ICONS[event.kind];
+  const tone = notPlanned
+    ? "text-muted-foreground"
+    : event.kind === "closed" || event.kind === "accepted"
+      ? "text-state-merged"
       : event.kind === "reopened"
         ? "text-state-open"
         : "text-subtle-foreground";
   return (
-    <div className="issue-event relative flex min-h-10 items-center gap-3 py-2 pl-4 text-sm text-muted-foreground before:absolute before:inset-y-[-16px] before:left-[31px] before:w-0.5 before:bg-border">
-      <span
-        className={cn(
-          "relative grid size-8 shrink-0 place-items-center rounded-full bg-surface ring-4 ring-background",
-          tone,
-        )}
-      >
-        <Icon className="size-4" aria-hidden="true" />
-      </span>
-      <p className="relative m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 [overflow-wrap:anywhere]">
-          {interpolate(t(key), nodes)}
+    <>
+      <div className="issue-event relative flex min-h-10 items-center gap-3 py-2 pl-4 text-sm text-muted-foreground before:absolute before:inset-y-[-16px] before:left-[31px] before:w-0.5 before:bg-border">
+        <span
+          className={cn(
+            "relative grid size-8 shrink-0 place-items-center rounded-full bg-surface ring-4 ring-background",
+            tone,
+          )}
+        >
+          <Icon className="size-4" aria-hidden="true" />
         </span>
-        <span>{formatRelativeDate(event.createdAt, language)}</span>
-      </p>
-    </div>
+        <p className="relative m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 [overflow-wrap:anywhere]">
+            {interpolate(t(key), nodes)}
+          </span>
+          <span>{formatRelativeDate(event.createdAt, language)}</span>
+        </p>
+      </div>
+      {body ? (
+        <div className="ml-14 rounded-lg border border-border p-3">
+          <IssueMarkdown text={body} />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -654,6 +715,13 @@ function IssueSidebar({
         ) : (
           <Muted>{t("issueNoAssignees")}</Muted>
         )}
+      </SidebarSection>
+      <SidebarSection title={t("issueAcceptance")}>
+        <Muted>
+          <span data-issue-acceptance={issue.acceptance?.kind ?? "none"}>
+            {t(issue.acceptance ? ACCEPTANCE_LABELS[issue.acceptance.kind] : "issueNotSubmitted")}
+          </span>
+        </Muted>
       </SidebarSection>
       <SidebarSection title={t("issueLabels")} onEdit={triage ? () => onEdit("labels") : undefined}>
         {issue.labels.length ? (

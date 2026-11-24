@@ -59,6 +59,18 @@ export interface WorkspaceIssue extends WorkspaceIssueSummary {
   };
   readonly references: readonly WorkspaceIssueReference[];
   readonly pullRequests: readonly WorkspaceIssuePullRequest[];
+  /** The latest verdict, or null when the Issue was never submitted or the server predates verdicts. */
+  readonly acceptance: WorkspaceIssueAcceptance | null;
+}
+
+export type WorkspaceIssueVerdictKind = "submitted" | "accepted" | "sent_back";
+
+export interface WorkspaceIssueAcceptance {
+  /** A `WorkspaceIssueVerdictKind`, kept open so a newer server's verdict still parses. */
+  readonly kind: string;
+  readonly actor: WorkspaceIssueUser | null;
+  readonly body: string;
+  readonly createdAt: string;
 }
 
 export interface WorkspaceIssuePullRequest {
@@ -193,6 +205,24 @@ export function parseIssue(value: unknown): WorkspaceIssue {
     },
     references: record["references"].map((reference) => parseReference(reference)),
     pullRequests: ((record["pullRequests"] ?? []) as unknown[]).map((pullRequest) => parsePullRequest(pullRequest)),
+    acceptance: record["acceptance"] == null ? null : parseAcceptance(record["acceptance"]),
+  };
+}
+
+function parseAcceptance(value: unknown): WorkspaceIssueAcceptance {
+  if (
+    !isWorkspaceRecord(value) ||
+    typeof value["kind"] !== "string" ||
+    typeof value["body"] !== "string" ||
+    typeof value["createdAt"] !== "string"
+  ) {
+    throw invalidResponse("Workspace Issue contains an invalid acceptance");
+  }
+  return {
+    kind: value["kind"],
+    actor: value["actor"] === null ? null : parseUser(value["actor"]),
+    body: value["body"],
+    createdAt: value["createdAt"],
   };
 }
 

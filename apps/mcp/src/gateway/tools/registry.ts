@@ -34,6 +34,7 @@ import { issueCreateTool } from "./core/issue-create.js";
 import { issueEditTool } from "./core/issue-edit.js";
 import { issueListTool } from "./core/issue-list.js";
 import { issueSetStateTool } from "./core/issue-set-state.js";
+import { issueVerdictTool } from "./core/issue-verdict.js";
 import { issueViewTool } from "./core/issue-view.js";
 import { prListTool } from "./core/pr-list.js";
 import { prViewTool } from "./core/pr-view.js";
@@ -85,6 +86,7 @@ export const tools: readonly ToolDefinition[] = [
   issueEditTool,
   issueCommentTool,
   issueSetStateTool,
+  issueVerdictTool,
   prListTool,
   prViewTool,
   prCreateTool,

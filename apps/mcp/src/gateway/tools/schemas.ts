@@ -102,6 +102,10 @@ export const issueSchema = z.object({
       }),
     )
     .describe("Pull requests linked to this Issue that you may see, newest first."),
+  acceptance: z
+    .object({ kind: z.string(), actor: issueUserSchema.nullable(), body: z.string(), createdAt: z.string() })
+    .nullable()
+    .describe("Latest verdict (submitted, accepted or sent_back) with its body, or null if never submitted."),
   url: z.url(),
 });
 export const issueCommentSchema = z.object({

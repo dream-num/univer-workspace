@@ -192,7 +192,7 @@ uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
 
 | Group   | Commands                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `repo member list/add/edit/remove`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
+| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `repo member list/add/edit/remove`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment/submit/accept/send-back`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
 | Content | `space browse/find/node`, `unit`, `execute`, `outline`, `read`, `find` (Sheet only), `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-markdown`, `export-markdown`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                      |
 | Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 
@@ -217,6 +217,12 @@ person who started it, or anyone who may merge it. Once a merge has finished, an
 else who runs `pr merge` gets `workspace-lifecycle-invalid` saying it is already merged.
 `uvw search prs --reviewable` lists, across repositories, the ready Team pull requests that others wrote and you may merge.
 Pull request JSON carries `capabilities`, what you may do with it now, such as `merge`.
+
+`uvw issue submit <n> -b <summary>` lets an assignee of an open Issue, with any role, hand the work over for acceptance.
+Whoever may close the Issue, its author or a member who triages, answers with `uvw issue accept <n>`, which closes it as
+completed, or `uvw issue send-back <n> -b <reason>`, after which an assignee submits again. `--body-file -` reads the body
+from stdin. Repeating the latest verdict with the same body changes nothing. `issue view` shows the latest verdict as
+`acceptance`, and `uvw search issues --acceptance submitted|sent_back` finds Issues by it.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

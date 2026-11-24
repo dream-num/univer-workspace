@@ -79,6 +79,7 @@ describe("shared Skill operation resolution", () => {
       "space node create": "space_node", "space node rename": "space_node",
       "space node move": "space_node", "space node trash": "space_node",
       "issue close": "issue_set_state", "issue reopen": "issue_set_state",
+      "issue submit": "issue_verdict", "issue accept": "issue_verdict", "issue send-back": "issue_verdict",
       "label create": "label_write", "label edit": "label_write", "label delete": "label_write",
       "search issues": "search", "search prs": "search", "html-view create": "html_view_save",
       "auth *": "unavailable", "config": "unavailable", "daemon": "unavailable",

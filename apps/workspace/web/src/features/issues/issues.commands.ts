@@ -47,6 +47,20 @@ export function useAddIssueComment(spaceId: string, number: number) {
   });
 }
 
+export function useIssueVerdict(spaceId: string, number: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: components["schemas"]["CreateIssueVerdict"]) => {
+      const { error } = await api.POST("/api/spaces/{spaceId}/issues/{number}/verdicts", {
+        params: { path: { spaceId, number } },
+        body: input,
+      });
+      if (error) throw apiError(error);
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: issuesQueryKey }),
+  });
+}
+
 export function useUpdateIssueComment(commentId: string) {
   const client = useQueryClient();
   return useMutation({

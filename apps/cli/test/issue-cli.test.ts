@@ -47,7 +47,7 @@ describe("Workspace CLI Issue commands", () => {
           respond(200, { id: "s1", name: "Team", type: "team" });
         } else if (path.endsWith("/comments")) {
           respond(201, { author: user, body: "closing note\n", createdAt: "2026-09-29T00:00:00.000Z", id: "c1", updatedAt: "2026-09-29T00:00:00.000Z" });
-        } else if (path.startsWith("/api/spaces/s1/issues?")) {
+        } else if (path.startsWith("/api/spaces/s1/issues?") || path.startsWith("/api/issues?")) {
           respond(200, { counts: { closed: 0, open: 0 }, items: [issue("open")], nextCursor: null });
         } else if (path === "/api/worktrees/wt-1") {
           respond(200, { worktree: { id: "wt-1", name: "Draft", state: "draft", createdVia: "agent" } });
@@ -75,6 +75,11 @@ describe("Workspace CLI Issue commands", () => {
       expect(JSON.parse(closed.stdout)).toMatchObject({ number: 3, state: "closed", stateReason: "not_planned" });
 
       await runCli(["issue", "list", "-R", "s1", "-l", "bug", "-l", "docs", "-a", "@me", "--json"], env);
+      for (const args of [["submit", "3", "-b", "Done"], ["send-back", "3", "-F", "-"], ["accept", "3"]]) {
+        expect(await runCli(["issue", ...args, "-R", "s1", "--json", "number"], env, "West is missing\n"))
+          .toMatchObject({ code: 0, stderr: "", stdout: '{\n  "number": 3\n}\n' });
+      }
+      await runCli(["search", "issues", "-a", "@me", "--acceptance", "sent_back", "--json"], env);
       const rejected = await runCli(["issue", "view", "abc", "-R", "s1"], env);
 
       expect(requests).toEqual([
@@ -84,6 +89,13 @@ describe("Workspace CLI Issue commands", () => {
         { body: { state: "closed", stateReason: "not_planned" }, method: "PATCH", path: "/api/spaces/s1/issues/3" },
         { body: undefined, method: "GET", path: "/api/spaces/s1" },
         { body: undefined, method: "GET", path: "/api/spaces/s1/issues?state=open&label=bug&label=docs&assignee=me&limit=30" },
+        { body: undefined, method: "GET", path: "/api/spaces/s1" },
+        { body: { kind: "submitted", body: "Done" }, method: "POST", path: "/api/spaces/s1/issues/3/verdicts" },
+        { body: undefined, method: "GET", path: "/api/spaces/s1" },
+        { body: { kind: "sent_back", body: "West is missing\n" }, method: "POST", path: "/api/spaces/s1/issues/3/verdicts" },
+        { body: undefined, method: "GET", path: "/api/spaces/s1" },
+        { body: { kind: "accepted" }, method: "POST", path: "/api/spaces/s1/issues/3/verdicts" },
+        { body: undefined, method: "GET", path: "/api/issues?state=open&assignee=me&acceptance=sent_back&limit=30" },
       ]);
       for (const [args, expected] of [
         [["issue", "list", "-R", "s1"], [{ createdVia: "agent" }]],

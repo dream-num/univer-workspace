@@ -807,6 +807,9 @@ describe("uvw JSON validation before product writes", () => {
     ["issue", "close", "3", "-R", "alice/docs", "-c", "Closing comment"],
     ["issue", "reopen", "3", "-R", "alice/docs"],
     ["issue", "comment", "3", "-R", "alice/docs", "-b", "Comment"],
+    ["issue", "submit", "3", "-R", "alice/docs", "-b", "Done"],
+    ["issue", "accept", "3", "-R", "alice/docs"],
+    ["issue", "send-back", "3", "-R", "alice/docs", "-b", "Missing"],
     ["label", "create", "bug", "-R", "alice/docs", "--color", "red"],
     ["label", "edit", "bug", "-R", "alice/docs", "--name", "Changed"],
     ["label", "delete", "bug", "-R", "alice/docs"],
@@ -846,6 +849,7 @@ describe("uvw JSON validation before product writes", () => {
       reopen: write("issue.reopen", issue()),
       update: write("issue.update", issue()),
       updateLabel: write("label.update", label),
+      verdict: write("issue.verdict", issue()),
     } as unknown as WorkspaceIssueFeature;
     const worktrees = {
       create: write("pr.create", worktree()),

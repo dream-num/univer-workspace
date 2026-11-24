@@ -27,7 +27,7 @@ export const ISSUE_LIST_JSON_FIELDS = [
   "referenceCount", "space", "state", "stateReason", "title", "updatedAt",
 ] as const satisfies readonly (keyof WorkspaceIssueSummary)[];
 export const ISSUE_JSON_FIELDS = [
-  ...ISSUE_LIST_JSON_FIELDS, "body", "capabilities", "references", "pullRequests",
+  ...ISSUE_LIST_JSON_FIELDS, "body", "capabilities", "references", "pullRequests", "acceptance",
 ] as const satisfies readonly (keyof WorkspaceIssue)[];
 const COMMENT_JSON_FIELDS = ["author", "body", "createdAt", "id", "type", "updatedAt"] as const satisfies
   readonly (keyof Extract<WorkspaceIssueTimelineItem, { type: "comment" }>)[];
@@ -131,6 +131,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
             ...(issue.assignees.length ? [`assignees: ${issue.assignees.map((user) => user.username).join(", ")}`] : []),
             ...(issue.references.length ? [`files: ${issue.references.map((ref) => ref.name ?? ref.nodeId).join(", ")}`] : []),
             ...issue.pullRequests.map((pull) => `pull request: ${pull.number === null ? pull.id : `#${String(pull.number)}`} ${pull.title} [${pull.state}]`),
+            ...(issue.acceptance ? [`acceptance: ${issue.acceptance.kind}${issue.acceptance.actor ? ` by ${issue.acceptance.actor.username}` : ""} ${issue.acceptance.createdAt}`] : []),
             "",
             issue.body,
             ...(timeline === undefined ? [] : ["", JSON.stringify(timeline, null, 2)]),
@@ -287,6 +288,25 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
       emit(comment, options, value, `Commented on #${number.replace(/^#/, "")}`);
     });
 
+  const verdict = (name: string, kind: "submitted" | "accepted" | "sent_back", description: string) => {
+    const command = new Command(name)
+      .description(description)
+      .argument("<number>")
+      .option(...REPO_OPTION)
+      .option("-b, --body <markdown>")
+      .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
+      .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
+      .action(async (number: string, options: JsonFieldsOption & RepoOption & TextOptions) => {
+        const issue = await executeCommand(command, async () => {
+          const target = await issueTarget(context, number, options.repo);
+          const body = await readText(options.body, options.bodyFile, "--body or --body-file");
+          return await feature.verdict(target.spaceId, target.number, kind, body);
+        });
+        emit(command, options, issue, `${await issueLine(origin, issue)}\nacceptance: ${issue.acceptance?.kind ?? "none"}`);
+      });
+    return command;
+  };
+
   return root
     .addCommand(list)
     .addCommand(view)
@@ -294,7 +314,10 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .addCommand(edit)
     .addCommand(close)
     .addCommand(reopen)
-    .addCommand(comment);
+    .addCommand(comment)
+    .addCommand(verdict("submit", "submitted", "As an assignee, submit an Issue for acceptance; the body says what you did, checked and assumed"))
+    .addCommand(verdict("accept", "accepted", "Accept a submitted Issue you may close, which closes it as completed"))
+    .addCommand(verdict("send-back", "sent_back", "Send a submitted Issue back to its assignees; the body gives the reason"));
 }
 
 async function issueTarget(context: RepoContext, argument: string, repo: string | undefined) {

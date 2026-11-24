@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SpaceAccess } from "../../../modules/access/index.js";
 import { type PostgresAccessRepository, ownerSuspendedSql, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
-import { assigneeEvent, checkCommentWrite, checkCreateRelations, checkLabelCapacity, requireIssueSpace, labelEvent, planIssueUpdate, referenceEvent, relationDelta } from "../../../modules/issues/issue-changes.js";
+import { assigneeEvent, checkCommentWrite, checkCreateRelations, checkLabelCapacity, requireIssueSpace, labelEvent, planIssueUpdate, planVerdict, referenceEvent, relationDelta } from "../../../modules/issues/issue-changes.js";
 import { forbidden, labelNameTaken, notFound } from "../../../modules/issues/issues.errors.js";
 import type { QueryValue } from "../connection.js";
 import type { PostgresDatabase } from "../connection.js";
@@ -23,6 +23,8 @@ import type {
   CreateIssue,
   IssueRelations,
   IssueUpdate,
+  RecordVerdict,
+  VerdictRow,
 } from "../../../modules/issues/issues.repository.js";
 
 const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
@@ -64,16 +66,52 @@ export class PostgresIssuesRepository implements IssuesRepository {
       if (!space.member) throw forbidden();
       const row = await this.readIssue(spaceId, number);
       if (!row) throw notFound();
-      const { text, state, events } = planIssueUpdate(row, patch, userId, space.capabilities.triageIssues);
-      if (text) await this.updateIssueText(row.id, text.title, text.body, at);
-      if (state) await this.setIssueState(row.id, state.value, state.reason, state.closedBy, at);
-      for (const event of events) {
-        await this.insertEvent({ ...event, id: randomUUID(), issueId: row.id, actorUserId: userId, now: at });
-      }
-      const relationsChanged = await this.applyRelations(userId, spaceId, row.id, patch, at);
-      if (text || state || relationsChanged) await this.touch(row.id, at);
+      await this.applyUpdate(userId, space, row, patch, at);
       return await this.readIssueDetail(userId, space, number);
     });
+  }
+
+  private async applyUpdate(userId: string, space: SpaceAccess, row: IssueRow, patch: IssueUpdate, at: number): Promise<void> {
+    const { text, state, events } = planIssueUpdate(row, patch, userId, space.capabilities.triageIssues);
+    if (text) await this.updateIssueText(row.id, text.title, text.body, at);
+    if (state) await this.setIssueState(row.id, state.value, state.reason, state.closedBy, at);
+    for (const event of events) {
+      await this.insertEvent({ ...event, id: randomUUID(), issueId: row.id, actorUserId: userId, now: at });
+    }
+    const relationsChanged = await this.applyRelations(userId, space.id, row.id, patch, at);
+    if (text || state || relationsChanged) await this.touch(row.id, at);
+  }
+
+  async recordVerdict(input: RecordVerdict): Promise<IssueDetail> {
+    return await this._database.transaction(async () => {
+      const space = await this.issueSpace(input.userId, input.spaceId);
+      const row = await this.readIssue(input.spaceId, input.number);
+      if (!row) throw notFound();
+      const plan = planVerdict({
+        issue: row, latest: await this.readLatestVerdict(row.id), space, userId: input.userId, kind: input.kind,
+        body: input.body, now: input.now,
+        assignee: Boolean(await this._get("SELECT 1 FROM issue_assignees WHERE issue_id = ? AND user_id = ?", row.id, input.userId)),
+      });
+      if (plan) {
+        await this._run(
+          "INSERT INTO issue_verdicts (id, issue_id, kind, actor_user_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+          input.id, row.id, input.kind, input.userId, input.body, plan.createdAt,
+        );
+        if (input.kind === "accepted") {
+          await this.applyUpdate(input.userId, space, row, { state: "closed", stateReason: "completed" }, plan.createdAt);
+        } else {
+          await this.touch(row.id, plan.createdAt);
+        }
+      }
+      return await this.readIssueDetail(input.userId, space, input.number);
+    });
+  }
+
+  private async readLatestVerdict(issueId: string): Promise<VerdictRow | null> {
+    return (await this._get(
+      "SELECT id, kind, actor_user_id, body, created_at FROM issue_verdicts WHERE issue_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+      issueId,
+    ) as VerdictRow | undefined) ?? null;
   }
 
   async findIssue(spaceId: string, number: number): Promise<IssueRow | null> {
@@ -94,7 +132,7 @@ export class PostgresIssuesRepository implements IssuesRepository {
     const references = await Promise.all((await this.readReferenceNodeIds(row.id)).map(async (nodeId) => ({
       nodeId, node: await this.access.readNodeAccess(userId, nodeId),
     })));
-    return { row, space, summary: await this.readSummaryData([row]), references };
+    return { row, space, summary: await this.readSummaryData([row]), references, acceptance: await this.readLatestVerdict(row.id) };
   }
 
   async listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]> {
@@ -344,7 +382,7 @@ export class PostgresIssuesRepository implements IssuesRepository {
 
   async timeline(issueId: string, cursor: TimelineCursor | null, limit: number): Promise<TimelineRow[]> {
     const keyset = cursor ? "WHERE (created_at, rank, id) > (?, ?, ?)" : "";
-    const params: QueryValue[] = [issueId, issueId];
+    const params: QueryValue[] = [issueId, issueId, issueId];
     if (cursor) params.push(cursor.ts, cursor.rank, cursor.id);
     params.push(limit);
     return await this._all(
@@ -355,6 +393,9 @@ export class PostgresIssuesRepository implements IssuesRepository {
          UNION ALL
          SELECT 'event', 1, id, actor_user_id, NULL, kind, payload_json, created_at, created_at
          FROM issue_events WHERE issue_id = ?
+         UNION ALL
+         SELECT 'verdict', 2, id, actor_user_id, body, kind, NULL, created_at, created_at
+         FROM issue_verdicts WHERE issue_id = ?
        ) ${keyset} ORDER BY created_at, rank, id LIMIT ?`,
       ...params,
     ) as unknown as TimelineRow[];
@@ -573,6 +614,11 @@ function filterClause(filter: IssueFilter, includeState: boolean): { sql: string
     const pattern = `%${filter.search.replace(/[\\%_]/g, "\\$&")}%`;
     clauses.push("(issues.title ILIKE ? ESCAPE '\\' OR issues.body ILIKE ? ESCAPE '\\')");
     params.push(pattern, pattern);
+  }
+  if (filter.acceptance) {
+    clauses.push(`(SELECT kind FROM issue_verdicts WHERE issue_id = issues.id
+      ORDER BY created_at DESC, id DESC LIMIT 1) = ?`);
+    params.push(filter.acceptance);
   }
   return { sql: clauses.join(" AND "), params };
 }

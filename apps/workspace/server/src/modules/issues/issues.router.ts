@@ -49,6 +49,11 @@ export function createIssuesRouter(options: {
         ),
       );
   });
+  router.post("/spaces/:spaceId/issues/:number/verdicts", async (request, response) => {
+    response.json(
+      await options.issues.verdict(await userId(request.headers.cookie), request.params.spaceId, request.params.number, request.body),
+    );
+  });
   router.patch("/issue-comments/:commentId", async (request, response) => {
     response.json(await options.issues.updateComment(await userId(request.headers.cookie), request.params.commentId, request.body));
   });
