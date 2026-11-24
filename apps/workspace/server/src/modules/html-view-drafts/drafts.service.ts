@@ -260,8 +260,9 @@ export function createHtmlViewDraftsModule(options: {
         row = reservation.row;
         created = reservation.created;
       }
+      // A client that revises its own pending page retries with the key that created the draft it now names.
       const same =
-        row.revises_draft_id === (previous?.id ?? null) &&
+        (row.revises_draft_id === (previous?.id ?? null) || row.id === previous?.id) &&
         row.kind === input.kind &&
         row.sha256 === sha256 &&
         row.source_worktree_id === (input.sourceWorktreeId ?? null) &&

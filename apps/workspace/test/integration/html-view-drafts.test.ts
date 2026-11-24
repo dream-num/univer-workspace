@@ -60,6 +60,14 @@ describe("HTML View draft HTTP API", () => {
     const replay = await c.send("", body, key);
     expect(replay.status).toBe(200);
     expect((await replay.json()).draft).toEqual(next);
+    const revisesItself = await c.send("", { ...body, draftId: next.id }, key);
+    expect(revisesItself.status).toBe(200);
+    expect((await revisesItself.json()).draft).toEqual(next);
+    expect((await c.send("", { ...body, draftId: next.id, html }, key)).status).toBe(409);
+    const ownKey = crypto.randomUUID();
+    const own = await c.submit(ownKey);
+    const resent = await c.send("", { kind: "revise", draftId: own.id, html }, ownKey);
+    expect({ status: resent.status, draft: (await resent.json()).draft }).toEqual({ status: 200, draft: own });
     expect((await c.send("", { ...body, html }, key)).status).toBe(409);
     const wrongKey = await c.send("", body, crypto.randomUUID());
     expect(wrongKey.status).toBe(409);
