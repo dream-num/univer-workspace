@@ -6,19 +6,30 @@ import { pathToFileURL } from 'node:url';
 import { assertWorkerCount, assertLogsExclude } from './executor-doctor-checks.mjs';
 import { join } from 'node:path';
 
-const [repo, run, project, image, imageId, origin, serverPort, mcpPort, executorCount = "1", production = "0", renderer = "1"] = process.argv.slice(2);
+const [repo, run, project, image, imageId, origin, serverPort, mcpPort, executorCount = "1", production = "0", renderer = "1", from, transport] = process.argv.slice(2);
 const secret = name => readFileSync(join(run, 'home', name), 'utf8').trim();
 const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'staging'), VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
   VERIFY_UVW_METRICS_TOKEN: secret('metrics-token'), VERIFY_UVW_EXECUTOR_TOKEN: secret('executor-token'), VERIFY_UVW_RENDERER_TOKEN: secret('renderer-token'),
   VERIFY_UVW_MCP_OAUTH_SECRET: secret('mcp-oauth-secret') };
-const docker = (args, input) => execFileSync('docker', args, { env, input, encoding: 'utf8', maxBuffer: 1 << 28, timeout: 25_000, stdio: ['pipe', 'pipe', 'pipe'] });
+const capture = (file, args, input) => execFileSync(file, args, { env, input, encoding: 'utf8', maxBuffer: 1 << 28, timeout: 25_000, stdio: ['pipe', 'pipe', 'pipe'] });
+const docker = (args, input) => capture('docker', args, input);
 const compose = (args, input) => docker(['compose', '-p', project, '-f', join(repo, 'apps/mcp/docker/compose.verify.yml'), ...args], input);
-const node = (service, code, input) => compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input);
+const node = (service, code, input) => from === 'image'
+  ? compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input)
+  : capture(process.execPath, [join(repo, '.agents/skills/verify-uvw/bin/mcp-processes.mjs'), 'exec', run, service, '--', 'node', '--input-type=module', '-e', code], input);
+// Under dist the role log files keep every process a role ran, so the scans cover restarted roles too.
+const logs = services => from === 'image'
+  ? compose(['logs', '--no-color', '--no-log-prefix', ...services])
+  : services.map(service => readFileSync(join(run, 'logs', `mcp-${service}.log`), 'utf8')).join('');
+const skip = check => console.log(`skip  ${check}: dist start mode has no container`);
 
 try {
   const executors = executorCount === '2' ? ['executor', 'executor-b'] : ['executor'];
-  for (const service of executors) {
+  if (from !== 'image') {
+    for (const check of ['MCP gateway and executor call-direction credentials', 'MCP gateway and executor mode, allowlist and renderer configuration',
+      'MCP executor health and image', 'MCP executor published ports']) skip(check);
+  } else for (const service of executors) {
     const cid = compose(['ps', '-q', service]).trim();
     assert(cid, 'executor container exists');
     const [container] = JSON.parse(docker(['inspect', cid]));
@@ -64,7 +75,7 @@ try {
     `, JSON.stringify({ kind: 'session', userId: identity.user.id, session, expiresAt: Date.now() + 60_000 })));
     writeFileSync(join(run, 'evidence/executor-probe.json'), JSON.stringify(result, null, 2) + '\n');
     assert(result.ok && result.output.whoami.id === identity.user.id && result.output.ticket && result.output.websocket, 'executor probe authenticates HTTP, ticket and collaboration WebSocket');
-    assert.equal(result.output.transport, 'http://host.docker.internal:' + serverPort);
+    assert.equal(result.output.transport, transport);
     console.log('ok    MCP executor reaches Workspace HTTP and collaboration WebSocket through transport');
     const mcp = (label, tool, args) => {
       execFileSync(join(repo, '.agents/skills/verify-uvw/bin/verify-uvw'),
@@ -78,13 +89,15 @@ try {
     mcp('doctor-worker-inspect', 'inspect', { worktree: worktree.id, unit: unit.unitId, target: 'workbook' });
 
   }
+  // Workers are children of the executor: PID 1 in its container, its recorded pid under dist.
   const children = executors.reduce((total, service) => total + Number(node(service, `
     import { readFileSync, readdirSync } from 'node:fs';
+    const parent = ${JSON.stringify(from === 'image' ? '1' : readFileSync(join(run, `mcp-${service}.pid`), 'utf8').trim())};
     let checked = 0;
-    for (const pid of readdirSync('/proc').filter(p => /^\\d+$/.test(p) && p !== '1' && p !== String(process.pid))) {
+    for (const pid of readdirSync('/proc').filter(p => /^\\d+$/.test(p) && p !== parent && p !== String(process.pid))) {
       let status, environ;
       try { status=readFileSync('/proc/'+pid+'/status','utf8'); environ=readFileSync('/proc/'+pid+'/environ','utf8'); } catch { continue; }
-      if (!/^PPid:\\s+1$/m.test(status)) continue;
+      if (status.match(/^PPid:\\s+(\\d+)$/m)?.[1] !== parent) continue;
       if (environ.split('\\0').some(v => /^(MCP_EXECUTOR_TOKEN|MCP_RENDERER_TOKEN|METRICS_TOKEN|UNIVER_LICENSE|UNIVER_LICENSE_KEY|MCP_OAUTH_CLIENT_SECRET)=/.test(v))) process.exit(1);
       checked++;
     }
@@ -93,13 +106,13 @@ try {
   assertWorkerCount(children);
   writeFileSync(join(run, 'evidence/executor-worker-environ.txt'), `Checked ${children} worker children; no inherited secret environment variables. Same-uid workers can still read /proc/1/environ until Stage G.\n`);
   console.log(`ok    MCP executor worker environment excludes inherited secrets (${children} live children)`);
-  const logs = compose(['logs', '--no-color', '--no-log-prefix', 'gateway', ...executors]);
+  const roleLogs = logs(['gateway', ...executors]);
   for (const name of ['mcp-session', 'mcp-token', 'executor-token', 'renderer-token', 'metrics-token', 'mcp-oauth-secret']) {
-    if (existsSync(join(run, 'home', name))) assertLogsExclude(logs, [secret(name)]);
+    if (existsSync(join(run, 'home', name))) assertLogsExclude(roleLogs, [secret(name)]);
   }
   const licenses = await import(pathToFileURL(join(repo, 'apps/cli/dist/license.js')).href);
   const configured = JSON.parse(node('executor', `console.log(JSON.stringify([process.env.UNIVER_LICENSE, process.env.UNIVER_LICENSE_KEY].filter(Boolean)))`));
-  assertLogsExclude(logs, [...Object.values(licenses), ...configured]);
+  assertLogsExclude(roleLogs, [...Object.values(licenses), ...configured]);
   console.log('ok    MCP gateway and executor logs contain no session, PAT, internal token, client secret or license values');
 } catch (error) {
   console.error('FAIL  MCP executor verification: ' + (error instanceof assert.AssertionError ? error.message : 'check failed; inspect the run evidence and container state'));

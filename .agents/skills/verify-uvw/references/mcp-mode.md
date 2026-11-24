@@ -6,11 +6,23 @@ and their pass conditions start at [MCP gateway](../features/mcp.md), and each t
 
 ## Start
 
-On macOS with Docker Desktop or OrbStack, opt in with `VERIFY_UVW_MCP=1 $V up`. `up` refuses any other
-engine. It builds `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
-port 3930 (`VERIFY_UVW_MCP_PORT`). Without the opt-in, every command keeps its default-mode behavior.
+Opt in with `VERIFY_UVW_MCP=1 $V up`. The gateway listens on loopback port 3930 (`VERIFY_UVW_MCP_PORT`).
+Without the opt-in, every command keeps its default-mode behavior. `VERIFY_UVW_MCP_FROM` chooses how `up`
+starts the gateway, executor and renderer:
+
+| Start mode | Where it runs | What `up` does |
+| --- | --- | --- |
+| `image`, the default | On macOS with Docker Desktop or OrbStack. `up` refuses any other engine. | Builds `apps/mcp/Dockerfile` from the working tree and starts the roles with `apps/mcp/docker/compose.verify.yml`. |
+| `dist` | Only in [the runner](../SKILL.md#run-journeys-in-the-runner), whose image sets it. Elsewhere `up` refuses before it starts anything, because `VERIFY_UVW_RUNNER` is not `1`. | Starts `node dist/main.js` in `apps/mcp` once per role, as your own processes on loopback ports that it picks and saves in `run.env`. `apps/mcp/dist` must be newer than `apps/mcp/src` (`pnpm --filter '@univerjs/univer-workspace-mcp...' build`); `up` does not build it. The renderer uses the Chromium at `UNIVER_RENDER_BROWSER`. |
+
+`dist` checks what the roles do, not how they are packaged: it has no image, container, internal network or
+published port. Journeys that check those, or that call `docker`, are marked `(host only)`. Each role writes
+`logs/mcp-<role>.log` and its process id to `mcp-<role>.pid`. `mcp-logs` shows each role's current process,
+and the file keeps earlier processes of a restarted role.
+
 Keep `VERIFY_UVW_SERVER_PORT` off the Fetch standard's blocked ports, such as 4045 and 6000. The gateway's `fetch`
-refuses them with `bad port`, and `doctor` then says the container cannot reach the host Workspace.
+refuses them with `bad port`, and in the `image` start mode `doctor` then says the container cannot reach the host
+Workspace.
 
 These variables are read at `up` and saved in `run.env`:
 
@@ -50,7 +62,10 @@ and replaces logs, so save what you need from the logs first. Run `user` again a
 gateway exchanges the PAT with Workspace (confidential client `univer-workspace-mcp-gateway`, whose
 secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. In MCP mode
 `$V env` adds `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL` to the
-default exports, which include `RUN`, `ORIGIN` and `EVIDENCE`. Sessions,
+default exports, which include `RUN`, `ORIGIN` and `EVIDENCE`. `MCP_PROJECT` and `MCP_IMAGE` are empty in the
+`dist` start mode. `MCP_OPENCODE_MODEL` is `console-deepseek/deepseek-flash#high` unless
+`VERIFY_UVW_OPENCODE_MODEL` names another model. The runner sets `deepseek/deepseek-flash#high`, whose
+provider reads `DEEPSEEK_API_KEY`. MO1 imports the OpenCode Console credential only for a `console-` model. Sessions,
 opencode config, the executor and renderer tokens, and the metrics token stay under `home/` with
 credential files at mode 0600.
 
@@ -120,11 +135,14 @@ A reused key with different arguments returns `workspace-idempotency-conflict` a
 With MCP enabled, `doctor` adds the container, image, network, credential and renderer checks. After
 `user`, it also creates or reuses an `Executor doctor` pull request and a `Doctor` Sheet in the personal
 Space to open a real worker. Rebuild with `down`, then `up`, whenever the image inputs change.
-`mcp-build.json` and `logs/mcp-build.log` keep the build evidence.
+`mcp-build.json` and `logs/mcp-build.log` keep the build evidence. In the `dist` start mode, doctor prints a
+`skip` line for each container, image and network check, checks that the gateway's recorded process owns its
+port, and runs every functional check.
 
 `down` saves the gateway, executor and renderer logs under `logs/`, removes the run's containers,
 networks, volumes and image tag, and prints `ok    MCP resources removed` after it checks the removal.
-Build cache and evidence survive.
+Build cache and evidence survive. In the `dist` start mode, `down` stops each role's process group and removes
+`staging/`.
 
 ## Workspace Agent
 
@@ -137,6 +155,8 @@ and confirm the onboarding service URL is `$ORIGIN` before signing in. `$V agent
 `down` also deletes its installation. MA8 in [PAT sign-in](../features/mcp-auth.md#ma8-existing-sign-in-clients) drives it.
 
 ## Benchmarks and probes
+
+These drive containers, so they need the `image` start mode.
 
 - Executor sizing: `node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help` and
   [the capacity benchmark](mcp-benchmarks.md#executor-capacity-benchmark).
