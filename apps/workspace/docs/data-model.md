@@ -214,7 +214,7 @@ ready 的提议仍留给成员审阅、合并或放弃。非成员在一个 Team
 Team Worktree，计数与插入在同一事务内，超出返回 `403 FORBIDDEN`。
 
 `accept_after_hours`（V31，`INTEGER`，可空，CHECK 大于 0）是 Team Space 的验收期限：`NULL`（默认，新库和迁移后的
-已有行都是）表示关闭；开启时，提交（`submitted`）之后这么多小时内无人退回的 Issue 由期限验收，见 `issue_verdicts`。
+已有行都是）表示关闭；开启时，提交（`submitted`）或重新打开之后这么多小时内无人退回的 Issue 由期限验收，见 `issue_verdicts`。
 只有 owner 与 admin 能经 `PATCH /api/spaces/{spaceId}` 的 `acceptAfterHours` 修改，服务层只接受 1–720 的整数或
 `null`，开启时建议取 72。Personal Space 恒为 `NULL`。
 
@@ -612,12 +612,18 @@ V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue �
 每条 Verdict 都更新 `issues` 行，PostgreSQL 的 SERIALIZABLE 事务因此让并发 Verdict 冲突并重试，重试读到胜者：
 两个并发验收只关闭一次、只记一条。
 
-期限验收由每个副本的 `server/src/jobs/issue-acceptance.ts` 每分钟执行一轮，每轮最多 25 个 Issue。它找出开放、最新
-Verdict 是 `submitted`、所在 Space 的 `accept_after_hours` 非空且 owner 未被暂停、并且 `submitted.created_at +
-accept_after_hours` 小时不晚于本副本当前时间的 Issue，逐个在一个事务里重新确认同一条件，然后写一条 `actor_user_id`
+期限验收由每个副本的 `server/src/jobs/issue-acceptance.ts` 每分钟执行一轮，每轮最多验收 25 个 Issue。期限是最新
+`submitted` 的 `created_at` 与最后一条 `reopened` 事件的 `created_at` 中较晚者加上 `accept_after_hours` 小时，
+只对开放、最新 Verdict 是 `submitted`、所在 Space 的 `accept_after_hours` 非空且 owner 未被暂停的 Issue 存在。两个
+repository 各用一条 SQL 计算它：任务用它找到期的 Issue，Issue 详情用它返回 `acceptance.deadline`，所以页面、uvw 与
+MCP 显示的时间就是任务使用的时间。任务按期限和 id 的顺序取期限不晚于本副本当前时间的 Issue，逐个在一个事务里重新确认
+同一条件，然后写一条 `actor_user_id`
 为 `NULL`、`body` 为空的 `accepted`，并以 `completed` 关闭 Issue，`closed_by_user_id` 为 `NULL`。它不写 `closed`
 事件：时间线里这条无 actor 的 `accepted` 就是关闭记录，活动流显示 actor 为 `null` 的 `issue-closed`。退回让最新一条
-不再是 `submitted`，计时停止；再次提交从新的 `created_at` 重新计时；关闭设置后不再验收。期限按副本的系统时钟比较，
+不再是 `submitted`，计时停止；再次提交从新的 `created_at` 重新计时；提交后被关闭再重新打开的 Issue 从重新打开时
+重新计时；关闭设置后不再验收；开启设置或调小小时数后，已超过新期限的 Issue 在下一轮被验收。某个 Issue 的事务失败只记日志，
+不中止本轮，也不占用 25 个的名额：任务按期限顺序越过它继续取后面的 Issue，所以持续失败的 Issue 每轮各重试一次，不会挡住
+其他 Issue。期限按副本的系统时钟比较，
 副本之间的时钟偏差使验收提前或推迟同样的量；以小时计的期限下，秒级偏差可以忽略。多个副本同时执行时，事务内的重新
 确认和对 `issues` 行的更新让 PostgreSQL 只放行一个，另一个重试后不再匹配：每个 Issue 只记一条验收、只关闭一次。
 

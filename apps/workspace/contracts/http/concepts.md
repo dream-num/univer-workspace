@@ -516,11 +516,13 @@ its access link. The pages and files the linked pull requests published come fro
 
 A Team Space's owner or admin may set `acceptAfterHours` (1 to 720, off as `null` by default,
 `72` suggested) with `PATCH /api/spaces/{spaceId}`. Then the server accepts a submitted Issue
-that nobody sent back within that many hours of its latest submission and closes it as completed.
-Such an acceptance is attributed to no one: its verdict's `actor`, the Issue's `closedBy` and the
-activity event's `actor` are `null`, and it writes no `closed` event. A send-back stops the clock
-and the next submission restarts it. The server checks about once a minute, so an acceptance can
-come up to a minute after the deadline.
+that nobody sent back within that many hours of its latest submission or, if later, its last
+reopen, and closes it as completed. The Issue's `acceptance.deadline` says when. Such an
+acceptance is attributed to no one: its verdict's `actor`, the Issue's `closedBy` and the
+activity event's `actor` are `null`, and it writes no `closed` event. A send-back stops the
+clock, and the next submission or a reopen restarts it. Turning the setting on or lowering it
+accepts every submitted Issue already past the new deadline at the next check. The server checks
+about once a minute, so an acceptance can come up to a minute after the deadline.
 
 The timeline merges comments, events and verdicts in chronological order. A verdict appears as
 an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`; an

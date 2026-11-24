@@ -18,7 +18,9 @@ const inputSchema = z.object({
     .max(720)
     .nullable()
     .optional()
-    .describe("Accept a submitted Issue nobody sent back after this many hours (72 is typical); null turns it off."),
+    .describe(
+      "Accept a submitted Issue nobody sent back after this many hours (72 is typical); null turns it off. Turning it on or lowering it accepts every submitted Issue already past the new deadline within a minute.",
+    ),
   slug: z.string().optional().describe("New slug. The old owner/slug stops resolving."),
 });
 export const repoEditTool: ToolDefinition = {

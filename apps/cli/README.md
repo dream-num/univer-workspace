@@ -225,7 +225,9 @@ from stdin. Repeating the latest verdict with the same body changes nothing. `is
 `acceptance`, and `uvw search issues --acceptance submitted|sent_back` finds Issues by it.
 The owner or an admin of a repository can turn on an acceptance deadline with `uvw repo edit --accept-after-hours 72`
 (1 to 720 hours, `off` turns it off). Then a submitted Issue that nobody sends back in time is accepted and closed as
-completed by no one: `issue view` prints `acceptance: accepted by deadline`, and `repo view` prints the setting.
+completed by no one: `issue view` prints when that will happen while it waits and `acceptance: accepted by deadline`
+after, and `repo view` prints the setting. The clock restarts when the Issue is reopened. Turning the deadline on or
+lowering it accepts every submitted Issue already past the new deadline within a minute.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

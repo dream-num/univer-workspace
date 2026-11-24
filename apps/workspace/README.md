@@ -786,7 +786,8 @@ every verdict, and `acceptance=submitted|sent_back` filters Issue lists.
 A Team Space owner or admin can turn on an acceptance deadline in Settings, with `uvw repo edit --accept-after-hours
 <n|off>`, or with the MCP `repo_edit` tool. It is off by default, and 72 hours is the suggested value. A submitted Issue
 that nobody sends back within that many hours is then accepted and closed as completed, attributed to no one. A send-back
-stops the clock and the next submission restarts it. Every server instance checks once a minute, and the database
+stops the clock, and the next submission or a reopen restarts it. Turning it on or lowering it accepts every submitted
+Issue already past the new deadline within a minute, and Settings says so before the change. Every server instance checks once a minute, and the database
 decides which one accepts.
 
 V30→V31 adds the empty table `issue_verdicts` with the index `issue_verdicts_issue`, and the nullable column

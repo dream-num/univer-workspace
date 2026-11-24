@@ -82,6 +82,50 @@ it("stops the clock on a send-back, restarts it on the next submission, and neve
   expect(await issues.get(owner, team, issue.number)).toMatchObject({ state: "closed", acceptance: { kind: "accepted", actor: null } });
 }, 120_000);
 
+it("restarts the clock when someone reopens a submitted Issue another person closed", async () => {
+  const { applications: [application], owner, agent, team } = await setup();
+  const { issues } = application!;
+  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  const issue = await issues.create(owner, team, { title: "Add North", assigneeUserIds: [agent] });
+  const { acceptance } = await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
+  const submitted = Date.parse(acceptance!.createdAt);
+  expect(acceptance!.deadline).toBe(new Date(submitted + HOUR).toISOString());
+
+  vi.setSystemTime(submitted + HOUR / 2);
+  const closed = await issues.update(owner, team, issue.number, { state: "closed", stateReason: "not_planned" });
+  expect(closed.acceptance).toMatchObject({ kind: "submitted", deadline: null });
+  vi.setSystemTime(submitted + 3 * HOUR);
+  const reopened = await issues.update(owner, team, issue.number, { state: "open" });
+  const reopenedAt = Date.parse((await issues.timeline(owner, team, issue.number, {})).items.findLast((item) =>
+    item.type === "event" && item.kind === "reopened")!.createdAt);
+  expect(reopened.acceptance).toMatchObject({ kind: "submitted", deadline: new Date(reopenedAt + HOUR).toISOString() });
+
+  expect(await issues.acceptDue(reopenedAt + HOUR - 1, 25), "the reopen restarted the clock").toBe(0);
+  expect((await issues.get(owner, team, issue.number)).state).toBe("open");
+  expect(await issues.acceptDue(reopenedAt + HOUR, 25)).toBe(1);
+  expect(await issues.get(owner, team, issue.number)).toMatchObject({
+    state: "closed", stateReason: "completed", acceptance: { kind: "accepted", actor: null, deadline: null },
+  });
+}, 120_000);
+
+it("passes over an Issue whose acceptance fails and still accepts the rest up to the limit", async () => {
+  const failing = new Set<string>();
+  const { applications: [application], owner, agent, team } = await setup(1, failing);
+  const { issues } = application!;
+  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  const numbers: number[] = [];
+  for (const title of ["Oldest", "Next", "Last"]) {
+    const issue = await issues.create(owner, team, { title, assigneeUserIds: [agent] });
+    await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
+    if (title === "Oldest") failing.add(issue.id);
+    numbers.push(issue.number);
+  }
+
+  expect(await issues.acceptDue(Date.now() + HOUR, 2)).toBe(2);
+  const states = await Promise.all(numbers.map(async (number) => (await issues.get(owner, team, number)).state));
+  expect(states).toEqual(["open", "closed", "closed"]);
+}, 120_000);
+
 it("records one acceptance and one close per Issue when two replicas run the job together, in bounded passes", async () => {
   const { applications, owner, agent, team } = await setup(2);
   const [first, second] = [applications[0]!, applications.at(-1)!];
@@ -107,7 +151,7 @@ it("records one acceptance and one close per Issue when two replicas run the job
 }, 120_000);
 
 /** Replicas share only the database, so more than one needs PostgreSQL. */
-async function setup(replicas = 1) {
+async function setup(replicas = 1, failAccepting: ReadonlySet<string> = new Set()) {
   // The Issue module reads the clock it finds when the application is created.
   vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
   const cleanup = new AsyncDisposableStack();
@@ -135,7 +179,18 @@ async function setup(replicas = 1) {
     claimAgent ??= (agentId, ownerId) => database.repositories.identity.claimAgent(agentId, ownerId, Date.now());
     const collaboration = await openCollaborationDatabase(config, database.unitCreationFacts);
     cleanup.defer(() => collaboration.close());
-    const application = createWorkspaceApplication(config, database.repositories, collaboration);
+    const real = database.repositories.issues;
+    const issuesRepository = new Proxy(real, {
+      get(target, key) {
+        if (key === "acceptDueIssue") {
+          return (issueId: string, now: number) =>
+            failAccepting.has(issueId) ? Promise.reject(new Error("acceptance failed")) : target.acceptDueIssue(issueId, now);
+        }
+        const value = Reflect.get(target, key) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const application = createWorkspaceApplication(config, { ...database.repositories, issues: issuesRepository }, collaboration);
     cleanup.defer(() => application.close());
     await application.initialize();
     applications.push(application);

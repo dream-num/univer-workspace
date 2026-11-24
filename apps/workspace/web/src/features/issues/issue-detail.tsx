@@ -224,7 +224,6 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <IssueSidebar
           issue={issue}
-          acceptAfterHours={spaces.data?.acceptAfterHours ?? null}
           onEdit={(kind) => setPicker(kind)}
           className={compact ? "order-last" : "order-first lg:order-last"}
         />
@@ -687,21 +686,16 @@ function EventLine({ event }: { readonly event: TimelineEvent }) {
 
 function IssueSidebar({
   issue,
-  acceptAfterHours,
   onEdit,
   className,
 }: {
   readonly issue: Issue;
-  readonly acceptAfterHours: number | null;
   readonly onEdit: (kind: "labels" | "assignees" | "references") => void;
   readonly className?: string;
 }) {
   const { language, t } = useI18n();
   const acceptance = issue.acceptance;
-  const deadline =
-    issue.state === "open" && acceptance?.kind === "submitted" && acceptAfterHours !== null
-      ? new Date(Date.parse(acceptance.createdAt) + acceptAfterHours * 3_600_000)
-      : null;
+  const deadline = acceptance?.deadline ? new Date(acceptance.deadline) : null;
   const triage = issue.capabilities.triage;
   return (
     <aside

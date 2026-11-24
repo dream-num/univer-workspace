@@ -247,7 +247,11 @@ describe("Workspace Issue feature", () => {
       : rawIssue({ acceptance }));
     expect((await issues.verdict("s1", 7, "sent_back", "West is missing.")).acceptance).toEqual({
       kind: "sent_back", actor: { id: "u1", username: "u1", displayName: "u1" }, body: "West is missing.", createdAt: "2026-09-29T00:00:00.000Z",
+      deadline: null,
     });
+    const submitted = { ...acceptance, kind: "submitted", deadline: "2026-10-02T00:00:00.000Z" };
+    expect((await feature(() => rawIssue({ acceptance: submitted })).feature.get("s1", 7)).acceptance?.deadline)
+      .toBe("2026-10-02T00:00:00.000Z");
     await issues.verdict("s1", 7, "accepted");
     await issues.list({ assignee: "me", acceptance: "sent_back" });
     expect(calls.map((call) => [call.method, call.path, call.body])).toEqual([

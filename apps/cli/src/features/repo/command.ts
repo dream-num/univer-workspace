@@ -138,7 +138,8 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .option("--proposals <who>", PROPOSALS_HELP)
     .option(
       "--accept-after-hours <n|off>",
-      "accept a submitted Issue nobody sent back after n hours (1 to 720, 72 is typical), or off",
+      "accept a submitted Issue nobody sent back after n hours (1 to 720, 72 is typical), or off; turning it on or " +
+        "lowering it accepts every submitted Issue already past the new deadline within a minute",
     )
     .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(

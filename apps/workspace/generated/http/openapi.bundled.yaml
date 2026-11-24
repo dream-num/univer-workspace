@@ -9057,6 +9057,7 @@ components:
         - actor
         - body
         - createdAt
+        - deadline
       properties:
         kind:
           $ref: '#/components/schemas/IssueVerdictKind'
@@ -9071,6 +9072,12 @@ components:
         createdAt:
           type: string
           format: date-time
+        deadline:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: 'When the Space''s acceptance deadline accepts this Issue unless someone sends it back first: `acceptAfterHours` after the later of its latest submission and its last reopen. `null` unless the Issue is open and submitted and the Space has a deadline.'
     IssueReference:
       type: object
       additionalProperties: false

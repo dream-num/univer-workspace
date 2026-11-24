@@ -108,6 +108,10 @@ describe("uvw repository and Issue commands", () => {
     const command = createIssueCommand({ context: repoContext, feature: { get } as unknown as WorkspaceIssueFeature, origin: async () => ORIGIN });
     expect(await run(command, ["view", "3", "-R", "alice/docs"])).toContain("acceptance: accepted by bob 2026-10-03");
     expect(await run(command, ["view", "3", "-R", "alice/docs"])).toContain("acceptance: accepted by deadline 2026-10-03");
+    get.mockResolvedValueOnce(issue({
+      acceptance: { kind: "submitted", actor: null, body: "", createdAt: "2026-10-03T00:00:00.000Z", deadline: "2026-10-06T00:00:00.000Z" },
+    }));
+    expect(await run(command, ["view", "3", "-R", "alice/docs"])).toContain("accepted by deadline: 2026-10-06T00:00:00.000Z unless sent back");
   });
 
   it("resolves a bare slug through the shared repository context", async () => {

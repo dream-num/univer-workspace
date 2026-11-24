@@ -4274,6 +4274,8 @@ export interface components {
             body: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description When the Space's acceptance deadline accepts this Issue unless someone sends it back first: `acceptAfterHours` after the later of its latest submission and its last reopen. `null` unless the Issue is open and submitted and the Space has a deadline. */
+            deadline: string | null;
         };
         IssueReference: {
             nodeId: string;

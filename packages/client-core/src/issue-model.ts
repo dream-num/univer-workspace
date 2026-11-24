@@ -71,6 +71,8 @@ export interface WorkspaceIssueAcceptance {
   readonly actor: WorkspaceIssueUser | null;
   readonly body: string;
   readonly createdAt: string;
+  /** When the repository's deadline accepts this submitted Issue unless it is sent back; null when nothing will or the server predates it. */
+  readonly deadline: string | null;
 }
 
 export interface WorkspaceIssuePullRequest {
@@ -215,7 +217,8 @@ function parseAcceptance(value: unknown): WorkspaceIssueAcceptance {
     !isWorkspaceRecord(value) ||
     typeof value["kind"] !== "string" ||
     typeof value["body"] !== "string" ||
-    typeof value["createdAt"] !== "string"
+    typeof value["createdAt"] !== "string" ||
+    !(value["deadline"] == null || typeof value["deadline"] === "string")
   ) {
     throw invalidResponse("Workspace Issue contains an invalid acceptance");
   }
@@ -224,6 +227,7 @@ function parseAcceptance(value: unknown): WorkspaceIssueAcceptance {
     actor: value["actor"] === null ? null : parseUser(value["actor"]),
     body: value["body"],
     createdAt: value["createdAt"],
+    deadline: value["deadline"] ?? null,
   };
 }
 

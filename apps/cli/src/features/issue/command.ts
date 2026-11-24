@@ -132,6 +132,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
             ...(issue.references.length ? [`files: ${issue.references.map((ref) => ref.name ?? ref.nodeId).join(", ")}`] : []),
             ...issue.pullRequests.map((pull) => `pull request: ${pull.number === null ? pull.id : `#${String(pull.number)}`} ${pull.title} [${pull.state}]`),
             ...(issue.acceptance ? [`acceptance: ${issue.acceptance.kind} by ${issue.acceptance.actor?.username ?? "deadline"} ${issue.acceptance.createdAt}`] : []),
+            ...(issue.acceptance?.deadline ? [`accepted by deadline: ${issue.acceptance.deadline} unless sent back`] : []),
             "",
             issue.body,
             ...(timeline === undefined ? [] : ["", JSON.stringify(timeline, null, 2)]),

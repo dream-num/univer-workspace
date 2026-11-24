@@ -75,6 +75,9 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
   }
   if (!space) return null;
   const canEdit = space.capabilities.renameSpace;
+  const backlogHours = space.acceptAfterHours === null
+    ? SUGGESTED_ACCEPT_AFTER_HOURS
+    : validHours(hours) && Number(hours) < space.acceptAfterHours ? Number(hours) : null;
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) {
@@ -293,7 +296,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
             update({ acceptAfterHours: Number(hours) });
           }}
         >
-          <fieldset className="grid gap-2" aria-describedby="space-accept-deadline-hint" disabled={!canEdit || rename.isPending}>
+          <fieldset className="grid gap-2" aria-describedby="space-accept-deadline-backlog space-accept-deadline-hint" disabled={!canEdit || rename.isPending}>
             <legend className="mb-1.5 text-[13px] font-medium text-foreground">{t("settingsAcceptDeadline")}</legend>
             <label className="flex max-w-xl items-start gap-2 text-sm has-disabled:opacity-60">
               <input
@@ -330,6 +333,13 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
                   {t("save")}
                 </Button>
               </div>
+            ) : null}
+            {canEdit && backlogHours !== null ? (
+              <p id="space-accept-deadline-backlog" className="text-[13px] font-medium text-foreground">
+                {t(space.acceptAfterHours === null ? "settingsAcceptDeadlineBacklogOn" : "settingsAcceptDeadlineBacklogLower", {
+                  hours: backlogHours,
+                })}
+              </p>
             ) : null}
             <p id="space-accept-deadline-hint" className="text-[13px] text-muted-foreground">
               {t("settingsAcceptDeadlineHint")}

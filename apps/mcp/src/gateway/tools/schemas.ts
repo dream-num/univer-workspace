@@ -108,7 +108,13 @@ export const issueSchema = z.object({
     )
     .describe("Pull requests linked to this Issue that you may see, newest first."),
   acceptance: z
-    .object({ kind: z.string(), actor: issueUserSchema.nullable(), body: z.string(), createdAt: z.string() })
+    .object({
+      kind: z.string(),
+      actor: issueUserSchema.nullable(),
+      body: z.string(),
+      createdAt: z.string(),
+      deadline: z.string().nullable().describe("When the repository's deadline accepts this submitted Issue unless it is sent back, or null."),
+    })
     .nullable()
     .describe(
       "Latest verdict (submitted, accepted or sent_back) with its body, or null if never submitted. A null actor means the repository's deadline accepted it.",

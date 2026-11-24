@@ -90,6 +90,8 @@ export interface IssueAcceptanceView {
   readonly actor: PublicUser | null;
   readonly body: string;
   readonly createdAt: string;
+  /** When the Space's deadline accepts this submitted Issue unless someone sends it back; null when nothing will. */
+  readonly deadline: string | null;
 }
 
 export interface IssuePullRequestView {
