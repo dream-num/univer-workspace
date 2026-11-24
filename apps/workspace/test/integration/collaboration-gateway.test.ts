@@ -2344,6 +2344,22 @@ describe("content permission integration", () => {
     }
   });
 
+  it("removes and recovers Units only through the product API, for no client", async () => {
+    const f = await fixture();
+    for (const cookie of [f.outsider.cookie, f.editor.cookie, f.owner.cookie]) {
+      const removed = await fetch(`${f.origin}/universer-api/snapshot/-/units?unitIds=${f.unitId}&hardDelete=true`, {
+        method: "DELETE", headers: { cookie },
+      });
+      expect(((await removed.json()) as { error: { code: number } }).error.code).toBe(ErrorCode.PERMISSION_DENIED);
+      const recovered = await fetch(`${f.origin}/universer-api/snapshot/-/units/recover`, {
+        method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ unitIds: [f.unitId] }),
+      });
+      expect(((await recovered.json()) as { error: { code: number } }).error.code).toBe(ErrorCode.PERMISSION_DENIED);
+    }
+    const snapshot = await fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${f.unitId}/rev/0`, { headers: { cookie: f.owner.cookie } });
+    expect(((await snapshot.json()) as { error: { code: number } }).error.code).toBe(ErrorCode.OK);
+  });
+
   describe("Trunk restore", () => {
     const restore = (client: Awaited<ReturnType<typeof sheetSubmit>>, baseRev: number, revision: number) =>
       client.submit(baseRev, RevertRevisionMutation.id, { revision });

@@ -15,6 +15,7 @@ import type { IUniverHistoryService } from "@univerjs-pro/collaboration-history-
 import { RevertRevisionMutation, transformSnapshotToSlideData } from "@univerjs-pro/collaboration";
 import {
   type CommitChangesetMiddlewareContext,
+  type CustomData,
   type IUnitSnapshotMaterializer,
   CollabError,
   isCommentOnlyChangeset,
@@ -140,6 +141,9 @@ export function createCollaborationGateway(options: {
     await requireUnitAccess(access, context.userID, context.request.unitID);
     await next();
   });
+  // The SDK removes and recovers Units on these routes for whoever calls them; Trash does it through the product API.
+  service.use("deleteUnits", requireProductUnitLifecycle);
+  service.use("recoverUnits", requireProductUnitLifecycle);
   service.use("submitChangeset", async (context, next) => {
     await requireChangesetAccess(access, context.userID, context.request.changeset);
     await next();
@@ -570,6 +574,13 @@ function trackConnectionLifecycle(
       await handler.close?.(context);
     },
   };
+}
+
+async function requireProductUnitLifecycle(context: { readonly customData: CustomData }, next: () => Promise<void>): Promise<void> {
+  if (context.customData.source !== "product-api") {
+    throw new CollabError("PERMISSION_DENIED", "Units are removed and recovered through the product API.");
+  }
+  await next();
 }
 
 async function requireProductWorktreeManagement(
