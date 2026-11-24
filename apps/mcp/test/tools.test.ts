@@ -69,6 +69,14 @@ const rawWorktree = (id: string, overrides: Record<string, unknown> = {}) => ({
   units: [],
   ...overrides,
 });
+const rawCheck = {
+  name: "totals-match",
+  declared: true,
+  state: "missing",
+  results: [{
+    reporter: user("user-1"), state: "passed", summary: "B5 = 60", reportedAt: "2026-11-24T00:00:00.000Z", current: true, counts: false,
+  }],
+};
 const rawUserWorktree = (id: string, number: number) =>
   rawWorktree(id, { number, kind: "user", teamSpace: null });
 const team = {
@@ -163,6 +171,12 @@ describe("Issue tools and gateway infrastructure", () => {
     if (target.pathname === "/api/worktrees/wt-3/reopen") {
       return Response.json({ worktree: rawWorktree("wt-3", { state: "draft" }) });
     }
+    if (target.pathname === "/api/spaces/team-1/worktrees/4") {
+      const capabilities = { review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge: false, discard: false };
+      return Response.json({ worktree: rawWorktree("wt-4", { number: 4, state: "ready", capabilities, checks: { passed: 0, failed: 0, missing: 1 } }) });
+    }
+    if (target.pathname === "/api/worktrees/wt-4/checks") return Response.json({ checks: [rawCheck] });
+    if (target.pathname === "/api/worktrees/wt-4/checks/totals-match") return Response.json({ check: rawCheck });
     if (target.pathname === "/api/spaces/team-1/issue-labels") {
       return Response.json({
         labels: ["bug", "docs", "ux"].map((name, index) => ({
@@ -620,6 +634,17 @@ describe("Issue tools and gateway infrastructure", () => {
       expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(events().map((event) => event["repo"])).toEqual([null, null, null, null, null]);
+  });
+
+  it("reports a check with pr_check and lists the checks in pr_view for a reviewer", async () => {
+    await start();
+    const reported = await call("pr_check", { repo: "bob/team", number: "4", name: "totals-match", state: "passed", summary: "B5 = 60" });
+    expect(reported.structuredContent).toMatchObject({ name: "totals-match", state: "missing", results: [{ current: true, counts: false }] });
+    expect(writesOf()).toEqual([{ method: "PUT", path: "/api/worktrees/wt-4/checks/totals-match", body: { state: "passed", summary: "B5 = 60" } }]);
+    const viewed = await call("pr_view", { repo: "bob/team", number: "4" });
+    expect(viewed.structuredContent).toMatchObject({ id: "wt-4", checks: [{ name: "totals-match", declared: true }] });
+    const unreviewed = await call("pr_view", { repo: "bob/team", number: "3" });
+    expect(unreviewed.structuredContent).not.toHaveProperty("checks");
   });
 
   it("submits, sends back and accepts with issue_verdict, and searches Issues by acceptance", async () => {

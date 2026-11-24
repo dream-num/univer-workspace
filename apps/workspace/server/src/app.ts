@@ -116,6 +116,7 @@ import {
   type TrashModule,
 } from "./modules/trash/index.js";
 import {
+  createDeclaredChecksReader,
   createWorktreesModule,
   createWorktreesRouter,
   type WorktreeBackend,
@@ -317,6 +318,7 @@ export function createWorkspaceApplication(
       foreign: (worktreeId, draftIds) => htmlViewDrafts.foreign(worktreeId, draftIds),
       publish: (worktreeId, mergerId, draftIds) => htmlViewDrafts.publishForWorktree(worktreeId, mergerId, draftIds),
     },
+    declaredChecks: createDeclaredChecksReader({ nodes: repositories.nodes, access, store: blobStore }),
     publicOrigin: config.publicOrigin ?? null,
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });

@@ -10,7 +10,9 @@ import { isWorkspaceRecord, type AuthenticatedWorkspaceHttp, type WorkspaceHttp 
 import { rethrowUnlessServerOutdated } from "./space.js";
 import { usernameKey } from "./username.js";
 import {
+  parseCheck,
   parseWorktree,
+  type WorkspaceCheck,
   type WorkspaceWorktree,
   type WorkspaceWorktreeState,
 } from "./worktree-model.js";
@@ -153,6 +155,30 @@ export class WorkspaceWorktreeFeature {
       { body: input, method: "PATCH" },
     );
     return parseWorktree(body["worktree"], id);
+  }
+
+  /** Declared checks in Trunk's `.agents/checks.md` order, then reported names that are not declared. */
+  public async checks(worktreeId: string): Promise<readonly WorkspaceCheck[]> {
+    const id = requireId(worktreeId, "Worktree ID");
+    const body = await (await this.authenticatedHttp()).json(`/api/worktrees/${encodeURIComponent(id)}/checks`);
+    if (!Array.isArray(body["checks"])) {
+      throw workspaceError("workspace-invalid-response", "Workspace response is missing checks.");
+    }
+    return body["checks"].map((check: unknown) => parseCheck(check));
+  }
+
+  /** Reports one check on the ready pull request's current content; the server binds the content. */
+  public async reportCheck(
+    worktreeId: string,
+    name: string,
+    input: { readonly state: "passed" | "failed"; readonly summary?: string },
+  ): Promise<WorkspaceCheck> {
+    const id = requireId(worktreeId, "Worktree ID");
+    const body = await (await this.authenticatedHttp()).json(
+      `/api/worktrees/${encodeURIComponent(id)}/checks/${encodeURIComponent(requireId(name, "Check name"))}`,
+      { body: input, method: "PUT" },
+    );
+    return parseCheck(body["check"]);
   }
 
   public async transition(worktreeId: string, action: LifecycleAction): Promise<WorkspaceWorktree> {

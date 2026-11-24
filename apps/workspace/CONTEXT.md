@@ -203,6 +203,18 @@ The product operation that creates a Node and Resource for a successfully
 merged Worktree-local Unit.
 _Avoid_: Publish, provisioning
 
+**Declared Check**:
+A named check a Team Space asks its Team Worktrees to pass, one `## name` heading in
+the Trunk file `.agents/checks.md`. The text under the heading says what to verify.
+_Avoid_: CI job, test, status check
+
+**Check Result**:
+One reporter's passed or failed on one check, bound to the exact content a ready
+Worktree had: its Units' draft and Trunk revisions and its pending drafts. A later
+Trunk edit to one of its Units, or a reopen that changes it, leaves the result out of
+date. A result counts while current when its reporter may merge the Worktree.
+_Avoid_: Approval, review, status
+
 ## Identity
 
 **User**:

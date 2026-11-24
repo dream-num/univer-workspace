@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   info: vi.fn(),
   me: "user-2" as string | null,
   pages: undefined as unknown,
+  checks: undefined as unknown,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -21,7 +22,8 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { queryKey?: readonly unknown[] }) =>
     options.queryKey?.[0] === "session" && state.me
       ? { data: { authenticated: true, user: { id: state.me } } }
-      : options.queryKey?.[1] === "worktree" ? { data: state.pages } : {},
+      : options.queryKey?.[1] === "worktree" ? { data: state.pages }
+      : options.queryKey?.[1] === "checks" ? { data: state.checks } : {},
   useQueryClient: () => ({ invalidateQueries: state.invalidate }),
   useMutation: (config: {
     mutationFn: (value: unknown) => Promise<unknown>;
@@ -53,6 +55,7 @@ vi.mock("@univer/unit-comparison-viewer", () => ({ UnitComparisonViewer: () => n
 vi.mock("../editor/comparison-univer", () => ({ createComparisonUniver: vi.fn() }));
 vi.mock("./worktrees.queries", () => ({
   worktreesQueryKey: ["worktrees"],
+  worktreeChecksQueryOptions: (id: string) => ({ queryKey: ["worktrees", "checks", id] }),
   worktreeUnitComparisonQueryOptions: vi.fn(),
   worktreeUnitMergeReviewQueryOptions: vi.fn(),
 }));
@@ -118,6 +121,7 @@ beforeEach(() => {
   state.pending = false;
   state.me = "user-2";
   state.pages = undefined;
+  state.checks = undefined;
   state.clicks.clear();
   vi.clearAllMocks();
   state.post.mockResolvedValue({ data: { worktree: { state: "draft" } } });
@@ -317,4 +321,23 @@ it("lists each page the pull request carries with its author, state and preview,
   const hidden = worktree(false);
   hidden.capabilities.review = false;
   expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: hidden }))).not.toContain("/drafts/");
+});
+
+it("lists each check with its state and every result, marking those out of date or not counting", () => {
+  const reporter = (name: string) => ({ id: name, username: name, displayName: name, avatarUrl: null });
+  const result = (name: string, current: boolean, counts: boolean) =>
+    ({ reporter: reporter(name), state: "passed", summary: `${name} read B5`, reportedAt: "2026-11-24T00:00:00.000Z", current, counts });
+  state.checks = [
+    { name: "totals-match", declared: true, state: "passed", results: [result("Editor", true, true), result("Viewer", true, false), result("Old", false, false)] },
+    { name: "smoke", declared: false, state: "missing", results: [] },
+  ];
+  const html = renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: worktree(false) }));
+  expect(html).toContain("totals-match");
+  expect(html).toContain("Editor · checkPassed · Editor read B5");
+  expect(html).toContain("Viewer · checkPassed · checkDoesNotCount · Viewer read B5");
+  expect(html).toMatch(/line-through[^>]*>Old · checkPassed · checkOutOfDate/u);
+  expect(html).toContain("checkNotDeclared");
+  const hidden = worktree(false);
+  hidden.capabilities.review = false;
+  expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: hidden }))).not.toContain("totals-match");
 });

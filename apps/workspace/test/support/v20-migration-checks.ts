@@ -41,7 +41,7 @@ export function verifyV20Migration(open: (filename: string) => SqliteDatabase): 
   const rows = (db: DatabaseSync) =>
     db
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('agents', 'node_reports', 'executor_access', 'forks', 'issue_verdicts') ORDER BY name",
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('agents', 'node_reports', 'executor_access', 'forks', 'issue_verdicts', 'worktree_checks') ORDER BY name",
       )
       .all()
       .map(({ name }) => [name, withoutV24Columns(String(name), db.prepare(`SELECT ${name === "users" ? USER_COLUMNS : "*"} FROM ${name}`).all())]);
@@ -61,7 +61,7 @@ export function verifyV20Migration(open: (filename: string) => SqliteDatabase): 
         db.prepare("SELECT DISTINCT kind FROM users").all().map((row) => row.kind),
         seeded ? ["human"] : [],
       );
-      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 31);
+      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 32);
       assert.equal(userColumns(db).at(-1), "kind");
       assert.equal(db.prepare("SELECT count(*) AS n FROM agents").get()?.n, 0);
       assert.equal(db.prepare("SELECT count(*) AS n FROM node_reports").get()?.n, 0);
@@ -110,7 +110,7 @@ export function verifyV20Migration(open: (filename: string) => SqliteDatabase): 
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V20 to V31 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V20 to V32 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v20-backup-"))!,

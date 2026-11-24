@@ -240,6 +240,9 @@ export {
 export {
   parseUnit,
   parseWorktree,
+  type WorkspaceCheck,
+  type WorkspaceCheckResult,
+  type WorkspaceChecksSummary,
   type WorkspaceUnit,
   type WorkspaceWorktree,
   type WorkspaceWorktreeState,

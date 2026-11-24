@@ -38,6 +38,7 @@ import { cn } from "../../shared/utils/cn";
 import type { MergeReviewStatus } from "../editor/merge-review";
 import { createComparisonUniver } from "../editor/comparison-univer";
 import {
+  worktreeChecksQueryOptions,
   worktreeUnitComparisonQueryOptions,
   worktreeUnitMergeReviewQueryOptions,
 } from "./worktrees.queries";
@@ -225,7 +226,9 @@ export function WorktreeReviewPanel({
       ) : null}
     </>
   );
-  const pages = worktree.capabilities.review ? <PageDrafts worktreeId={worktree.id} /> : null;
+  const pages = worktree.capabilities.review
+    ? <><PullRequestChecks worktreeId={worktree.id} /><PageDrafts worktreeId={worktree.id} /></>
+    : null;
   const review = (
     <article className="flex h-full min-h-0 flex-col">
       <WorktreeReviewHeader
@@ -282,6 +285,46 @@ export function WorktreeReviewPanel({
     </article>
   );
   return layout ? layout({ review, actions: lifecycleActions, pages }) : review;
+}
+
+const CHECK_STATES = {
+  passed: { label: "checkPassed", variant: "success" },
+  failed: { label: "checkFailed", variant: "danger" },
+  missing: { label: "checkMissing", variant: "outline" },
+} as const;
+
+function PullRequestChecks({ worktreeId }: { readonly worktreeId: string }) {
+  const { t } = useI18n();
+  const checks = useQuery(worktreeChecksQueryOptions(worktreeId));
+  if (checks.isError) return <p role="alert" className="m-0 border-t border-border px-4 py-3 text-sm text-destructive">{checks.error.message}</p>;
+  if (!checks.data?.length) return null;
+  return (
+    <section aria-label={t("checks")} className="border-t border-border px-4 py-3">
+      <h2 className="m-0 mb-2 text-xs font-semibold text-muted-foreground">{t("checks")}</h2>
+      <ul className="m-0 grid list-none gap-2 p-0">
+        {checks.data.map((check) => (
+          <li key={check.name} className="grid gap-1 text-sm">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="min-w-0 flex-1 break-words font-mono font-medium">{check.name}</span>
+              {check.declared ? null : <span className="text-muted-foreground">{t("checkNotDeclared")}</span>}
+              <Badge variant={CHECK_STATES[check.state].variant}>{t(CHECK_STATES[check.state].label)}</Badge>
+            </div>
+            {check.results.length ? (
+              <ul className="m-0 grid list-none gap-1 p-0 pl-3 text-xs text-muted-foreground">
+                {check.results.map((result) => (
+                  <li key={`${result.reporter.id}-${result.reportedAt}`} className={cn("break-words", !result.current && "line-through")}>
+                    {result.reporter.displayName} · {t(CHECK_STATES[result.state].label)}
+                    {result.counts ? null : ` · ${t(result.current ? "checkDoesNotCount" : "checkOutOfDate")}`}
+                    {result.summary ? ` · ${result.summary}` : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function PageDrafts({ worktreeId }: { readonly worktreeId: string }) {

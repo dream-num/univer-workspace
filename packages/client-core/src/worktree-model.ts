@@ -67,6 +67,76 @@ export interface WorkspaceWorktree {
   readonly capabilities?: WorkspaceWorktreeCapabilities;
   /** The Issue a Team Worktree serves; null when none is linked or the caller cannot read its Space. */
   readonly issue?: { readonly number: number; readonly title: string; readonly state: WorkspaceIssueState } | null;
+  /** Declared checks that pass, fail or lack a counting result; null when the caller cannot review. Absent in lists. */
+  readonly checks?: WorkspaceChecksSummary | null;
+}
+
+export interface WorkspaceChecksSummary {
+  readonly passed: number;
+  readonly failed: number;
+  readonly missing: number;
+}
+
+export interface WorkspaceCheckResult {
+  readonly reporter: { readonly id: string; readonly username: string; readonly displayName: string };
+  readonly state: "passed" | "failed";
+  readonly summary: string;
+  readonly reportedAt: string;
+  /** Reported on the content the pull request has now, or merged with. */
+  readonly current: boolean;
+  /** Current, and reported by someone who may merge the pull request. */
+  readonly counts: boolean;
+}
+
+export interface WorkspaceCheck {
+  readonly name: string;
+  /** Declared in Trunk's `.agents/checks.md`; other reported names are not required. */
+  readonly declared: boolean;
+  readonly state: "passed" | "failed" | "missing";
+  readonly results: readonly WorkspaceCheckResult[];
+}
+
+export function parseCheck(value: unknown): WorkspaceCheck {
+  const results = isWorkspaceRecord(value) ? value["results"] : undefined;
+  if (
+    !isWorkspaceRecord(value) ||
+    typeof value["name"] !== "string" ||
+    typeof value["declared"] !== "boolean" ||
+    (value["state"] !== "passed" && value["state"] !== "failed" && value["state"] !== "missing") ||
+    !Array.isArray(results)
+  ) {
+    throw invalidResponse("Workspace response contains an invalid check");
+  }
+  return {
+    name: value["name"],
+    declared: value["declared"],
+    state: value["state"],
+    results: results.map((result: unknown) => {
+      const reporter = isWorkspaceRecord(result) ? result["reporter"] : undefined;
+      if (
+        !isWorkspaceRecord(result) ||
+        !isWorkspaceRecord(reporter) ||
+        typeof reporter["id"] !== "string" ||
+        typeof reporter["username"] !== "string" ||
+        typeof reporter["displayName"] !== "string" ||
+        (result["state"] !== "passed" && result["state"] !== "failed") ||
+        typeof result["summary"] !== "string" ||
+        typeof result["reportedAt"] !== "string" ||
+        typeof result["current"] !== "boolean" ||
+        typeof result["counts"] !== "boolean"
+      ) {
+        throw invalidResponse("Workspace response contains an invalid check result");
+      }
+      return {
+        reporter: { id: reporter["id"], username: reporter["username"], displayName: reporter["displayName"] },
+        state: result["state"],
+        summary: result["summary"],
+        reportedAt: result["reportedAt"],
+        current: result["current"],
+        counts: result["counts"],
+      };
+    }),
+  };
 }
 
 export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWorktree {
@@ -122,7 +192,15 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
         }
       : {}),
     ...parseIssueLink(value["issue"]),
+    ...parseChecksSummary(value["checks"]),
   };
+}
+
+function parseChecksSummary(value: unknown): Pick<WorkspaceWorktree, "checks"> {
+  if (value === null) return { checks: null };
+  return isWorkspaceRecord(value) && isRevision(value["passed"]) && isRevision(value["failed"]) && isRevision(value["missing"])
+    ? { checks: { passed: value["passed"], failed: value["failed"], missing: value["missing"] } }
+    : {};
 }
 
 function parseIssueLink(value: unknown): Pick<WorkspaceWorktree, "issue"> {

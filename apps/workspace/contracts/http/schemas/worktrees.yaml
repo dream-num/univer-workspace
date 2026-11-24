@@ -246,6 +246,108 @@ WorktreeDetail:
           type: array
           items:
             $ref: "#/WorktreeUnit"
+        checks:
+          description: Present on a single pull request read. Null when the reader cannot review it.
+          oneOf:
+            - $ref: "#/WorktreeChecksSummary"
+            - type: "null"
+
+WorktreeChecksSummary:
+  type: object
+  additionalProperties: false
+  description: How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result.
+  required: [passed, failed, missing]
+  properties:
+    passed:
+      type: integer
+      minimum: 0
+    failed:
+      type: integer
+      minimum: 0
+    missing:
+      type: integer
+      minimum: 0
+
+WorktreeCheckName:
+  type: string
+  pattern: "^[a-z0-9-]{1,40}$"
+
+WorktreeCheckResult:
+  type: object
+  additionalProperties: false
+  required: [reporter, state, summary, reportedAt, current, counts]
+  properties:
+    reporter:
+      $ref: ./identity.yaml#/PublicUser
+    state:
+      type: string
+      enum: [passed, failed]
+    summary:
+      type: string
+    reportedAt:
+      type: string
+      format: date-time
+    current:
+      type: boolean
+      description: >-
+        Reported on the content the pull request has now, or merged with. The server names the content from every
+        Unit's draft and Trunk head revisions and the pending page and file drafts. A Trunk edit to one of its Units, or
+        a reopen that changes its content, leaves earlier results out of date.
+    counts:
+      type: boolean
+      description: Current, and reported by someone who may merge the pull request now.
+
+WorktreeCheck:
+  type: object
+  additionalProperties: false
+  required: [name, declared, state, results]
+  properties:
+    name:
+      $ref: "#/WorktreeCheckName"
+    declared:
+      type: boolean
+      description: Declared in Trunk's `.agents/checks.md`. A name that is only reported is kept and shown but not required.
+    state:
+      type: string
+      enum: [passed, failed, missing]
+      description: failed when any counting result failed, passed when one passed and none failed, missing otherwise.
+    results:
+      type: array
+      description: Every result on this name, newest first, with out-of-date ones and those that do not count.
+      items:
+        $ref: "#/WorktreeCheckResult"
+
+WorktreeChecks:
+  type: object
+  additionalProperties: false
+  required: [checks]
+  properties:
+    checks:
+      type: array
+      description: Declared checks in file order, then reported names that are not declared.
+      items:
+        $ref: "#/WorktreeCheck"
+
+ReportWorktreeCheck:
+  type: object
+  additionalProperties: false
+  required: [state]
+  properties:
+    state:
+      type: string
+      enum: [passed, failed]
+    summary:
+      type: string
+      maxLength: 1000
+      description: What was checked and found.
+
+WorktreeCheckEnvelope:
+  type: object
+  additionalProperties: false
+  required: [check]
+  properties:
+    check:
+      $ref: "#/WorktreeCheck"
 
 WorktreeEnvelope:
   type: object

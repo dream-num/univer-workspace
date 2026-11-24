@@ -29,7 +29,7 @@ export function verifyV28Migration(open: (filename: string) => SqliteDatabase): 
     }
     return db;
   };
-  const snapshot = (db: DatabaseSync) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'issue_verdicts' ORDER BY name").all()
+  const snapshot = (db: DatabaseSync) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('issue_verdicts', 'worktree_checks') ORDER BY name").all()
     .map(({ name }) => [name, withoutV29Columns(String(name), db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all())]);
   const version = (db: DatabaseSync) => db.prepare("PRAGMA user_version").get()?.user_version;
   const proposals = (db: DatabaseSync) => db.prepare("SELECT id, proposals FROM spaces ORDER BY id").all().map((row) => ({ ...row }));
@@ -41,7 +41,7 @@ export function verifyV28Migration(open: (filename: string) => SqliteDatabase): 
       old.close();
       const migrated = open(filename);
       const db = migrated.connection;
-      assert.equal(version(db), 31);
+      assert.equal(version(db), 32);
       assert.deepEqual(snapshot(db), before);
       assert.deepEqual(proposals(db), seeded ? ["p", "s", "t"].map((id) => ({ id, proposals: "members" })) : []);
       assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -64,7 +64,7 @@ export function verifyV28Migration(open: (filename: string) => SqliteDatabase): 
       backup.close();
       const restarted = open(filename);
       assert.deepEqual(snapshot(restarted.connection), before);
-      assert.equal(version(restarted.connection), 31);
+      assert.equal(version(restarted.connection), 32);
       restarted.close();
       assert.equal(backups().length, 1);
     }
@@ -73,7 +73,7 @@ export function verifyV28Migration(open: (filename: string) => SqliteDatabase): 
     broken.exec("PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 2)");
     const before = snapshot(broken);
     broken.close();
-    assert.throws(() => open(filename), /V28 to V31 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V28 to V32 migration failed.*rolled back.*backup/);
     const backup = readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v28-backup-"))!;
     for (const name of ["rollback.sqlite", backup]) {
       const db = new DatabaseSync(join(root, name), { readOnly: true });

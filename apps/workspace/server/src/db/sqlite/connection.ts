@@ -21,9 +21,9 @@ export class SqliteDatabase {
       const version = this.connection
         .prepare("PRAGMA user_version")
         .get() as { readonly user_version: number };
-      if (version.user_version !== 31) {
+      if (version.user_version !== 32) {
         throw new Error(
-          `Unsupported product database version ${version.user_version}; expected 31.`
+          `Unsupported product database version ${version.user_version}; expected 32.`
         );
       }
     } catch (error) {

@@ -786,3 +786,31 @@ backup, migration and health checks before restoring service. Back up PostgreSQL
 rolls back; successful restarts do not repeat migration or backup. V30 code refuses a V31 database, so a code rollback
 needs the backup taken before the upgrade: stop V31 and restore it, which loses what was written since. Never run V30
 and V31 writers on the same SQLite file.
+
+### Pull request checks and product database V32
+
+A Team Space declares the checks its pull requests should pass in `.agents/checks.md` on Trunk. Each `## name` heading
+outside fenced code is one check. A name is 1 to 40 lowercase letters, digits or hyphens; other headings, and names past
+the first 20, are only text. The text under each heading tells an agent what to verify:
+
+```markdown
+## totals-match
+`Sales/North` B5 equals SUM(B2:B4), and the same in South and East.
+
+## header-unchanged
+Row 1 of every Sheet under `Sales/` matches Trunk.
+```
+
+The server reads the file from Trunk with the reader's access, so a pull request that edits it does not change its own
+checks. Anyone who may review a ready pull request reports a check with `PUT /api/worktrees/{id}/checks/{name}`,
+`uvw pr check`, or the MCP `pr_check` tool. The server binds each result to the pull request's current content. A Trunk
+edit to one of its files, or a reopen that changes its content, leaves earlier results visible but out of date. A result
+counts when its reporter may merge the pull request. `GET /api/worktrees/{id}/checks` and MCP `pr_view` list every
+declared check and every result, and the pull request page shows them. Nothing blocks a merge on checks yet.
+
+V31→V32 adds the empty table `worktree_checks`. On PostgreSQL the same step moves `workspace_product_schema` from
+version 11 to 12. Stop every old instance, start one V32 instance, and wait for its backup, migration and health checks
+before restoring service. Back up PostgreSQL before the upgrade. Failed migration rolls back; successful restarts do not
+repeat migration or backup. V31 code refuses a V32 database, so a code rollback needs the backup taken before the
+upgrade: stop V32 and restore it, which loses what was written since. Never run V31 and V32 writers on the same SQLite
+file.

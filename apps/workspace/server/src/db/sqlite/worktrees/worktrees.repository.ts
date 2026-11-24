@@ -9,6 +9,7 @@ import type { WriteSource } from "../../../modules/identity/index.js";
 import type { PublicUser } from "../../../modules/permissions/index.js";
 import type { WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
 import type {
+  WorktreeCheckRow,
   WorktreeCursor,
   WorktreeRow,
   WorktreeUnitRow,
@@ -554,6 +555,46 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       )
       .all(JSON.stringify(worktreeIds)) as unknown as Array<PublicUser & { readonly worktreeId: string }>;
     return new Map(rows.map(({ worktreeId, ...merger }) => [worktreeId, merger]));
+  }
+
+  async checks(worktreeId: string): Promise<WorktreeCheckRow[]> {
+    return this._database.connection
+      .prepare(
+        `SELECT check_result.content_key, check_result.name, check_result.reporter_user_id,
+                reporter.username AS reporter_username, reporter.display_name AS reporter_display_name,
+                reporter.avatar_url AS reporter_avatar_url, check_result.state, check_result.summary, check_result.reported_at
+         FROM worktree_checks AS check_result
+         JOIN users AS reporter ON reporter.id = check_result.reporter_user_id
+         WHERE check_result.worktree_id = ?
+         ORDER BY check_result.reported_at DESC, check_result.reporter_user_id, check_result.content_key`
+      )
+      .all(worktreeId) as unknown as WorktreeCheckRow[];
+  }
+
+  async reportCheck(input: Parameters<WorktreesRepository["reportCheck"]>[0]): Promise<void> {
+    this._database.connection
+      .prepare(
+        `INSERT INTO worktree_checks (worktree_id, content_key, name, reporter_user_id, state, summary, reported_at)
+         VALUES ($worktreeId, $contentKey, $name, $reporterUserId, $state, $summary, $reportedAt)
+         ON CONFLICT (worktree_id, content_key, name, reporter_user_id) DO UPDATE
+         SET state = excluded.state, summary = excluded.summary, reported_at = excluded.reported_at
+         WHERE worktree_checks.state <> excluded.state OR worktree_checks.summary <> excluded.summary`
+      )
+      .run(input);
+  }
+
+  async mergedContentKey(worktreeId: string): Promise<string | null> {
+    const row = this._database.connection
+      .prepare(
+        `SELECT json_extract(payload_json, '$.contentKey') AS key
+         FROM operations
+         WHERE kind = 'merge_worktree' AND json_extract(payload_json, '$.worktreeId') = ?
+           AND json_extract(payload_json, '$.contentKey') IS NOT NULL
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1`
+      )
+      .get(worktreeId) as { key: string } | undefined;
+    return row?.key ?? null;
   }
 
   async getOperation(operationId: string): Promise<WorktreeOperationRow | null> {

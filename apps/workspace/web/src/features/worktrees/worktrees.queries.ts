@@ -52,6 +52,19 @@ export function worktreePagesQueryOptions(filters: WorktreeListFilters = {}) {
   });
 }
 
+export function worktreeChecksQueryOptions(worktreeId: string) {
+  return queryOptions({
+    queryKey: [...worktreesQueryKey, "checks", worktreeId] as const,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/worktrees/{worktreeId}/checks", {
+        params: { path: { worktreeId } },
+      });
+      if (error) throw apiError(error);
+      return data.checks;
+    },
+  });
+}
+
 export function worktreeListQueryOptions(scope: "active" | "processed") {
   return queryOptions({
     queryKey: [...worktreesQueryKey, "list", scope] as const,

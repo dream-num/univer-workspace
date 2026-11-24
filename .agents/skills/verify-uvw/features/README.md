@@ -50,7 +50,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   over MCP, sends it back and accepts it in the browser. MP11 lists reviewable
   pull requests, and MP12 has two agents find their own work with prompts that carry no task. MP13 links a fork's
   pull request to an Issue and checks both sides in MCP, uvw and the browser. MP14 drives an
-  agent to its budget of open pull requests and counts a merge in `whoami`.
+  agent to its budget of open pull requests and counts a merge in `whoami`. MP15 reports check results declared in
+  `.agents/checks.md` and shows them, out of date after a Trunk edit, in the browser.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,

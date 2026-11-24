@@ -24,6 +24,8 @@ import type {
   ActivationState,
   WorktreeBackend,
   WorktreeCapabilities,
+  WorktreeCheck,
+  WorktreeCheckReportState,
   WorktreeDetail,
   WorktreeOperationKind,
   WorktreeOperationView,
@@ -35,7 +37,8 @@ import type {
   WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared } from "./worktrees.errors.js";
+import { checkNeedsReady, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
+import { CHECK_NAME, checksSummary, checkViews, contentKey } from "./checks.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -74,6 +77,8 @@ export interface WorktreePages {
 interface MergePayload {
   readonly worktreeId: string;
   readonly pageDraftIds?: readonly string[];
+  /** The content key when the merge left ready, so results stay current on the merged pull request. */
+  readonly contentKey?: string;
 }
 
 export function createWorktreesModule(options: {
@@ -86,6 +91,8 @@ export function createWorktreesModule(options: {
     unitIds: readonly string[]
   ) => Promise<void>;
   readonly pages: WorktreePages;
+  /** The check names a Team Space declares on its Trunk, as the user can read them. */
+  readonly declaredChecks: (userId: string, teamSpaceId: string) => Promise<readonly string[]>;
   readonly publicOrigin: string | null;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
@@ -162,17 +169,50 @@ export function createWorktreesModule(options: {
   }
 
   async function authorMerges(value: WorktreeContext): Promise<boolean> {
+    return mergesAs(value, value.row.creator_user_id);
+  }
+
+  async function mergesAs(value: WorktreeContext, userId: string): Promise<boolean> {
     const { row } = value;
-    const author = await options.repository.get(row.id, row.creator_user_id);
-    return author !== null && mayMerge((await worktreeCapabilities(
-      row.creator_user_id,
-      author,
+    const asUser = await options.repository.get(row.id, userId);
+    return asUser !== null && mayMerge((await worktreeCapabilities(
+      userId,
+      asUser,
       value.state,
       await options.repository.units(row.id),
       options.access,
       value.units.map((unit) => ({ unitID: unit.unitId, removed: unit.change === "deleted" })),
       options.pages,
     )).facts);
+  }
+
+  /** What the pull request has now while it is open, what it merged with once merged, and nothing once discarded. */
+  async function currentContentKey(value: WorktreeContext): Promise<string | null> {
+    if (value.state === "draft" || value.state === "ready") {
+      return contentKey(value.units, await options.pages.pending(value.row.id));
+    }
+    return value.state === "discarded" ? null : options.repository.mergedContentKey(value.row.id);
+  }
+
+  async function checkList(userId: string, value: WorktreeContext): Promise<WorktreeCheck[]> {
+    if (!value.capabilities.review) throw forbidden();
+    const { row } = value;
+    const [declared, rows, key] = await Promise.all([
+      row.kind === "team" && row.team_space_id ? options.declaredChecks(userId, row.team_space_id) : [],
+      options.repository.checks(row.id),
+      currentContentKey(value),
+    ]);
+    const merges = new Map<string, boolean>();
+    for (const result of rows) {
+      if (result.content_key === key && !merges.has(result.reporter_user_id)) {
+        merges.set(result.reporter_user_id, await mergesAs(value, result.reporter_user_id));
+      }
+    }
+    return checkViews(declared, rows, key, merges);
+  }
+
+  async function detailWithChecks(userId: string, value: WorktreeContext): Promise<WorktreeDetail> {
+    return { ...detailView(value), checks: value.capabilities.review ? checksSummary(await checkList(userId, value)) : null };
   }
 
   /** A ready Worktree that its author cannot merge is shared with the Space, where someone can. */
@@ -471,9 +511,37 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async get(userId, worktreeId) {
+    async get(userId, worktreeId, withChecks = false) {
       const value = await context(userId, worktreeId);
-      return { worktree: detailView(value) };
+      return { worktree: withChecks ? await detailWithChecks(userId, value) : detailView(value) };
+    },
+
+    async checks(userId, worktreeId) {
+      return { checks: await checkList(userId, await context(userId, worktreeId)) };
+    },
+
+    async reportCheck(userId, worktreeId, nameValue, input) {
+      const name = validCheckName(nameValue);
+      const report = validCheckReport(input);
+      const value = await context(userId, worktreeId);
+      if (!value.capabilities.review) throw forbidden();
+      if (value.state !== "ready") throw checkNeedsReady(value.state);
+      const key = contentKey(value.units, await options.pages.pending(worktreeId));
+      const names = new Set((await options.repository.checks(worktreeId))
+        .filter((row) => row.content_key === key)
+        .map((row) => row.name));
+      if (!names.has(name) && names.size >= MAX_CHECK_NAMES) throw tooManyChecks(MAX_CHECK_NAMES);
+      await options.repository.reportCheck({
+        worktreeId,
+        contentKey: key,
+        name,
+        reporterUserId: userId,
+        ...report,
+        reportedAt: now(),
+      });
+      await notifyChanged("updated", worktreeId);
+      const check = (await checkList(userId, value)).find((candidate) => candidate.name === name)!;
+      return { check };
     },
 
     async getByNumber(userId, spaceId, numberValue) {
@@ -488,7 +556,7 @@ export function createWorktreesModule(options: {
         }
       }
       if (!worktreeId) throw notFound();
-      return { worktree: detailView(await context(userId, worktreeId)) };
+      return { worktree: await detailWithChecks(userId, await context(userId, worktreeId)) };
     },
 
     async update(userId, worktreeId, inputValue) {
@@ -864,7 +932,9 @@ export function createWorktreesModule(options: {
       if (reviewed !== undefined && canonicalJson(reviewed) !== canonicalJson(pageDraftIds)) {
         throw pagesChanged(value.row, options.publicOrigin);
       }
-      const payload = { worktreeId, pageDraftIds };
+      const payload = value.state === "ready"
+        ? { worktreeId, pageDraftIds, contentKey: contentKey(value.units, pageDraftIds) }
+        : { worktreeId, pageDraftIds };
       const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "merge_worktree",
@@ -877,7 +947,7 @@ export function createWorktreesModule(options: {
         "merge_worktree",
         userId
       );
-      assertJsonIntent(payload, { worktreeId: stable.worktreeId, pageDraftIds: stable.pageDraftIds ?? pageDraftIds });
+      assertJsonIntent({ worktreeId, pageDraftIds }, { worktreeId: stable.worktreeId, pageDraftIds: stable.pageDraftIds ?? pageDraftIds });
       let operation = reserved.row;
       if (operation.state !== "completed") {
         operation = await executeReserved(operation, async () => {
@@ -1453,6 +1523,25 @@ function summaryView(
       ? null
       : { number: row.issue_number, title: row.issue_title, state: row.issue_state },
   };
+}
+
+const MAX_CHECK_NAMES = 40;
+const MAX_CHECK_SUMMARY = 1000;
+
+function validCheckName(value: unknown): string {
+  if (typeof value !== "string" || !CHECK_NAME.test(value)) {
+    throw invalidInput("A check name is 1 to 40 lowercase letters, digits or hyphens.", "name");
+  }
+  return value;
+}
+
+function validCheckReport(value: unknown): { readonly state: WorktreeCheckReportState; readonly summary: string } {
+  const { state, summary = "" } = requiredRecord(value);
+  if (state !== "passed" && state !== "failed") throw invalidInput("state must be passed or failed.", "state");
+  if (typeof summary !== "string" || summary.length > MAX_CHECK_SUMMARY) {
+    throw invalidInput(`summary must be text of at most ${MAX_CHECK_SUMMARY} characters.`, "summary");
+  }
+  return { state, summary };
 }
 
 function detailView(value: WorktreeContext): WorktreeDetail {

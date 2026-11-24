@@ -30,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=12");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=13");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=11");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=12");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -110,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 11 }]);
+    expect(fresh.version).toMatchObject([{ version: 12 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -351,7 +351,7 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
     });
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 11 }]);
+    expect(fresh.version).toMatchObject([{ version: 12 }]);
     await downgrade(schema, 7);
     if (seeded) {
       await schema.pool.query(`
@@ -546,6 +546,61 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
     }
   });
 
+  it.each([false, true])("upgrades version 11 by adding empty check results (seeded=%s)", async (seeded) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const start = async () => (await openProductDatabase({ provider: "postgres", connectionString: schema.connectionString })).close();
+    const structure = async () => ({
+      version: (await schema.pool.query("SELECT version, fingerprint FROM workspace_product_schema")).rows,
+      columns: (await schema.pool.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position")).rows,
+      constraints: (await schema.pool.query("SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE connamespace = current_schema()::regnamespace ORDER BY conname")).rows,
+      indexes: (await schema.pool.query("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = current_schema() ORDER BY indexname")).rows,
+    });
+    const rows = async () => ({
+      users: (await schema.pool.query("SELECT * FROM users ORDER BY id")).rows,
+      worktrees: (await schema.pool.query("SELECT * FROM worktrees ORDER BY id")).rows,
+      operations: (await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows,
+    });
+    const check = (values: string) => schema.pool.query(`INSERT INTO worktree_checks (worktree_id, content_key, name, reporter_user_id, state, summary, reported_at) VALUES ${values}`);
+    await start();
+    const fresh = await structure();
+    await downgrade(schema, 11);
+    if (seeded) {
+      await schema.pool.query(`
+        INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 2);
+        INSERT INTO spaces (id, type, name, slug, owner_user_id, created_at, updated_at) VALUES ('t', 'team', 'Team', 'team', 'u', 1, 2);
+        INSERT INTO worktrees (id, name, creator_user_id, kind, team_space_id, visibility, created_at, updated_at, number) VALUES ('w', 'Fix', 'u', 'team', 't', 'space', 1, 2, 2);
+        INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, created_at, updated_at)
+          VALUES ('op', 'merge_worktree', 'u', 'reserved', 'pending', '{"worktreeId":"w","pageDraftIds":[]}', 1, 3, 1, 2);
+      `);
+    }
+    const v11 = await structure();
+    const before = await rows();
+
+    // A sequence is outside the fingerprint and takes the new table's name, so the upgrade fails and rolls back.
+    await schema.pool.query("CREATE SEQUENCE worktree_checks");
+    await expect(start()).rejects.toThrow(/worktree_checks/);
+    expect(await structure()).toEqual(v11);
+    expect(await rows()).toEqual(before);
+    await schema.pool.query("DROP SEQUENCE worktree_checks");
+
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(before);
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(before);
+
+    if (seeded) {
+      await check("('w', 'k1', 'totals-match', 'u', 'passed', 'B5 = SUM(B2:B4)', 4), ('w', 'k2', 'totals-match', 'u', 'failed', '', 5)");
+      await expect(check("('w', 'k1', 'totals-match', 'u', 'failed', '', 6)")).rejects.toThrow(/worktree_checks_pkey/);
+      await expect(check("('w', 'k3', 'totals-match', 'u', 'skipped', '', 6)")).rejects.toThrow(/worktree_checks_state_check/);
+      await expect(check("('w', 'k3', 'totals-match', 'nobody', 'passed', '', 6)")).rejects.toThrow(/worktree_checks_reporter_user_id_fkey/);
+      await schema.pool.query("DELETE FROM worktrees WHERE id = 'w'");
+      expect((await schema.pool.query("SELECT COUNT(*)::int AS n FROM worktree_checks")).rows).toEqual([{ n: 0 }]);
+    }
+  });
+
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
     const schema = await createPostgresTestSchema(url!);
     onTestFinished(schema.close);
@@ -556,10 +611,11 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
 });
 
 /** Gives a fresh schema the structure a deployed database at an older version has. */
-async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10): Promise<void> {
+async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11): Promise<void> {
   const client = await schema.pool.connect();
   try {
-    await client.query("DROP TABLE issue_verdicts; ALTER TABLE spaces DROP COLUMN accept_after_hours");
+    await client.query("DROP TABLE worktree_checks");
+    if (version < 11) await client.query("DROP TABLE issue_verdicts; ALTER TABLE spaces DROP COLUMN accept_after_hours");
     if (version < 10) await client.query("DROP INDEX worktrees_issue; ALTER TABLE worktrees DROP COLUMN issue_id");
     if (version < 9) await client.query("ALTER TABLE spaces DROP COLUMN proposals");
     if (version < 8) await client.query("DROP INDEX worktrees_open_fork; ALTER TABLE worktrees DROP COLUMN fork_id; DROP TABLE forks");

@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { PoolClient } from "pg";
 import { identifier, importTable } from "./rows.js";
 
-// Product V31 → PostgreSQL V11. Keep foreign keys and domain triggers enabled during import.
+// Product V32 → PostgreSQL V12. Keep foreign keys and domain triggers enabled during import.
 const tables = [
   "users",
   "password_credentials",
@@ -37,6 +37,7 @@ const tables = [
   "issue_assignees",
   "issue_node_refs",
   "issue_verdicts",
+  "worktree_checks",
   "space_stars",
   "space_pins",
   "oauth_clients",
