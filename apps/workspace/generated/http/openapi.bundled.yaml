@@ -4837,6 +4837,73 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/checks:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Worktrees
+      operationId: listWorktreeChecks
+      summary: List the declared checks and every reported result on a pull request.
+      description: Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. Needs review access.
+      responses:
+        '200':
+          description: Checks and their results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeChecks'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/worktrees/{worktreeId}/checks/{name}:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/WorktreeCheckName'
+    put:
+      tags:
+        - Worktrees
+      operationId: reportWorktreeCheck
+      summary: Report whether one check passed on the pull request's current content.
+      description: Needs review access and a ready pull request. The server binds the result to the current content. Reporting again on the same content replaces the caller's earlier result on this name, and the same report changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportWorktreeCheck'
+      responses:
+        '200':
+          description: The check with every result on it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeCheckEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 components:
   securitySchemes:
     sessionCookie:
@@ -5524,6 +5591,11 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/WorktreeUnit'
+            checks:
+              description: Present on a single pull request read. Null when the reader cannot review it.
+              oneOf:
+                - $ref: '#/components/schemas/WorktreeChecksSummary'
+                - type: 'null'
     ForkView:
       type: object
       additionalProperties: false
@@ -7819,6 +7891,24 @@ components:
           oneOf:
             - $ref: '#/components/schemas/WorktreeUnitFreshness'
             - type: 'null'
+    WorktreeChecksSummary:
+      type: object
+      additionalProperties: false
+      description: How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result.
+      required:
+        - passed
+        - failed
+        - missing
+      properties:
+        passed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        missing:
+          type: integer
+          minimum: 0
     WorktreeEnvelope:
       type: object
       additionalProperties: false
@@ -9609,6 +9699,98 @@ components:
           $ref: '#/components/schemas/OperationView'
         worktree:
           $ref: '#/components/schemas/WorktreeSummary'
+    WorktreeCheckName:
+      type: string
+      pattern: ^[a-z0-9-]{1,40}$
+    WorktreeCheckResult:
+      type: object
+      additionalProperties: false
+      required:
+        - reporter
+        - state
+        - summary
+        - reportedAt
+        - current
+        - counts
+      properties:
+        reporter:
+          $ref: '#/components/schemas/PublicUser'
+        state:
+          type: string
+          enum:
+            - passed
+            - failed
+        summary:
+          type: string
+        reportedAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+          description: Reported on the content the pull request has now, or merged with. The server names the content from every Unit's draft and Trunk head revisions and the pending page and file drafts. A Trunk edit to one of its Units, or a reopen that changes its content, leaves earlier results out of date.
+        counts:
+          type: boolean
+          description: Current, and reported by someone who may merge the pull request now.
+    WorktreeCheck:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - declared
+        - state
+        - results
+      properties:
+        name:
+          $ref: '#/components/schemas/WorktreeCheckName'
+        declared:
+          type: boolean
+          description: Declared in Trunk's `.agents/checks.md`. A name that is only reported is kept and shown but not required.
+        state:
+          type: string
+          enum:
+            - passed
+            - failed
+            - missing
+          description: failed when any counting result failed, passed when one passed and none failed, missing otherwise.
+        results:
+          type: array
+          description: Every result on this name, newest first, with out-of-date ones and those that do not count.
+          items:
+            $ref: '#/components/schemas/WorktreeCheckResult'
+    WorktreeChecks:
+      type: object
+      additionalProperties: false
+      required:
+        - checks
+      properties:
+        checks:
+          type: array
+          description: Declared checks in file order, then reported names that are not declared.
+          items:
+            $ref: '#/components/schemas/WorktreeCheck'
+    ReportWorktreeCheck:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum:
+            - passed
+            - failed
+        summary:
+          type: string
+          maxLength: 1000
+          description: What was checked and found.
+    WorktreeCheckEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - check
+      properties:
+        check:
+          $ref: '#/components/schemas/WorktreeCheck'
   parameters:
     '0':
       name: client_id

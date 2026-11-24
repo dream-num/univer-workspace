@@ -43,7 +43,17 @@ export function createWorktreesRouter(options: {
       request.headers.cookie
     )).user;
     response.json(
-      await options.worktrees.get(user.id, request.params.worktreeId)
+      await options.worktrees.get(user.id, request.params.worktreeId, true)
+    );
+  });
+  router.get("/worktrees/:worktreeId/checks", async (request, response) => {
+    const user = (await options.identity.requireSession(request.headers.cookie)).user;
+    response.json(await options.worktrees.checks(user.id, request.params.worktreeId));
+  });
+  router.put("/worktrees/:worktreeId/checks/:name", async (request, response) => {
+    const user = (await options.identity.requireSession(request.headers.cookie)).user;
+    response.json(
+      await options.worktrees.reportCheck(user.id, request.params.worktreeId, request.params.name, request.body),
     );
   });
   router.get("/spaces/:spaceId/worktrees/:number", async (request, response) => {

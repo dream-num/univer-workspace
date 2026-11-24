@@ -41,6 +41,7 @@ import { prViewTool } from "./core/pr-view.js";
 import { prCreateTool } from "./core/pr-create.js";
 import { prEditTool } from "./core/pr-edit.js";
 import { prReadyTool } from "./core/pr-ready.js";
+import { prCheckTool } from "./core/pr-check.js";
 import { prMergeTool } from "./core/pr-merge.js";
 import { searchTool } from "./core/search.js";
 import { browseTool } from "./core/browse.js";
@@ -92,6 +93,7 @@ export const tools: readonly ToolDefinition[] = [
   prCreateTool,
   prEditTool,
   prReadyTool,
+  prCheckTool,
   prMergeTool,
   searchTool,
   browseTool,

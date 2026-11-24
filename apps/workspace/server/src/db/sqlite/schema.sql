@@ -715,6 +715,16 @@ CREATE TABLE IF NOT EXISTS issue_verdicts (
   CHECK (operation_id IS NULL OR kind = 'reverted')
 );
 CREATE INDEX IF NOT EXISTS issue_verdicts_issue ON issue_verdicts(issue_id, created_at, id);
+CREATE TABLE IF NOT EXISTS worktree_checks (
+  worktree_id TEXT NOT NULL REFERENCES worktrees(id) ON DELETE CASCADE,
+  content_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  reporter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  state TEXT NOT NULL CHECK (state IN ('passed', 'failed')),
+  summary TEXT NOT NULL DEFAULT '',
+  reported_at INTEGER NOT NULL,
+  PRIMARY KEY (worktree_id, content_key, name, reporter_user_id)
+);
 
 CREATE TABLE IF NOT EXISTS space_stars (
   space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
@@ -797,7 +807,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 31;
+PRAGMA user_version = 32;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>

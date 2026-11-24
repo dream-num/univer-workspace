@@ -6,6 +6,7 @@ import {
   pullRequestSpace,
   pullUrl,
   workspaceError,
+  type WorkspaceCheck,
   type WorkspaceSpaceFeature,
   type WorkspaceWorktree,
   type WorkspaceWorktreeFeature,
@@ -26,7 +27,10 @@ export const PR_JSON_FIELDS = [
   "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "createdVia", "updatedAt",
   "capabilities",
   "issue",
+  "checks",
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
+
+const CHECK_JSON_FIELDS = ["name", "declared", "state", "results"] as const satisfies readonly (keyof WorkspaceCheck)[];
 
 const ISSUE_OPTION = [
   "--issue <number>",
@@ -181,6 +185,9 @@ function build(
           `${label(worktree)} ${worktree.name} [${worktree.state}]`,
           `id: ${worktree.id}${worktree.creator ? ` · created by ${worktree.creator.username}` : ""}`,
           ...(worktree.issue ? [`issue: #${String(worktree.issue.number)} ${worktree.issue.title} [${worktree.issue.state}]`] : []),
+          ...(worktree.checks
+            ? [`checks: ${String(worktree.checks.passed)} passed, ${String(worktree.checks.failed)} failed, ${String(worktree.checks.missing)} missing`]
+            : []),
           ...(worktree.summary ? ["", worktree.summary] : []),
           ...(worktree.units.length
             ? [
@@ -300,7 +307,45 @@ function build(
     );
   };
 
-  root.addCommand(list).addCommand(get).addCommand(create).addCommand(edit);
+  const check = new Command("check")
+    .description("Report whether one check declared in trunk's .agents/checks.md passed on a ready pull request")
+    .argument("<pr>")
+    .argument("<name>", "a `## name` heading in .agents/checks.md")
+    .option(...REPO_OPTION)
+    .option("--passed", "the check passed")
+    .option("--failed", "the check failed")
+    .option("--summary <text>", "what you checked and found")
+    .addOption(jsonFieldsOption(CHECK_JSON_FIELDS))
+    .action(
+      async (
+        argument: string,
+        name: string,
+        options: JsonFieldsOption & RepoOption & { failed?: boolean; passed?: boolean; summary?: string },
+      ) => {
+        const result = await executeCommand(check, async () => {
+          if (options.passed === options.failed) {
+            throw workspaceError("workspace-argument-invalid", "Pass exactly one of --passed or --failed.");
+          }
+          const target = await writeTarget(argument, options);
+          return await worktrees.reportCheck(target.id, name, {
+            state: options.passed === true ? "passed" : "failed",
+            ...(options.summary === undefined ? {} : { summary: options.summary }),
+          });
+        });
+        emit(
+          check,
+          options,
+          result,
+          [
+            `${result.name}: ${result.state}${result.declared ? "" : " (not declared)"}`,
+            ...result.results.map((entry) =>
+              `${entry.reporter.username} ${entry.state}${entry.counts ? "" : entry.current ? " (does not count)" : " (out of date)"}${entry.summary ? `: ${entry.summary}` : ""}`),
+          ].join("\n"),
+        );
+      },
+    );
+
+  root.addCommand(list).addCommand(get).addCommand(create).addCommand(edit).addCommand(check);
   if (names.reopen === undefined) {
     root.addCommand(transition("ready", "ready", "Mark a draft pull request ready for review", true));
   } else {

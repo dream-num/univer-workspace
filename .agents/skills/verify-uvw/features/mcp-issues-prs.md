@@ -34,12 +34,14 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MP14 drives an agent to its budget of 10 open pull requests, shows the refusal, its event and metric, refuses the
   replay of a creation that Collaboration failed, and frees a place with a merge that `whoami` counts. The run user has
   no budget.
+- MP15 declares two checks in `.agents/checks.md`, has a claimed Viewer agent report them with `pr_check`, shows them
+  in the browser, marks them out of date after a Trunk edit, and counts the results of a claimed Editor agent.
 
 ## How to get to it (user POV)
 
 An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue_list`, `issue_edit`,
-`issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `search` and
-`browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
+`issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `pr_check`,
+`search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent.
 
@@ -632,6 +634,99 @@ Pass when the locked creation exits 1 and leaves 0 used, all ten creations succe
 `agent_unclaimed` principal, the replay with the failed key also gets `AGENT_QUOTA_EXCEEDED` and leaves 10 used, the
 denial counter for `openWorktree` reads 2, the replay with the tenth key returns the tenth pull request, the merge
 leaves 9 open and 1 merge in `whoami`, the next creation succeeds, and the run user's `whoami` has no `budget`.
+
+### MP15. Check results on a pull request
+
+The run user O holds a Team Space R and declares two checks in `.agents/checks.md` on its Trunk. A claimed agent A, a
+Viewer, proposes a change and reports both checks with `pr_check`. A person E sees them in the browser, marked as not
+counting. O then changes the Sheet on Trunk, and the page marks A's results out of date. A claimed agent B, an Editor
+who may merge, reports both again, and its results count, also after B merges. MP15 uses two `principal`s, which count
+toward the 5 agents per hour.
+
+```bash
+$V cli mpc-repo repo create checks-demo --name "Checks demo" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mpc-repo.out"); R="$O/checks-demo"
+$V cli mpc-folder space node create "$R" --name .agents --json
+printf '# Checks\n\n## totals-match\nB3 equals SUM(B2:B2).\n\n## header-unchanged\nRow 1 reads Region, Total.\n' > "$EVIDENCE/mpc-checks.md"
+$V cli mpc-checks blob upload --file "$EVIDENCE/mpc-checks.md" --space "$T" --parent "$(jq -r .node.nodeId "$EVIDENCE/mpc-folder.out")" --name checks.md --json
+$V cli mpc-h-pr pr create -R "$R" -t "Sales" --json
+$V cli mpc-h-unit unit create --worktree "$(jq -r .id "$EVIDENCE/mpc-h-pr.out")" --space "$R" --type sheet --name Sales --json
+U=$(jq -r .unit.unitId "$EVIDENCE/mpc-h-unit.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mpc-h-unit.out")
+$V cli mpc-h-exec execute --worktree "$(jq -r .id "$EVIDENCE/mpc-h-pr.out")" --unit "$U" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("A1:B3").setValues([["Region","Total"],["North",40],["Sum",null]]); univerAPI.getActiveWorkbook().getActiveSheet().getRange("B3").setFormula("=SUM(B2:B2)");'
+$V cli mpc-h-ready pr ready "$(jq -r .number "$EVIDENCE/mpc-h-pr.out")" -R "$R" --json state
+$V cli mpc-h-merge pr merge "$(jq -r .number "$EVIDENCE/mpc-h-pr.out")" -R "$R" --json state
+$V principal checker-a mpc-a
+$V principal checker-b mpc-b
+$V mcp --as checker-a mpc-claim-a claim '{}'
+$V mcp --as checker-b mpc-claim-b claim '{}'
+```
+
+Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
+[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache. Register a
+person E with `POST $ORIGIN/api/auth/password/register` and keep the password outside `$EVIDENCE`. Then:
+
+```bash
+A=$(jq -r .agent.username "$EVIDENCE/principal-checker-a.json"); B=$(jq -r .agent.username "$EVIDENCE/principal-checker-b.json")
+$V cli mpc-member-a repo member add "$A" --role viewer -R "$R" --json
+$V cli mpc-member-b repo member add "$B" --role editor -R "$R" --json
+$V cli mpc-member-e repo member add <E> --role viewer -R "$R" --json
+$V mcp --as checker-a mpc-a-pr pr_create "{\"repo\":\"$R\",\"title\":\"Raise North\"}"
+W=$(jq -r .id "$EVIDENCE/mpc-a-pr.out"); N=$(jq -r .number "$EVIDENCE/mpc-a-pr.out")
+$V mcp --as checker-a mpc-a-add unit_add "{\"worktree\":\"$W\",\"resource\":\"$RES\"}"
+$V mcp --as checker-a mpc-a-exec execute "$(jq -nc --arg w "$W" --arg u "$U" '{worktree:$w,unit:$u,code:"univerAPI.getActiveWorkbook().getActiveSheet().getRange(\"B2\").setValue(50);"}')"
+$V mcp --as checker-a mpc-a-draft pr_check "{\"repo\":\"$R\",\"number\":\"$N\",\"name\":\"totals-match\",\"state\":\"passed\"}"
+test $? -eq 1
+jq -e '.code == "CONFLICT"' "$EVIDENCE/mpc-a-draft.out"
+$V mcp --as checker-a mpc-a-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N\"}"
+for name in totals-match header-unchanged; do
+  $V mcp --as checker-a "mpc-a-$name" pr_check "{\"repo\":\"$R\",\"number\":\"$N\",\"name\":\"$name\",\"state\":\"passed\",\"summary\":\"Read on the draft.\"}"
+done
+$V mcp --as checker-a mpc-a-view pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '[.checks[] | {name, declared, state, counts: [.results[].counts]}] == [{name:"totals-match",declared:true,state:"missing",counts:[false]},{name:"header-unchanged",declared:true,state:"missing",counts:[false]}] and .checks[0].results[0].current' "$EVIDENCE/mpc-a-view.out"
+$V cli mpc-cli-view pr view "$N" -R "$R" --json checks
+jq -e '.checks == {passed: 0, failed: 0, missing: 2}' "$EVIDENCE/mpc-cli-view.out"
+```
+
+In a second browser session (`AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e`) signed in as E, open
+`$ORIGIN/spaces/$T/pulls/$N`, scroll the `Checks` section into view, and screenshot `mp15-checks-viewer.png`. It lists
+`totals-match` and `header-unchanged`, each `Missing`, with A's name, `Passed`, `Does not count` and the summary.
+
+O changes the Sheet on Trunk through another pull request, then E reloads:
+
+```bash
+$V cli mpc-h2-pr pr create -R "$R" -t "Header" --json
+$V cli mpc-h2-add unit add --worktree "$(jq -r .id "$EVIDENCE/mpc-h2-pr.out")" --resource "$RES" --json
+$V cli mpc-h2-exec execute --worktree "$(jq -r .id "$EVIDENCE/mpc-h2-pr.out")" --unit "$U" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("C1").setValue("Note");'
+$V cli mpc-h2-ready pr ready "$(jq -r .number "$EVIDENCE/mpc-h2-pr.out")" -R "$R" --json state
+$V cli mpc-h2-merge pr merge "$(jq -r .number "$EVIDENCE/mpc-h2-pr.out")" -R "$R" --json state
+$V mcp --as checker-a mpc-a-stale pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '[.checks[].results[] | .current] == [false, false]' "$EVIDENCE/mpc-a-stale.out"
+```
+
+E's reloaded page shows both results struck through and `Out of date`: screenshot `mp15-checks-out-of-date.png`.
+Then B, who may merge, verifies and reports:
+
+```bash
+for name in totals-match header-unchanged; do
+  $V mcp --as checker-b "mpc-b-$name" pr_check "{\"repo\":\"$R\",\"number\":\"$N\",\"name\":\"$name\",\"state\":\"passed\",\"summary\":\"Read on trunk.\"}"
+done
+$V mcp --as checker-b mpc-b-view pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '[.checks[] | .state] == ["passed", "passed"] and ([.checks[].results[] | select(.counts) | .reporter.username] | unique) == ["'"$B"'"]' "$EVIDENCE/mpc-b-view.out"
+$V mcp --as checker-b mpc-b-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N\"}"
+$V mcp --as checker-b mpc-b-merged pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '.state == "merged" and ([.checks[] | .state] == ["passed", "passed"])' "$EVIDENCE/mpc-b-merged.out"
+$V mcp --as checker-b mpc-b-after-merge pr_check "{\"repo\":\"$R\",\"number\":\"$N\",\"name\":\"totals-match\",\"state\":\"failed\"}"
+test $? -eq 1
+jq -e '.code == "CONFLICT"' "$EVIDENCE/mpc-b-after-merge.out"
+```
+
+E's reloaded page shows both checks `Passed`, B's results without a label and A's still `Out of date`: screenshot
+`mp15-checks-counted.png`.
+
+Pass when the draft report exits 1 with `CONFLICT`, A's results are current but do not count and the CLI summary reads
+2 missing, the first screenshot shows them, the Trunk merge leaves A's results `current: false` and the second
+screenshot marks them out of date, B's results count and both checks read `passed`, they still do after B merges, and a
+report on the merged pull request exits 1 with `CONFLICT`.
 
 ## Gotchas
 

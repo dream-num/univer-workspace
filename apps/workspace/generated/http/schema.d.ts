@@ -2616,6 +2616,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/worktrees/{worktreeId}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List the declared checks and every reported result on a pull request.
+         * @description Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. Needs review access.
+         */
+        get: operations["listWorktreeChecks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/worktrees/{worktreeId}/checks/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+                name: components["schemas"]["WorktreeCheckName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Report whether one check passed on the pull request's current content.
+         * @description Needs review access and a ready pull request. The server binds the result to the current content. Reporting again on the same content replaces the caller's earlier result on this name, and the same report changes nothing.
+         */
+        put: operations["reportWorktreeCheck"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2867,6 +2912,8 @@ export interface components {
         };
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
             units: components["schemas"]["WorktreeUnit"][];
+            /** @description Present on a single pull request read. Null when the reader cannot review it. */
+            checks?: components["schemas"]["WorktreeChecksSummary"] | null;
         };
         ForkView: {
             id: string;
@@ -3774,6 +3821,12 @@ export interface components {
             /** @description Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, and once the Worktree leaves draft and ready. */
             freshness: components["schemas"]["WorktreeUnitFreshness"] | null;
         };
+        /** @description How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result. */
+        WorktreeChecksSummary: {
+            passed: number;
+            failed: number;
+            missing: number;
+        };
         WorktreeEnvelope: {
             worktree: components["schemas"]["WorktreeDetail"];
         };
@@ -4440,6 +4493,44 @@ export interface components {
         WorktreeOperationResponse: {
             operation: components["schemas"]["OperationView"];
             worktree: components["schemas"]["WorktreeSummary"];
+        };
+        WorktreeCheckName: string;
+        WorktreeCheckResult: {
+            reporter: components["schemas"]["PublicUser"];
+            /** @enum {string} */
+            state: "passed" | "failed";
+            summary: string;
+            /** Format: date-time */
+            reportedAt: string;
+            /** @description Reported on the content the pull request has now, or merged with. The server names the content from every Unit's draft and Trunk head revisions and the pending page and file drafts. A Trunk edit to one of its Units, or a reopen that changes its content, leaves earlier results out of date. */
+            current: boolean;
+            /** @description Current, and reported by someone who may merge the pull request now. */
+            counts: boolean;
+        };
+        WorktreeCheck: {
+            name: components["schemas"]["WorktreeCheckName"];
+            /** @description Declared in Trunk's `.agents/checks.md`. A name that is only reported is kept and shown but not required. */
+            declared: boolean;
+            /**
+             * @description failed when any counting result failed, passed when one passed and none failed, missing otherwise.
+             * @enum {string}
+             */
+            state: "passed" | "failed" | "missing";
+            /** @description Every result on this name, newest first, with out-of-date ones and those that do not count. */
+            results: components["schemas"]["WorktreeCheckResult"][];
+        };
+        WorktreeChecks: {
+            /** @description Declared checks in file order, then reported names that are not declared. */
+            checks: components["schemas"]["WorktreeCheck"][];
+        };
+        ReportWorktreeCheck: {
+            /** @enum {string} */
+            state: "passed" | "failed";
+            /** @description What was checked and found. */
+            summary?: string;
+        };
+        WorktreeCheckEnvelope: {
+            check: components["schemas"]["WorktreeCheck"];
         };
     };
     responses: {
@@ -9231,6 +9322,63 @@ export interface operations {
                     "application/json": components["schemas"]["OperationEnvelope"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listWorktreeChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checks and their results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorktreeChecks"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    reportWorktreeCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+                name: components["schemas"]["WorktreeCheckName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportWorktreeCheck"];
+            };
+        };
+        responses: {
+            /** @description The check with every result on it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorktreeCheckEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

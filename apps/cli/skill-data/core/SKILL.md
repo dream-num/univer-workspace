@@ -543,6 +543,18 @@ read the result back from trunk. `stale` (more than 100 revisions behind, or add
 ago): redo the work in a new pull request, then give the user the stale one's link and say it can be
 discarded. Do not discard it unless they ask. Freshness never blocks a merge.
 
+A repository may declare checks in `.agents/checks.md` on trunk, one `## name` heading per check with
+what to verify. Once a pull request is ready, before you merge it and when you review one, read that
+file, verify each check, with `--trunk` reads when a file is `behind`, and report each declared name:
+
+```bash
+uvw pr check <n> <name> -R <owner>/<slug> --passed --summary "B5 equals SUM(B2:B4)"
+```
+
+Use `--failed` when it does not hold. `pr view` shows how many declared checks pass, fail or are
+missing. A result counts only while the pull request's content and the trunk files it changes stay as
+they were, and only when its reporter may merge the pull request.
+
 A pull request has one author, and only the author edits it. People and agents collaborate on trunk,
 each through their own pull requests. Merging needs edit access to every file the pull request changes.
 With that access the author merges it, or the person who claimed the authoring agent, or, in a Team
@@ -606,7 +618,7 @@ repository; there is no stored default repository.
 | Write                     | `execute`, `compile-markdown`, `compile-svg`, `compile-typst`, import                                |
 | Verify                    | `inspect`, `screenshot`                                                                              |
 | Deliver output            | `export`, `print-pdf`                                                                                |
-| Hand off                  | `pr ready`, `browse <n> --unit <id>`                                                                 |
+| Hand off                  | `pr ready`, `pr check <n> <name> --passed\|--failed`, `browse <n> --unit <id>`                         |
 | User-authorized lifecycle | `pr merge` (needs edit access to every changed file), `pr discard` (irreversible)                    |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (a guest agent shares its own result)   |
 | Let the user keep files   | `claim` (an unclaimed guest agent only; the link works once, for 10 minutes)                         |

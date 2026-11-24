@@ -350,6 +350,10 @@ describe("uvw pr and the worktree alias", () => {
       list: record("list", [worktree()]),
       transition: record("transition", worktree({ state: "ready" })),
       update: record("update", worktree({ name: "New" })),
+      reportCheck: record("reportCheck", {
+        name: "totals-match", declared: true, state: "missing",
+        results: [{ reporter: { id: "u1", username: "alice", displayName: "Alice" }, state: "passed", summary: "B5 = 60", reportedAt: "2026-11-24T00:00:00.000Z", current: true, counts: false }],
+      }),
     } as unknown as WorkspaceWorktreeFeature;
     const spaces = { get: vi.fn(async (id: string) => ({
       ...teamSpace,
@@ -382,6 +386,7 @@ describe("uvw pr and the worktree alias", () => {
     [["ready", "12", "-R", "alice/docs", "--undo"], ["reopen", "12", "-R", "alice/docs"]],
     [["merge", "12", "-R", "alice/docs"], ["merge", "12", "-R", "alice/docs"]],
     [["discard", "12", "-R", "alice/docs"], ["discard", "12", "-R", "alice/docs"]],
+    [["check", "12", "totals-match", "-R", "alice/docs", "--passed", "--summary", "B5 = 60"], ["check", "12", "totals-match", "-R", "alice/docs", "--passed", "--summary", "B5 = 60"]],
   ];
 
   it.each(PAIRS)("runs `pr %s` and its worktree spelling identically", async (prArgs, worktreeArgs) => {
@@ -392,6 +397,19 @@ describe("uvw pr and the worktree alias", () => {
     expect(viaWorktree.calls).toEqual(viaPr.calls);
     expect(worktreeOutput).toBe(prOutput);
     expect(viaPr.calls.length).toBeGreaterThan(0);
+  });
+
+  it("reports one check as passed or failed and shows whether each result counts", async () => {
+    const { calls, pr } = pullRequestCommands();
+    expect(await run(pr, ["check", "12", "totals-match", "-R", "alice/docs", "--failed"]))
+      .toContain("totals-match: missing\nalice passed (does not count): B5 = 60");
+    for (const flags of [[], ["--passed", "--failed"]]) {
+      await expect(run(pr, ["check", "12", "totals-match", "-R", "alice/docs", ...flags])).rejects.toThrow(/exactly one of --passed or --failed/u);
+    }
+    expect(calls).toEqual([
+      ["getByNumber", "space-1", 12],
+      ["reportCheck", "wt-1", "totals-match", { state: "failed" }],
+    ]);
   });
 
   it("addresses by number, maps lifecycle verbs and treats owner/personal as User Worktrees", async () => {

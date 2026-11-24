@@ -8,8 +8,8 @@ import type {
 export function createSqliteUnitCreationFactsReader(database: DatabaseSync): UnitCreationFactsReader {
   return {
     async read() {
-      if (database.prepare("PRAGMA user_version").get()?.user_version !== 31) {
-        throw new Error("Prepare the product database to V31 before migrating the Collaboration database.");
+      if (database.prepare("PRAGMA user_version").get()?.user_version !== 32) {
+        throw new Error("Prepare the product database to V32 before migrating the Collaboration database.");
       }
       const units = database.prepare(`
         SELECT univer.unit_id AS unitId, node.created_by AS creatorId, node.created_at AS createdAt

@@ -65,6 +65,22 @@ export function proposalStaysShared(): ApplicationError {
   );
 }
 
+export function checkNeedsReady(state: string): ApplicationError {
+  return new ApplicationError(
+    "CONFLICT",
+    409,
+    `Check results are reported on a ready pull request, and this one is ${state}.${state === "draft" ? " Mark it ready first." : ""}`,
+  );
+}
+
+export function tooManyChecks(limit: number): ApplicationError {
+  return new ApplicationError(
+    "CONFLICT",
+    409,
+    `This pull request already has results for ${limit} check names on its current content. Report on a name it already has.`,
+  );
+}
+
 export function forkAlreadyOpen(): ApplicationError {
   return new ApplicationError("CONFLICT", 409, "The fork already has an open Worktree.");
 }

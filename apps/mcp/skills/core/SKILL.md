@@ -119,10 +119,8 @@ Creation writes directly to the Space and cannot be undone by Worktree discard.
 After an unknown result, browse the exact parent before deciding whether to retry.
 Sibling names need not be unique; a same-name result is not proof of creation.
 Rename and move use stable Node IDs. Choose either a parent or the current Space
-root as the destination. The service reads back desired metadata after an
-interrupted rename or move; if the result is still unknown, inspect the directory.
-Trash recursively removes a subtree from its Space location. Only do it when the
-user explicitly requests that action. Retain trashBatchId and nodeCount. Never
+root as the destination. If an interrupted rename or move stays unknown, inspect the directory.
+Trash recursively removes a subtree. Only do it when the user explicitly asks. Retain trashBatchId and nodeCount. Never
 blindly repeat an unknown trash result. No restore or permanent Trash deletion
 tool is available here.
 
@@ -183,7 +181,7 @@ an unrelated Unit to an existing task Worktree.
 Every creating tool takes an idempotency key. Generate a new random value, such
 as a UUID, for each new operation. Reuse it only to retry the same call with
 identical arguments. Never derive it from names or reuse a key from earlier work.
-Where a schema requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
+Conversion keys use 16 to 200 URL-safe letters, digits,
 underscores or hyphens. After an unknown content commit, read back before retrying.
 
 ## Work through a fork
@@ -227,8 +225,7 @@ Use the public Facade with the original image source. Supported BASE64 images
 written with `execute` are stored as Workspace FileIds with bytes stored separately;
 later reads return that UUID. Docs created by `compile_markdown`, `compile_typst` or
 `import` keep their images inline, so reads return BASE64 data URIs that already
-contain the bytes. Browser clients load both forms automatically; no manual asset
-upload or mutation storage handling is needed. When readback returns a UUID and you
+contain the bytes. Browser clients load both forms. When readback returns a UUID and you
 need the original bytes, use `asset_download` with that id and Worktree.
 
 ### Facade API lookup
@@ -272,8 +269,8 @@ for one hour after reservation. Never pass a local file path to a tool.
   rejected. A Doc not compiled from Markdown has no map: read it with `inspect` or
   read-only `execute`.
 - `resources_export` returns SVG text, not files. Use that text in authored content.
-- `export`, `print_pdf`, `blob_download` and `asset_download` return expiring download
-  links. They last fifteen minutes. Download the bytes before expiry. To replace an
+- `export`, `print_pdf`, `blob_download` and `asset_download` return download
+  links that last fifteen minutes. To replace an
   edited original file, reserve and upload its bytes, then use `blob_replace` with
   the exact quoted ETag returned by `blob_download`.
 - Short screenshots arrive as image content when they fit the synchronous image
@@ -316,14 +313,17 @@ change it and mark it ready with `pr_ready`: that shows it to the repository's
 members, and one who can edit merges it. When `pr_merge` fails partway and the pull request stays
 `merging` or `merged`, call `pr_merge` again to finish it.
 Do not discard unless explicitly requested. Discard is irreversible.
-`pr_view` gives each file that came from trunk a `freshness` label. `current`:
-trunk has not moved. `behind`: trunk changed the file after it joined; the changes
-merge without conflict, but a result you verified on the draft can still be wrong
-once merged, so before you merge read the file on trunk and check that what your
-change depends on still holds, and after merging read the result back from trunk.
+`pr_view` gives each file from trunk a `freshness` label. `current`: trunk has
+not moved. `behind`: trunk changed the file since; it merges without conflict, but
+a result verified on the draft can be wrong once merged, so before merging check on
+trunk that what your change depends on still holds, and after merging read it back.
 `stale` (more than 100 revisions behind, or added more than 7 days ago): redo the
 work in a new pull request, then give the user the stale one's link and say it can
 be discarded. Do not discard it unless they ask. Freshness never blocks a merge.
+Trunk's `.agents/checks.md` may declare checks, each a `## name` with what to
+verify. Once a pull request is ready, before merging and when reviewing, verify
+each, on trunk when a file is `behind`, and report it with `pr_check`. `pr_view`
+lists them; a result counts while the content is unchanged and its reporter may merge.
 `share` works only on files in a Personal Space. For a Team repository, return the
 pull request link instead.
 An agent identity that returns a `share` url also says who can open it, from

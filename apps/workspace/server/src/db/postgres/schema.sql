@@ -746,6 +746,16 @@ CREATE TABLE issue_verdicts (
   CHECK (operation_id IS NULL OR kind = 'reverted')
 );
 CREATE INDEX issue_verdicts_issue ON issue_verdicts(issue_id, created_at, id);
+CREATE TABLE worktree_checks (
+  worktree_id TEXT NOT NULL REFERENCES worktrees(id) ON DELETE CASCADE,
+  content_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  reporter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  state TEXT NOT NULL CHECK (state IN ('passed', 'failed')),
+  summary TEXT NOT NULL DEFAULT '',
+  reported_at BIGINT NOT NULL,
+  PRIMARY KEY (worktree_id, content_key, name, reporter_user_id)
+);
 
 CREATE TABLE space_stars (
   space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,

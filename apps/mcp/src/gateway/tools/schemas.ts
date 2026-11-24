@@ -193,7 +193,32 @@ export const worktreeSchema = z.object({
     .nullable()
     .optional()
     .describe("The Issue this pull request serves; null when none is linked."),
+  checks: z
+    .object({ passed: z.number(), failed: z.number(), missing: z.number() })
+    .nullable()
+    .optional()
+    .describe("How many declared checks pass, fail, or lack a result that counts. pr_view lists them."),
   url: z.url(),
+});
+
+export const checkSchema = z.object({
+  name: z.string(),
+  declared: z.boolean().describe("Declared in trunk's `.agents/checks.md`. Other reported names are not required."),
+  state: z
+    .enum(["passed", "failed", "missing"])
+    .describe("failed if a counting result failed, passed if one passed and none failed, otherwise missing."),
+  results: z
+    .array(
+      z.object({
+        reporter: z.object({ id: z.string(), username: z.string(), displayName: z.string() }),
+        state: z.enum(["passed", "failed"]),
+        summary: z.string(),
+        reportedAt: z.string(),
+        current: z.boolean().describe("Reported on the content the pull request has now, or merged with."),
+        counts: z.boolean().describe("Current, and reported by someone who may merge the pull request."),
+      }),
+    )
+    .describe("Newest first."),
 });
 
 export const forkPullSchema = worktreeSchema

@@ -46,7 +46,7 @@ export function verifyV23Migration(open: (filename: string) => SqliteDatabase): 
   };
   const rows = (db: DatabaseSync) =>
     db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('forks', 'issue_verdicts') ORDER BY name")
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('forks', 'issue_verdicts', 'worktree_checks') ORDER BY name")
       .all()
       .map(({ name }) => [name, withoutV24Columns(String(name), db.prepare(`SELECT * FROM ${name}`).all())]);
   const columns = (db: DatabaseSync, table: string) =>
@@ -66,7 +66,7 @@ export function verifyV23Migration(open: (filename: string) => SqliteDatabase): 
       const migrated = open(filename);
       const db = migrated.connection;
       assert.deepEqual(rows(db), before);
-      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 31);
+      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 32);
       assert.equal(columns(db, "nodes").at(-1), "copied_from_node_id");
       assert.equal(columns(db, "worktree_node_intents").at(-1), "copied_from_node_id");
       assert.deepEqual(columns(db, "node_link_sharing").slice(-2), ["unverified_role", "making_of_note"]);
@@ -117,7 +117,7 @@ export function verifyV23Migration(open: (filename: string) => SqliteDatabase): 
     );
     const before = rows(broken);
     broken.close();
-    assert.throws(() => open(filename), /V23 to V31 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V23 to V32 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v23-backup-"))!,

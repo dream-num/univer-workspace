@@ -473,6 +473,75 @@
       "409":
         $ref: ../schemas/common.yaml#/Conflict
 
+/api/worktrees/{worktreeId}/checks:
+  parameters:
+    - name: worktreeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Worktrees]
+    operationId: listWorktreeChecks
+    summary: List the declared checks and every reported result on a pull request.
+    description: Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. Needs review access.
+    responses:
+      "200":
+        description: Checks and their results.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/worktrees.yaml#/WorktreeChecks
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/worktrees/{worktreeId}/checks/{name}:
+  parameters:
+    - name: worktreeId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/worktrees.yaml#/WorktreeCheckName
+  put:
+    tags: [Worktrees]
+    operationId: reportWorktreeCheck
+    summary: Report whether one check passed on the pull request's current content.
+    description: >-
+      Needs review access and a ready pull request. The server binds the result to the current content. Reporting again
+      on the same content replaces the caller's earlier result on this name, and the same report changes nothing.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/worktrees.yaml#/ReportWorktreeCheck
+    responses:
+      "200":
+        description: The check with every result on it.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/worktrees.yaml#/WorktreeCheckEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
 /api/worktrees/{worktreeId}/units/{unitId}/removal:
   parameters:
     - name: worktreeId

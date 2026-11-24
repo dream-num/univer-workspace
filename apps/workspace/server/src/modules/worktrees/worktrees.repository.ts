@@ -100,6 +100,18 @@ export interface WorktreeOperationRow {
   readonly updated_at: number;
 }
 
+export interface WorktreeCheckRow {
+  readonly content_key: string;
+  readonly name: string;
+  readonly reporter_user_id: string;
+  readonly reporter_username: string;
+  readonly reporter_display_name: string;
+  readonly reporter_avatar_url: string | null;
+  readonly state: "passed" | "failed";
+  readonly summary: string;
+  readonly reported_at: number;
+}
+
 export interface WorktreesRepository {
   hasCreatedWorktree(userId: string): Promise<boolean>;
   audience(worktreeId: string): Promise<string[]>;
@@ -183,6 +195,20 @@ export interface WorktreesRepository {
   removalBatchId(worktreeId: string, unitId: string): Promise<string>;
   hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): Promise<boolean>;
   mergers(worktreeIds: readonly string[]): Promise<ReadonlyMap<string, PublicUser>>;
+  /** Every check result on the Worktree, newest first. */
+  checks(worktreeId: string): Promise<WorktreeCheckRow[]>;
+  /** Records one reporter's result on one check for one content, replacing that reporter's earlier result on it. */
+  reportCheck(input: {
+    readonly worktreeId: string;
+    readonly contentKey: string;
+    readonly name: string;
+    readonly reporterUserId: string;
+    readonly state: "passed" | "failed";
+    readonly summary: string;
+    readonly reportedAt: number;
+  }): Promise<void>;
+  /** The content key the latest merge recorded when it left ready. */
+  mergedContentKey(worktreeId: string): Promise<string | null>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;
   reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
   completeOperation(

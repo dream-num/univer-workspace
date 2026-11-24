@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -130,6 +130,19 @@ CREATE TABLE issue_verdicts (
   CHECK (operation_id IS NULL OR kind = 'reverted')
 );
 CREATE INDEX issue_verdicts_issue ON issue_verdicts(issue_id, created_at, id);`);
+}
+
+async function addWorktreeChecks(client: PoolClient): Promise<void> {
+  await client.query(`CREATE TABLE worktree_checks (
+  worktree_id TEXT NOT NULL REFERENCES worktrees(id) ON DELETE CASCADE,
+  content_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  reporter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  state TEXT NOT NULL CHECK (state IN ('passed', 'failed')),
+  summary TEXT NOT NULL DEFAULT '',
+  reported_at BIGINT NOT NULL,
+  PRIMARY KEY (worktree_id, content_key, name, reporter_user_id)
+)`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

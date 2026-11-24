@@ -100,6 +100,34 @@ export interface WorktreeUnitFreshness {
 
 export interface WorktreeDetail extends WorktreeSummary {
   readonly units: readonly WorktreeUnit[];
+  /** How many declared checks pass, fail or lack a counting result; null when the reader cannot review. */
+  readonly checks?: WorktreeChecksSummary | null;
+}
+
+export type WorktreeCheckReportState = "passed" | "failed";
+
+export interface WorktreeCheckResult {
+  readonly reporter: PublicUser;
+  readonly state: WorktreeCheckReportState;
+  readonly summary: string;
+  readonly reportedAt: string;
+  /** Reported on the content the pull request has now, or merged with. */
+  readonly current: boolean;
+  /** Current, and reported by someone who may merge the pull request. */
+  readonly counts: boolean;
+}
+
+export interface WorktreeCheck {
+  readonly name: string;
+  readonly declared: boolean;
+  readonly state: WorktreeCheckReportState | "missing";
+  readonly results: readonly WorktreeCheckResult[];
+}
+
+export interface WorktreeChecksSummary {
+  readonly passed: number;
+  readonly failed: number;
+  readonly missing: number;
 }
 
 export type WorktreeOperationKind =
@@ -245,8 +273,17 @@ export interface WorktreesModule {
   pullRequestsForIssue(userId: string, issueId: string): Promise<readonly IssuePullRequestView[]>;
   get(
     userId: string,
-    worktreeId: string
+    worktreeId: string,
+    withChecks?: boolean
   ): Promise<{ readonly worktree: WorktreeDetail }>;
+  /** Every declared check, then every other reported name, with all their results. */
+  checks(userId: string, worktreeId: string): Promise<{ readonly checks: readonly WorktreeCheck[] }>;
+  reportCheck(
+    userId: string,
+    worktreeId: string,
+    name: string,
+    input: unknown
+  ): Promise<{ readonly check: WorktreeCheck }>;
   getByNumber(
     userId: string,
     spaceId: string,

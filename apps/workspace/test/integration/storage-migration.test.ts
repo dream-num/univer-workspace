@@ -16,7 +16,7 @@ import { importProduct } from "../../server/src/storage-migration/product.js";
 import { prepareSource } from "../../server/src/storage-migration/source.js";
 import { createPostgresTestDatabase, createPostgresTestSchema } from "../support/postgres/schema.js";
 
-async function v31Source(resources: AsyncDisposableStack) {
+async function v32Source(resources: AsyncDisposableStack) {
   const directory = mkdtempSync(join(tmpdir(), "cutover-test-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
   const productFile = join(directory, "old-product");
@@ -68,15 +68,15 @@ async function v31Source(resources: AsyncDisposableStack) {
   return source;
 }
 
-it("reads committed V31 WAL rows without modifying the source files", async () => {
+it("reads committed V32 WAL rows without modifying the source files", async () => {
   await using resources = new AsyncDisposableStack();
-  const source = await v31Source(resources);
+  const source = await v32Source(resources);
   await source.checkSourceStopped();
-  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(31);
+  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(32);
   expect(source.product.prepare("SELECT kind FROM users WHERE id='u'").get()?.kind).toBe("human");
 });
 
-it.each([24, 25, 26, 27, 28, 29, 30, 32])("rejects product V%i before opening the collaboration database", async (version) => {
+it.each([24, 25, 26, 27, 28, 29, 30, 31, 33])("rejects product V%i before opening the collaboration database", async (version) => {
   await using resources = new AsyncDisposableStack();
   const directory = mkdtempSync(join(tmpdir(), "cutover-version-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
@@ -87,7 +87,7 @@ it.each([24, 25, 26, 27, 28, 29, 30, 32])("rejects product V%i before opening th
   const before = readFileSync(path);
 
   await expect(prepareSource(directory, path, join(directory, "missing"), resources))
-    .rejects.toThrow(`Expected a V31 SQLite product database, got V${version}`);
+    .rejects.toThrow(`Expected a V32 SQLite product database, got V${version}`);
   expect(readFileSync(path)).toEqual(before);
 });
 
@@ -96,7 +96,7 @@ it.skipIf(!url)(
   "preserves Sheet blocks, snapshot references, Worktree baselines, seeds and comments",
   async () => {
     await using resources = new AsyncDisposableStack();
-    const source = await v31Source(resources);
+    const source = await v32Source(resources);
     const target = await createPostgresTestDatabase(url!);
     resources.defer(target.close);
     const storage = await createTestBucket(resources);

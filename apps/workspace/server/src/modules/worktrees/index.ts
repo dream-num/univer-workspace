@@ -1,6 +1,7 @@
 export type { WorktreesRepository } from "./worktrees.repository.js";
 export { createWorktreesRouter } from "./worktrees.router.js";
 export { createWorktreesModule, type WorktreePages } from "./worktrees.service.js";
+export { createDeclaredChecksReader } from "./checks.js";
 export type {
   ActivationState,
   WorktreeActivity,

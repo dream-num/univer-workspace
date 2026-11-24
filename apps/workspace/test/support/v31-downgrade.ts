@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { DROP_V32_SQL } from "./v32-downgrade.js";
 
-export const DROP_V31_SQL = `
+export const DROP_V31_SQL = `${DROP_V32_SQL}
 DROP INDEX issue_verdicts_issue;
 DROP TABLE issue_verdicts;
 ALTER TABLE spaces DROP COLUMN accept_after_hours;

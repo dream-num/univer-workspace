@@ -285,6 +285,23 @@ otherwise. The label is advice for the author and never blocks a merge. Worktree
 and Units that trunk no longer holds have `freshness: null`, and so does every Unit once the
 Worktree leaves `draft` and `ready`.
 
+A Team Space declares checks in `.agents/checks.md` on trunk: each `## name` heading outside
+fenced code, with a name of 1 to 40 `[a-z0-9-]` characters, is one check, up to 20. The server
+reads the file with the caller's own access. `PUT /api/worktrees/{id}/checks/{name}` with
+`state` (`passed` or `failed`) and an optional `summary` reports one check. It needs the
+`review` capability and a `ready` Worktree, otherwise `409 CONFLICT`. The server binds the
+result to a content key it derives from every Unit's draft head revision, removal and trunk
+head revision and the pending page and file drafts; a request cannot name the key. Reporting
+again on the same content replaces the caller's result, and the same report writes nothing.
+`GET /api/worktrees/{id}/checks` lists the declared checks in file order, then reported names
+that are not declared, each with every result, newest first. A result is `current` while the
+key matches what the Worktree has now, or, once merged, what it had when its merge began. It
+`counts` when it is current and its reporter may merge the Worktree now. A check is `failed`
+when a counting result failed, `passed` when one passed and none failed, and `missing`
+otherwise. `GET /api/worktrees/{id}` and the `#N` read carry `checks`, how many declared
+checks pass, fail or are missing, or `null` for a caller without `review`. Checks block
+nothing yet.
+
 A Worktree has one author, its creator, and only the author edits its draft. People and
 agents collaborate on trunk, each through their own Worktrees. Merging needs edit access
 to every target, and one of two standings. The owners of the creator's Personal Space,
