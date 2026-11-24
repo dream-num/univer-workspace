@@ -901,6 +901,28 @@ describe("publishing a pull request's pages when it merges", () => {
     expect(await filesIn(origin, owner, s.id)).toEqual(["Budget", "Reviewed.univer.html"]);
   }, 60_000);
 
+  it("finishes a merge Operation reserved before merges stored their pages with the pages pending when it was created", async () => {
+    const { origin, application, repositories } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, editor, viewer } = s;
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const page = (name: string) => ({ kind: "create", spaceId: s.id, name, html: titledPage(name), sourceWorktreeId: pull });
+    const before = await made<{ draft: { id: string } }>(await post(origin, viewer, "/api/html-view-drafts", page("Before")));
+    const createdAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const after = await made<{ draft: { id: string } }>(await post(origin, viewer, "/api/html-view-drafts", page("After")));
+    expect(await transition(origin, pull, "ready", viewer)).toBe("ready");
+    const key = randomUUID();
+    await repositories.worktrees.reserveOperation({ id: key, kind: "merge_worktree", actorUserId: editor.id, payload: { worktreeId: pull }, createdAt });
+
+    const merged = await send(origin, "POST", `/api/worktrees/${pull}/merge`, undefined, editor.cookie, { "idempotency-key": key });
+    expect(merged.status).toBe(200);
+    expect(((await merged.json()) as { publishedPages: { draftId: string }[] }).publishedPages.map((p) => p.draftId)).toEqual([before.draft.id]);
+    expect(await repositories.htmlViewDrafts.find(before.draft.id)).toMatchObject({ state: "published", decided_by: editor.id });
+    expect((await repositories.htmlViewDrafts.find(after.draft.id))?.state).toBe("pending");
+    expect(await filesIn(origin, owner, s.id)).toEqual(["Before.univer.html", "Budget"]);
+  }, 60_000);
+
   it("refuses a browser merge whose reviewer saw pages the author changed since, and changes nothing until they review again", async () => {
     const { origin, application } = await start();
     const s = await budgetSpace(origin, application);

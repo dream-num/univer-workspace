@@ -62,8 +62,8 @@ interface WorktreeFacts {
 
 /** The pending HTML View drafts attached to a Worktree, which its merge publishes as the merger. */
 export interface WorktreePages {
-  /** IDs of the pending, unexpired drafts attached now. A merge fixes this set when it begins. */
-  pending(worktreeId: string): Promise<readonly string[]>;
+  /** IDs of the pending, unexpired drafts attached now, or last changed by `before`. A merge fixes this set when it begins. */
+  pending(worktreeId: string, before?: number): Promise<readonly string[]>;
   /** Whether the user may write every pending page, or every one of `draftIds` still pending. */
   writable(worktreeId: string, userId: string, draftIds?: readonly string[]): Promise<boolean>;
   /** Names of the pending pages among `draftIds` whose own author may not write their target. */
@@ -91,6 +91,12 @@ export function createWorktreesModule(options: {
   readonly now?: () => number;
 }): WorktreesModule {
   const now = options.now ?? Date.now;
+
+  // Compatibility: a merge Operation reserved before merges stored their pages publishes the drafts pending when it
+  // was created, as it would have then. Applies only to such Operations; remove once none is unfinished.
+  async function legacyMergePages(worktreeId: string, createdAt: number): Promise<string[]> {
+    return [...await options.pages.pending(worktreeId, createdAt)].sort();
+  }
 
   async function executeReserved<T>(
     operationId: string,
@@ -797,8 +803,9 @@ export function createWorktreesModule(options: {
         if (value.state === "ready" || unfinished) throw mergeNeedsEditAccess();
         throw forbidden();
       }
-      // A merge Operation saved before merges stored their pages replays with none; drop the default once none is unfinished.
-      const pageDraftIds = stored ? stored.pageDraftIds ?? [] : [...await options.pages.pending(worktreeId)].sort();
+      const pageDraftIds = existing && stored
+        ? stored.pageDraftIds ?? await legacyMergePages(worktreeId, existing.created_at)
+        : [...await options.pages.pending(worktreeId)].sort();
       if (existing?.state !== "completed" && value.row.processed_at === null) {
         await validateAllTargets(userId, value.row, value.units, options, pageDraftIds);
       }
@@ -823,7 +830,7 @@ export function createWorktreesModule(options: {
         "merge_worktree",
         userId
       );
-      assertJsonIntent(payload, { worktreeId: stable.worktreeId, pageDraftIds: stable.pageDraftIds ?? [] });
+      assertJsonIntent(payload, { worktreeId: stable.worktreeId, pageDraftIds: stable.pageDraftIds ?? pageDraftIds });
       let operation = reserved.row;
       if (operation.state !== "completed") {
         operation = await executeReserved(operationId, async () => {

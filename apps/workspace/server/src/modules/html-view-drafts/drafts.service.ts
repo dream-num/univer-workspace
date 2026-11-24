@@ -321,8 +321,8 @@ export function createHtmlViewDraftsModule(options: {
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
     publish,
-    async pending(worktreeId: string): Promise<string[]> {
-      return (await livePages(worktreeId)).map((row) => row.id);
+    async pending(worktreeId: string, before = Infinity): Promise<string[]> {
+      return (await livePages(worktreeId)).filter((row) => row.updated_at <= before).map((row) => row.id);
     },
     async writable(worktreeId: string, userId: string, draftIds?: readonly string[]): Promise<boolean> {
       for (const row of await livePages(worktreeId, draftIds)) if (!(await mayWrite(userId, row))) return false;
