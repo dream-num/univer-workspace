@@ -16,6 +16,22 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium \
     ANTHROPIC_DEFAULT_SONNET_MODEL='deepseek-flash[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash \
     CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash CLAUDE_CODE_EFFORT_LEVEL=high \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432
+# The MCP journeys need opencode (npm's opencode-ai stops at 1.19.6), poppler and ImageMagick, and a magick
+# command, which bookworm's ImageMagick 6 lacks.
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils imagemagick \
+    && rm -rf /var/lib/apt/lists/* \
+    && case "$TARGETARCH" in arm64) asset=opencode-linux-arm64.tar.gz ;; amd64) asset=opencode-linux-x64-baseline.tar.gz ;; \
+         *) echo "no opencode build for architecture '$TARGETARCH'" >&2; exit 1 ;; esac \
+    && curl -fsSL "https://opencode.ai/files/bin/2.0.29/$asset" | tar -xz -C /usr/local/bin opencode \
+    && printf '%s\n' '#!/bin/sh' \
+      'case "$1" in identify|compare|composite|conjure|convert|mogrify|montage|stream) t=$1; shift; exec "$t" "$@";; esac' \
+      'exec convert "$@"' >/usr/local/bin/magick \
+    && chmod 755 /usr/local/bin/magick
+# The dist start mode runs the MCP roles from apps/mcp/dist; verify-uvw allows it only where VERIFY_UVW_RUNNER=1.
+# opencode's built-in deepseek provider reads DEEPSEEK_API_KEY, which each task receives.
+ENV VERIFY_UVW_RUNNER=1 VERIFY_UVW_MCP_FROM=dist UNIVER_RENDER_BROWSER=/usr/bin/chromium \
+    VERIFY_UVW_OPENCODE_MODEL='deepseek/deepseek-flash#high'
 USER node
 # Created here, a new named volume mounted on it belongs to node rather than root.
 RUN mkdir -p /home/node/.local/share/pnpm

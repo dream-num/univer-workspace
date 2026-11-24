@@ -200,7 +200,8 @@ async function main() {
     const built = up === 0 && await run(['exec', name, 'bash', '-c', [
       'set -e', "git config --global --add safe.directory '*'",
       `git init -q ~/repo && cd ~/repo && git fetch -q --depth 1 file:///hostgit ${sha} && git checkout -q FETCH_HEAD`,
-      'pnpm install --frozen-lockfile', "pnpm --filter 'univer-workspace-cli...' build"].join('\n')], { log }) === 0;
+      'pnpm install --frozen-lockfile', "pnpm --filter 'univer-workspace-cli...' build",
+      "pnpm --filter '@univerjs/univer-workspace-mcp...' build"].join('\n')], { log }) === 0;
     if (!built) return console.error(`runner r${k + 1} setup failed; see ${log}`);
     setup[k] = seconds(since);
     for (let task; (task = queue.shift());) {
