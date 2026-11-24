@@ -22,10 +22,16 @@ Each feature file starts with an H1 and one paragraph of user-visible behavior, 
 four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 `Driving it with agent-browser and uvw`, `Gotchas`.
 
-An H1, or a journey's `###` heading, that ends in ` (host only)` cannot run in
-[the runner](../SKILL.md#run-journeys-in-the-runner). The runner and `brief --own` read only this
-marker. The runner refuses a marked feature, skips a marked journey, and lists both for a host run.
-The host flow ignores the marker.
+Under `Driving it with agent-browser and uvw`, every `###` heading is a journey:
+`### <ID>. <Title>`. The ID is a capital letter, then capital letters and digits, and ends in a number,
+as in `MS5`, `SLC10` or `TR2-1`. No two journeys in `features/` share an ID. Text before the first
+journey is setup for all of them. A journey's text ends in its pass condition. A verifier records one
+verdict for each journey it runs (the Evidence section of [the skill](../SKILL.md#evidence)).
+`bin/journeys.mjs` is the only reader of this structure, and its test parses every file here.
+
+An H1, or a journey heading, that ends in ` (host only)` cannot run in
+[the runner](../SKILL.md#run-journeys-in-the-runner). The runner refuses a marked feature, leaves a
+marked journey out of its task, and lists both for a host run. The host flow ignores the marker.
 
 ## Features
 

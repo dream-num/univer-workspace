@@ -17,6 +17,8 @@ $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evid
 $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
+$V journeys <feature> [journey-id...]   # the journeys to verify; after up, which have a verdict
+$V verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note]   # record one journey's verdict in this run
 $V brief <feature> [journey-id...]   # print the brief for an agent that drives this run
 $V runner <feature[:ID,ID]>...       # run journeys in disposable Linux containers, no instance of yours
 $V runner --check [feature[:ID,ID]...]   # can these run in runner mode here? starts nothing
@@ -168,16 +170,33 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   match token shapes, because the run's secret values are gone.
 - In the report, give the run id, launch HEAD (`run.env`), feature IDs, and artifact paths.
 
+Every journey you run gets one verdict, recorded with `$V verdict <journey-id> <verdict> "<note>"` as soon as you
+judge it. The run's `evidence/journeys.jsonl` keeps every verdict, and the last one for a journey counts.
+
+| Verdict | When |
+| --- | --- |
+| `PASS` | Every step ran and every check held. |
+| `FAIL` | The product differs from the recipe. |
+| `DRIFT` | The recipe is wrong, such as a stale count or a renamed label. Quote the recipe and say what the product does. |
+| `BLOCKED` | The journey could not run, or ran only in part. Say why. |
+
+Every verdict but `PASS` needs a note with the values you read and the evidence files. Before you report, run
+`$V journeys <feature> [journey-id...]`. It lists each journey with its verdict, or `MISSING`, and ends with
+`RESULT: PASS`, `ISSUES` or `INCOMPLETE`. `INCOMPLETE` means a journey has no verdict, and the command exits `1`.
+
 ## Hand the driving to another agent
 
 Following a journey in `features/` does not need your strongest model. When your harness can start a
 subagent, give it the journey and keep your own turns for choosing what to verify and for judging the result.
 
 1. Start the instance yourself with `$V up`, `$V user` and `$V doctor`.
-2. Run `$V brief <feature> [journey-id...]`, for example `$V brief link-sharing LS1 LS2 LS3`, and give
-   the subagent that text unchanged, with no hint about the change under review.
-3. Treat the report as a claim. Before you repeat a `PASS` or a `FAIL`, open the evidence files it names.
-   You decide whether a difference from the recipe is a defect.
+2. Run `$V journeys <feature>` to see the journeys, then `$V brief <feature> [journey-id...]`, for example
+   `$V brief link-sharing LS1 LS2 LS3`. The brief lists the journey IDs that each need a verdict. Give the subagent
+   that text unchanged, with no hint about the change under review.
+3. Run `$V journeys <feature> [journey-id...]` with the same IDs. Until it no longer says `INCOMPLETE`, some
+   journey is unverified, whatever the report says. Treat the verdicts and the report as claims. Before you repeat
+   a `PASS`, `FAIL` or `DRIFT`, open the evidence files it names. You decide whether a difference from the recipe
+   is a defect.
 4. Stop the instance yourself with `$V down`.
 
 Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
@@ -213,8 +232,9 @@ $V runner --jobs 3 --keep issues auth create-document
 - It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
   builds the CLI and the MCP gateway once, then takes tasks one at a time. Every task gets a new Claude Code session, which starts its
   own instance from the brief that `$V brief --own <run-id> <feature> [journey-id...]` prints.
-- A feature or journey marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract)
-  does not run here. The runner lists it in `summary.md` for a host run.
+- A task expects a verdict for each journey it selects, from the journey headings of its feature file. A journey
+  marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract) does not run here,
+  and neither does a marked feature. The runner lists them in `summary.md` for a host run.
 - MCP features run here in the `dist` start mode of [MCP mode](references/mcp-mode.md#start), which starts the
   gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
   `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
@@ -222,15 +242,20 @@ $V runner --jobs 3 --keep issues auth create-document
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
   `summary.md`, and for each task `report.md` (its evidence paths open on the host), `transcript.jsonl`,
   `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
+- At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
+  holds each expected journey's verdict and note, `MISSING` when it has none, and a result: `INCOMPLETE` when any
+  journey is `MISSING`, else `PASS` when every journey is `PASS`, else `ISSUES`. `summary.md` counts the
+  verdicts per task and lists every journey that is not `PASS` with its note. The report is prose for you, and
+  the runner reads no verdict from it.
 - Evidence never stays in a container. `task.sh` sets `VERIFY_UVW_EVIDENCE_ROOT` to the task's `runs/`, and
   `up` then makes each run's `evidence/` and `logs/` links into it, so files reach the host as they are written.
   That covers runs a recipe starts under its own `VERIFY_UVW_ROOT`, and a batch stopped by Ctrl-C or a failed
   container keeps everything written so far. `data/`, `home/` and `user.pw` stay in the container.
 - Treat a report as a claim, as in the previous section. Open the evidence before you repeat a `PASS` or a
   `FAIL`.
-- Exit codes: `0` when every task reported, `3` when Docker is missing or a task is host only, `4` when a
-  task has no report, timed out, failed in the runner or leaked a secret (it wins over `3`), and `5` when the key
-  is missing or refused. A task whose session ended on an `API Error: …` from the endpoint failed in the runner
+- Exit codes: `0` when every task finished with a verdict for each expected journey, findings included, `3` when
+  Docker is missing or a task is host only, `4` when a task is `INCOMPLETE`, timed out, failed in the runner or
+  leaked a secret (it wins over `3`), and `5` when the key is missing or refused. A task whose session ended on an `API Error: …` from the endpoint failed in the runner
   (`infra-error`), and `summary.md` lists that error. A task leaks a secret when its output holds the key. Its
   files stay for you to delete. `summary.md` also lists every `secret-check` file with a `FAIL` line, without
   changing the status. The transcript holds recipe code with the same shapes, so read those lines before you
