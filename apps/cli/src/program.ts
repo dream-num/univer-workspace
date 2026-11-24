@@ -31,8 +31,10 @@ import {
   WorkspaceUnitLayoutLintFeature,
   serializeWorkspaceRuntimeTarget,
   type SheetLensResult,
+  type WorkspaceRenderUnitLoadInput,
+  type WorkspaceRuntimeScope,
 } from "@univerjs/univer-workspace-client-core";
-import { resolveUnitReference } from "@univerjs/univer-workspace-client-core/product";
+import { isForkAddress, resolveUnitReference } from "@univerjs/univer-workspace-client-core/product";
 import type { Command } from "commander";
 import { resolveUniverLicense, resolveUniverLicenseKey } from "./config.js";
 import { createAssetCommand } from "./features/asset/command.js";
@@ -108,9 +110,20 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   const runtimeOperations = createWorkspaceDaemonRuntimeOperations(daemon);
   const daemonControl = createDaemonControl(daemonOptions);
   const product = createProductServices(options);
-  const { auth, authenticatedHttp, spaces } = product;
+  const { auth, authenticatedHttp, forks, spaces } = product;
   const resolveUnit = async (unit: string) =>
     await resolveUnitReference(spaces, unit, await product.origin());
+  const readScope = async (unitId: string, scope: WorkspaceRuntimeScope): Promise<WorkspaceRuntimeScope> =>
+    scope.kind === "worktree" && isForkAddress(scope.worktreeId)
+      ? await forks.readScope(scope.worktreeId, unitId)
+      : scope;
+  const resolveReadTarget = async (unitId: string, requested: WorkspaceRuntimeScope) => {
+    const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
+    const scope = await readScope(unitId, requested);
+    return scope.kind === "trunk"
+      ? await source.resolveTrunkRuntimeTarget({ unitId })
+      : await source.resolveRuntimeTarget({ unitId, worktreeId: scope.worktreeId });
+  };
   const openResourceLibrary = createNodeResourceLibraryFactory({
     cacheRoot: options.resourceCacheRoot,
     manifestPath: options.resourceManifestPath,
@@ -121,7 +134,11 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       resolveEditableRuntimeTarget: async (input) =>
         await new WorkspaceContentSource(
           await auth.authenticatedHttp("client"),
-        ).resolveEditableRuntimeTarget(input),
+        ).resolveEditableRuntimeTarget(
+          isForkAddress(input.worktreeId)
+            ? { unitId: input.unitId, worktreeId: (await forks.writeScope(input.worktreeId, input.unitId)).worktreeId }
+            : input,
+        ),
     },
     runtimeOperations,
   );
@@ -154,7 +171,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(
         input,
       ),
-    createUnit: async (input) => await units.create(input),
+    createUnit: async (input) =>
+      isForkAddress(input.worktreeId) ? await forks.createUnit(input.worktreeId, input) : await units.create(input),
     resolveRuntimeTarget: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(
         input,
@@ -164,11 +182,17 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     runtime: runtimeOperations,
     openSource: async () => new WorkspaceContentSource(await auth.authenticatedHttp("client")),
   });
+  const renderUnits = {
+    loadUnit: async (input: WorkspaceRenderUnitLoadInput) =>
+      await renderUnitLoader.loadUnit(
+        input.unitId === undefined ? input : { ...input, scope: await readScope(input.unitId, input.scope) },
+      ),
+  };
   const screenshot = new WorkspaceScreenshotFeature({
     renderPageRoot: options.renderPageRoot,
     license,
     env: options.env,
-    loader: renderUnitLoader,
+    loader: renderUnits,
     ...(options.createRenderRuntime === undefined
       ? {}
       : { createRuntime: options.createRenderRuntime }),
@@ -177,7 +201,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     renderPageRoot: options.renderPageRoot,
     license,
     env: options.env,
-    loader: renderUnitLoader,
+    loader: renderUnits,
     ...(options.createPrintPdfRuntime === undefined
       ? {}
       : { createRuntime: options.createPrintPdfRuntime }),
@@ -186,7 +210,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     renderPageRoot: options.renderPageRoot,
     license,
     env: options.env,
-    loader: renderUnitLoader,
+    loader: renderUnits,
     ...(options.createLayoutRuntime === undefined
       ? {}
       : { createRuntime: options.createLayoutRuntime }),
@@ -206,8 +230,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createResourcesCommand({ openLibrary: openResourceLibrary }),
     createSkillsCommand(options.skillDataRoot),
     ...createProductCommands(product),
-    createSpaceCommand(spaces, product.repoContext),
-    createUnitCommand(units, product.repoContext, product.origin),
+    createSpaceCommand(spaces, product.repoContext, forks),
+    createUnitCommand(units, forks, product.repoContext, product.origin),
     ...createWorkspaceUnitExchangeCommands(exchange),
     createBlobCommand(blobs),
     createHtmlViewCommand(
@@ -236,11 +260,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     ...createSheetLensCommands({
       resolveUnit,
       run: async ({ unitId, scope, request }) => {
-        const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
-        const target =
-          scope.kind === "trunk"
-            ? await source.resolveTrunkRuntimeTarget({ unitId })
-            : await source.resolveRuntimeTarget({ unitId, worktreeId: scope.worktreeId });
+        const target = await resolveReadTarget(unitId, scope);
         return (await daemon.request("sheet-lens.run", {
           target: serializeWorkspaceRuntimeTarget(target),
           request,
@@ -253,12 +273,10 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createWorkspaceCompileSvgCommand(compileSvg),
     createWorktreeContentInspectionCommand({
       acquireRuntime: async ({ unitId, worktreeID }) => {
-        const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
-        const unit = await resolveUnit(unitId);
-        const target =
-          worktreeID === undefined
-            ? await source.resolveTrunkRuntimeTarget({ unitId: unit })
-            : await source.resolveRuntimeTarget({ unitId: unit, worktreeId: worktreeID });
+        const target = await resolveReadTarget(
+          await resolveUnit(unitId),
+          worktreeID === undefined ? { kind: "trunk" } : { kind: "worktree", worktreeId: worktreeID },
+        );
         return {
           unitId: target.unitId,
           unitType: target.unitType,
@@ -289,6 +307,7 @@ const HELP_GROUPS = ["Core commands:", "Content commands:", "Setup commands:"];
 const CORE_COMMANDS = new Set([
   "auth",
   "repo",
+  "fork",
   "issue",
   "label",
   "pr",

@@ -192,7 +192,7 @@ uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
 
 | Group   | Commands                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
+| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
 | Content | `space browse/find/node`, `unit`, `execute`, `outline`, `read`, `find` (Sheet only), `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-markdown`, `export-markdown`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                      |
 | Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 
@@ -221,6 +221,40 @@ a pull request without attribution omits the field.
 While a pull request is draft or ready, `pr view` labels each file that came from trunk `current`, `behind by N`
 or `stale`, from the server's `freshness` (also in `--json units`). `stale` means trunk is more than 100 revisions
 ahead of the file or it joined more than 7 days ago. The label is advice and never blocks `pr merge`.
+
+### Forks
+
+A fork is your own view of a Team Space, named `<your-username>/<name>`. Only you see it. It reads as the
+upstream's trunk with your changes on top, and the changes become one pull request in the upstream.
+
+```bash
+uvw fork create <owner>/<slug> --name <name>
+uvw space browse <you>/<name> --recursive --json
+uvw execute --worktree <you>/<name> --unit <unit-id> --script edit.js
+uvw fork view <you>/<name>
+```
+
+Pass the fork's name where these commands take `--worktree <id>`: `execute`, `unit list/add/create`,
+`import`, `inspect`, `outline`, `read`, `find`, `screenshot`, `lint` and `print-pdf`. `space browse <fork>` and
+`space find --space <fork>` list the upstream's files without the ones the fork removed and with the ones it
+created. `unit create --space <fork>` creates the file in the upstream. `import` takes the upstream's Space ID
+in `--space`. `unit create --from` and the other commands that take `--worktree` need the pull request's
+Worktree ID from `uvw fork view <fork> --json worktree`.
+
+A read through a fork shows the fork's version of a file it changed and the upstream's current trunk version of
+every other file. The fork's first write opens its pull request in the upstream. A write adds an upstream file to
+that pull request first, so an `execute` through a fork adds the file even when the code only reads. Writes need
+the pull request to be draft: a ready one returns `FORK_WORKTREE_NOT_DRAFT` until `pr ready <n> --undo`.
+`fork view` prints the pull request's number, which the `pr` commands take with `-R <upstream>`. After the pull
+request is merged or discarded, the fork is `clean` again and its next write opens a new pull request.
+`fork delete` deletes only the fork. Its open pull request stays in the upstream.
+
+A fork is not a repository. Commands that take a repository, such as `repo edit`, `space node create`, `issue`
+and `pr create`, refuse a fork's name and say which repository it forks.
+
+Known limit: a file the fork has not changed reads its cross-file references (formulas, embeds) from trunk.
+When it references a file the fork changed, the read shows the trunk version of that file. Adding the file to
+the fork with `unit add --worktree <fork>` makes its reads use the fork's changes.
 
 Configuration and daemon lifecycle commands start without loading Office or rendering capabilities. The daemon
 loads content capabilities on its first content request. Concurrent first requests share one runtime

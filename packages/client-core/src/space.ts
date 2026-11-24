@@ -11,20 +11,28 @@ import {
   parseNodeResponse,
   parseSpace,
   parseTrashBatch,
+  type WorkspaceAccessRole,
   type WorkspaceLinkSharing,
   type WorkspaceNode,
   type WorkspaceNodeSummary,
+  type WorkspaceNodeDirectory,
   type WorkspaceNodeResource,
   type WorkspaceSpace,
   type WorkspaceTrashBatch,
   type WorkspaceUnitType,
 } from "./space-model.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
+import type { WorkspaceUnit, WorkspaceWorktree } from "./worktree-model.js";
 import { repoUrl } from "./urls.js";
 import { usernameKey } from "./username.js";
 
 export type WorkspaceResourceKindFilter = WorkspaceNodeResource["kind"] | "none";
 export interface BrowseSpaceInput {
+  /**
+   * Lists the Space as this Worktree sees it: without the files it removes, and with its new files. A new
+   * file has no Trunk Node yet, so it carries `accessRole` and no capabilities.
+   */
+  readonly overlay?: { readonly accessRole: WorkspaceAccessRole; readonly worktree: WorkspaceWorktree };
   readonly parentNodeId?: string;
   readonly recursive?: boolean;
   readonly resourceKind?: WorkspaceResourceKindFilter;
@@ -239,7 +247,7 @@ export class WorkspaceSpaceFeature {
     const http = await this.authenticatedHttp();
     const visited = new Set<string>(input.parentNodeId === undefined ? [] : [input.parentNodeId]);
     const visit = async (parentNodeId: string | undefined): Promise<readonly WorkspaceNode[]> => {
-      const nodes = await listDirectory(http, input.spaceId, parentNodeId);
+      const nodes = overlaid(await listDirectory(http, input.spaceId, parentNodeId), input, parentNodeId);
       const discovered: WorkspaceNode[] = [];
       for (const node of nodes) {
         if (visited.has(node.nodeId)) {
@@ -472,7 +480,7 @@ async function listDirectory(
   http: WorkspaceHttp,
   spaceId: string,
   parentNodeId: string | undefined,
-): Promise<readonly WorkspaceNode[]> {
+): Promise<Pick<WorkspaceNodeDirectory, "breadcrumbs" | "nodes">> {
   const base =
     parentNodeId === undefined
       ? `/api/spaces/${encodeURIComponent(spaceId)}/nodes`
@@ -481,6 +489,7 @@ async function listDirectory(
   const cursors = new Set<string>();
   let cursor: string | null = null;
   let metadata: string | undefined;
+  let breadcrumbs: WorkspaceNodeDirectory["breadcrumbs"] = [];
   do {
     const page = parseNodePage(
       await http.json(cursor === null ? base : `${base}?cursor=${encodeURIComponent(cursor)}`),
@@ -497,13 +506,58 @@ async function listDirectory(
       throw invalidResponse("Workspace Node pagination metadata changed between pages");
     }
     metadata = currentMetadata;
+    breadcrumbs = page.breadcrumbs;
     nodes.push(...page.nodes);
     cursor = page.nextCursor;
     if (cursor !== null && cursors.has(cursor))
       throw invalidResponse("Workspace repeated a Node cursor");
     if (cursor !== null) cursors.add(cursor);
   } while (cursor !== null);
-  return nodes;
+  return { breadcrumbs, nodes };
+}
+
+const LOCAL_NODE_CAPABILITIES = {
+  browseChildren: false, createChildren: false, move: false, rename: false, share: false, trash: false,
+};
+const LOCAL_RESOURCE_CAPABILITIES = { downloadContent: false, editContent: false, openContent: false };
+
+function overlaid(
+  directory: Pick<WorkspaceNodeDirectory, "breadcrumbs" | "nodes">,
+  { overlay, spaceId }: BrowseSpaceInput,
+  parentNodeId: string | undefined,
+): readonly WorkspaceNode[] {
+  if (overlay === undefined) return directory.nodes;
+  const { accessRole, worktree } = overlay;
+  const removed = new Set(worktree.units.filter((unit) => unit.change === "deleted").map((unit) => unit.nodeId));
+  const path = directory.breadcrumbs.map((item) => item.name);
+  const added = worktree.units.filter(
+    (unit): unit is WorkspaceUnit & { readonly target: NonNullable<WorkspaceUnit["target"]> } =>
+      unit.source === "worktree" &&
+      unit.change !== "deleted" &&
+      unit.target?.spaceId === spaceId &&
+      unit.target.parentNodeId === (parentNodeId ?? null),
+  );
+  return [
+    ...directory.nodes.filter((node) => !removed.has(node.nodeId)),
+    ...added.map((unit) => ({
+      accessRole,
+      capabilities: LOCAL_NODE_CAPABILITIES,
+      hasChildren: false,
+      name: unit.name,
+      nodeId: unit.nodeId,
+      parentNodeId: unit.target.parentNodeId,
+      path: `/${[...path, unit.name].join("/")}`,
+      resource: {
+        capabilities: LOCAL_RESOURCE_CAPABILITIES,
+        kind: "univer" as const,
+        resourceId: unit.resourceId,
+        unitId: unit.unitId,
+        unitType: unit.type,
+      },
+      spaceId,
+      updatedAt: worktree.updatedAt ?? "",
+    })),
+  ];
 }
 
 function matches(

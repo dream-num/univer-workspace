@@ -25,7 +25,7 @@ export function createWorkspaceUnitLayoutLintCommand(
     },
   });
   command.addOption(
-    new Option("--worktree <worktree-id>", "check the Unit from a Worktree").conflicts("trunk"),
+    new Option("--worktree <worktree-id>", "check the Unit from a Worktree, or through a fork's owner/name").conflicts("trunk"),
   );
   command.addOption(new Option("--trunk", "check the Unit from trunk").conflicts("worktree"));
   return command;

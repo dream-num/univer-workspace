@@ -23,6 +23,7 @@ import { createClaimCommand, createShareCommand } from "../src/features/share/co
 import { RepoContext } from "../src/repo-context.js";
 
 const ORIGIN = "https://workspace.test";
+const NO_FORKS = { get: vi.fn(async () => { throw workspaceError("NOT_FOUND", "Not found", { status: 404 }); }) };
 const teamSpace = {
   accessRole: "owner" as const,
   fullName: "alice/docs",
@@ -76,7 +77,7 @@ function context(env: NodeJS.ProcessEnv = {}) {
     id: slug === "personal" ? "personal-1" : "space-1",
     name: `${owner}/${slug}`,
   }));
-  return { lookup, repoContext: new RepoContext({ lookup, get: async (id) => ({ ...teamSpace, id }), list: async () => [teamSpace] }, async () => ORIGIN, env) };
+  return { lookup, repoContext: new RepoContext({ lookup, get: async (id) => ({ ...teamSpace, id }), list: async () => [teamSpace] }, NO_FORKS, async () => ORIGIN, env) };
 }
 
 describe("uvw repository and Issue commands", () => {
@@ -104,7 +105,7 @@ describe("uvw repository and Issue commands", () => {
       get: vi.fn(async () => { throw workspaceError("NOT_FOUND", "Not found", { status: 404 }); }),
       list: vi.fn(async () => [teamSpace]),
     };
-    const repoContext = new RepoContext(spaces, async () => ORIGIN, {});
+    const repoContext = new RepoContext(spaces, NO_FORKS, async () => ORIGIN, {});
     const get = vi.fn(async () => issue());
     const command = createIssueCommand({
       context: repoContext, feature: { get } as unknown as WorkspaceIssueFeature, origin: async () => ORIGIN,
@@ -503,7 +504,7 @@ describe("Personal pull request Browser URLs", () => {
       }),
     };
     const deps = {
-      context: new RepoContext(spaces, async () => ORIGIN, {}),
+      context: new RepoContext(spaces, NO_FORKS, async () => ORIGIN, {}),
       origin: async () => ORIGIN,
       spaces: spaces as unknown as WorkspaceSpaceFeature,
       userId: async () => "u1",
@@ -1299,7 +1300,7 @@ describe("uvw startup", () => {
     const { readFile } = await import("node:fs/promises");
     const files = [
       "command.ts", "errors.ts", "repo-context.ts", "product-commands.ts", "transport/http.ts",
-      "features/auth/command.ts", "features/auth/session.ts", "features/browse/command.ts",
+      "features/auth/command.ts", "features/auth/session.ts", "features/browse/command.ts", "features/fork/command.ts",
       "features/issue/command.ts", "features/label/command.ts", "features/pr/command.ts",
       "features/repo/command.ts", "features/search/command.ts", "features/share/command.ts",
     ];

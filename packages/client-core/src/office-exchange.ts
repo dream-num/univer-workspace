@@ -15,6 +15,7 @@ import {
 } from "@univerjs-pro/exchange-node";
 import { UniverInstanceType } from "@univerjs/core";
 import { workspaceError } from "./errors.js";
+import { isForkAddress } from "./fork.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import type { WorkspaceUnitType } from "./space-model.js";
@@ -242,7 +243,7 @@ export class WorkspaceUnitExchangeFeature {
       resourceId: created.resourceId,
       type,
       unitId: created.unitId,
-      worktreeId: input.worktreeId,
+      worktreeId: created.worktreeId,
     };
   }
 
@@ -428,7 +429,8 @@ function requireCreatedUnit(
   },
 ): void {
   if (
-    unit.worktreeId !== input.worktreeId ||
+    // Through a fork the Unit lands in the fork's open Worktree, whose ID the request did not name.
+    (unit.worktreeId !== input.worktreeId && !isForkAddress(input.worktreeId)) ||
     unit.source !== "worktree" ||
     unit.type !== input.type ||
     unit.name !== input.name ||

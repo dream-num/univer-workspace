@@ -1,42 +1,53 @@
 import { Command } from "commander";
 import type { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-core";
-import { parseNodeReference } from "@univerjs/univer-workspace-client-core/product";
+import {
+  isForkAddress,
+  parseNodeReference,
+  workspaceError,
+  type WorkspaceForkFeature,
+} from "@univerjs/univer-workspace-client-core/product";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
 import type { RepoContext } from "../../repo-context.js";
 
+const WORKTREE = ["--worktree <id>", "Worktree ID, or a fork's owner/name"] as const;
+
 export function createUnitCommand(
   feature: WorkspaceUnitFeature,
+  forks: Pick<WorkspaceForkFeature, "addUnit" | "createUnit" | "units">,
   context: RepoContext,
   origin: () => Promise<string>,
 ): Command {
   const root = new Command("unit").description("Manage Worktree Units");
   const list = new Command("list")
-    .requiredOption("--worktree <id>")
+    .requiredOption(...WORKTREE)
     .option("--json")
     .action(async (options: JsonOption & { readonly worktree: string }) => {
       const value = {
-        units: await executeCommand(list, async () => await feature.list(options.worktree)),
+        units: await executeCommand(list, async () =>
+          isForkAddress(options.worktree) ? await forks.units(options.worktree) : await feature.list(options.worktree),
+        ),
       };
       present(list, options, value);
     });
   const add = new Command("add")
-    .requiredOption("--worktree <id>")
+    .requiredOption(...WORKTREE)
     .requiredOption("--resource <id>")
     .option("--json")
     .action(
       async (options: JsonOption & { readonly resource: string; readonly worktree: string }) => {
         const value = {
-          unit: await executeCommand(
-            add,
-            async () => await feature.add(options.worktree, options.resource),
+          unit: await executeCommand(add, async () =>
+            isForkAddress(options.worktree)
+              ? await forks.addUnit(options.worktree, options.resource)
+              : await feature.add(options.worktree, options.resource),
           ),
         };
         present(add, options, value);
       },
     );
   const create = new Command("create")
-    .requiredOption("--worktree <id>")
-    .requiredOption("--space <repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
+    .requiredOption(...WORKTREE)
+    .requiredOption("--space <repo>", "owner/slug, unique bare slug from repo list, Space ID or URL; a fork names its upstream")
     .requiredOption("--type <type>")
     .requiredOption("--name <name>")
     .option("--parent <node>")
@@ -59,23 +70,34 @@ export function createUnitCommand(
         },
       ) => {
         const value = {
-          unit: await executeCommand(
-            create,
-            async () =>
-              await feature.create({
-                name: options.name,
-                spaceId: (await context.repo(options.space)).spaceId,
-                type: oneOf(options.type, ["sheet", "doc", "slide", "base", "board"], "--type"),
+          unit: await executeCommand(create, async () => {
+            const resolved = await context.repoOrFork(options.space);
+            const spaceId = "fork" in resolved ? resolved.fork.upstream?.id : resolved.spaceId;
+            if (spaceId === undefined) {
+              throw workspaceError("workspace-not-found", `You can no longer read the upstream of fork ${options.space}.`);
+            }
+            const input = {
+              name: options.name,
+              spaceId,
+              type: oneOf(options.type, ["sheet", "doc", "slide", "base", "board"], "--type"),
+              ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
+              ...(options.idempotencyKey === undefined ? {} : { idempotencyKey: options.idempotencyKey }),
+            };
+            if (!isForkAddress(options.worktree)) {
+              return await feature.create({
+                ...input,
                 worktreeId: options.worktree,
-                ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
-                ...(options.from === undefined
-                  ? {}
-                  : { fromNodeId: parseNodeReference(options.from, await origin()) }),
-                ...(options.idempotencyKey === undefined
-                  ? {}
-                  : { idempotencyKey: options.idempotencyKey }),
-              }),
-          ),
+                ...(options.from === undefined ? {} : { fromNodeId: parseNodeReference(options.from, await origin()) }),
+              });
+            }
+            if (options.from !== undefined) {
+              throw workspaceError(
+                "workspace-argument-invalid",
+                "--from needs a Worktree ID: write once through the fork, then pass the `worktree.id` from `uvw fork view --json worktree`.",
+              );
+            }
+            return await forks.createUnit(options.worktree, input);
+          }),
         };
         present(create, options, value);
       },

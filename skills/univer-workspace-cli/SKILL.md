@@ -94,6 +94,9 @@ repository checkout, guessed installation paths, or a different CLI version's AP
 - A pull request is a Worktree (`uvw pr ...`; `uvw worktree ...` is the same). For a new editable
   Unit task, create a new one with `uvw pr create`. Reuse a known one only to continue that same task.
   Content commands take `--worktree <id>`, the `id` from `uvw pr view <n> --json id`. Read-only inspection does not require creating a task draft.
+- A fork (`uvw fork create <owner>/<slug> --name <name>`) is your own view of a Team repository, named
+  `<you>/<name>`. Its changes become one pull request in the upstream. The installed core Skill lists the
+  content commands that take it as `--worktree`.
 - Follow the loaded Skills to author and verify. Read back stored content; inspect rendered
   output when appearance matters. A successful command alone is not verification.
 - When the user points at an Issue ("work on #12"), read it with `uvw issue view 12 -R <repo> -c` first; the installed

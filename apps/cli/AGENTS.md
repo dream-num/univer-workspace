@@ -19,7 +19,7 @@ concerns:
 
 ## Commands and startup
 
-- Product commands (`auth`, `repo`, `issue`, `label`, `pr`/`worktree`, `search`, `browse`,
+- Product commands (`auth`, `repo`, `fork`, `issue`, `label`, `pr`/`worktree`, `search`, `browse`,
   `share`) only talk HTTP. `src/product-commands.ts` assembles them from the light
   `@univerjs/univer-workspace-client-core/product` entry, and `src/lifecycle-commands.ts` builds
   `config` and `daemon` from the shared SDK lifecycle command factory. Neither file imports the

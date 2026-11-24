@@ -143,7 +143,7 @@ function baseCommand(name: string, verb: string): Command {
     .description(`${verb} a Sheet Unit (Sheet only; use inspect for Doc, Slide, Base and Board)`)
     .requiredOption("--unit <id>", "Sheet Unit to read: its Unit ID or its file link")
     .addOption(new Option("--trunk", "read from trunk").conflicts("worktree"))
-    .addOption(new Option("--worktree <id>", "read from a Worktree").conflicts("trunk"))
+    .addOption(new Option("--worktree <id>", "read from a Worktree, or through a fork's owner/name").conflicts("trunk"))
     .option("--json", "write structured JSON");
 }
 

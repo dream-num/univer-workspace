@@ -178,6 +178,7 @@ describe("Workspace CLI", () => {
       for (const command of [
         "space",
         "repo",
+        "fork",
         "issue",
         "pr",
         "worktree",
