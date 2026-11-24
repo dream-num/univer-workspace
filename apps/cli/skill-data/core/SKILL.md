@@ -87,7 +87,7 @@ Understand these identities before running a mutation:
 - **User-scoped Worktree**: a private Worktree owned by the authenticated user, created with `-R <username>/personal`. It can contain Units
   the user may edit from Personal or Team Spaces. It is not a Personal Space.
 - **Space-scoped Worktree**: a Worktree belonging to one Team Space, created with `-R <owner>/<slug>`. It can contain only Units from
-  that Space and may be private or visible to that Space.
+  that Space and is visible to that Space or private until merged.
 - **Worktree-local Unit**: a new Unit created inside a Worktree. The server allocates its
   `unitId`, `resourceId`, and `nodeId`; merge activates the target Node/Resource.
 - **Fork**: your own view of a Team Space, named `<your-username>/<name>` and visible only to you. It

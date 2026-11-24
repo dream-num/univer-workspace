@@ -123,10 +123,12 @@ export function createWorktreesModule(options: {
 
   async function context(userId: string, worktreeId: string): Promise<WorktreeContext> {
     const row = await options.repository.get(worktreeId, userId);
-    if (!row || !isDiscoverable(row)) throw notFound();
+    // Ask the Collaboration Service only about a Worktree the actor would see if it were merged.
+    if (!row || !isDiscoverable(row, true)) throw notFound();
     const data = await backendCall(() =>
       options.backend.getWorktree(worktreeId, userId)
     );
+    if (!isDiscoverable(row, data.status === "merged")) throw notFound();
     const unitRows = await options.repository.units(worktreeId);
     const units = await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId));
     const access = await worktreeCapabilities(
@@ -225,9 +227,9 @@ export function createWorktreesModule(options: {
         ...(scope.kind === "user" ? { creatorUserId: scope.creatorUserId } : {}),
         search: "", order: "createdAtDesc", cursor: null, limit: MAX_ACTIVITY_ROWS + 1, touchedSince: since,
       });
-      const visible = rows.slice(0, MAX_ACTIVITY_ROWS).filter((row) => isDiscoverable(row));
+      const candidates = rows.slice(0, MAX_ACTIVITY_ROWS).filter((row) => isDiscoverable(row, true));
       let complete = rows.length <= MAX_ACTIVITY_ROWS;
-      const processed = visible.filter((row) => row.processed_at !== null && row.processed_at >= since)
+      const processed = candidates.filter((row) => row.processed_at !== null && row.processed_at >= since)
         .sort((a, b) => b.processed_at! - a.processed_at! || a.id.localeCompare(b.id));
       const merged = new Set<string>();
       // ponytail: MAX_MERGE_LOOKUPS bounds Collaboration calls per request; replace with product-side merged_at written by merge.
@@ -241,7 +243,7 @@ export function createWorktreesModule(options: {
       }
       const mergers = await options.repository.mergers([...merged]);
       return {
-        items: visible.map((row) => ({
+        items: candidates.filter((row) => isDiscoverable(row, merged.has(row.id))).map((row) => ({
           id: row.id, number: row.number, name: row.name,
           creator: {
             id: row.creator_user_id, username: row.creator_username,
@@ -297,8 +299,8 @@ export function createWorktreesModule(options: {
       let scanFrom = cursor;
       let hasNext = false;
       let lastScanned: WorktreeRow | undefined;
-      // State lives in the Collaboration Service, not the product database, so a
-      // state filter scans candidate batches until the page is full or exhausted.
+      // State lives in the Collaboration Service, not the product database, so a state filter,
+      // and a private Worktree only its merge shares, scan candidate batches until the page is full or exhausted.
       for (;;) {
         const rows = await options.repository.listCandidates({
           userId,
@@ -313,10 +315,10 @@ export function createWorktreesModule(options: {
         const batch = rows.slice(0, limit);
         const loaded = [];
         for (const row of batch) {
-          if (!isDiscoverable(row)) continue;
           const data = await backendCall(() =>
             options.backend.getWorktree(row.id, userId)
           );
+          if (!isDiscoverable(row, data.status === "merged")) continue;
           if (states.length && !states.includes(data.status)) continue;
           loaded.push({ row, data });
         }
@@ -340,7 +342,7 @@ export function createWorktreesModule(options: {
         }
         lastScanned = batch.at(-1) ?? lastScanned;
         hasNext = rows.length > limit;
-        if (!states.length || !hasNext || visible.length >= limit) break;
+        if (!hasNext || visible.length >= limit) break;
         scanFrom = position(batch[batch.length - 1]!);
       }
       const page = visible.slice(0, limit);
@@ -1023,7 +1025,7 @@ async function worktreeCapabilities(
   const facts: WorktreeFacts = {
     state,
     team: row.kind === "team",
-    shared: row.kind === "team" && row.visibility === "space",
+    shared: visibilityOf(row, state === "merged") === "space",
     author: row.creator_user_id === userId,
     // A claimer owns the agent's Space, so decides the agent's pull requests; only the author edits them.
     authorOrClaimer: Boolean(row.actor_owns_creator_space),
@@ -1189,12 +1191,17 @@ async function validateTarget(
   if (!parent.capabilities.createChildren) throw forbidden();
 }
 
-function isDiscoverable(row: WorktreeRow): boolean {
+/** A finished merge puts a Team Worktree in its Space's history, so the Space sees it whatever its author chose while it was open. */
+function visibilityOf(row: WorktreeRow, merged: boolean): WorktreeVisibility {
+  return row.kind === "team" && merged && row.processed_at !== null ? "space" : row.visibility;
+}
+
+function isDiscoverable(row: WorktreeRow, merged: boolean): boolean {
   if (row.actor_owns_creator_space) return true;
   if (row.kind === "user") return false;
   const teamRole = row.actor_owns_team_space ? "owner" : row.actor_member_role;
   if (teamRole === null) return false;
-  if (row.visibility === "space") return true;
+  if (visibilityOf(row, merged) === "space") return true;
   return teamRole === "owner" || teamRole === "admin";
 }
 
@@ -1371,7 +1378,7 @@ function summaryView(
             name: row.team_space_name,
           }
         : null,
-    visibility: row.visibility,
+    visibility: visibilityOf(row, state === "merged"),
     state,
     creator: {
       id: row.creator_user_id,

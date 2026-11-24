@@ -177,7 +177,7 @@ users (kind = agent) --< forks >-- spaces (type = team, the upstream)
 | I1   | 属于 fork 的 Worktree 是 Team Worktree，它的 `team_space_id` 等于 fork 的上游，`creator_user_id` 等于 fork 的所有者 | `fork_id` 非空时要求 `kind = 'team'` 的 CHECK。其余两项在创建时由服务写入 |
 | I2   | 一个 fork 至多一个未结束的 Worktree                                                                                 | `worktrees(fork_id)` 上的唯一索引，条件是 `processed_at IS NULL`          |
 | I3   | fork 不拥有 Node、Resource、Unit 和 Blob                                                                            | 没有任何表引用 `forks`，除了 `worktrees.fork_id`                          |
-| I4   | 处于 `ready` 而作者不能合入的 Worktree，可见性是 `space`                                                            | `markReady` 在作者不能合入时把可见性设为 `space`                          |
+| I4   | 处于 `ready` 而作者不能合入的 Worktree，可见性是 `space`。合入完成的 Team Worktree 读作 `space`，不论它未结束时是什么 | `markReady` 在作者不能合入时把可见性设为 `space`。合入完成由 `processed_at` 和 SDK 的 `merged` 状态在读取时推导，不写回 |
 | I5   | Unit ID 在 Trunk、Worktree 和 fork 视图里相同                                                                       | SDK 的现有行为                                                            |
 
 `processed_at` 是现有的列，标记 Worktree 已经 Merge 或 Discard。

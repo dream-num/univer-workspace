@@ -645,6 +645,92 @@ describe("what each member can do with a Team pull request", () => {
   }, 120_000);
 });
 
+describe("a private pull request its author merged alone", () => {
+  it("shows itself, its files and its merge to every member of the Team Space, for an agent through a fork and for a person, and keeps unmerged ones private", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const [claimer, author, reader] = await Promise.all(["claimer", "author", "reader"].map((name) => person(origin, name)));
+    const agent = await guestAgent(origin);
+    await claim(origin, agent, claimer);
+    for (const editor of [agent, author]) await application.permissions.upsertTeamMember(s.owner.id, s.id, editor.id, { role: "editor" });
+    const seen = async (actor: Actor, pull: string) => {
+      const response = await send(origin, "GET", `/api/worktrees/${pull}`, undefined, actor.cookie);
+      if (response.status !== 200) return response.status;
+      const { worktree } = (await response.json()) as { worktree: { visibility: string; units: { name: string }[] } };
+      return `${worktree.visibility} [${worktree.units.map((unit) => unit.name).join(", ")}]`;
+    };
+    const throughFork = async (name: string) => {
+      const fork = await made<{ id: string }>(await post(origin, agent, "/api/forks", { upstreamSpaceId: s.id, name }));
+      const { worktree, unit } = await made<{ worktree: { id: string }; unit: Unit }>(
+        await post(origin, agent, `/api/forks/${fork.id}/units`, { source: "trunk", resourceId: s.budget.resourceId }),
+      );
+      expect(await writeDraft(origin, agent, worktree.id, unit.unitId, await sheetIn(origin, agent, worktree.id, unit.unitId), name)).toBe("committed");
+      return worktree.id;
+    };
+
+    const agentMerged = await throughFork("fix-budget");
+    await transition(origin, agentMerged, "ready", agent);
+    expect(await seen(agent, agentMerged), "its author can merge it, so ready leaves it private").toBe("private [Budget]");
+    expect(await transition(origin, agentMerged, "merge", agent)).toBe("merged");
+    const agentDrafting = await throughFork("next-fix");
+    const personMerged = await openPull(origin, author, s.id, "private");
+    const forecast = await addFile(origin, author, personMerged, newSheet(s.id));
+    await transition(origin, personMerged, "ready", author);
+    expect(await transition(origin, personMerged, "merge", author)).toBe("merged");
+    const personDiscarded = await openPull(origin, author, s.id, "private");
+    await addFile(origin, author, personDiscarded, { source: "trunk", resourceId: s.budget.resourceId });
+    expect((await post(origin, author, `/api/worktrees/${personDiscarded}/discard`)).status).toBe(200);
+
+    const pulls = { "agent's merged": agentMerged, "person's merged": personMerged, "agent's drafting": agentDrafting, "person's discarded": personDiscarded };
+    const view = async (actor: Actor) => {
+      const reads: Record<string, unknown> = {};
+      for (const [name, id] of Object.entries(pulls)) reads[name] = await seen(actor, id);
+      const { items } = (await (await send(origin, "GET", "/api/worktrees?scope=all", undefined, actor.cookie)).json()) as { items: { id: string }[] };
+      const response = await send(origin, "GET", `/api/spaces/${s.id}/activity?timeZone=UTC`, undefined, actor.cookie);
+      const { events } = response.ok ? ((await response.json()) as { events: { kind: string; pull?: { id: string } }[] }) : { events: [] };
+      return {
+        reads,
+        lists: Object.entries(pulls).filter(([, id]) => items.some((item) => item.id === id)).map(([name]) => name),
+        activity: response.ok
+          ? Object.entries(pulls).flatMap(([name, id]) => events.filter((event) => event.pull?.id === id).map((event) => `${name} ${event.kind}`)).sort()
+          : response.status,
+      };
+    };
+    const merged = { "agent's merged": "space [Budget]", "person's merged": "space [Forecast]" };
+    const mergedActivity = ["agent's merged pull-merged", "agent's merged pull-opened", "person's merged pull-merged", "person's merged pull-opened"];
+    const administers = {
+      reads: { ...merged, "agent's drafting": "private []", "person's discarded": "private []" },
+      lists: Object.keys(pulls),
+      activity: [...mergedActivity, "agent's drafting pull-opened", "person's discarded pull-opened"].sort(),
+    };
+    const member = {
+      reads: { ...merged, "agent's drafting": 404, "person's discarded": 404 },
+      lists: Object.keys(merged),
+      activity: mergedActivity,
+    };
+    const hidden = { "agent's merged": 404, "person's merged": 404, "agent's drafting": 404, "person's discarded": 404 };
+
+    expect({
+      owner: await view(s.owner),
+      admin: await view(s.admin),
+      editor: await view(s.editor),
+      viewer: await view(s.viewer),
+      outsider: await view(s.outsider),
+    }).toEqual({
+      owner: administers,
+      admin: administers,
+      editor: member,
+      viewer: member,
+      outsider: { reads: hidden, lists: [], activity: 404 },
+    });
+    await application.spaces.update(s.owner.id, s.id, { publicRead: true });
+    expect(await view(reader), "a public reader who is not a member").toEqual({ reads: hidden, lists: [], activity: [] });
+
+    expect((await post(origin, s.owner, `/api/nodes/${forecast.nodeId}/trash`)).status).toBe(201);
+    expect(await seen(s.viewer, personMerged), "a member who cannot read one of its files sees none of them").toBe("space []");
+  }, 60_000);
+});
+
 describe("who sees the pages a pull request publishes", () => {
   it("shows them to whoever may review it, only to them, and keeps them as reviewed while it is ready", async () => {
     const { origin, application } = await start();

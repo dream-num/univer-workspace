@@ -198,4 +198,4 @@ R 的 Trunk 由 A3 的认领人 C 读回。A3 的第一次运行之后（`s3-tru
 - 部署环境上的 `workspace_ceiling_denials_total` 和 `mcp.tool_call`。本次读的是隔离实例，计数只来自这三个故事和准备工作。
 - 其他客户端和模型。三个故事只用了 `mcp` 客户端和 `console-deepseek/deepseek-flash#high`。它们一次走通，所以没有按约定用 `#max` 或 `codex` 重跑。
 - 同一个仓库里多个 fork 并行、落后距离大于 0 时的合入、部分冲突，以及 HTML View 和其他 Blob。三个故事都没有涉及。被修改的 Unit 的 `freshness` 都是 `current`，故事 1 新加的 Doc 是 `null`（`s1-pr-before-merge.out`）。
-- 故事 2 合入的 pull request 是 `private`，因为作者自己能合入。H 作为 S 的 owner 读这个 pull request 时 `units` 为空（`s2-pr-after-merge.out`），E 读 S 的 activity 也看不到 #3（`s2-activity.json`）。人事后怎样看到 agent 自己合入了什么，本次只记录了这个现象，没有评估。
+- 故事 2 合入的 pull request 是 `private`，因为作者自己能合入。H 作为 S 的 owner 读这个 pull request 时 `units` 为空（`s2-pr-after-merge.out`），E 读 S 的 activity 也看不到 #3（`s2-activity.json`）。人事后怎样看到 agent 自己合入了什么，本次只记录了这个现象，没有评估。这个现象之后按缺陷修复：合入完成的 Team Worktree 读作 `space`，Space Member 都能看到它和它的合入，见规格 I4。

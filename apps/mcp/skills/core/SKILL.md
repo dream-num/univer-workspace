@@ -81,8 +81,8 @@ Unavailable operations:
 - A Worktree (pull request) isolates one task from shared files until merge.
   A user-scoped Worktree belongs to the connected user's Personal repository and
   may stage editable files from Personal or Team Spaces. It is not a Personal
-  Space. A Space-scoped Worktree belongs to one Team Space, contains only that
-  Space's Units, and can be private or visible to the Space.
+  Space. A Space-scoped Worktree belongs to one Team Space, holds only that
+  Space's Units, and is visible to the Space or private until merged.
 - Team Issues and pull requests share the Space's number sequence. Older
   Worktrees may have number null and use their id. An Issue is a discussion and
   request, not a Worktree; Personal Spaces have no Issues.
