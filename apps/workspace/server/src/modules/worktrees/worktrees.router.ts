@@ -11,7 +11,8 @@ interface WorktreeRouteDependencies {
 export function createAddWorktreeUnitHandler(
   options: WorktreeRouteDependencies
 ): RequestHandler<{ worktreeId: string }> {
-  const parseUnitJson = json({ limit: "2mb" });
+  const unitJsonLimitMiB = 8;
+  const parseUnitJson = json({ limit: unitJsonLimitMiB * 1024 * 1024 });
   return async (request, response) => {
     const { user } = await options.identity.requireSession(request.headers.cookie);
     await new Promise<void>((resolve, reject) => {
@@ -29,7 +30,7 @@ export function createAddWorktreeUnitHandler(
           new ApplicationError(
             tooLarge ? "PAYLOAD_TOO_LARGE" : "INVALID_INPUT",
             tooLarge ? 413 : 400,
-            tooLarge ? "Worktree Unit requests are limited to 2 MiB." : "Invalid Unit JSON body."
+            tooLarge ? `Worktree Unit requests are limited to ${unitJsonLimitMiB} MiB.` : "Invalid Unit JSON body."
           )
         );
       });

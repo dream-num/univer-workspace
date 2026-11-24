@@ -1084,11 +1084,11 @@ describe("Worktrees", () => {
           }),
         });
 
-      expect((await send(2_200_000, false)).status).toBe(401);
-      const oversized = await send(2_200_000, true);
+      expect((await send(8_500_000, false)).status).toBe(401);
+      const oversized = await send(8_500_000, true);
       expect(oversized.status).toBe(413);
       expect(await oversized.json()).toMatchObject({ error: { code: "PAYLOAD_TOO_LARGE" } });
-      expect((await send(1_220_000, true)).status).toBe(201);
+      expect((await send(4_660_000, true)).status).toBe(201);
       expect((await application.worktrees.get(user.id, worktree.id)).worktree.units).toHaveLength(1);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
