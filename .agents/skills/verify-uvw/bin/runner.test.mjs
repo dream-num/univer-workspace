@@ -102,7 +102,7 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.equal((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'missing')).status, 2);
     const unknownId = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P9');
     assert.equal(unknownId.status, 2);
-    assert.match(unknownId.stderr, /no journey P9 in features\/plain\.md/);
+    assert.match(unknownId.stderr, /no journey or mode P9 in features\/plain\.md/);
 
     await new Promise((resolve) => endpoint.close(resolve));
     const unreachable = await check({ DEEPSEEK_API_KEY: 'good-key' });

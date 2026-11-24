@@ -22,10 +22,10 @@ test('both briefs name the run, the feature file and every expected journey id, 
     assert.equal(some.status, 0, some.stderr);
     assert.ok(some.stdout.includes(`export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=test; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env)"`));
     assert.deepEqual(listed(some.stdout), ['LS1', 'LS2']);
-    assert.match(some.stdout, /features\/link-sharing\.md\. Set up its preconditions, then run your journeys in file order, each command as written\. Skip its other journeys\./);
+    assert.match(some.stdout, /features\/link-sharing\.md\. Do its setup, the text before its first journey, then run your journeys in file order, each command as written\. Skip its other journeys\./);
     assert.match(some.stdout, /`\$V verdict <ID> PASS\|FAIL\|DRIFT\|BLOCKED "<note>"`/);
     assert.match(some.stdout, /Run `\$V journeys link-sharing LS2 LS1`\. .*INCOMPLETE/);
-    assert.match(some.stdout, /Do not run `up`, `down` or `user`\./);
+    assert.match(some.stdout, /^Run test is already running in the `default` mode that these journeys declare, with its user signed in .*Do not run `up`, `down` or `user` unless a journey's own text restarts the instance/m);
 
     const host = call('sheet-lens');
     assert.equal(host.status, 0, host.stderr);
@@ -37,9 +37,9 @@ test('both briefs name the run, the feature file and every expected journey id, 
     assert.equal(own.status, 0, own.stderr);
     assert.deepEqual(listed(own.stdout), [...Array(10)].map((_, k) => `SLC${k + 1}`).concat([...Array(9)].map((_, k) => `SLM${k + 2}`)));
     assert.match(own.stdout, /Do not run SLM1\. Only the host runs it\./);
-    assert.match(own.stdout, /This container is disposable and yours\. Start the instance yourself\./);
+    assert.match(own.stdout, /This container is disposable and yours\.\n/);
     assert.ok(own.stdout.includes(`export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
-    assert.match(own.stdout, /do not run `down` for it/);
+    assert.match(own.stdout, /Leave run task-1 running when you reply/);
     assert.match(own.stdout, /Never print a cookie, token, password or environment variable/);
     assert.ok(own.stdout.includes(`Name each evidence file by its full path, such as ${root}/task-1/evidence/<file>.`));
     assert.doesNotMatch(own.stdout + host.stdout, /RESULT: PASS/);
@@ -53,7 +53,7 @@ test('both briefs name the run, the feature file and every expected journey id, 
 
     const unknownId = call('issues', 'IS9');
     assert.notEqual(unknownId.status, 0);
-    assert.match(unknownId.stderr, /no journey IS9 in features\/issues\.md/);
+    assert.match(unknownId.stderr, /no journey or mode IS9 in features\/issues\.md/);
     const unknown = call('no-such-feature');
     assert.notEqual(unknown.status, 0);
     assert.match(unknown.stderr, /no \.agents\/skills\/verify-uvw\/features\/no-such-feature\.md/);

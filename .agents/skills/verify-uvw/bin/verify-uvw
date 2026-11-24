@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief [--own run-id] <feature> [journey-id...] | journeys <feature> [journey-id...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | runner [--jobs N] [--keep] <feature[:ID,ID]>... | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief [--own run-id] <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | runner [--jobs N] [--keep] <feature[:ID|mode,...]>... | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -545,7 +545,17 @@ mcp_dist_fresh() {
 }
 
 cmd_up() {
-  [[ $# == 0 || ( $# == 1 && "$1" == --reuse ) ]] || die "usage: verify-uvw up [--reuse]"
+  local usage="usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]]" reuse="" mode_env line
+  [[ "${1:-}" != --reuse ]] || { reuse=1; shift; }
+  if [[ "${1:-}" == --for ]]; then
+    shift
+    [[ $# -ge 1 ]] || die "$usage"
+    # The journeys' declared mode wins over these flags in the caller's environment.
+    mode_env="$(node "$BIN/journeys.mjs" up-env "$@")" || exit $?
+    while IFS= read -r line; do export "$line"; done <<<"$mode_env"
+    set --
+  fi
+  [[ $# == 0 ]] || die "$usage"
   local mcp_from="${VERIFY_UVW_MCP_FROM:-image}"
   [[ "$mcp_from" == image || "$mcp_from" == dist ]] || die "VERIFY_UVW_MCP_FROM must be image or dist"
   [[ "$mcp_from" == image || "${VERIFY_UVW_RUNNER:-0}" == 1 ]] || die "the dist start mode runs only inside the verify runner"
@@ -574,7 +584,7 @@ cmd_up() {
   fi
   local run="$ROOT/$id"
   if [[ -e "$run" ]]; then
-    [[ "${1:-}" == --reuse && -f "$run/run.env" && ! -d "$run/data" && ! -d "$run/home" ]] \
+    [[ -n "$reuse" && -f "$run/run.env" && ! -d "$run/data" && ! -d "$run/home" ]] \
       || die "$run already exists; down first, then up --reuse to retain evidence"
     [[ ! -f "$run/user.env" ]] || unlink "$run/user.env"
   fi
@@ -636,7 +646,7 @@ GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
 EOF
   printf 'MCP_ENABLED=%s\n' "$mcp_enabled" >>"$run/run.env"
   if [[ "$mcp_enabled" == 1 ]]; then
-    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
+    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SAME_ORIGIN=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${VERIFY_UVW_MCP_SAME_ORIGIN:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
     [[ ! -f "$run/executor-allowed-user-ids" ]] || unlink "$run/executor-allowed-user-ids"
     [[ "${VERIFY_UVW_MCP_PRODUCTION:-0}" != 1 ]] || printf 'verify-uvw-pending-user\n' >"$run/executor-allowed-user-ids"
     [[ -z "${VERIFY_UVW_MCP_BUILD_CONTEXT:-}" ]] || printf 'MCP_BUILD_CONTEXT=%s\n' "$(cd "$VERIFY_UVW_MCP_BUILD_CONTEXT" && pwd)" >>"$run/run.env"
@@ -755,17 +765,17 @@ EOF
   fi
 }
 
-cmd_brief() { # [--own run-id] feature [journey-id...]: the text to hand an agent that drives a run, from journeys.mjs
+cmd_brief() { # [--own run-id] feature [journey-id|mode...]: the text to hand an agent that drives a run, from journeys.mjs
   if [[ "${1:-}" == --own ]]; then
-    [[ $# -ge 3 && "$2" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "usage: verify-uvw brief --own <run-id> <feature> [journey-id...]"
+    [[ $# -ge 3 && "$2" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "usage: verify-uvw brief --own <run-id> <feature> [journey-id|mode...]"
     exec node "$BIN/journeys.mjs" brief --own --repo "$REPO" --root "$ROOT" --run-id "$2" "${@:3}"
   fi
-  [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id...]"
+  [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id|mode...]"
   load_run
   exec node "$BIN/journeys.mjs" brief --repo "$REPO" --root "$ROOT" --run-id "$RUN_ID" "$@"
 }
 
-cmd_journeys() { # feature [journey-id...]: the plan before up, this run's coverage after; exit 1 while it is INCOMPLETE
+cmd_journeys() { # feature [journey-id|mode...]: the plan before up, this run's coverage after; exit 1 while it is INCOMPLETE
   local run
   if run="$(run_dir 2>/dev/null)"; then exec node "$BIN/journeys.mjs" list --run "$run" "$@"; fi
   exec node "$BIN/journeys.mjs" list "$@"
