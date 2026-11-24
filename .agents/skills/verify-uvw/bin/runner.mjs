@@ -153,6 +153,16 @@ function holds(dir, needle) {
     .some((entry) => entry.isFile() && readFileSync(join(entry.parentPath, entry.name)).includes(needle));
 }
 
+// A function that runs the async functions it is given one at a time, in call order, whether or not each one fails.
+export function serial() {
+  let tail = Promise.resolve();
+  return (fn) => {
+    const turn = tail.then(fn);
+    tail = turn.catch(() => {});
+    return turn;
+  };
+}
+
 export function finish(task, dir, wallSeconds, key, { model = true } = {}) {
   const out = join(dir, task.id);
   const read = (name) => (existsSync(join(out, name)) ? readFileSync(join(out, name), 'utf8') : null);
@@ -296,6 +306,9 @@ async function main() {
   const results = new Map(hostOnly.map((t) => [t.id, { task: t.id, status: 'host-only', result: null, turns: null, wallSeconds: 0, usage: null }]));
   const needs = [...new Set(queue.flatMap((t) => t.needs))];
   const setup = Array(jobs).fill(null);
+  // Three instances preparing at once took 147 s each where one alone took 20 s, so tasks take turns to prepare;
+  // the rest of each task still runs in parallel.
+  const prepareOne = serial();
   const runner = async (k) => {
     const name = `uvw-verify-${batch}-r${k + 1}`, log = join(dir, `r${k + 1}-setup.log`), since = Date.now();
     const up = await run(['run', '-d', '--init', '--name', name, '--label', `uvw-verify.batch=${batch}`, '--shm-size=1g', '--cpus', cpus,
@@ -310,11 +323,17 @@ async function main() {
     if (!built) return console.error(`runner r${k + 1} setup failed; see ${log}`);
     setup[k] = seconds(since);
     for (let task; (task = queue.shift());) {
-      const begun = Date.now();
-      console.error(`r${k + 1}: ${task.id} started`);
+      let begun;
       mkdirSync(join(dir, task.id), { recursive: true });
-      await run(['exec', ...(model ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash', '/home/node/repo/.agents/skills/verify-uvw/runner/task.sh',
-        ...(model ? [] : ['--no-model']), task.id, task.feature, ...task.selectors], { log: join(dir, task.id, 'task.log'), env });
+      const phase = (step, keys) => run(['exec', ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
+        '/home/node/repo/.agents/skills/verify-uvw/runner/task.sh', step, ...(model ? [] : ['--no-model']), task.id, task.feature, ...task.selectors],
+      { log: join(dir, task.id, 'task.log'), env });
+      const prepared = await prepareOne(() => {
+        begun = Date.now();
+        console.error(`r${k + 1}: ${task.id} started`);
+        return phase('prepare', false);
+      });
+      if (prepared === 0) await phase('run', model);
       const result = finish(task, dir, seconds(begun), key, { model });
       results.set(task.id, result);
       console.error(`r${k + 1}: ${task.id} ${result.status} ${(model ? result.result : result.checks) ?? ''}`);

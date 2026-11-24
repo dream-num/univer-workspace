@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { loadFeatures, parseFeature, plan } from './journeys.mjs';
-import { exitCode, expand, findKey, finish, parseArgs, readTranscript, summary } from './runner.mjs';
+import { exitCode, expand, findKey, finish, parseArgs, readTranscript, serial, summary } from './runner.mjs';
 
 const transcript = readFileSync(fileURLToPath(new URL('../fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
 const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.map((j) => `### ${j}\n`).join('\n')}`;
@@ -313,4 +313,22 @@ test('a no-model task is finished without a session, and summary.md counts its c
     assert.match(judged, /^\| f \| mcp \| finished \| INCOMPLETE \| 4 \| 0 \| 0 \| 0 \| 0 \| 4 \| 1 held, 1 broke, 1 not run \| 9 \|/m, 'the model summary has a Checks column');
     assert.match(judged, /^- f H2 MISSING \(checks broke: features\/f\.md:9 exit 1: jq -e/m);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('tasks prepare one at a time, in the order they ask, and a failed prepare does not hold up the next', async () => {
+  const one = serial(), events = [];
+  let running = 0;
+  const prepare = (id, ms, fail) => one(async () => {
+    running += 1;
+    events.push(`${id} start, ${running} running`);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    running -= 1;
+    events.push(`${id} end`);
+    if (fail) throw new Error(`${id} failed`);
+    return id;
+  });
+  const results = await Promise.allSettled([prepare('a', 30), prepare('b', 5, true), prepare('c', 1)]);
+  assert.deepEqual(events, ['a start, 1 running', 'a end', 'b start, 1 running', 'b end', 'c start, 1 running', 'c end']);
+  assert.deepEqual(results.map((r) => r.status), ['fulfilled', 'rejected', 'fulfilled']);
+  assert.equal(results[2].value, 'c');
 });

@@ -256,8 +256,9 @@ and so on. The id is also the task's run id.
   ref points at, and your index, status and refs stay as they were.
 - It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
   builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
-  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, then
-  `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code session the brief that
+  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, and loads
+  the login page in the run's browser. Runners take turns at this prepare, because instances that start at once
+  slow each other down. Then the task runs `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code session the brief that
   `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief says the instance is already running
   in the journeys' mode, and that the helper already ran its journeys, whose checks the session reads and judges.
   When the prepare fails, no session starts, the task is `infra-error`, and `summary.md` quotes the `FAIL` lines of
