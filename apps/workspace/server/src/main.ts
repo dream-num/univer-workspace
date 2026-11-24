@@ -52,6 +52,7 @@ async function serve(product: ProductDatabase, collaboration: CollaborationDatab
     jobs.push(startBlobMaintenance(application.blobs, {
       drafts: application.htmlViewDrafts,
       skillDrafts: application.skillDrafts,
+      univerAssets: application.univerAssets,
     }));
     application.attachWebSocket(server);
 

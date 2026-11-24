@@ -1,6 +1,7 @@
 import type { Readable } from "node:stream";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
+import { logger } from "../../logging/logger.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { assertCeiling, type AccessResolver, type BlobResourceAccess } from "../access/index.js";
 import { principalCategory } from "../identity/index.js";
@@ -24,8 +25,12 @@ import type {
   CompleteBlobUploadResult,
 } from "./blobs.types.js";
 
+// Several replicas share these rows. A request renews the row while it receives bytes, and maintenance on any
+// replica treats a row left unrenewed for the lease as interrupted by a stopped process.
+const RECEIVE_RENEW_MS = 10_000;
+const RECEIVE_LEASE_MS = 60_000;
+
 export interface BlobsModule {
-  initialize(): Promise<void>;
   replace(
     actor: Principal,
     resourceId: string,
@@ -112,18 +117,6 @@ export function createBlobsModule(options: {
   }
 
   return {
-    async initialize() {
-      await options.repository.recoverInterruptedUploads(now());
-      // A single-process restart cannot resume interrupted PUT bodies.
-      for (const operationId of await options.repository.pendingReplacementIds()) {
-        await options.repository.failReplacement(
-          operationId,
-          "REPLACEMENT_INTERRUPTED",
-          "Server restarted during Blob replacement; retry with a new key.",
-          now(),
-        );
-      }
-    },
     async replace(actor, resourceId, key, ifMatch, contentLength, body) {
       const operationId = validOperationId(key);
       if (typeof ifMatch !== "string" || !/^"[^"\r\n]+"$/.test(ifMatch) || ifMatch.length > 200) {
@@ -159,11 +152,10 @@ export function createBlobsModule(options: {
             "Blob content has changed; download it again before replacing.",
           );
         }
-        const stored = await options.store.put({
-          objectKey: reserved.objectKey,
-          body,
-          expectedByteSize: byteSize,
-        });
+        const stored = await whileRenewing(
+          () => options.repository.renewReplacement(operationId, now()),
+          options.store.put({ objectKey: reserved.objectKey, body, expectedByteSize: byteSize }),
+        );
         return await options.repository.completeReplacement(
           operationId,
           actor,
@@ -235,11 +227,14 @@ export function createBlobsModule(options: {
       }
       let stored;
       try {
-        stored = await options.store.put({
-          objectKey: value.upload.object_key,
-          body,
-          expectedByteSize: value.upload.byte_size,
-        });
+        stored = await whileRenewing(
+          () => options.repository.renewUpload(uploadId, now()),
+          options.store.put({
+            objectKey: value.upload.object_key,
+            body,
+            expectedByteSize: value.upload.byte_size,
+          }),
+        );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Blob upload failed.";
@@ -314,6 +309,15 @@ export function createBlobsModule(options: {
     async runMaintenance(workerId, limit = 25) {
       const startedAt = now();
       await options.repository.expireDue(startedAt, limit);
+      await options.repository.recoverInterruptedUploads(startedAt, startedAt - RECEIVE_LEASE_MS);
+      for (const operationId of await options.repository.pendingReplacementIds(startedAt - RECEIVE_LEASE_MS)) {
+        await options.repository.failReplacement(
+          operationId,
+          "REPLACEMENT_INTERRUPTED",
+          "Server restarted during Blob replacement; retry with a new key.",
+          startedAt,
+        );
+      }
       const jobs = await options.repository.claimDeletionJobs({
         workerId,
         now: startedAt,
@@ -345,6 +349,17 @@ export function createBlobsModule(options: {
       return jobs.length;
     },
   };
+}
+
+async function whileRenewing<T>(renew: () => Promise<void>, receiving: Promise<T>): Promise<T> {
+  const timer = setInterval(() => {
+    renew().catch((error: unknown) => logger.warn({ err: error }, "Blob receive lease was not renewed"));
+  }, RECEIVE_RENEW_MS);
+  try {
+    return await receiving;
+  } finally {
+    clearInterval(timer);
+  }
 }
 
 function uploadView(row: BlobUploadRow): BlobUploadSessionView {

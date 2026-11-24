@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { BlobsModule } from "../modules/blobs/index.js";
 import type { HtmlViewDraftsModule } from "../modules/html-view-drafts/index.js";
 import type { SkillDraftsModule } from "../modules/skill-drafts/index.js";
+import type { UniverAssetsModule } from "../modules/univer-assets/index.js";
 import type { OperationRecovery } from "./operation-recovery.js";
 
 export function startBlobMaintenance(
@@ -10,6 +11,7 @@ export function startBlobMaintenance(
     readonly intervalMs?: number;
     readonly skillDrafts?: Pick<SkillDraftsModule, "expireDue">;
     readonly drafts?: Pick<HtmlViewDraftsModule, "expireDue">;
+    readonly univerAssets?: Pick<UniverAssetsModule, "recoverInterruptedUploads">;
     readonly onError?: (error: unknown) => void;
   } = {}
 ): OperationRecovery {
@@ -25,6 +27,7 @@ export function startBlobMaintenance(
       .then(async () => {
         await options.drafts?.expireDue(Date.now(), 25);
         await options.skillDrafts?.expireDue(Date.now(), 25);
+        await options.univerAssets?.recoverInterruptedUploads();
         await blobs.runMaintenance(workerId);
       })
       .catch(onError)

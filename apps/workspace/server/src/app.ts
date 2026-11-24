@@ -526,11 +526,7 @@ export function createWorkspaceApplication(
     univerAssets,
     exchange,
     initialize() {
-      initialization ??= (async () => {
-        await identity.initialize();
-        await blobs.initialize();
-        await univerAssets.initialize();
-      })();
+      initialization ??= identity.initialize();
       return initialization;
     },
     attachWebSocket(server) {

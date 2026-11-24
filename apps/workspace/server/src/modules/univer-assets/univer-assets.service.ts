@@ -25,7 +25,8 @@ export interface ImportedUniverAsset {
 }
 
 export interface UniverAssetsModule {
-  initialize(): Promise<void>;
+  /** Touches only expired reservations: one hour outlasts any live upload under the 20 MB limit on another replica. */
+  recoverInterruptedUploads(): Promise<void>;
   upload(
     userId: string,
     scope: UniverAssetScope,
@@ -62,7 +63,7 @@ export interface UniverAssetsModule {
    * target and created the Trunk Unit, so no Unit check runs here; the schema
    * still requires that Unit to exist. Each file goes through the same upload
    * lifecycle as a client upload, so an interrupted import is recovered or
-   * abandoned at startup like any other upload.
+   * abandoned when its reservation expires, like any other upload.
    */
   storeImported(input: {
     readonly actorUserId: string;
@@ -83,7 +84,7 @@ export function createUniverAssetsModule(options: {
   const maxAssetBytes = options.maxAssetBytes ?? MAX_UNIVER_ASSET_BYTES;
 
   return {
-    async initialize() {
+    async recoverInterruptedUploads() {
       await options.repository.recoverInterruptedUploads(now());
     },
     async upload(userId, scope, input) {

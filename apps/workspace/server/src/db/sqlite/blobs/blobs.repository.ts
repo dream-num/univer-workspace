@@ -114,10 +114,12 @@ export class SqliteBlobsRepository implements BlobsRepository {
       if (swapped === "etag-mismatch") throw new BlobReplacementConflictError("etag");
       const { etag } = swapped;
       const result = { operationId, resourceId: intent.resourceId, etag: `"${etag}"` };
-      database
+      const { changes } = database
         .prepare(`UPDATE operations SET state = 'completed', step = 'completed', result_json = ?,
         updated_at = ?, completed_at = ? WHERE id = ? AND state = 'pending'`)
         .run(JSON.stringify(result), now, now, operationId);
+      // Maintenance already failed it and queued the new object for deletion, so keep the old one.
+      if (changes !== 1) throw new BlobReplacementConflictError("state");
       return result;
     });
   }
@@ -126,13 +128,15 @@ export class SqliteBlobsRepository implements BlobsRepository {
     this._database.transaction((database) => {
       const row = database
         .prepare(
-          "SELECT payload_json FROM operations WHERE id = ? AND kind = 'replace_blob_content' AND state = 'pending'",
+          "SELECT payload_json FROM operations WHERE id = ? AND kind = 'replace_blob_content' AND state <> 'completed'",
         )
         .get(operationId) as { payload_json: string } | undefined;
       if (!row) return;
+      // A request whose lease lapsed finds its replacement already failed; the bytes it stored late still need deleting.
       database
         .prepare(
-          `UPDATE operations SET state = 'failed', last_error_code = ?, last_error_message = ?, updated_at = ? WHERE id = ?`,
+          `UPDATE operations SET state = 'failed', last_error_code = ?, last_error_message = ?, updated_at = ?
+          WHERE id = ? AND state = 'pending'`,
         )
         .run(code, message, now, operationId);
       database
@@ -142,13 +146,19 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  async pendingReplacementIds(): Promise<string[]> {
+  async pendingReplacementIds(renewedBefore: number): Promise<string[]> {
     const rows = this._database.connection
       .prepare(
-        "SELECT id FROM operations WHERE kind = 'replace_blob_content' AND state = 'pending'",
+        "SELECT id FROM operations WHERE kind = 'replace_blob_content' AND state = 'pending' AND updated_at <= ?",
       )
-      .all() as unknown as Array<{ id: string }>;
+      .all(renewedBefore) as unknown as Array<{ id: string }>;
     return rows.map((row) => row.id);
+  }
+
+  async renewReplacement(operationId: string, renewedAt: number): Promise<void> {
+    this._database.connection
+      .prepare("UPDATE operations SET updated_at = ? WHERE id = ? AND kind = 'replace_blob_content' AND state = 'pending'")
+      .run(renewedAt, operationId);
   }
 
   async reserve(input: {
@@ -244,14 +254,20 @@ export class SqliteBlobsRepository implements BlobsRepository {
     return this.requireByOperation(upload.operation_id);
   }
 
-  async recoverInterruptedUploads(recoveredAt: number): Promise<number> {
+  async recoverInterruptedUploads(recoveredAt: number, renewedBefore: number): Promise<number> {
     return Number(this._database.connection.prepare(
       `UPDATE blob_upload_sessions
        SET state = 'waiting_for_upload', updated_at = ?,
            last_error_code = 'UPLOAD_INTERRUPTED',
            last_error_message = 'The server restarted while receiving content.'
-       WHERE state = 'verifying'`
-    ).run(recoveredAt).changes);
+       WHERE state = 'verifying' AND updated_at <= ?`
+    ).run(recoveredAt, renewedBefore).changes);
+  }
+
+  async renewUpload(uploadId: string, renewedAt: number): Promise<void> {
+    this._database.connection.prepare(
+      "UPDATE blob_upload_sessions SET updated_at = ? WHERE id = ? AND state = 'verifying'"
+    ).run(renewedAt, uploadId);
   }
 
   async beginUpload(uploadId: string, updatedAt: number): Promise<boolean> {
