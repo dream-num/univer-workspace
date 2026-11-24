@@ -337,7 +337,7 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 | 把 Unit 拿出 Worktree，或者部分合入      | 一个 fork 只能是一件事。冲突的 Unit 要重做                     |
 | 草稿快照                                 | Worktree 存在越久，加载越慢                                    |
 | 删除和回收                               | Worktree 的数据只增不减                                        |
-| 撤回一次合入                             | 尾部只能通过再提一个修正来纠错                                 |
+| 撤回一次合入而保留之后的修改             | 撤回只能把整个 Unit 恢复到合入之前的修订，之后别人的修改要么不撤回，要么一并覆盖 |
 | 合入的 OT 移出主线程，或分段让出事件循环 | 大的合入让整个服务停顿，约 4 µs × 草稿 changeset 数 × 落后距离 |
 
 ## 6. 分期与完成标准
@@ -483,9 +483,40 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 ### 6.7 阶段 6：任务和验收
 
-只写范围，见 README 第 7、8 节。Issue 和 Worktree 的关联，验收页，Worktree 上的检查状态，仓库声明的不变量，检查通过后自动合入，按 agent 的预算。
+任务就是 Issue。阶段 6 让一个 Issue 从交给 agent 到被验收，中间不需要人，尾部一个人几分钟能判断，或者不需要人判断。
 
-agent 之间的交接也在这一阶段：agent 被加进仓库、有 pull request 等它评审时，它怎样得知。今天产品里没有通知 agent 的通道，第一版验收的故事 3 由驱动者转达，见[验收结果](acceptance-results.zh-CN.md) 5.4。
+交付：
+
+- Issue 和 pull request 的关联。`worktrees.issue_id` 指向同一 Team Space 的 Issue，一个 pull request 至多服务一个 Issue。Issue 列出它的 pull request，pull request 显示它的 Issue。MCP 的 `pr_create`、`pr_edit` 和 CLI 的 `--issue` 设置它。
+- 验收记录。`issue_verdicts` 记录 `submitted`、`accepted`、`sent_back`、`reverted`，Issue 的验收状态是最新一条。指派的 agent 提交（submit），写明做了什么、核对了什么、假设了什么。能关闭这个 Issue 的主体可以验收或打回，包括做这个任务的 agent 自己。验收即以 completed 关闭 Issue。验收的主体可以是人、另一个 agent，或者在仓库打开期限时由期限验收。
+- 验收页。Issue 页面的验收面板汇总：Issue 原文，关联的 pull request 和每个文件合入前后的对比（`packages/unit-comparison-viewer`），这些 pull request 发布的页面和文件，指派的 agent 改过的 Link Sharing 和授权，检查结果，agent 的提交说明和评论。按钮是通过、打回和撤回。
+- 检查结果。仓库在 Trunk 的 `.agents/checks.md` 里声明检查，每个 `## 名字` 是一项。`worktree_checks` 记录某个主体对某项检查在一个 ready 的 pull request 的冻结内容上的结论（passed 或 failed）。内容由服务端按每个 Unit 的草稿修订和 Trunk 修订推导，内容或 Trunk 变了，旧结论不再计入。只有能合入这个 pull request 的主体报告的结论计入。
+- 合入的守卫。仓库设置 `landing` 取 `review`（默认，行为不变）或 `checks`。在 `checks` 的仓库里，不是 owner 的 agent 要每项声明的检查都 passed 才能合入，并且不能在合入之外写 Trunk。人不受限制。A、B 两条路线仍由上游给 agent 的角色决定：viewer 是 A，editor 是 B，agent 自己持有的仓库是 B。
+- 撤回。一组已合入的 pull request（一个，或一个 Issue 的全部）可以撤回：改过的 Unit 用 Trunk 的历史恢复到这组第一次合入之前的修订，新增的文件进 Trash，删除的文件从 Trash 恢复。合入之后别人又改过的 Unit 默认不撤回，列出改动的人；人可以在 Browser 里逐个强制。替换过的 Blob 和页面不能撤回。撤回是一个持久化的 Operation。
+- 按 agent 的预算。每个 agent 同时未结束的 pull request 和 24 小时内的合入次数有上限，在产品数据库里计数，超过时返回 `AGENT_QUOTA_EXCEEDED`，`whoami` 显示用量。
+- agent 之间的交接。agent 用 `search` 轮询自己的工作：分配给它的未关闭 Issue、被打回的 Issue、等它验收的 Issue，以及它能合入的 ready pull request。产品不推送，唤醒 agent 由它所在的 harness 负责。
+
+完成标准。沿用阶段 2 的 S、H、E。
+
+| 编号 | 标准 |
+| ---- | ---- |
+| A6.1 | S 的 `landing` 是 `checks`，有两项声明的检查。H 把 A 加为 editor，写 Issue 指派给 A。A 经 fork 开三个 pull request，各自关联 Issue，报告检查，合入，提交。H 在验收面板上看到三个 pull request、每个文件的前后对比和检查结果，通过。人的动作：加成员，写 Issue，验收 |
+| A6.2 | H 打回并写明原因。A 只用不含任务内容的固定提示词启动，找到打回，用新的 pull request 修正，再提交。H 通过 |
+| A6.3 | A6.1 之后 E 在 Trunk 上改了其中一张 Sheet。H 撤回这个 Issue。另外两张 Sheet 回到任务之前的内容，新建的 Doc 进入 Trash，E 改过的 Sheet 列为未撤回且不变 |
+| A6.4 | A3 创建 R，声明检查，把 B3 加为 viewer，写 Issue 指派给 B3。之后 A3 和 B3 只用不含任务内容的固定提示词运行。B3 提议并提交，A3 报告检查、合入、验收。人的动作为零，驱动者转达的任务内容为零 |
+| A6.5 | 在 `review` 的仓库里，editor agent 的合入和今天相同（第一版故事 2） |
+| A6.6 | agent 超过预算时在第一步得到 `AGENT_QUOTA_EXCEEDED`，人不受影响 |
+| A6.7 | 每个故事给出 1.3 前三项指标、驱动者转达的占比和验收人从打开面板到给出结论的时间，并和第一版的验收结果对比 |
+| A6.8 | 每个改动数据库的阶段从上一个发布版本迁移后，结构和全新安装一致 |
+
+不做：
+
+- 服务端运行检查，或服务端计算公式。
+- 服务端在检查通过时自动合入。
+- 撤回一次合入而保留之后的修改（向上游提需求）。
+- 撤回替换过的 Blob 和页面。
+- 推送给 agent 的通知，托管的 agent 运行时。
+- 跨仓库的 Issue，Personal Space 的任务。
 
 ### 6.8 第一版的完成标准
 

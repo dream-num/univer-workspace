@@ -178,7 +178,7 @@ flowchart LR
 出错时的影响面由授予的范围决定，不靠人看一眼。
 
 **四、用可撤销代替事前审阅。** 改动落地之后看得到、查得到是谁做的、撤得回来。
-`PRODUCT.md` 的第一条原则是 “Every change is seen before it lands”。Agent Mode 长期的方向是：每个改动都能归因、都能撤回，什么算完成由人决定。第一版不改这条原则（规格 9.1 第 9 项），撤回也要等上游 SDK 提供（规格 5.9）。
+`PRODUCT.md` 的第一条原则是 “Every change is seen before it lands”。Agent Mode 长期的方向是：每个改动都能归因、都能撤回，什么算完成由人决定。第一版不改这条原则（规格 9.1 第 9 项），按任务撤回在阶段 6 用 Trunk 按 Unit 恢复旧修订的能力来做，撤回一次合入而保留之后的修改仍要等上游（规格 5.9）。
 
 **五、用机器验收代替人眼把关。** 软件能做到自动合入，靠的是 CI。office 文件没有测试，错误是安静的，一个算错的合计不会报错。
 所以检查是代替审阅的那个东西，不是附加项。没有它，Agent Mode 只是跳过审阅。
@@ -293,7 +293,7 @@ fork 在提议之上加了三样东西：一个整仓的视图，写入时自动
 | 草稿有快照吗，有回收吗               | 都没有。冷加载要重放基线之后的全部变更。discard 只改状态，没有删除                                                                                                            | Worktree 存在越久，加载越慢。Worktree 只增不减         |
 | 运行成本                             | 每个 Worktree 有自己的草稿协同服务和 worker。草稿连接和 trunk 共用 License 的编辑连接配额                                                                                     | 同时未结束的 Worktree 数量受服务器内存和 License 限制  |
 
-SDK 的 README 写明了它不提供的东西：“Whole-Worktree deletion, rollback/reset, History, cleanup of referenced trunk history, and periodic draft snapshots are not currently provided”。
+SDK 的 README 写明了它不提供的东西：“Whole-Worktree deletion, rollback/reset, History, cleanup of referenced trunk history, and periodic draft snapshots are not currently provided”。这句话说的是 Worktree。Trunk 上已经有按 Unit 恢复到旧修订的公开能力（`@univerjs-pro/collaboration` 的 `RevertRevisionMutation`，`@univerjs-pro/edit-history` 的 `HistoryRestoreService`），Browser 在 Trunk 的历史面板里用它恢复版本。
 
 三项决定里的共享谱系、浅拷贝和按 Unit 记录结果，SDK 都已经支持。不支持的是“长期”和“部分提交”。
 
@@ -515,7 +515,7 @@ agent 创建的仓库由它持有，它在其中是 owner。agent 能持有哪�
 
 本仓库要改的，见规格第 4 节的 requirement 和 5.4 的权限判定。
 
-归上游 Collaboration SDK 的五项能力见规格 5.9：同步基线，部分合入，草稿快照，删除和回收，撤回合入。修订、OT 和 Worktree 归上游所有，这些能力向上游提需求，不在本仓库实现。
+归上游 Collaboration SDK 的五项能力见规格 5.9：同步基线，部分合入，草稿快照，删除和回收，撤回一次合入而保留之后的修改。修订、OT 和 Worktree 归上游所有，这些能力向上游提需求，不在本仓库实现。
 
 ### 6.10 实施风险
 
@@ -555,7 +555,7 @@ officelab 要提供的是：不需要人的凭据、任务队列、完整的能�
 | 收到任务                         | `issue_list` 的 `assignee: @me` 可以轮询                                                       | 没有事件推送。第一版用轮询就够                                                                                             |
 | 合入策略                         | 作者合入自己的 PR。角色                                                                        | 第一档用角色表达，见 5.3。之后是仓库级的 trunk 策略：是否要求检查通过，是否要求作者以外的评审者                            |
 | 检查                             | `lint`（只检查 Slide 的版式）、`screenshot`、`inspect`、读回验证、服务端的 Unit 比较           | PR 上没有检查状态。仓库没有地方声明不变量，例如“合计等于明细之和”“表头不变”                                                |
-| 撤销                             | Trash 可恢复，Link Sharing 可关，认领人可停用 agent                                            | 不能撤回一次合入。SDK 写明不提供 rollback 和 History，要向上游提                                                           |
+| 撤销                             | Trash 可恢复，Link Sharing 可关，认领人可停用 agent                                            | 产品没有按任务撤回。Trunk 能按 Unit 恢复旧修订，撤回一次合入而保留之后的修改要向上游提                                     |
 | 归因                             | `created_via`、`operations.actor_user_id`、`mergedBy`、Issue 事件、网关的 `mcp.tool_call` 日志 | 没有按任务汇总的记录。trajectory 只在浏览器本地。协同层里，一次合入在每个 Unit 上只是一个修订，成员标识是 `worktree-merge` |
 | 预算和熔断                       | 未认领 agent 的文件配额，停用，封禁                                                            | 没有按 agent 的执行次数和速率上限。Agent Hub 6.8 已列为待做                                                                |
 | 冲突处理                         | 合入结果按 Unit 记录。ready 状态下有逐 Unit 的合入预览                                         | 不能同步上游，过期只能重做。没有过期提示，见 6.5                                                                           |
@@ -597,18 +597,20 @@ viewer 成员可以开 Issue 和评论，所以 agent 以 viewer 身份进入就
 **建议。** 两条路线是上游的同一个设置的两个档位，不是两个产品。别人的仓库默认 A，B 由所有者主动打开。
 agent 自己持有的仓库里始终是 B。A 的代价很小，应该先做。B 才是 Agent Mode 的全部价值所在。
 
+规格 6.7 采用的做法略有不同：路线由上游给 agent 的角色决定，viewer 是 A，editor 是 B。仓库设置 `landing` 是路线 B 的守卫，取 `checks` 时 agent 要通过声明的检查才能合入。
+
 ## 9. 放弃什么，保住什么
 
 ### 9.1 放弃的
 
 fork 机制把风险集中到两个由所有者做的决定上：把读权给哪个 agent，以及是否让它不经人审直接落地。
 
-| 放弃的保护                     | 何时放弃                            | 后果                                                                                                                                 | 剩下的防线                                                           |
-| ------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| 合入前人审                     | 上游给 agent editor，或打开自动合入 | 错误的内容先落到 trunk，立刻被读者看到。HTML View 始终读实时数据，所以错误的数字会立刻出现在已发布的页面上。人会依据错误的数字做决定 | 检查，归因。撤回要等上游 SDK 提供，在那之前只能靠 agent 再提一个修正 |
-| 逐次确认                       | 采用 Agent Mode                     | 桌面版的合入弹窗、浏览器 Agent 的批准卡片、Skill 里的 “only when the user asks” 不再出现                                             | 头部的授权                                                           |
-| 短期凭据                       | 采用 Agent Mode                     | 长期凭据泄漏后可以一直用                                                                                                             | 影响面是 agent 的空间加提议的权利。可吊销，可停用 agent              |
-| 对 prompt injection 的人工拦截 | 采用 Agent Mode                     | 见下                                                                                                                                 | 见下                                                                 |
+| 放弃的保护                     | 何时放弃                            | 后果                                                                                                                                 | 剩下的防线                                                                        |
+| ------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 合入前人审                     | 上游给 agent editor，或打开自动合入 | 错误的内容先落到 trunk，立刻被读者看到。HTML View 始终读实时数据，所以错误的数字会立刻出现在已发布的页面上。人会依据错误的数字做决定 | 检查，归因。阶段 6 按 Unit 恢复到任务之前的修订来撤回，保留之后修改的撤回要等上游 |
+| 逐次确认                       | 采用 Agent Mode                     | 桌面版的合入弹窗、浏览器 Agent 的批准卡片、Skill 里的 “only when the user asks” 不再出现                                             | 头部的授权                                                                        |
+| 短期凭据                       | 采用 Agent Mode                     | 长期凭据泄漏后可以一直用                                                                                                             | 影响面是 agent 的空间加提议的权利。可吊销，可停用 agent                           |
+| 对 prompt injection 的人工拦截 | 采用 Agent Mode                     | 见下                                                                                                                                 | 见下                                                                              |
 
 **prompt injection。**
 一个 agent 同时具备三样东西时最危险：读得到私有数据，会读到陌生人写的内容，能向外发出东西。今天挡在中间的是人。
