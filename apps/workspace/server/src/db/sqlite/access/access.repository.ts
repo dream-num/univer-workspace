@@ -171,7 +171,7 @@ export function assertProposalQuota(database: DatabaseSync, userId: string, spac
  * written yet included, and the merges it started within the window.
  */
 function readBudget(database: DatabaseSync, userId: string, now: number) {
-  return database.prepare(`SELECT ${requesterColumns},
+  return database.prepare(`SELECT
     (SELECT COUNT(*) FROM worktrees WHERE creator_user_id = $userId AND processed_at IS NULL)
     + (SELECT COUNT(*) FROM operations
        WHERE actor_user_id = $userId AND kind = 'create_worktree' AND state = 'pending'
@@ -179,10 +179,10 @@ function readBudget(database: DatabaseSync, userId: string, now: number) {
     (SELECT COUNT(*) FROM operations
      WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since) AS merged`)
     .get({ userId, since: now - AGENT_MERGE_WINDOW_MS }) as
-    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly open: number; readonly merged: number };
+    { readonly open: number; readonly merged: number };
 }
 
-/** Counted in the transaction that records the next create or merge, so concurrent ones cannot pass an agent's budget. */
+/** Counted in the transaction that records the next create or merge, so concurrent ones cannot pass an agent's budget. People are not counted. */
 export function assertAgentBudget(
   database: DatabaseSync,
   userId: string,
@@ -190,8 +190,9 @@ export function assertAgentBudget(
   now: number,
   adding = 1,
 ): void {
-  const row = readBudget(database, userId, now);
-  assertCeiling(requesterCategory(row), action, { open: row.open, merged: row.merged, adding });
+  const principal = requesterCategory(readRequester(database, userId));
+  if (principal === "human") return;
+  assertCeiling(principal, action, { ...readBudget(database, userId, now), adding });
 }
 
 export class SqliteAccessRepository implements AccessRepository {

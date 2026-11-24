@@ -160,7 +160,7 @@ export async function assertProposalQuota(database: PostgresDatabase, userId: st
  * written yet included, and the merges it started within the window.
  */
 async function readBudget(database: PostgresDatabase, userId: string, now: number) {
-  return await database.prepare(`SELECT ${requesterColumns},
+  return await database.prepare(`SELECT
     (SELECT COUNT(*)::integer FROM worktrees WHERE creator_user_id = $userId AND processed_at IS NULL)
     + (SELECT COUNT(*)::integer FROM operations
        WHERE actor_user_id = $userId AND kind = 'create_worktree' AND state = 'pending'
@@ -168,10 +168,10 @@ async function readBudget(database: PostgresDatabase, userId: string, now: numbe
     (SELECT COUNT(*)::integer FROM operations
      WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since) AS merged`)
     .get({ userId, since: now - AGENT_MERGE_WINDOW_MS }) as
-    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> & { readonly open: number; readonly merged: number };
+    { readonly open: number; readonly merged: number };
 }
 
-/** Counted in the transaction that records the next create or merge, so concurrent ones cannot pass an agent's budget. */
+/** Counted in the transaction that records the next create or merge, so concurrent ones cannot pass an agent's budget. People are not counted. */
 export async function assertAgentBudget(
   database: PostgresDatabase,
   userId: string,
@@ -179,8 +179,9 @@ export async function assertAgentBudget(
   now: number,
   adding = 1,
 ): Promise<void> {
-  const row = await readBudget(database, userId, now);
-  assertCeiling(requesterCategory(row), action, { open: row.open, merged: row.merged, adding });
+  const principal = requesterCategory(await readRequester(database, userId));
+  if (principal === "human") return;
+  assertCeiling(principal, action, { ...await readBudget(database, userId, now), adding });
 }
 
 export class PostgresAccessRepository implements AccessRepository {
