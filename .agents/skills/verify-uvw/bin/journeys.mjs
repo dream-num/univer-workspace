@@ -308,7 +308,7 @@ export function brief({ own, repo, root, runId, feature, selectors, partition, h
    - PASS: every step ran and every check held.
    - FAIL: the product differs from the recipe.
    - DRIFT: the recipe is wrong, such as a stale count or a renamed label. Quote the recipe and say what the product does.
-   - BLOCKED: the journey could not run, or ran only in part. Say why.
+   - BLOCKED: the journey could not run, or ran only in part. Say why. A command that timed out or failed before the product answered, such as an \`agent-browser\` load timeout, is BLOCKED, not FAIL.
    Every verdict but PASS needs a note with the values you read and the evidence files. Record each verdict as soon as you judge the journey; one command can record several. A later verdict for a journey replaces the earlier one.`,
     `Run \`$V journeys ${[feature.name, ...selectors].join(' ')}\`. Record a verdict for each journey it lists as MISSING, until its last line no longer says INCOMPLETE.`,
     `Reply with a short account of every journey that is not PASS, and of anything surprising in a PASS. Give the values you read, not the values the recipe expects.${own ? ` Name each evidence file by its full path, such as ${root}/${runId}/evidence/<file>.` : ''}`,

@@ -15,7 +15,13 @@ rm -rf /tmp/verify-uvw /tmp/verify-uvw-*
 export VERIFY_UVW_EVIDENCE_ROOT=$out/runs
 $V brief --own "$task" "$feature" "$@" >"$out/brief.txt" || exit 3
 # A failed prepare skips the verifier; bin/runner.mjs reports the task as infra-error with the FAIL lines of prepare.log.
-if VERIFY_UVW_RUN=$task timeout 900 bash -c '"$0" up --for "$@" && "$0" user && "$0" doctor' "$V" "$feature" "$@" >"$out/prepare.log" 2>&1; then
+# The first page load starts Chromium and makes Vite compile the app. Under host load that outran agent-browser's
+# fixed 25 s load timeout and broke the first browser check of a journey, so prepare loads it, retrying: Vite keeps
+# compiling after a timed-out load, and open is safe to repeat.
+if VERIFY_UVW_RUN=$task timeout 900 bash -c '"$0" up --for "$@" && "$0" user && "$0" doctor && eval "$("$0" env)" || exit 1
+  for try in 1 2 3 4 5; do agent-browser open "$ORIGIN/login" && exit 0; sleep 5; done
+  echo "FAIL  the browser did not load $ORIGIN/login in 5 tries"; exit 1' \
+  "$V" "$feature" "$@" >"$out/prepare.log" 2>&1; then
   # Before the verifier, so no helper journey meets the timeout of its Bash tool; with no model this is the whole task.
   VERIFY_UVW_RUN=$task $V run-journeys "$feature" "$@" >"$out/run-journeys.log" 2>&1
   if [[ -n "$model" ]]; then
