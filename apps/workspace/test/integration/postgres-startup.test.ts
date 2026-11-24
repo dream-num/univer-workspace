@@ -30,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=11");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=12");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=10");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=11");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -110,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 10 }]);
+    expect(fresh.version).toMatchObject([{ version: 11 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -351,7 +351,7 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
     });
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 10 }]);
+    expect(fresh.version).toMatchObject([{ version: 11 }]);
     await downgrade(schema, 7);
     if (seeded) {
       await schema.pool.query(`
@@ -419,7 +419,7 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
 
     await start();
     expect(await structure()).toEqual(fresh);
-    const after = before.map((row) => ({ ...row, proposals: "members" }));
+    const after = before.map((row) => ({ ...row, proposals: "members", accept_after_hours: null }));
     expect(await spaces()).toEqual(after);
     await start();
     expect(await structure()).toEqual(fresh);
@@ -489,6 +489,63 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
     }
   });
 
+  it.each([false, true])("upgrades version 10 by adding empty Issue verdicts and an unset acceptance deadline (seeded=%s)", async (seeded) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const start = async () => (await openProductDatabase({ provider: "postgres", connectionString: schema.connectionString })).close();
+    const structure = async () => ({
+      version: (await schema.pool.query("SELECT version, fingerprint FROM workspace_product_schema")).rows,
+      columns: (await schema.pool.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position")).rows,
+      constraints: (await schema.pool.query("SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE connamespace = current_schema()::regnamespace ORDER BY conname")).rows,
+      indexes: (await schema.pool.query("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = current_schema() ORDER BY indexname")).rows,
+    });
+    const rows = async () => ({
+      spaces: (await schema.pool.query("SELECT * FROM spaces ORDER BY id")).rows,
+      issues: (await schema.pool.query("SELECT * FROM issues ORDER BY id")).rows,
+      worktrees: (await schema.pool.query("SELECT * FROM worktrees ORDER BY id")).rows,
+    });
+    const verdict = (values: string) => schema.pool.query(`INSERT INTO issue_verdicts (id, issue_id, kind, actor_user_id, body, operation_id, created_at) VALUES ${values}`);
+    await start();
+    const fresh = await structure();
+    await downgrade(schema, 10);
+    if (seeded) {
+      await schema.pool.query(`
+        INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 2);
+        INSERT INTO spaces (id, type, name, slug, owner_user_id, created_at, updated_at) VALUES ('t', 'team', 'Team', 'team', 'u', 1, 2);
+        INSERT INTO issues (id, space_id, number, title, state, author_user_id, created_at, updated_at) VALUES ('i', 't', 1, 'Fix totals', 'open', 'u', 1, 2);
+        INSERT INTO worktrees (id, name, creator_user_id, kind, team_space_id, visibility, created_at, updated_at, number, issue_id) VALUES ('w', 'Fix', 'u', 'team', 't', 'space', 1, 2, 2, 'i');
+      `);
+    }
+    const v10 = await structure();
+    const before = await rows();
+
+    // A sequence is outside the fingerprint and takes the new index's name, so the upgrade fails after it added the table.
+    await schema.pool.query("CREATE SEQUENCE issue_verdicts_issue");
+    await expect(start()).rejects.toThrow(/issue_verdicts_issue/);
+    expect(await structure()).toEqual(v10);
+    expect(await rows()).toEqual(before);
+    await schema.pool.query("DROP SEQUENCE issue_verdicts_issue");
+
+    await start();
+    expect(await structure()).toEqual(fresh);
+    const after = { ...before, spaces: before.spaces.map((row) => ({ ...row, accept_after_hours: null })) };
+    expect(await rows()).toEqual(after);
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(after);
+
+    if (seeded) {
+      await verdict("('v1', 'i', 'submitted', 'u', 'Done', NULL, 3), ('v2', 'i', 'accepted', NULL, '', NULL, 4), ('v3', 'i', 'reverted', 'u', '', 'op', 5)");
+      await expect(verdict("('v4', 'i', 'sent_back', NULL, 'Why', NULL, 6)")).rejects.toThrow(/issue_verdicts_check/);
+      await expect(verdict("('v4', 'i', 'accepted', 'u', '', 'op', 6)")).rejects.toThrow(/issue_verdicts_check/);
+      await expect(verdict("('v4', 'i', 'closed', 'u', '', NULL, 6)")).rejects.toThrow(/issue_verdicts_kind_check/);
+      await expect(schema.pool.query("UPDATE spaces SET accept_after_hours = 0 WHERE id = 't'")).rejects.toThrow(/spaces_accept_after_hours_check/);
+      await schema.pool.query("UPDATE spaces SET accept_after_hours = 72 WHERE id = 't'");
+      await schema.pool.query("DELETE FROM issues WHERE id = 'i'");
+      expect((await schema.pool.query("SELECT COUNT(*)::int AS n FROM issue_verdicts")).rows).toEqual([{ n: 0 }]);
+    }
+  });
+
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
     const schema = await createPostgresTestSchema(url!);
     onTestFinished(schema.close);
@@ -499,10 +556,11 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
 });
 
 /** Gives a fresh schema the structure a deployed database at an older version has. */
-async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9): Promise<void> {
+async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10): Promise<void> {
   const client = await schema.pool.connect();
   try {
-    await client.query("DROP INDEX worktrees_issue; ALTER TABLE worktrees DROP COLUMN issue_id");
+    await client.query("DROP TABLE issue_verdicts; ALTER TABLE spaces DROP COLUMN accept_after_hours");
+    if (version < 10) await client.query("DROP INDEX worktrees_issue; ALTER TABLE worktrees DROP COLUMN issue_id");
     if (version < 9) await client.query("ALTER TABLE spaces DROP COLUMN proposals");
     if (version < 8) await client.query("DROP INDEX worktrees_open_fork; ALTER TABLE worktrees DROP COLUMN fork_id; DROP TABLE forks");
     if (version < 7) await client.query(`ALTER TABLE html_view_drafts DROP COLUMN superseded_by, DROP COLUMN revises_draft_id;

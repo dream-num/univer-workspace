@@ -1,8 +1,8 @@
 # Univer Workspace 数据模型
 
 产品库支持 SQLite 和 PostgreSQL，两个后端分别维护 schema 版本和外键约束。
-SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 30`。
-PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 10 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 31`。
+PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 11 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 `DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。Core 使用 `core-s3` V1：快照引用保存在 `snapshots.block_ids`，`sheet_blocks` 记录 Unit 与块 ID，块内容由协同适配器写入 S3。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
@@ -26,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-SQLite 启动入口先将产品数据库准备到 V30，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V31，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
@@ -34,7 +34,7 @@ Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V30，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V31，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -212,6 +212,9 @@ owner 与 admin 能修改。“能否提议”只在 SQL 里判断一次（SQLit
 Trunk 或合并；它只看见自己的 Team Worktree。设置改回 `members` 或关闭公开读取后，它的 draft 像离开 Space 一样冻结，
 ready 的提议仍留给成员审阅、合并或放弃。非成员在一个 Team Space 至多有 3 个未处理（`processed_at IS NULL`）的
 Team Worktree，计数与插入在同一事务内，超出返回 `403 FORBIDDEN`。
+
+`accept_after_hours`（V31，`INTEGER`，可空，CHECK 大于 0）预留给按期限自动验收：`NULL` 表示关闭。目前只有这一列，
+没有读取它的任务，也没有设置它的界面或接口；新库和迁移后的已有行都是 `NULL`。
 
 `slug`（V12，`TEXT COLLATE NOCASE`，可空）是 Team Space 在 owner 名下的短名，规则为
 `[A-Za-z0-9._-]`、1–100 字符、首字符为字母或数字，不区分大小写，`(owner_user_id, slug)` 唯一
@@ -526,7 +529,7 @@ Fork 回到 `clean`，下一次写入打开新的 Worktree。
 ## Issues
 
 Issue 只属于 Team Space，不保存 snapshot、changeset 或 revision。Team Worktree 可以用 `worktrees.issue_id`（V30）
-指向它服务的 Issue，Issue 一侧不存链接。
+指向它服务的 Issue，Issue 一侧不存链接。验收记录在 `issue_verdicts`（V31）。
 所有写入都是单个 `BEGIN IMMEDIATE` 事务，不使用 Operation。权限从 Space 角色推导，不设 Issue 级 ACL；
 个人空间的 Issue 接口返回 409。
 
@@ -549,7 +552,31 @@ V1 不允许删除 Issue，所以编号不会复用。以后加入删除，需�
 评论保存作者、正文和时间；作者可编辑，作者、Owner、Admin 可硬删除。事件保存 `kind`
 （`closed | reopened | renamed | labeled | unlabeled | assigned | unassigned | node_referenced | node_unreferenced`）
 和 `payload_json` 快照（标签名与颜色键、用户名、Node 名称），标签被删除或文件被改名后历史仍可读。
-时间线按 `(created_at, 评论优先, id)` 合并两张表，用 keyset 分页。
+时间线按 `(created_at, 评论、事件、Verdict, id)` 合并三张表，用 keyset 分页；Verdict 以同名 `kind` 的事件出现，
+`payload` 只有 `body`。
+
+### `issue_verdicts`
+
+V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue 的验收状态（`acceptance`）就是最新一条：
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 随机主键 |
+| `issue_id` | 所属 Issue，`ON DELETE CASCADE` |
+| `kind` | `submitted | accepted | sent_back | reverted`；目前只写入前三种 |
+| `actor_user_id` | 给出 Verdict 的 User；CHECK 只允许 `accepted` 为 `NULL`，目前总有值 |
+| `body` | Markdown；`submitted` 是做了什么、查了什么、假设了什么，`sent_back` 是退回原因，`accepted` 可为空 |
+| `operation_id` | CHECK 只允许 `reverted` 非空，目前总为 `NULL` |
+| `created_at` | 毫秒时间；同一 Issue 内每条都晚于上一条 |
+
+索引 `issue_verdicts_issue(issue_id, created_at, id)` 读最新一条。状态由最新 Verdict 与 `issues.state` 推导：
+开放的 Issue 没有 Verdict 或最新为 `sent_back` 时，任一 Assignee（任何成员角色）可 `submitted`，`body` 必填；
+最新为 `submitted` 时，能关闭它的人（作者或有 `triageIssues` 能力，包括被指派的 agent）可 `accepted`，或带必填 `body`
+`sent_back`。`accepted` 在同一事务里走已有关闭路径，以 `completed` 关闭 Issue，写 `closed` 事件，活动流照旧显示
+`issue-closed`。已关闭的 Issue 拒绝 Verdict（`409 ISSUE_CLOSED`），重复提交返回 `409 ISSUE_ALREADY_SUBMITTED`，
+未提交时验收或退回返回 `409 ISSUE_NOT_SUBMITTED`，无权返回 `403 FORBIDDEN`。与最新一条同 `kind`、同 actor、同
+`body` 的请求不写入，直接返回当前 Issue。每条 Verdict 都更新 `issues` 行，PostgreSQL 的 SERIALIZABLE 事务因此让
+并发 Verdict 冲突并重试，重试读到胜者：两个并发验收只关闭一次、只记一条。
 
 ### `issue_labels` 与 `issue_label_links`
 
@@ -676,11 +703,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V30，不备份；
-2. 完整 V30：校验指纹后正常启动，不重复备份；
-3. 完整 V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V30；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V30；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V30；
+1. 不存在或空文件：创建 V31，不备份；
+2. 完整 V31：校验指纹后正常启动，不重复备份；
+3. 完整 V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V31；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V31；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V31；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含

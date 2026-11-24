@@ -188,11 +188,16 @@ Issue:
   allOf:
     - $ref: "#/IssueSummary"
     - type: object
-      required: [body, references, capabilities, pullRequests]
+      required: [body, references, capabilities, pullRequests, acceptance]
       properties:
         body:
           type: string
           description: Markdown.
+        acceptance:
+          oneOf:
+            - $ref: "#/IssueAcceptance"
+            - type: "null"
+          description: The latest verdict, or `null` when the Issue was never submitted.
         references:
           type: array
           items:
@@ -208,6 +213,40 @@ Issue:
           items:
             $ref: "#/IssuePullRequest"
   unevaluatedProperties: false
+
+IssueVerdictKind:
+  type: string
+  enum: [submitted, accepted, sent_back]
+
+IssueAcceptance:
+  type: object
+  additionalProperties: false
+  required: [kind, actor, body, createdAt]
+  properties:
+    kind:
+      $ref: "#/IssueVerdictKind"
+    actor:
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
+    body:
+      type: string
+      description: Markdown. What was done, checked and assumed for `submitted`; the reason for `sent_back`.
+    createdAt:
+      type: string
+      format: date-time
+
+CreateIssueVerdict:
+  type: object
+  additionalProperties: false
+  required: [kind]
+  properties:
+    kind:
+      $ref: "#/IssueVerdictKind"
+    body:
+      type: string
+      maxLength: 65536
+      description: Required and not blank for `submitted` and `sent_back`; optional for `accepted`.
 
 IssuePullRequest:
   type: object
@@ -284,6 +323,9 @@ IssueEventKind:
     - unassigned
     - node_referenced
     - node_unreferenced
+    - submitted
+    - accepted
+    - sent_back
 
 IssueTimelineComment:
   type: object
@@ -328,7 +370,8 @@ IssueTimelineEvent:
         `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
         `labelId`, `name` and `color`; `assigned` and `unassigned` carry
         `userId`, `username` and `displayName`; `node_referenced` and
-        `node_unreferenced` carry `nodeId` and `name`.
+        `node_unreferenced` carry `nodeId` and `name`. The verdicts `submitted`,
+        `accepted` and `sent_back` carry `body`.
     createdAt:
       type: string
       format: date-time
@@ -518,6 +561,15 @@ IssueSearchParameter:
   schema:
     type: string
     maxLength: 200
+
+IssueAcceptanceParameter:
+  name: acceptance
+  in: query
+  required: false
+  description: Only Issues whose latest verdict is this one.
+  schema:
+    type: string
+    enum: [submitted, sent_back]
 
 IssueSortParameter:
   name: sort

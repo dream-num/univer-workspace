@@ -769,3 +769,20 @@ wait for its backup, migration and health checks before restoring service. Back 
 Failed migration rolls back; successful restarts do not repeat migration or backup. V29 code refuses a V30 database,
 so a code rollback needs the backup taken before the upgrade: stop V30 and restore it, which loses what was written
 since. Never run V29 and V30 writers on the same SQLite file.
+
+### Issue acceptance and product database V31
+
+An assignee of an open Issue, with any member role, submits it for acceptance with a summary of what was done, checked
+and assumed. Whoever may close the Issue, its author or a member who may triage Issues, then accepts it, which closes it
+as completed, or sends it back with a reason, after which an assignee submits again. Use `POST
+/api/spaces/{spaceId}/issues/{number}/verdicts`, `uvw issue submit|accept|send-back`, the MCP `issue_verdict` tool, or
+the Accept and Send back form on the Issue page. The Issue shows its latest verdict as `acceptance`, the timeline shows
+every verdict, and `acceptance=submitted|sent_back` filters Issue lists.
+
+V30→V31 adds the empty table `issue_verdicts` with the index `issue_verdicts_issue`, and the nullable column
+`spaces.accept_after_hours`, which nothing reads yet. Existing rows read null. On PostgreSQL the same step moves
+`workspace_product_schema` from version 10 to 11. Stop every old instance, start one V31 instance, and wait for its
+backup, migration and health checks before restoring service. Back up PostgreSQL before the upgrade. Failed migration
+rolls back; successful restarts do not repeat migration or backup. V30 code refuses a V31 database, so a code rollback
+needs the backup taken before the upgrade: stop V31 and restore it, which loses what was written since. Never run V30
+and V31 writers on the same SQLite file.

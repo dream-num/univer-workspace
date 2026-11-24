@@ -16,6 +16,8 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MI9 preserves a malformed-Issue-number error and its usage event.
 - MI10 preserves a nonexistent-Issue error from the Workspace and its usage event.
 - MI11 returns a structured `workspace-argument-invalid` for an invalid argument and records its usage event.
+- MI12 has a claimed Viewer agent submit an Issue it worked in a fork pull request, the run user send it back and
+  accept it in the browser, and the agent find the sent-back Issue with `search` and `acceptance`.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -36,7 +38,7 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 ## How to get to it (user POV)
 
 An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue_list`, `issue_edit`,
-`issue_comment`, `issue_set_state`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `search` and
+`issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `search` and
 `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent.
@@ -214,6 +216,78 @@ jq -e '.outcome == "tool_error" and .error_code == "workspace-argument-invalid" 
 
 Pass when the call exits 1 with a structured `workspace-argument-invalid` result (not the
 SDK's plain validation text) and the event records `tool_error` with the same code.
+
+### MI12. Submit an Issue, send it back, then accept it
+
+The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
+fork pull request linked to the Issue and submits it with `issue_verdict`. O sends it back in the browser with a
+reason, A finds it with `search` and `acceptance` and submits again, and O accepts it in the browser, which closes it
+as completed. MI12 uses one `principal`, which counts toward the 5 agents per hour.
+
+```bash
+$V cli mia-repo repo create issue-accept --name "Issue accept" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mia-repo.out")
+$V principal acceptor mia-a
+A=$(jq -r .agent.username "$EVIDENCE/principal-acceptor.json")
+$V mcp --as acceptor mia-claim claim '{}'
+```
+
+Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+`mia-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+cache. Then:
+
+```bash
+R="$O/issue-accept"
+$V cli mia-member repo member add "$A" --role viewer -R "$R" --json
+$V cli mia-issue issue create -R "$R" -t "Add the West region" -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mia-issue.out")
+$V mcp --as acceptor mia-fork fork_create "{\"repo\":\"$R\",\"name\":\"west\"}"
+F=$(jq -r .fullName "$EVIDENCE/mia-fork.out")
+$V mcp --as acceptor mia-write unit_create "{\"worktree\":\"$F\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Regions\"}"
+$V mcp --as acceptor mia-fork-view fork_view "{\"fork\":\"$F\"}"
+PN=$(jq -r .worktree.number "$EVIDENCE/mia-fork-view.out")
+$V mcp --as acceptor mia-link pr_edit "{\"repo\":\"$R\",\"number\":\"$PN\",\"issue\":$N}"
+$V mcp --as acceptor mia-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$PN\"}"
+$V mcp --as acceptor mia-submit issue_verdict "$(jq -nc --arg r "$R" --arg n "$N" --arg b "Added a Regions sheet in pull request #$PN. Checked that it opens. Assumed West is a new row." '{repo:$r,number:$n,verdict:"submit",body:$b}')"
+jq -e '.state == "open" and .acceptance.kind == "submitted"' "$EVIDENCE/mia-submit.out"
+$V mcp --as acceptor mia-self-accept issue_verdict "{\"repo\":\"$R\",\"number\":\"$N\",\"verdict\":\"accept\"}"
+test $? -eq 1
+jq -e '.code == "FORBIDDEN"' "$EVIDENCE/mia-self-accept.out"
+$V mcp mia-h-queue search '{"kind":"issues","author":"@me","acceptance":"submitted"}'
+jq -e --argjson n "$N" '[.issues[].number] == [$n]' "$EVIDENCE/mia-h-queue.out"
+$V mcp mia-h-empty issue_verdict "{\"repo\":\"$R\",\"number\":\"$N\",\"verdict\":\"send_back\"}"
+test $? -eq 1
+jq -e '.code == "INVALID_INPUT"' "$EVIDENCE/mia-h-empty.out"
+```
+
+In the run browser, signed in as O, open `$ORIGIN/spaces/$T/issues/$N`. The sidebar's `Acceptance` reads
+`Submitted for acceptance`, and the `Review this submission` section shows `Send back` disabled until a reason is typed.
+Type `West needs its Q4 total.` into `Reason for sending back`, click `Send back`, reload, and screenshot the timeline
+and sidebar as `mia-sent-back.png`. Then:
+
+```bash
+$V mcp --as acceptor mia-find search '{"kind":"issues","assignee":"@me","acceptance":"sent_back"}'
+jq -e --argjson n "$N" '[.issues[].number] == [$n]' "$EVIDENCE/mia-find.out"
+$V mcp --as acceptor mia-reason issue_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '.acceptance.kind == "sent_back" and .acceptance.body == "West needs its Q4 total."' "$EVIDENCE/mia-reason.out"
+$V mcp --as acceptor mia-resubmit issue_verdict "{\"repo\":\"$R\",\"number\":\"$N\",\"verdict\":\"submit\",\"body\":\"Added the West Q4 total.\"}"
+jq -e '.acceptance.kind == "submitted"' "$EVIDENCE/mia-resubmit.out"
+```
+
+Reload the Issue page, click `Accept`, reload, and screenshot the closed Issue with its timeline as `mia-accepted.png`.
+Open `$ORIGIN/api/spaces/$T/activity?timeZone=UTC` in the run browser and save the page text as `mia-activity.json`. Then:
+
+```bash
+$V cli mia-final issue view "$N" -R "$R" -c --json state,stateReason,acceptance,timeline
+jq -e --arg o "$O" '.state == "closed" and .stateReason == "completed" and .acceptance.kind == "accepted" and .acceptance.actor.username == $o' "$EVIDENCE/mia-final.out"
+jq -e '[.timeline[] | select(.type == "event") | .kind] | map(select(. != "assigned")) == ["submitted", "sent_back", "submitted", "closed", "accepted"]' "$EVIDENCE/mia-final.out"
+jq -e --argjson n "$N" '[.events[] | select(.kind == "issue-closed" and .issue.number == $n)] | length == 1' "$EVIDENCE/mia-activity.json"
+```
+
+Pass when every command exits as shown: A submits as a Viewer assignee but may not accept, an empty send-back is
+`INVALID_INPUT`, O's `acceptance` search lists the submitted Issue, the browser send-back shows the reason in the
+timeline, A finds the sent-back Issue with `acceptance`, resubmits, and O's browser accept closes the Issue as
+completed with one `issue-closed` activity event.
 
 ### MP1. Pull request create
 

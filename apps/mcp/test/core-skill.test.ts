@@ -72,7 +72,7 @@ describe("MCP core Skill tool bindings", () => {
     expect(content).toContain(
       "`share` works only on files in a Personal Space. For a Team repository, return the pull request link instead.",
     );
-    expect(content).toContain("Leave the Issue open, and finish the pull request as the server instructions say.");
+    expect(content).toContain("4. Verify, and finish the pull request as the server instructions say. 5. Submit with `issue_verdict`");
     expect(content).toContain("Do not discard unless explicitly requested. Discard is irreversible.");
   });
 

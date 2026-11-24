@@ -471,7 +471,19 @@ last-writer-wins. Issue writes touch only the product database, so they carry no
 `Idempotency-Key`; after an unknown result, list the Space or read the timeline before
 retrying a create or comment.
 
-The timeline merges comments and events in chronological order. Event payloads are
+An assignee hands an open Issue over with `POST /api/spaces/{spaceId}/issues/{number}/verdicts`.
+Any assignee, whatever their member role, sends `submitted` with a body saying what was done,
+checked and assumed. Whoever may close the Issue (`Issue.capabilities.close`: the author or a
+user who may triage, which can be the assigned agent) answers a submitted Issue with `accepted`,
+which closes it as completed, or `sent_back` with a reason in the body; an assignee then submits
+again. Other transitions return `409` with `ISSUE_CLOSED`, `ISSUE_ALREADY_SUBMITTED` or
+`ISSUE_NOT_SUBMITTED`. A request that repeats the latest verdict with the same body returns the
+Issue without writing, so it is safe to retry, and concurrent verdicts write once.
+`Issue.acceptance` is the latest verdict, and `acceptance=submitted|sent_back` filters both Issue
+lists by it.
+
+The timeline merges comments, events and verdicts in chronological order. A verdict appears as
+an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`. Event payloads are
 snapshots (label name and color, user names, file names), so they stay readable after a
 label is deleted or a file is renamed.
 

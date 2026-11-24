@@ -19,6 +19,10 @@ const inputSchema = z.object({
     .describe("Issues: open, closed or all. Pull requests: open, merged, discarded or all."),
   labels: z.array(z.string()).optional().describe("Issues only. Require every one of these labels."),
   assignee: z.string().optional().describe("Issues only. Username, @me, or none."),
+  acceptance: z
+    .enum(["submitted", "sent_back"])
+    .optional()
+    .describe("Issues only. submitted: waiting for acceptance. sent_back: returned with a reason."),
   author: z.string().optional().describe("Username or @me."),
   search: z.string().optional().describe("Match title and body (pull requests also author)."),
   reviewable: z
@@ -43,7 +47,7 @@ export const searchTool: ToolDefinition = {
   }),
   annotations: readOnlyAnnotations,
   async run(context, args) {
-    const { kind, state, labels, assignee, author, search, reviewable, limit } = inputSchema.parse(args);
+    const { kind, state, labels, assignee, acceptance, author, search, reviewable, limit } = inputSchema.parse(args);
     if (kind === "issues") {
       if (state === "merged" || state === "discarded") {
         throw invalid("state must be open, closed or all when kind is issues.");
@@ -55,6 +59,7 @@ export const searchTool: ToolDefinition = {
           state,
           ...(labels === undefined ? {} : { labels }),
           ...(assignee === undefined ? {} : { assignee: issueApiUsername(assignee) }),
+          ...(acceptance === undefined ? {} : { acceptance }),
           ...(author === undefined ? {} : { author: issueApiUsername(author) }),
           ...(search === undefined ? {} : { search }),
         },
@@ -63,8 +68,8 @@ export const searchTool: ToolDefinition = {
       return { output: { issues: issues.map((issue) => withUrl(context, issue)) }, repo: null };
     }
     if (state === "closed") throw invalid("state must be open, merged, discarded or all when kind is prs.");
-    if (labels !== undefined || assignee !== undefined) {
-      throw invalid("labels and assignee apply only when kind is issues.");
+    if (labels !== undefined || assignee !== undefined || acceptance !== undefined) {
+      throw invalid("labels, assignee and acceptance apply only when kind is issues.");
     }
     const prs = await listPullRequests(
       { userId: async () => context.user.id, worktrees: worktreeFeature(context) },

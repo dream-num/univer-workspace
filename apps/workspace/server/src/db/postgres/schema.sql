@@ -58,6 +58,7 @@ CREATE TABLE spaces (
   description TEXT NOT NULL DEFAULT '',
   slug TEXT,
   proposals TEXT NOT NULL DEFAULT 'members' CHECK (proposals IN ('members', 'accountable', 'anyone')),
+  accept_after_hours INTEGER CHECK (accept_after_hours > 0),
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX spaces_personal_owner
@@ -733,6 +734,18 @@ CREATE TABLE issue_node_refs (
   PRIMARY KEY (issue_id, node_id)
 );
 CREATE INDEX issue_node_refs_node ON issue_node_refs(node_id);
+CREATE TABLE issue_verdicts (
+  id TEXT PRIMARY KEY,
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('submitted', 'accepted', 'sent_back', 'reverted')),
+  actor_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  body TEXT NOT NULL DEFAULT '',
+  operation_id TEXT,
+  created_at BIGINT NOT NULL,
+  CHECK (actor_user_id IS NOT NULL OR kind = 'accepted'),
+  CHECK (operation_id IS NULL OR kind = 'reverted')
+);
+CREATE INDEX issue_verdicts_issue ON issue_verdicts(issue_id, created_at, id);
 
 CREATE TABLE space_stars (
   space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,

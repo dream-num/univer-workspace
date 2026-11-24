@@ -3918,6 +3918,7 @@ paths:
         - $ref: '#/components/parameters/IssueAssigneeParameter'
         - $ref: '#/components/parameters/IssueAuthorParameter'
         - $ref: '#/components/parameters/IssueSearchParameter'
+        - $ref: '#/components/parameters/IssueAcceptanceParameter'
         - $ref: '#/components/parameters/IssueSortParameter'
         - $ref: '#/components/parameters/IssueOrderParameter'
       responses:
@@ -3952,6 +3953,7 @@ paths:
         - $ref: '#/components/parameters/IssueAssigneeParameter'
         - $ref: '#/components/parameters/IssueAuthorParameter'
         - $ref: '#/components/parameters/IssueSearchParameter'
+        - $ref: '#/components/parameters/IssueAcceptanceParameter'
         - $ref: '#/components/parameters/IssueSortParameter'
         - $ref: '#/components/parameters/IssueOrderParameter'
       responses:
@@ -4132,6 +4134,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IssueComment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/issues/{number}/verdicts:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      tags:
+        - Issues
+      operationId: recordIssueVerdict
+      summary: Submit an Issue for acceptance, accept it, or send it back.
+      description: |
+        An assignee of an open Issue submits it, with any member role. Whoever may close the Issue (the
+        author or a user with the triage capability, including an assigned agent) accepts a submitted
+        Issue, which closes it as completed, or sends it back with a reason. After a send-back an assignee
+        submits again. Repeating the latest verdict with the same body returns the Issue unchanged, so a
+        retry after an unknown result is safe. Other transitions return 409 with `ISSUE_CLOSED`,
+        `ISSUE_ALREADY_SUBMITTED` or `ISSUE_NOT_SUBMITTED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueVerdict'
+      responses:
+        '200':
+          description: The Issue with its new acceptance state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -5282,10 +5332,16 @@ components:
             - references
             - capabilities
             - pullRequests
+            - acceptance
           properties:
             body:
               type: string
               description: Markdown.
+            acceptance:
+              oneOf:
+                - $ref: '#/components/schemas/IssueAcceptance'
+                - type: 'null'
+              description: The latest verdict, or `null` when the Issue was never submitted.
             references:
               type: array
               items:
@@ -8839,6 +8895,33 @@ components:
           items:
             type: string
           description: Requires the triage capability. Nodes must be in the Space and not in Trash.
+    IssueVerdictKind:
+      type: string
+      enum:
+        - submitted
+        - accepted
+        - sent_back
+    IssueAcceptance:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - actor
+        - body
+        - createdAt
+      properties:
+        kind:
+          $ref: '#/components/schemas/IssueVerdictKind'
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: 'null'
+        body:
+          type: string
+          description: Markdown. What was done, checked and assumed for `submitted`; the reason for `sent_back`.
+        createdAt:
+          type: string
+          format: date-time
     IssueReference:
       type: object
       additionalProperties: false
@@ -9013,6 +9096,9 @@ components:
         - unassigned
         - node_referenced
         - node_unreferenced
+        - submitted
+        - accepted
+        - sent_back
     IssueTimelineEvent:
       type: object
       additionalProperties: false
@@ -9041,7 +9127,8 @@ components:
             `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
             `labelId`, `name` and `color`; `assigned` and `unassigned` carry
             `userId`, `username` and `displayName`; `node_referenced` and
-            `node_unreferenced` carry `nodeId` and `name`.
+            `node_unreferenced` carry `nodeId` and `name`. The verdicts `submitted`,
+            `accepted` and `sent_back` carry `body`.
         createdAt:
           type: string
           format: date-time
@@ -9101,6 +9188,18 @@ components:
         updatedAt:
           type: string
           format: date-time
+    CreateIssueVerdict:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+      properties:
+        kind:
+          $ref: '#/components/schemas/IssueVerdictKind'
+        body:
+          type: string
+          maxLength: 65536
+          description: Required and not blank for `submitted` and `sent_back`; optional for `accepted`.
     IssueLabelUsage:
       allOf:
         - $ref: '#/components/schemas/IssueLabel'
@@ -9675,6 +9774,16 @@ components:
       schema:
         type: string
         maxLength: 200
+    IssueAcceptanceParameter:
+      name: acceptance
+      in: query
+      required: false
+      description: Only Issues whose latest verdict is this one.
+      schema:
+        type: string
+        enum:
+          - submitted
+          - sent_back
     IssueSortParameter:
       name: sort
       in: query

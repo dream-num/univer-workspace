@@ -26,6 +26,7 @@ export {
 } from "./issue.js";
 export type {
   WorkspaceIssue,
+  WorkspaceIssueAcceptance,
   WorkspaceIssueLabel,
   WorkspaceIssuePage,
   WorkspaceIssuePullRequest,
@@ -35,6 +36,7 @@ export type {
   WorkspaceIssueSummary,
   WorkspaceIssueTimelineItem,
   WorkspaceIssueUser,
+  WorkspaceIssueVerdictKind,
 } from "./issue-model.js";
 export { resolveWorkspaceAssetContent } from "./asset-content.js";
 export { WorkspaceAssetFeature } from "./asset.js";

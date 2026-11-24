@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -114,6 +114,22 @@ ALTER TABLE worktrees ADD CONSTRAINT worktrees_issue_team CHECK (issue_id IS NUL
 CREATE INDEX worktrees_issue
   ON worktrees(issue_id)
   WHERE issue_id IS NOT NULL;`);
+}
+
+async function addIssueVerdicts(client: PoolClient): Promise<void> {
+  await client.query(`ALTER TABLE spaces ADD COLUMN accept_after_hours INTEGER CHECK (accept_after_hours > 0);
+CREATE TABLE issue_verdicts (
+  id TEXT PRIMARY KEY,
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('submitted', 'accepted', 'sent_back', 'reverted')),
+  actor_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  body TEXT NOT NULL DEFAULT '',
+  operation_id TEXT,
+  created_at BIGINT NOT NULL,
+  CHECK (actor_user_id IS NOT NULL OR kind = 'accepted'),
+  CHECK (operation_id IS NULL OR kind = 'reverted')
+);
+CREATE INDEX issue_verdicts_issue ON issue_verdicts(issue_id, created_at, id);`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

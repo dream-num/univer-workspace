@@ -12,6 +12,7 @@ import {
   type WorkspaceIssuePage,
   type WorkspaceIssueSummary,
   type WorkspaceIssueTimelineItem,
+  type WorkspaceIssueVerdictKind,
 } from "./issue-model.js";
 import { usernameKey } from "./username.js";
 import { findUser } from "./users.js";
@@ -25,6 +26,7 @@ export interface WorkspaceIssueLabelUsage extends WorkspaceIssueLabel {
 export interface ListIssuesInput {
   /** Omit to list across every Team Space the caller belongs to. */
   readonly spaceId?: string;
+  readonly acceptance?: "submitted" | "sent_back";
   readonly assignee?: string;
   readonly author?: string;
   readonly cursor?: string;
@@ -92,6 +94,7 @@ export class WorkspaceIssueFeature {
       const value = input.author === "@me" ? "me" : input.author;
       query.set("author", value === "me" ? value : (await resolveUsers(http, [value]))[0]!);
     }
+    if (input.acceptance !== undefined) query.set("acceptance", input.acceptance);
     if (input.search !== undefined) query.set("q", input.search);
     if (input.sort !== undefined) query.set("sort", input.sort);
     if (input.order !== undefined) query.set("order", input.order);
@@ -235,6 +238,21 @@ export class WorkspaceIssueFeature {
       state: "closed",
       stateReason: options.reason ?? "completed",
     });
+  }
+
+  /** Repeating the latest verdict with the same body returns the Issue unchanged, so a retry is safe. */
+  public async verdict(
+    spaceId: string,
+    number: number,
+    kind: WorkspaceIssueVerdictKind,
+    body?: string,
+  ): Promise<WorkspaceIssue> {
+    return parseIssue(
+      await (await this.authenticatedHttp()).json(`${issuePath(spaceId, number)}/verdicts`, {
+        body: body === undefined ? { kind } : { kind, body },
+        method: "POST",
+      }),
+    );
   }
 
   public async reopen(spaceId: string, number: number): Promise<WorkspaceIssue> {

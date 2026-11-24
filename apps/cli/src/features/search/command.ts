@@ -24,12 +24,14 @@ export function createSearchCommand(
     .option("-l, --label <name>", "require a label; repeat for several", collect)
     .option("-a, --assignee <user>", "username, @me, or none")
     .option("-A, --author <user>", "username or @me")
+    .option("--acceptance <state>", "submitted or sent_back")
     .option("-S, --search <text>", "match title and body")
     .option("-L, --limit <n>", "maximum number of Issues", "30")
     .addOption(jsonFieldsOption(ISSUE_LIST_JSON_FIELDS))
     .action(
       async (
         options: JsonFieldsOption & {
+          readonly acceptance?: string;
           readonly assignee?: string;
           readonly author?: string;
           readonly label?: readonly string[];
@@ -45,6 +47,9 @@ export function createSearchCommand(
               state: oneOf(options.state, ["open", "closed", "all"], "--state"),
               ...(options.label === undefined ? {} : { labels: options.label }),
               ...(options.assignee === undefined ? {} : { assignee: issueApiUsername(options.assignee) }),
+              ...(options.acceptance === undefined
+                ? {}
+                : { acceptance: oneOf(options.acceptance, ["submitted", "sent_back"], "--acceptance") }),
               ...(options.author === undefined ? {} : { author: issueApiUsername(options.author) }),
               ...(options.search === undefined ? {} : { search: options.search }),
             },
