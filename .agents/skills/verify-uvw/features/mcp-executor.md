@@ -100,7 +100,8 @@ if agent-browser get url | grep -q '/login'; then
   agent-browser wait --url '**/home'
 fi
 agent-browser open "$(jq -r '.unit.url' "$EVIDENCE/mx-unit.out")"
-agent-browser wait 3000
+agent-browser wait canvas
+agent-browser wait 4000
 agent-browser screenshot "$EVIDENCE/mx-pull-request.png"
 ```
 
