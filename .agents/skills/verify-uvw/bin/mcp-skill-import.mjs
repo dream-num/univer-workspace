@@ -85,11 +85,14 @@ try {
   assert(page.includes("Script won't run") && page.includes(quote), "The page must show the script-file finding's label and the verified quote.");
   assert(page.includes(`SKILL.md:${draft.review[0].line}`), "Verified review must display its line.");
   assert.equal(browser("eval", `document.querySelector('a[href="${sourceUrl}"]') !== null`).trim(), "true");
+  // The review scrolls inside the app shell, so a full-page screenshot holds only the viewport; a tall one holds it all.
+  const [width, height] = JSON.parse(JSON.parse(browser("eval", "JSON.stringify([innerWidth, innerHeight])")));
+  browser("set", "viewport", String(width), "2600");
   screenshot("mr15-draft");
+  browser("set", "viewport", String(width), String(height));
   browser("screenshot", join(EVIDENCE, "mr15-draft-header.png"));
-  const scriptFile = draft.files.find((file) => file.path.startsWith("scripts/"));
-  assert(scriptFile);
-  browser("eval", `document.getElementById(${JSON.stringify(`skill-file-${encodeURIComponent(scriptFile.path)}`)})?.scrollIntoView({ block: "center" })`);
+  assert(draft.files.some((file) => file.path.startsWith("scripts/")));
+  assert.equal(browser("eval", `(() => { const list = document.getElementById("skill-files"); list?.scrollIntoView({ block: "start" }); return list?.textContent.includes("scripts/") === true; })()`).trim(), "true", "The file list must name the script files.");
   browser("screenshot", join(EVIDENCE, "mr15-draft-files.png"));
   browser("find", "role", "button", "click", "--name", "Publish", "--exact");
   browser("wait", "--text", "Open Skill folder");
