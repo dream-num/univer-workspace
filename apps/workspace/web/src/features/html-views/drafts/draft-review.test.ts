@@ -111,7 +111,7 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
-async function click(label: string) { await act(async () => button(label).click()); }
+async function click(label: string) { await waitFor(() => button(label)); await act(async () => button(label).click()); }
 function count(suffix: string) { return requests.filter((request) => new URL(request.url).pathname.endsWith(suffix)).length; }
 async function reason(value: string) {
   const input = container.querySelector("textarea");
