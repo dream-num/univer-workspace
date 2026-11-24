@@ -51,7 +51,7 @@ Follow the `core` Skill for source and asset handling. `window.univerBinding` is
 Use the `core` Skill for authentication and discovery, and the `sheet` Skill to inspect worksheets, values and formulas. Bind to actual Unit
 and worksheet IDs; Resource IDs and worksheet names are different identities.
 
-Use `html-view validate --worktree <id>` to read a pull request's data. Sources mapped in
+Use `html-view validate --worktree <id>` (or a fork's name) to read a pull request's data. Sources mapped in
 that pull request read its current changes; other sources read merged data. A merged pull
 request reads merged data. `html-view create` publishes immediately and still needs merged
 sources, so defer creation until review and merge are complete. Merge only as the `core`

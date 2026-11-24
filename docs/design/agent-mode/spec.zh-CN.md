@@ -276,7 +276,7 @@ owner 不是 `space_members` 里的一行，它是 `spaces.owner_user_id`。现�
 2. fork 有未结束的 Worktree，并且这个 Unit 在其中，就读 Worktree。
 3. 否则读上游 Trunk。
 
-目录列表是上游的目录，加上 Worktree 里新建的 Unit，减去标记为移除的 Unit。HTML View 有一个挂在这个 Worktree 上的 `pending` 草稿时，读草稿，否则读上游的 Blob。
+目录列表是上游的目录，加上 Worktree 里新建的 Unit，减去标记为移除的 Unit。读者自己有一个挂在这个 Worktree 上、指向这个页面的 `pending` HTML View 草稿时，读草稿，否则读上游的 Blob。
 
 client-core 的 `resolveReferencedRuntimeTarget` 已经按“在这个 Worktree 里就读 Worktree，否则读 Trunk”解析被引用的 Unit。
 
@@ -313,10 +313,7 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 发布跟着合入权走。每次合入，包括 token 会话的合入，都以合入者的身份发布合入开始前挂着的 pending 草稿，合入权因此包括页面：合入者要能写每份草稿的目标。Team Worktree 的作者在它的 Team Space 里提议页面，和提议 Unit 一样只要读权。草稿作者自己写不了目标时，页面代码要人看过才上线：这样的 Worktree 只能在 Browser 里合入，CLI、PAT、OAuth 的合入得到 409 `PAGE_REVIEW_REQUIRED`，什么都不改变。作者自己能写目标的草稿在任何合入中发布。每个 Worktree 最多挂 20 份 pending 草稿。
 
-还缺两样：
-
-- fork 视图读草稿（5.5）。
-- 页面运行时按 fork 的范围读数据。已发布的页面今天只读 Trunk。
+经 fork 改页面，就是把 HTML View 草稿挂在 fork 的 Worktree 上。草稿的 `source_worktree_id` 是这个 Worktree，所以草稿的预览和 dry run 按 fork 的范围读数据：在 Worktree 里的 Sheet 读 Worktree，其他读上游 Trunk。已发布的页面读 Trunk，合入之后 Trunk 里就是 fork 的修改。干净的 fork 只改页面时，`POST /api/forks/{forkId}/worktree` 打开 fork 的 Worktree。Collaboration SDK 能把没有 Unit 的 Worktree 标记 ready 并合入，这样的 pull request 合入时只发布页面。
 
 草稿 7 天过期。提议等待超过 7 天，页面要由 agent 重新保存。
 
@@ -324,7 +321,7 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 ### 5.8 接口
 
-- HTTP contract 的来源是 `apps/workspace/contracts/http`。阶段 2 给 Worktree Unit 加上 5.6 的三个字段和标签。阶段 4 加上 fork 的创建、列出、读取和删除，以及经 fork 写入 Unit 的 `POST /api/forks/{forkId}/units`。
+- HTTP contract 的来源是 `apps/workspace/contracts/http`。阶段 2 给 Worktree Unit 加上 5.6 的三个字段和标签。阶段 4 加上 fork 的创建、列出、读取和删除，以及经 fork 写入 Unit 的 `POST /api/forks/{forkId}/units`。阶段 5 加上为页面草稿打开 fork Worktree 的 `POST /api/forks/{forkId}/worktree`。
 - MCP 和 CLI 不新建工具集。内容工具的 `worktree` 参数（CLI 的 `--worktree`）接受 fork 的地址，读走 5.5 的读路径，写走 5.5 的写路径。MCP 的 `space_browse`、`space_find`（CLI 的 `space browse`、`space find`）按 5.5 列出 fork 的目录，MCP 的 `repo_view` 显示 fork 的上游。其他指向仓库的参数只接受仓库，遇到 fork 的地址就报错，错误里给出上游和 pull request 编号。还没接 fork 的内容工具（如 `export`）同样报错，要求改用 fork 的 Worktree ID。新增的只有创建、列出、查看和删除 fork：MCP 的 `fork_create`、`fork_list`、`fork_view`、`fork_delete`，CLI 的 `uvw fork create|list|view|delete`。
 - MCP 网关的说明文字由授予的 scope 和 `capabilities` 决定走哪个变体，不再按主体类别写死。
 
@@ -477,10 +474,8 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 ### 6.6 阶段 5：fork 里的 HTML View 和 Blob
 
-只写范围，开工前再细化。
-
-- fork 视图读挂在 Worktree 上的 HTML View 草稿。
-- 页面运行时按 fork 的范围读数据。
+- fork 视图读挂在 Worktree 上的 HTML View 草稿。已做到：MCP 的 `html_view_read` 带 `worktree`（Worktree ID 或 fork 地址）时，返回调用者挂在这个 pull request 上的这个页面的 pending 草稿，没有就返回上游页面。
+- 页面运行时按 fork 的范围读数据。已做到，见 5.7。MCP 的 `html_view_save` 带 `worktree` 把草稿挂到 fork 的 Worktree，`dryRun` 按同样的范围取样。CLI 不存页面草稿：`html-view validate --worktree <fork>` 按 fork 的范围校验，`html-view create` 拒绝 fork。
 - token 会话合入时，草稿的发布跟着合入权走。已做到，作者自己写不了目标的草稿仍要人在 Browser 里合入，见 5.7。
 - 其他 Blob 的覆盖写。
 

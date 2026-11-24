@@ -2663,6 +2663,50 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/forks/{forkId}/worktree:
+    parameters:
+      - name: forkId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Forks
+      operationId: openForkWorktree
+      summary: Open the fork's Worktree for a write that adds no Unit, or return the open one.
+      description: |
+        A page draft through a fork attaches to the fork's open Worktree, which this route returns. On a `clean`
+        fork it opens that Worktree as `POST /api/forks/{forkId}/units` does, with no Unit, and returns `201`.
+        The Collaboration SDK readies and merges a Worktree with no Unit, so a proposal of pages alone is a pull
+        request like any other. When the open Worktree is not a draft, the request returns
+        `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, and a fork whose upstream its owner
+        can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      responses:
+        '200':
+          description: The fork's open draft Worktree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForkWorktree'
+        '201':
+          description: The Worktree this request opened.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForkWorktree'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/spaces/{spaceId}/nodes:
     parameters:
       - name: spaceId
@@ -7543,7 +7587,8 @@ components:
         Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
         `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
         an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
-        (`POST /api/forks/{forkId}/units`), and only a `drafting` fork takes writes.
+        (`POST /api/forks/{forkId}/units`, or `POST /api/forks/{forkId}/worktree` for a page draft), and only a
+        `drafting` fork takes writes.
     ForkList:
       type: object
       additionalProperties: false
@@ -7633,6 +7678,14 @@ components:
           $ref: '#/components/schemas/WorktreeSummary'
         unit:
           $ref: '#/components/schemas/WorktreeUnit'
+    ForkWorktree:
+      type: object
+      additionalProperties: false
+      required:
+        - worktree
+      properties:
+        worktree:
+          $ref: '#/components/schemas/WorktreeSummary'
     ResourceCapabilities:
       type: object
       additionalProperties: false

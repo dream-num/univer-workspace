@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import { findWorkspaceHtmlViewDraft, isForkAddress, workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { htmlViewInput, htmlViewMaxBytes } from "../../../shared/executor-protocol.js";
 import type { ToolContext } from "../definition.js";
-import { repoInput } from "../core/issue-support.js";
+import { forkFeature, repoInput } from "../core/issue-support.js";
 import { findPr, pullNumberInput } from "../core/pr-support.js";
+import { worktreeOrForkInput } from "../core/space-support.js";
 import { stagingStore } from "./staging-support.js";
 
 export const htmlViewSourceSchema = z.object({
@@ -39,14 +40,33 @@ export async function readHtmlView(input: z.infer<typeof htmlViewSourceSchema>, 
   );
 }
 
-export const htmlViewPullRequestShape = { repo: repoInput.optional(), pr: pullNumberInput.optional() };
+export const htmlViewPullRequestShape = {
+  worktree: worktreeOrForkInput.optional(),
+  repo: repoInput.optional(),
+  pr: pullNumberInput.optional(),
+};
 
+/** A save through a clean fork opens its Worktree; a dry run there reads trunk and opens nothing. */
 export async function htmlViewWorktree(
-  input: z.infer<z.ZodObject<typeof htmlViewPullRequestShape>>, context: ToolContext,
-) {
+  input: z.infer<z.ZodObject<typeof htmlViewPullRequestShape>>, context: ToolContext, save: boolean,
+): Promise<{ readonly sourceWorktreeId?: string }> {
+  if (input.worktree !== undefined) {
+    if (input.repo !== undefined || input.pr !== undefined)
+      throw workspaceError("workspace-argument-invalid", "Provide worktree or repo with pr, not both.");
+    if (!isForkAddress(input.worktree)) return { sourceWorktreeId: input.worktree };
+    const forks = forkFeature(context);
+    const worktree = save ? await forks.openWorktree(input.worktree) : (await forks.get(input.worktree)).worktree;
+    return worktree === null ? {} : { sourceWorktreeId: worktree.id };
+  }
   if (input.pr === undefined) return {};
   if (input.repo === undefined)
     throw workspaceError("workspace-argument-invalid", "Provide repo with the source pull request.");
   const { worktree } = await findPr(context, input.repo, input.pr);
   return { sourceWorktreeId: worktree.id };
+}
+
+export async function pendingPageDraft(context: ToolContext, worktreeId: string, resourceId: string) {
+  return await findWorkspaceHtmlViewDraft(async () => context.http, context.identityOrigin, {
+    worktreeId, resourceId, authorId: context.user.id,
+  });
 }

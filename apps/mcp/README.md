@@ -320,8 +320,8 @@ and the matching owner/slug candidates when available.
 | `skill_source_read` | `source`, optional `skill`, `path`, `cursor` | Resolves a pinned GitHub, skills.sh, ClawHub or Space zip/folder source; returns candidates, a Skill with scan findings, or a text page. Does not import or publish |
 | `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path`, `argumentHint` and `metadata`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
 | `html_view_styles` | No arguments | `{ default, styles: [{ id, name: { en, zh }, mood: { en, zh } }] }` from the built-in Skill snapshot. Scope `read`, no executor |
-| `html_view_save` | Exactly one of `html` or `html_upload_id`; required `idempotency_key`; new page `space`, `name`, optional `parent`; revision `page`, `etag`; optional `repo`, `pr` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
-| `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
+| `html_view_save` | Exactly one of `html` or `html_upload_id`; required `idempotency_key`; new page `space`, `name`, optional `parent`; revision `page`, `etag`; optional `worktree` (Worktree ID or fork address), or `repo` and `pr` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
+| `html_view_read` | Exactly one of `resource` or `draft`; optional `worktree` with `resource` | `{ resource, node, space, name, html, etag, shareUrl }`, or `{ draft, resource?, space, name, html, etag?, previewUrl }` for a draft. Gateway-only bounded inline read |
 | `html_view_draft_get` | Required `draft` (Draft ID) | `{ draft: { id, kind, state, name, space, previewUrl, expiresAt, resource?, node?, etag?, shareUrl? } }`. Scope `read`, no executor; publication fields appear only when published |
 
 `outline`, `read` and `find` accept only Sheet Units. Other types return
@@ -340,7 +340,7 @@ When more remains, `next` is `{ tool, arguments }`. Pass `arguments` unchanged t
 The final text line gives the same next call in neutral tool syntax.
 
 A fork address `<owner>/<name>` from `fork_create` works as `worktree` in `execute`, `unit_list`, `unit_add`, `unit_create`,
-`import`, `inspect`, `outline`, `read`, `find`, `screenshot` and `print_pdf`. The gateway resolves it through Client Core before
+`import`, `inspect`, `outline`, `read`, `find`, `screenshot`, `print_pdf`, `html_view_read` and `html_view_save`. The gateway resolves it through Client Core before
 the tool runs, so the executor and the result see a Worktree ID or trunk. A reading tool reads the fork's open Worktree when
 it holds the Unit, and the upstream trunk otherwise, so `scope` and `next` say `trunk` for a file the fork has not changed.
 Such a file also reads its formulas and embeds from trunk, even when they point at a file the fork changed. `execute`,
@@ -844,12 +844,19 @@ The default `core` toolset provides four HTML View tools:
 
 - `html_view_styles {}` returns the bilingual catalog.
 - `html_view_read {resource}` returns `{resource, node, space, name, html, etag, shareUrl}`.
+  With `worktree`, a Worktree ID or fork address, it returns the caller's pending draft of
+  that page attached to the pull request, as `{draft, resource, space, name, html, etag,
+  previewUrl}` with the draft's base ETag, or the page when there is none.
   Oversized inline results are refused without truncating the page.
 - `html_view_save` creates with `space`, `name` and optional `parent`, or revises with
   `page` (the resource returned by read) and its quoted `etag`. Pass exactly one of
   `html` or `html_upload_id` and an `idempotency_key`. Inline HTML is the default;
-  large inputs can use a ready `html-view` upload. Optional `repo` and `pr` select
-  source pull request data. The result is `{draft, bindings, bindingCount, truncated?}`.
+  large inputs can use a ready `html-view` upload. Optional `worktree`, or `repo` and `pr`,
+  attach the draft to a pull request whose data the page reads and whose merge publishes it.
+  A fork address as `worktree` resolves through Client Core: a save opens the fork's Worktree
+  with `POST /api/forks/{forkId}/worktree`, which a clean fork needs for a page-only change,
+  and a dry run reads the open Worktree or trunk without opening one. With `worktree`, saving
+  `page` with the base ETag of the caller's pending draft of it revises that draft. The result is `{draft, bindings, bindingCount, truncated?}`.
   The draft carries identity, state, preview URL, expiry and source access details.
 - `html_view_draft_get {draft}` returns current state. Published drafts also include
   `shareUrl`, `node`, `resource` and quoted `etag`. MCP has no publish or reject tool.

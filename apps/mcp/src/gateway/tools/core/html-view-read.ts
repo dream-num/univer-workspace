@@ -1,11 +1,15 @@
-import { readWorkspaceHtmlView, readWorkspaceHtmlViewDraftContent, workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import { isForkAddress, readWorkspaceHtmlView, readWorkspaceHtmlViewDraftContent, workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { RESULT_LIMIT, resultTooLarge, serializedLength } from "../../paging.js";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
+import { pendingPageDraft } from "../files/html-view-support.js";
+import { forkFeature } from "./issue-support.js";
+import { worktreeOrForkInput } from "./space-support.js";
 
 const inputSchema = z.object({
   draft: z.string().min(1).optional().describe("Pending draft ID, your own or one on a pull request you can review. Omit resource. Returns HTML without an etag."),
   resource: z.string().min(1).optional().describe("Resource ID of the .univer.html page to revise."),
+  worktree: worktreeOrForkInput.optional().describe("With resource: a pull request's Worktree ID or a fork address <owner>/<name>. Returns your pending draft of the page in that pull request, if any."),
 });
 
 export const htmlViewReadTool: ToolDefinition = {
@@ -14,20 +18,32 @@ export const htmlViewReadTool: ToolDefinition = {
   scope: "read",
   title: "Read an HTML View page",
   description:
-    "Read a .univer.html Blob as inline HTML plus its exact quoted strong ETag. Use its resource as page in html_view_save to revise it. Alternatively pass draft to read a pending draft's HTML without an etag: your own, which you revise with html_view_save draft, or one on a pull request you can review. Pages too large for the inline result are refused; the HTML is never truncated.",
+    "Read a .univer.html Blob as inline HTML plus its exact quoted strong ETag. Use its resource as page in html_view_save to revise it. With worktree, a pull request's Worktree ID or a fork address, it returns your pending draft of that page in the pull request, adding draft and previewUrl, or else the page; either way save with the same worktree, page and etag. Alternatively pass draft to read a pending draft's HTML without an etag: your own, which you revise with html_view_save draft, or one on a pull request you can review. Pages too large for the inline result are refused; the HTML is never truncated.",
   inputSchema,
-  outputSchema: z.union([z.object({ draft: z.string(), space: z.string(), name: z.string(), html: z.string(), previewUrl: z.url() }), z.object({
+  outputSchema: z.union([z.object({
+    draft: z.string(), resource: z.string().optional(), space: z.string(), name: z.string(),
+    html: z.string(), etag: z.string().optional(), previewUrl: z.url(),
+  }), z.object({
     resource: z.string(), node: z.string(), space: z.string(), name: z.string(),
     html: z.string(), etag: z.string(), shareUrl: z.url(),
   })]),
   annotations: readOnlyAnnotations,
   async run(context, args) {
-    const { resource, draft } = inputSchema.parse(args);
+    const { resource, draft, worktree } = inputSchema.parse(args);
     if ((resource === undefined) === (draft === undefined))
       throw workspaceError("workspace-argument-invalid", "Provide exactly one of resource or draft.");
-    if (draft !== undefined) {
-      const page = await readWorkspaceHtmlViewDraftContent(async () => context.http, context.identityOrigin, draft, RESULT_LIMIT - 4_000);
-      const output = { draft, space: page.draft.spaceId, name: page.draft.name, html: page.html, previewUrl: page.draft.previewUrl };
+    if (worktree !== undefined && resource === undefined)
+      throw workspaceError("workspace-argument-invalid", "Pass worktree with resource, not with draft.");
+    const worktreeId = worktree === undefined || !isForkAddress(worktree)
+      ? worktree : (await forkFeature(context).get(worktree)).worktree?.id;
+    const pending = worktreeId === undefined || resource === undefined ? undefined : await pendingPageDraft(context, worktreeId, resource);
+    const draftId = draft ?? pending?.id;
+    if (draftId !== undefined) {
+      const page = await readWorkspaceHtmlViewDraftContent(async () => context.http, context.identityOrigin, draftId, RESULT_LIMIT - 4_000);
+      const output = {
+        draft: draftId, ...(pending === undefined ? {} : { resource, etag: pending.baseEtag }),
+        space: page.draft.spaceId, name: page.draft.name, html: page.html, previewUrl: page.draft.previewUrl,
+      };
       if (serializedLength(output) > RESULT_LIMIT)
         throw resultTooLarge("html_view_read", "The draft is too large to revise inline.");
       context.usage?.addTransfer("export_bytes", Buffer.byteLength(page.html, "utf8"));

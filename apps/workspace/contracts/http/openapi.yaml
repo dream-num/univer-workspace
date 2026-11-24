@@ -178,6 +178,8 @@ paths:
     $ref: ./paths/forks.yaml#/~1api~1forks~1{forkId}
   /api/forks/{forkId}/units:
     $ref: ./paths/forks.yaml#/~1api~1forks~1{forkId}~1units
+  /api/forks/{forkId}/worktree:
+    $ref: ./paths/forks.yaml#/~1api~1forks~1{forkId}~1worktree
   /api/spaces/{spaceId}/nodes:
     $ref: ./paths/nodes.yaml#/~1api~1spaces~1{spaceId}~1nodes
   /api/nodes:

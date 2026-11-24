@@ -24,6 +24,12 @@ export interface ForksModule {
     input: unknown,
     createdVia: WriteSource | null,
   ): Promise<{ readonly status: 200 | 201; readonly body: { readonly worktree: WorktreeSummary; readonly unit: WorktreeUnit } }>;
+  openWorktree(
+    userId: string,
+    forkId: string,
+    operationId: unknown,
+    createdVia: WriteSource | null,
+  ): Promise<{ readonly status: 200 | 201; readonly body: { readonly worktree: WorktreeSummary } }>;
 }
 
 // A reader of a public Team Space is refused only by the Space's `proposals` setting, so the refusal names it.
@@ -72,6 +78,18 @@ export function createForksModule(options: {
       if (!opened) throw error;
       return opened;
     }
+  }
+
+  async function draftWorktree(userId: string, forkId: string, key: string, createdVia: WriteSource | null) {
+    const fork = await options.repository.findOwned(userId, { forkId });
+    if (!fork || !(await options.access.resolveSpace(userId, fork.upstreamSpaceId))) throw notFound();
+    const worktreeId = fork.openWorktreeId ?? await openForkWorktree(userId, fork, key, createdVia);
+    const { worktree } = await options.worktrees.get(userId, worktreeId);
+    if (worktree.state !== "draft") {
+      throw new ApplicationError("FORK_WORKTREE_NOT_DRAFT", 409,
+        `The fork's Worktree is ${worktree.state}, and only a draft takes writes. Reopen a ready Worktree to write again.`);
+    }
+    return { ...worktree, opened: fork.openWorktreeId === null };
   }
 
   async function view(userId: string, fork: StoredFork): Promise<ForkView> {
@@ -141,20 +159,21 @@ export function createForksModule(options: {
 
     async addUnit(userId, forkId, operationIdValue, input, createdVia) {
       const key = validOperationId(operationIdValue);
-      const fork = await options.repository.findOwned(userId, { forkId });
-      if (!fork || !(await options.access.resolveSpace(userId, fork.upstreamSpaceId))) throw notFound();
-      const worktreeId = fork.openWorktreeId ?? await openForkWorktree(userId, fork, key, createdVia);
-      const { units, ...worktree } = (await options.worktrees.get(userId, worktreeId)).worktree;
-      if (worktree.state !== "draft") {
-        throw new ApplicationError("FORK_WORKTREE_NOT_DRAFT", 409,
-          `The fork's Worktree is ${worktree.state}, and only a draft takes writes. Reopen a ready Worktree to write again.`);
-      }
+      const { units, opened: _opened, ...worktree } = await draftWorktree(userId, forkId, key, createdVia);
       if (!worktree.capabilities.addUnit) throw new ApplicationError("FORBIDDEN", 403, "This Worktree action is not allowed.");
+      const worktreeId = worktree.id;
       const trunk = input as { readonly source?: unknown; readonly resourceId?: unknown } | null;
       const present = trunk?.source === "trunk" && units.find((unit) => unit.source === "trunk" && unit.resourceId === trunk.resourceId);
       if (present) return { status: 200, body: { worktree, unit: present } };
       const { unit } = (await options.worktrees.addUnit(userId, worktreeId, key, input)).body;
       return { status: 201, body: { worktree: (await openWorktree(userId, worktreeId))!, unit } };
+    },
+
+    async openWorktree(userId, forkId, operationIdValue, createdVia) {
+      const key = validOperationId(operationIdValue);
+      const { units: _units, opened, ...worktree } = await draftWorktree(userId, forkId, key, createdVia);
+      if (!worktree.capabilities.editDraft) throw new ApplicationError("FORBIDDEN", 403, "This Worktree action is not allowed.");
+      return { status: opened ? 201 : 200, body: { worktree } };
     },
   };
 }

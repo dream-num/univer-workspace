@@ -385,6 +385,14 @@ write opens a new Worktree. A fork whose upstream its owner can no longer read r
 `404`, and a write the upstream no longer allows returns `403`. The Unit's content is then
 committed to the Worktree as in any other Worktree.
 
+A page changes through a fork as an HTML View draft attached to the fork's open Worktree.
+`POST /api/forks/{forkId}/worktree` takes an `Idempotency-Key` and returns `{ worktree }`, the
+open draft Worktree. On a `clean` fork it opens one with no Unit and returns `201`, and it
+refuses a Worktree that is not a draft with `409 FORK_WORKTREE_NOT_DRAFT` as a Unit write does.
+A Worktree with no Unit readies and merges like any other, so pages alone make a pull request.
+The draft itself is saved with `POST /api/html-view-drafts` and the Worktree as
+`sourceWorktreeId`, under the page rules of Worktrees above.
+
 ## Repository names and numbers
 
 A Team Space may carry a `slug`, unique per owner and compared case-insensitively. Together with the owner's

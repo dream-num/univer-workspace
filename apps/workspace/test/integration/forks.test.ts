@@ -367,6 +367,48 @@ describe("writing through a fork", () => {
   }, 60_000);
 });
 
+describe("pages through a fork", () => {
+  it.each(["viewer", "reader who is not a Space Member"] as const)(
+    "lets a %s propose a page alone, which an editor's browser merge publishes", async (proposer) => {
+      const { origin, database } = await start();
+      const { holder, editor, team, agent } = proposer === "viewer"
+        ? await upstream(origin)
+        : { ...await publicUpstream(origin, "accountable"), agent: await person(origin, "agent") };
+      const page = await publishedPage(origin, holder, team, "Holder");
+      const fork = await createFork(origin, agent, team, "fix-page");
+      const open = (key = randomUUID()) => send(origin, "POST", `/api/forks/${fork}/worktree`, undefined, agent.cookie, { "idempotency-key": key });
+
+      const opened = await open();
+      const { worktree } = (await opened.json()) as { worktree: { id: string; state: string; unitCount: number } };
+      expect({ status: opened.status, state: worktree.state, unitCount: worktree.unitCount }).toEqual({ status: 201, state: "draft", unitCount: 0 });
+      expect(await database.all("SELECT fork_id FROM worktrees WHERE id = $1", [worktree.id])).toEqual([{ fork_id: fork }]);
+      const again = await open();
+      expect({ status: again.status, id: ((await again.json()) as { worktree: { id: string } }).worktree.id }).toEqual({ status: 200, id: worktree.id });
+      const draft = await send(origin, "POST", "/api/html-view-drafts", { kind: "replace", ...page, html: html("Proposed"), sourceWorktreeId: worktree.id },
+        agent.cookie, { "idempotency-key": randomUUID() });
+      expect(draft.status).toBe(201);
+
+      expect(await transition(origin, worktree.id, "ready", agent)).toBe("ready");
+      expect(await worktreeView(origin, editor, worktree.id)).toMatchObject({ visibility: "space", units: [], capabilities: { merge: true } });
+      expect((await expectError(open(), 409, "FORK_WORKTREE_NOT_DRAFT")).message).toMatch(/is ready/);
+      const merged = await send(origin, "POST", `/api/worktrees/${worktree.id}/merge`, undefined, editor.cookie, { "idempotency-key": randomUUID() });
+      expect({ status: merged.status, body: await merged.json() }).toMatchObject({
+        status: 200, body: { worktree: { state: "merged" }, publishedPages: [{ name: "Page.univer.html" }] },
+      });
+      expect(await (await send(origin, "GET", `/api/blob-resources/${page.resourceId}/content`, undefined, holder.cookie)).text()).toContain("Proposed");
+      expect(await forkView(origin, agent, fork)).toMatchObject({ state: "clean", worktree: null });
+    }, 90_000);
+
+  it("refuses to open the Worktree of another User's fork", async () => {
+    const { origin } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const fork = await createFork(origin, agent, team, "fix-page");
+    await expectError(send(origin, "POST", `/api/forks/${fork}/worktree`, undefined, holder.cookie, { "idempotency-key": randomUUID() }), 404, "NOT_FOUND");
+    await expectError(send(origin, "POST", `/api/forks/${fork}/worktree`, undefined, agent.cookie), 400, "INVALID_INPUT");
+    expect(await forkView(origin, agent, fork)).toMatchObject({ state: "clean" });
+  }, 60_000);
+});
+
 describe("proposals from readers who are not Space Members", () => {
   it("admits each kind of reader by the proposals setting, and none while the Space is not public", async () => {
     const { origin } = await start();
@@ -761,6 +803,18 @@ async function writeThrough(origin: string, actor: Actor, forkId: string, sheet:
   const response = await send(origin, "POST", `/api/forks/${forkId}/units`, { source: "trunk", resourceId: sheet.resourceId }, actor.cookie, { "idempotency-key": key });
   if (response.status !== 200 && response.status !== 201) throw new Error(`Fork write failed with ${response.status}: ${await response.text()}`);
   return { status: response.status, ...((await response.json()) as { worktree: { id: string; state: string }; unit: Unit }) };
+}
+
+const html = (title: string) => `<!doctype html><html><head><title>${title}</title></head><body>${title}</body></html>`;
+
+async function publishedPage(origin: string, actor: Actor, spaceId: string, title: string): Promise<{ resourceId: string; etag: string }> {
+  const created = await send(origin, "POST", "/api/html-view-drafts", { kind: "create", spaceId, name: "Page", html: html(title) }, actor.cookie, { "idempotency-key": randomUUID() });
+  if (created.status !== 201) throw new Error(`Draft creation failed with ${created.status}: ${await created.text()}`);
+  const { draft } = (await created.json()) as { draft: { id: string } };
+  const published = await send(origin, "POST", `/api/html-view-drafts/${draft.id}/publish`, undefined, actor.cookie);
+  if (published.status !== 200) throw new Error(`Publish failed with ${published.status}: ${await published.text()}`);
+  const { resourceId, etag } = ((await published.json()) as { draft: { published: { resourceId: string; etag: string } } }).draft.published;
+  return { resourceId, etag };
 }
 
 async function forkView(origin: string, actor: Actor, forkId: string): Promise<unknown> {

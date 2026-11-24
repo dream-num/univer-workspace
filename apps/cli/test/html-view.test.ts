@@ -317,7 +317,12 @@ describe("HTML View commands", () => {
       privateSourceUnitIds,
     }));
     let output = "";
-    const command = createHtmlViewCommand({ validate, create });
+    const fork = (worktree: { id: string } | null) => ({ fullName: "agent/fix", upstream: { fullName: "hana/team" }, worktree });
+    const forks = { get: vi.fn(async (reference: string) => fork(reference === "agent/clean" ? null : { id: "wt-fork" })) };
+    const context = {
+      repoOrFork: vi.fn(async (reference: string) => reference === "agent/fix" ? { fork: fork({ id: "wt-fork" }) } : { spaceId: reference }),
+    };
+    const command = createHtmlViewCommand({ validate, create }, forks as never, context as never);
     for (const child of command.commands)
       child.exitOverride().configureOutput({
         writeOut: (text) => {
@@ -333,6 +338,19 @@ describe("HTML View commands", () => {
     const validation = await run(["validate", "--file", "view.univer.html", "--worktree", "wt-1", "--json"]);
     expect(validation.validate).toHaveBeenCalledWith("view.univer.html", "wt-1");
     await expect(run(["create", "--file", "view.univer.html", "--space", "space", "--name", "Page", "--idempotency-key", "key", "--worktree", "wt-1"])).rejects.toMatchObject({ code: "commander.unknownOption" });
+  });
+  it("validates through a fork's pull request, or trunk while the fork is clean", async () => {
+    expect((await run(["validate", "--file", "view.univer.html", "--worktree", "agent/fix", "--json"])).validate)
+      .toHaveBeenCalledWith("view.univer.html", "wt-fork");
+    expect((await run(["validate", "--file", "view.univer.html", "--worktree", "agent/clean", "--json"])).validate)
+      .toHaveBeenCalledWith("view.univer.html", undefined);
+  });
+  it("refuses to create a page in a fork and points to the MCP draft", async () => {
+    await expect(run(["create", "--file", "view.univer.html", "--space", "agent/fix", "--name", "Page", "--idempotency-key", "key"]))
+      .rejects.toMatchObject({
+        code: "workspace.command.failed",
+        message: expect.stringContaining("agent/fix is a fork of hana/team. html-view create publishes to a repository's trunk at once, and the CLI saves no page drafts"),
+      });
   });
   it("maps file validation and explicit creation metadata", async () => {
     const validation = await run(["validate", "--file", "view.univer.html", "--json"]);

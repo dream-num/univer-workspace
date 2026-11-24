@@ -41,8 +41,21 @@ const page = (nodes: readonly unknown[]) => ({
   space: { id: "s1", name: "Team", publicRead: false, type: "team" },
 });
 
+const pageNode = {
+  accessRole: "viewer", hasChildren: false, id: "pn", name: "Page.univer.html", parentNodeId: null, spaceId: "s1", updatedAt: "2026-11-23T00:00:00.000Z",
+  capabilities: { browseChildren: false, createChildren: false, move: false, rename: false, share: false, trash: false },
+  resource: { availability: "ready", byteSize: 15, capabilities: { downloadContent: true, editContent: false, openContent: true }, id: "page-1", kind: "blob", mediaType: "text/html" },
+};
+const pageDraft = (overrides: Record<string, unknown> = {}) => ({
+  id: "d1", author: { id: "a1", username: "agent" }, kind: "replace", state: "pending", publishWhen: "merge", supersededBy: null,
+  spaceId: "s1", sourceWorktreeId: "w1", parentNodeId: null, name: "Page.univer.html", targetResourceId: "page-1", baseEtag: '"up-1"',
+  byteSize: 12, createdAt: "2026-11-23T00:00:00.000Z", expiresAt: "2026-11-30T00:00:00.000Z", decidedAt: null, published: null, ...overrides,
+});
+
 interface Call { readonly method: string; readonly path: string; readonly body: unknown }
 
+let drafts: unknown[];
+let worktreeState: "draft" | "ready";
 let forkState: "clean" | "drafting" | "removed";
 let calls: Call[];
 let executorInputs: { op: string; input: Record<string, unknown> }[];
@@ -67,6 +80,14 @@ function routes(call: Call): unknown {
         : { ...created, name: body["name"], unitType: body["unitType"] };
       return Response.json({ unit: added, worktree: worktree([...opened, added]) }, { status: 201 });
     },
+    "POST /api/forks/f1/worktree": () => worktreeState === "draft"
+      ? Response.json({ worktree: summary }, { status: forkState === "clean" ? 201 : 200 })
+      : Response.json({ error: { code: "FORK_WORKTREE_NOT_DRAFT", message: "The fork's Worktree is ready, and only a draft takes writes." } }, { status: 409 }),
+    "GET /api/worktrees/w1/html-view-drafts": () => ({ drafts }),
+    "GET /api/html-view-drafts/d1": () => ({ draft: pageDraft() }),
+    "GET /api/html-view-drafts/d1/content": () => new Response("<p>draft</p>"),
+    "GET /api/resources/page-1": () => ({ node: pageNode, resource: pageNode.resource }),
+    "GET /api/blob-resources/page-1/download": () => new Response("<p>upstream</p>", { headers: { "content-type": "text/html", etag: '"up-1"' } }),
     "GET /api/spaces": () => ({ spaces: [] }),
     "GET /api/spaces/lookup?owner=hana&slug=team": () => UPSTREAM,
     "GET /api/spaces/s1": () => UPSTREAM,
@@ -83,9 +104,16 @@ const outputs: Record<string, (input: Record<string, unknown>) => object> = {
   "render.screenshot": (input) => ({ unitId: input["unitId"], unitType: "sheet", images: [] }),
   "render.printPdf": (input) => ({ unitId: input["unitId"], unitType: "sheet", name: "Budget", mediaType: "application/pdf", pageCount: 1 }),
   "content.execute": () => ({ committed: true, revision: 2 }),
+  "htmlView.draft": (input) => input["kind"] === "dryRun"
+    ? { dryRun: true, valid: true, bindings: [], bindingCount: 0 }
+    : { draft: { id: "d2", kind: "replace", state: "pending", name: "Page.univer.html", space: "s1", sourceWorktreeId: "w1", publishWhen: "merge",
+        previewUrl: `${origin}/drafts/d2`, expiresAt: "2026-11-30T00:00:00.000Z", repositoryVisibility: "private", privateSourceUnitIds: [] },
+      bindings: [], bindingCount: 0 },
 };
 
 beforeEach(async () => {
+  drafts = [];
+  worktreeState = "draft";
   forkState = "drafting";
   calls = [];
   executorInputs = [];
@@ -222,6 +250,54 @@ describe("fork addresses in write tools", () => {
       code: "workspace-not-found",
       message: "You can no longer read the upstream of fork agent/fix.",
     });
+  });
+});
+
+describe("pages through a fork", () => {
+  const save = { page: "page-1", etag: '"up-1"', html: "<p>mine</p>", idempotency_key: "page-key-000000001" };
+
+  it("html_view_read returns the upstream page, or your pending draft of it in the fork's pull request", async () => {
+    forkState = "clean";
+    expect(await call("html_view_read", { resource: "page-1", worktree: "agent/fix" }))
+      .toMatchObject({ resource: "page-1", etag: '"up-1"', html: "<p>upstream</p>" });
+    forkState = "drafting";
+    drafts = [pageDraft({ id: "theirs", author: { id: "h1", username: "hana" } }), pageDraft({ id: "old", state: "conflicted" }), pageDraft()];
+    expect(await call("html_view_read", { resource: "page-1", worktree: "agent/fix" })).toEqual({
+      draft: "d1", resource: "page-1", etag: '"up-1"', space: "s1", name: "Page.univer.html", html: "<p>draft</p>", previewUrl: `${origin}/drafts/d1`,
+    });
+    expect(writes()).toEqual([]);
+  });
+
+  it("html_view_save opens a clean fork's pull request, attaches the page to it, and revises your pending draft on the next save", async () => {
+    forkState = "clean";
+    await call("html_view_save", { ...save, worktree: "agent/fix" });
+    expect(writes().map(({ method, path }) => `${method} ${path}`)).toEqual(["POST /api/forks/f1/worktree"]);
+    forkState = "drafting";
+    drafts = [pageDraft()];
+    await call("html_view_save", { ...save, worktree: "agent/fix" });
+    await call("html_view_save", { ...save, etag: '"stale"', worktree: "agent/fix" });
+    expect(executorInputs.map(({ input: { html: _html, idempotencyKey: _key, ...input } }) => input)).toEqual([
+      { kind: "replace", resourceId: "page-1", etag: '"up-1"', sourceWorktreeId: "w1" },
+      { kind: "revise", draftId: "d1", sourceWorktreeId: "w1" },
+      { kind: "replace", resourceId: "page-1", etag: '"stale"', sourceWorktreeId: "w1" },
+    ]);
+  });
+
+  it("a dry run reads the fork's pull request, or trunk while the fork is clean, and opens nothing", async () => {
+    await call("html_view_save", { html: "<p>mine</p>", dryRun: true, worktree: "agent/fix" });
+    forkState = "clean";
+    await call("html_view_save", { html: "<p>mine</p>", dryRun: true, worktree: "agent/fix" });
+    expect(executorInputs.map(({ input }) => input["sourceWorktreeId"])).toEqual(["w1", undefined]);
+    expect(writes()).toEqual([]);
+  });
+
+  it("refuses a save while the fork's pull request is ready, and a worktree beside repo and pr", async () => {
+    worktreeState = "ready";
+    const refused = toolError(await client.callTool({ name: "html_view_save", arguments: { ...save, worktree: "agent/fix" } }));
+    expect(refused).toMatchObject({ code: "FORK_WORKTREE_NOT_DRAFT", detail: { path: "/api/forks/f1/worktree", status: 409 } });
+    const both = toolError(await client.callTool({ name: "html_view_save", arguments: { ...save, worktree: "agent/fix", repo: "hana/team", pr: 7 } }));
+    expect(both).toMatchObject({ code: "workspace-argument-invalid", message: "Provide worktree or repo with pr, not both." });
+    expect(executorInputs).toEqual([]);
   });
 });
 
