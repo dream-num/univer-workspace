@@ -114,6 +114,19 @@ describe("Issue tools and gateway infrastructure", () => {
     if (target.pathname === "/api/spaces/team-1" || target.pathname === "/api/spaces/personal-1") {
       return Response.json(target.pathname.endsWith("team-1") ? team : personal);
     }
+    if (target.pathname === "/api/worktrees" && request.method === "GET" && target.searchParams.get("state") === "ready") {
+      const capabilities = (merge: boolean) => ({
+        review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge, discard: false,
+      });
+      return Response.json({
+        items: [
+          rawWorktree("wt-own", { state: "ready", capabilities: capabilities(true) }),
+          rawWorktree("wt-4", { state: "ready", number: 4, creator: user("u2"), capabilities: capabilities(true) }),
+          rawWorktree("wt-5", { state: "ready", number: 5, creator: user("u2"), capabilities: capabilities(false) }),
+        ],
+        nextCursor: null,
+      });
+    }
     if (target.pathname === "/api/worktrees" && request.method === "GET") {
       return Response.json({
         items: target.searchParams.get("kind") === "team"
@@ -588,6 +601,29 @@ describe("Issue tools and gateway infrastructure", () => {
       expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(events().map((event) => event["repo"])).toEqual([null, null, null, null, null]);
+  });
+
+  it("finds the ready pull requests others wrote that the caller may merge, with what the caller may do", async () => {
+    await start();
+    const found = await call("search", { kind: "prs", reviewable: true });
+    expect(found.structuredContent).toEqual({
+      prs: [
+        expect.objectContaining({
+          id: "wt-4",
+          url: `${identityOrigin}/spaces/team-1/pulls/4`,
+          capabilities: expect.objectContaining({ merge: true, review: true }),
+        }),
+      ],
+    });
+    expect(requests.filter((r) => r.path.startsWith("/api/worktrees?")).map((r) => r.path)).toEqual([
+      "/api/worktrees?scope=active&kind=team&state=ready&limit=100",
+    ]);
+    for (const bad of [
+      { kind: "issues", reviewable: true },
+      { kind: "prs", reviewable: true, state: "merged" },
+    ]) {
+      expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
+    }
   });
 
   it("browses a repository, a pull request and an Issue, and reports a missing item", async () => {

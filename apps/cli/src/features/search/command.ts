@@ -59,16 +59,26 @@ export function createSearchCommand(
     .option("-s, --state <state>", "open, merged, discarded or all", "open")
     .option("-A, --author <user>", "username or @me")
     .option("-S, --search <text>", "match title, body, author or repository")
+    .option("--reviewable", "only ready pull requests that others wrote and you may merge")
     .option("-L, --limit <n>", "maximum number of pull requests", "30")
     .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
-      async (options: JsonFieldsOption & { author?: string; limit: string; search?: string; state: string }) => {
+      async (
+        options: JsonFieldsOption & {
+          author?: string;
+          limit: string;
+          reviewable?: true;
+          search?: string;
+          state: string;
+        },
+      ) => {
         const found = await executeCommand(searchPrs, async () => {
           return await listPullRequests(
             { userId, worktrees },
             {
               state: oneOf(options.state, PULL_REQUEST_STATES, "--state"),
               limit: limitOf(options.limit),
+              ...(options.reviewable === undefined ? {} : { reviewable: true }),
               ...(options.search === undefined ? {} : { search: options.search }),
               ...(options.author === undefined ? {} : { author: options.author }),
             },

@@ -21,6 +21,10 @@ const inputSchema = z.object({
   assignee: z.string().optional().describe("Issues only. Username, @me, or none."),
   author: z.string().optional().describe("Username or @me."),
   search: z.string().optional().describe("Match title and body (pull requests also author)."),
+  reviewable: z
+    .boolean()
+    .optional()
+    .describe("Pull requests only. true keeps ready pull requests that others wrote and you may merge."),
   limit: z.int().min(1).max(999999).default(30),
 });
 const invalid = (message: string) => workspaceError("workspace-argument-invalid", message);
@@ -31,7 +35,7 @@ export const searchTool: ToolDefinition = {
   scope: "read",
   title: "Search Issues or pull requests",
   description:
-    "Find Issues (kind issues) or pull requests (kind prs) across every repository you can access. The result has issues or prs accordingly.",
+    "Find Issues (kind issues) or pull requests (kind prs) across every repository you can access. The result has issues or prs accordingly. Each pull request's capabilities say what you may do with it now, such as merge.",
   inputSchema,
   outputSchema: z.object({
     issues: z.array(issueSummarySchema).optional(),
@@ -39,11 +43,12 @@ export const searchTool: ToolDefinition = {
   }),
   annotations: readOnlyAnnotations,
   async run(context, args) {
-    const { kind, state, labels, assignee, author, search, limit } = inputSchema.parse(args);
+    const { kind, state, labels, assignee, author, search, reviewable, limit } = inputSchema.parse(args);
     if (kind === "issues") {
       if (state === "merged" || state === "discarded") {
         throw invalid("state must be open, closed or all when kind is issues.");
       }
+      if (reviewable !== undefined) throw invalid("reviewable applies only when kind is prs.");
       const issues = await listIssues(
         issueFeature(context),
         {
@@ -66,6 +71,7 @@ export const searchTool: ToolDefinition = {
       {
         state: z.enum(PULL_REQUEST_STATES).parse(state),
         limit,
+        ...(reviewable === undefined ? {} : { reviewable }),
         ...(author === undefined ? {} : { author }),
         ...(search === undefined ? {} : { search }),
       },

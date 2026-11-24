@@ -26,6 +26,8 @@ export interface ListWorktreesInput {
   readonly creatorId?: string;
   /** Same, by username (ASCII case-insensitive, matching SQLite NOCASE). */
   readonly creatorUsername?: string;
+  /** Keep only Worktrees the signed-in user, whose ID this is, may merge and did not create; filtered while paging. */
+  readonly reviewerId?: string;
   /** Keep only these states (server-side, before paging). */
   readonly states?: readonly WorkspaceWorktreeState[];
   readonly view: "active" | "processed" | "all";
@@ -42,7 +44,8 @@ export class WorkspaceWorktreeFeature {
     if (input.search !== undefined) query.set("search", input.search);
     const http = await this.authenticatedHttp();
     const worktrees: WorkspaceWorktree[] = [];
-    const filtered = input.creatorId !== undefined || input.creatorUsername !== undefined;
+    const filtered =
+      input.creatorId !== undefined || input.creatorUsername !== undefined || input.reviewerId !== undefined;
     let cursor: string | null = null;
     do {
       const page = new URLSearchParams(query);
@@ -62,7 +65,9 @@ export class WorkspaceWorktreeFeature {
               (input.creatorId === undefined || worktree.creator?.id === input.creatorId) &&
               (input.creatorUsername === undefined ||
                 (worktree.creator !== undefined &&
-                  usernameKey(worktree.creator.username) === usernameKey(input.creatorUsername))),
+                  usernameKey(worktree.creator.username) === usernameKey(input.creatorUsername))) &&
+              (input.reviewerId === undefined ||
+                (worktree.capabilities?.merge === true && worktree.creator?.id !== input.reviewerId)),
           ),
       );
       cursor = input.limit !== undefined && typeof body["nextCursor"] === "string" ? body["nextCursor"] : null;

@@ -171,6 +171,53 @@ describe("who takes a pull request to trunk", () => {
   }, 30_000);
 });
 
+describe("the ready pull requests waiting for a member", () => {
+  it("are listed across the member's repositories with whether the member may merge each, and never from a repository the member cannot see", async () => {
+    const { origin, application } = await start();
+    const [budgetOwner, salesOwner, author, reviewer, viewer] = await Promise.all(
+      ["budget-owner", "sales-owner", "author", "reviewer", "viewer"].map((name) => person(origin, name)),
+    );
+    const budget = await application.spaces.createTeamSpace(budgetOwner.id, { name: "Budget" });
+    const sales = await application.spaces.createTeamSpace(salesOwner.id, { name: "Sales" });
+    const hidden = await application.spaces.createTeamSpace(salesOwner.id, { name: "Hidden" });
+    for (const [space, owner] of [[budget, budgetOwner], [sales, salesOwner]] as const) {
+      for (const [member, role] of [[author, "editor"], [reviewer, "editor"], [viewer, "viewer"]] as const) {
+        await application.permissions.upsertTeamMember(owner.id, space.id, member.id, { role });
+      }
+    }
+    await application.permissions.upsertTeamMember(salesOwner.id, hidden.id, author.id, { role: "editor" });
+    const pull = async (actor: Actor, spaceId: string, visibility: "private" | "space", ready: boolean) => {
+      const id = await createPull(origin, actor, { kind: "team", teamSpaceId: spaceId, visibility }, spaceId);
+      if (ready) await transition(origin, id, "ready", actor);
+      return id;
+    };
+    const names = new Map([
+      [await pull(author, budget.id, "space", true), "author's Budget proposal"],
+      [await pull(author, sales.id, "space", true), "author's Sales proposal"],
+      [await pull(reviewer, budget.id, "space", true), "reviewer's own"],
+      [await pull(author, budget.id, "private", true), "author's private"],
+      [await pull(author, sales.id, "space", false), "author's draft"],
+      [await pull(author, hidden.id, "space", true), "author's Hidden proposal"],
+    ]);
+    const waiting = async (actor: Actor) => {
+      const response = await send(origin, "GET", "/api/worktrees?scope=active&kind=team&state=ready&limit=100", undefined, actor.cookie);
+      const { items } = (await response.json()) as { items: { id: string; creator: { id: string }; capabilities: { merge: boolean } }[] };
+      return Object.fromEntries(items.map((item) => [names.get(item.id), { merge: item.capabilities.merge, own: item.creator.id === actor.id }]));
+    };
+
+    expect(await waiting(reviewer)).toEqual({
+      "author's Budget proposal": { merge: true, own: false },
+      "author's Sales proposal": { merge: true, own: false },
+      "reviewer's own": { merge: true, own: true },
+    });
+    expect(await waiting(viewer)).toEqual({
+      "author's Budget proposal": { merge: false, own: false },
+      "author's Sales proposal": { merge: false, own: false },
+      "reviewer's own": { merge: false, own: false },
+    });
+  }, 30_000);
+});
+
 describe("finishing a merge that a Team Admin started on a pull request they may not merge", () => {
   it.each(["merging", "merged"] as const)(
     "lets the author, the agent's owner and the Admin who started it finish a %s pull request, and nobody else",
