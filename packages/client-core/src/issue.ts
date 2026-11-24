@@ -14,6 +14,7 @@ import {
   type WorkspaceIssueTimelineItem,
 } from "./issue-model.js";
 import { usernameKey } from "./username.js";
+import { findUser } from "./users.js";
 
 export const LABEL_COLORS = ["gray", "blue", "green", "yellow", "orange", "red", "purple", "pink"] as const;
 
@@ -348,18 +349,11 @@ async function resolveUsers(http: WorkspaceHttp, users: readonly string[]): Prom
       resolved.push(me.id);
       continue;
     }
-    const body = await http.json(`/api/users/search?${new URLSearchParams({ query: value }).toString()}`);
-    const candidates = body["users"];
-    if (!Array.isArray(candidates) || candidates.some((candidate) =>
-      !isWorkspaceRecord(candidate) || typeof candidate["id"] !== "string" || typeof candidate["username"] !== "string")) {
-      throw workspaceError("workspace-invalid-response", "Workspace User search response is malformed.");
-    }
-    const match = candidates.find((candidate) => candidate["id"] === value) ??
-      candidates.find((candidate) => usernameKey(candidate["username"] as string) === usernameKey(value));
+    const match = await findUser(http, value);
     if (match === undefined) {
       throw workspaceError("issue-user-not-found", `Workspace has no user named or identified by "${value}".`);
     }
-    resolved.push(match["id"] as string);
+    resolved.push(match.id);
   }
   return resolved;
 }

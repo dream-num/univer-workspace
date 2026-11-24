@@ -129,10 +129,10 @@ describe("createRepo", () => {
       },
     } as unknown as WorkspaceSpaceFeature;
     await createRepo(spaces, { slug: "docs" });
-    await createRepo(spaces, { slug: "docs", name: "Docs", public: true, description: "x".repeat(350) });
+    await createRepo(spaces, { slug: "docs", name: "Docs", public: true, proposals: "accountable", description: "x".repeat(350) });
     expect(calls).toEqual([
       ["create", { name: "docs", slug: "docs" }],
-      ["create", { name: "Docs", slug: "docs", publicRead: true }],
+      ["create", { name: "Docs", slug: "docs", publicRead: true, proposals: "accountable" }],
       ["update", "s1", { description: "x".repeat(350) }],
     ]);
   });
@@ -152,6 +152,7 @@ describe("createRepo", () => {
 describe("repoEditPatch", () => {
   it("maps visibility to publicRead and keeps an empty description", () => {
     expect(repoEditPatch({ visibility: "public" })).toEqual({ publicRead: true });
+    expect(repoEditPatch({ proposals: "accountable" })).toEqual({ proposals: "accountable" });
     expect(repoEditPatch({ visibility: "private", description: "", slug: "s", name: "N" })).toEqual({
       name: "N",
       description: "",
@@ -169,7 +170,7 @@ describe("repoEditPatch", () => {
     );
     expect(() => repoEditPatch({})).toThrowError(
       expect.objectContaining({
-        message: "Nothing to change: pass name, description, visibility or slug.",
+        message: "Nothing to change: pass name, description, visibility, proposals or slug.",
       }),
     );
     expect(() => repoEditPatch({ slug: "s" }, ["name", "description", "visibility"])).toThrowError(

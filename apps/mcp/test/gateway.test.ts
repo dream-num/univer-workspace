@@ -667,7 +667,7 @@ describe("gateway over real HTTP and the MCP client", () => {
   });
 
   it.each([false, true])(
-    "lists the same admin tools for an agent as for a person (claimed: %s)",
+    "lists the same admin tools for an agent as for a person, and repository setup in core too (claimed: %s)",
     async (claimed) => {
       principal = { kind: "agent", claimed };
       const names = async (suffix: string) =>
@@ -676,8 +676,9 @@ describe("gateway over real HTTP and the MCP client", () => {
         );
       const agentAdmin = adminNames;
       const agentCore = claimed ? coreNames : coreNames.flatMap((name) => (name === "share" ? [name, "claim"] : [name]));
-      expect(await names("")).toEqual(agentCore);
-      expect(await names("?toolsets=core")).toEqual(agentCore);
+      const repositorySetup = ["repo_create", "repo_edit", "repo_member_list", "repo_member_write"];
+      expect(await names("")).toEqual([...agentCore, ...repositorySetup]);
+      expect(await names("?toolsets=core")).toEqual([...agentCore, ...repositorySetup]);
       expect(await names("?toolsets=files")).toEqual(filesNames);
       expect(await names("?toolsets=admin")).toEqual(agentAdmin);
       expect(await names("?toolsets=admin,core")).toEqual([...agentCore, ...agentAdmin]);
@@ -724,7 +725,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"e1e36d5205e3d609048d0a6aa98e99bef260293bd7749ac2547ef968dd37904c"`);
+    expect(digest).toMatchInlineSnapshot(`"ec00a2c25e2a08b89753c4f6ccbae11e07c50d849a1ed475dd3f3377b2c9858e"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
@@ -736,7 +737,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(human).toContain(
       "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the user asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Then give the user the pull request link.",
     );
-    for (const sentence of [review, leave, "agent identity", "Call share"]) {
+    for (const sentence of [review, leave, "agent identity", "call share"]) {
       expect(human).not.toContain(sentence);
     }
     expect(human).toContain(
@@ -752,9 +753,9 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(agent).toContain(
       "Once the result is verified, mark the pull request ready with pr_ready, then merge it with pr_merge.",
     );
-    expect(agent).toContain(
-      "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
-    );
+    const share =
+      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.";
+    expect(agent).toContain(share);
     const limits = "An unclaimed agent identity cannot make a repository public";
     expect(agent).toContain(limits);
     expect(human).not.toContain(limits);
@@ -772,8 +773,9 @@ describe("gateway over real HTTP and the MCP client", () => {
       "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person",
     );
     expect(claimed).toContain(
-      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Call share with node set to the merged file's nodeId",
+      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) If the merged file is in your Personal Space, call share",
     );
+    expect(claimed).toContain(share);
     expect(claimed).toContain("A file link from someone else gives an agent identity read access only.");
     for (const sentence of [limits, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(claimed).not.toContain(sentence);

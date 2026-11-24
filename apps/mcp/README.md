@@ -41,7 +41,9 @@ visible tools use the intersection of compatible replicas' operations, in regist
 Instructions follow each connection's visible tools and direct callers to `?toolsets=files` for available
 file capabilities outside their selected toolsets.
 The granted scopes choose the merge workflow. A connection that has `worktree:merge` and `pr_merge` in its list is told
-to mark the verified pull request ready, merge it, and give the user the pull request link, or for an agent the `share` link.
+to mark the verified pull request ready, merge it, and give the user the pull request link, or for an agent's file in its
+Personal Space the `share` link. Link Sharing applies only to Personal Space files, so an agent in a Team repository gives
+the pull request link.
 A person, and a claimed agent, are told instead to give the pull request link to the user, or to the person who claimed the
 agent, and stop, when that person asked to review the work or the change needs a person's decision; nothing enforces either
 choice. Any other connection is told to hand over the pull request link and leave merging to the user. The core Skill and the
@@ -266,6 +268,8 @@ Docker Desktop without changing those identities.
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
 The principal kind also selects tools. The token exchange and `/api/session` report it.
+An agent's `core` also lists `repo_create`, `repo_edit`, `repo_member_list` and `repo_member_write`, at the end, so the one connection
+its host configures can set up a repository the agent owns. A person gets them only with `admin`.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.
@@ -276,8 +280,8 @@ and the matching owner/slug candidates when available.
 | --- | --- | --- |
 | `whoami` | None | `{ origin, subject: { id, name } }` |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
-| `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
-| `fork_create` | Required `repo` (a Team repository the caller is a member of, with any role), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. A non-member gets `FORBIDDEN`, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |
+| `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Repository fields include `proposals` and `capabilities`, what the caller may do there, such as `manageMembers` and `propose`, when the server reports all of them. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
+| `fork_create` | Required `repo` (a Team repository whose `capabilities.propose` is true), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. Its owner and members may fork. Anyone else may fork a public repository whose `proposals` setting admits them, writes only their own proposals and holds at most 3 open ones there. A caller it does not admit gets `FORBIDDEN` with a message naming the setting, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |
 | `fork_list` | None | `{ forks: [...] }`, the caller's own forks |
 | `fork_view` | Required `fork` (`<owner>/<name>` or fork ID) | Fork. Another user's fork is `NOT_FOUND` |
 | `fork_delete` | Required `fork` | `{ fork, worktree }`. Deletes only the fork. Its open pull request, `worktree`, stays an ordinary pull request of the upstream |
@@ -387,8 +391,10 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `public` | Repository with `url`. Takes effect immediately. A person's token session cannot create a public repository: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error says to create it private and ask the user to make it public in the browser. An agent owns the repository it creates. An unclaimed agent cannot create a public one (`AGENT_NOT_ALLOWED`) and owns at most 3 (`AGENT_QUOTA_EXCEEDED`) |
-| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references. `visibility` `public` is refused to a person's token session (`INTERACTIVE_SESSION_REQUIRED`) and an unclaimed agent (`AGENT_NOT_ALLOWED`), so the user makes the repository public in the browser; for a person's token session the tool error gives the repository settings `url` |
+| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `public`, `proposals` (`members`, the default, `accountable` or `anyone`) | Repository with `url`. Takes effect immediately. A person's token session cannot create a public repository: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error says to create it private and ask the user to make it public in the browser. An agent owns the repository it creates. An unclaimed agent cannot create a public one (`AGENT_NOT_ALLOWED`) and owns at most 3 (`AGENT_QUOTA_EXCEEDED`). `proposals` says who besides members may fork and propose while the repository is public: `accountable` admits any person or claimed agent who can read it, `anyone` also unclaimed agents |
+| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `proposals` (`members`, `accountable` or `anyone`), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references. `visibility` `public` is refused to a person's token session (`INTERACTIVE_SESSION_REQUIRED`) and an unclaimed agent (`AGENT_NOT_ALLOWED`), so the user makes the repository public in the browser; for a person's token session the tool error gives the repository settings `url`. The owner or an admin may change `proposals`; moving back to `members`, or making the repository private, freezes non-members' drafts, and their ready pull requests stay for review |
+| `repo_member_list` | Required `repo` (a Team repository) | `{ owner, members }`. `owner` and each member's `user` and `grantedBy` are `{ id, username, displayName }`; a member also has `role` (`admin`, `editor`, `viewer`), `createdAt` and `updatedAt` |
+| `repo_member_write` | Required `repo`, `action` (`add`, `edit`, `remove`), `user` (a username or user ID); `role` for add and edit | The member, or `{ removed }` with the username. Takes effect immediately. `add` finds the user through user search, which finds a claimed agent by its username and never an unclaimed or stopped one; adding someone who is already a member changes their role. `edit` and `remove` take a current member, so a stopped agent can still be removed, and a member can remove themselves. Without `capabilities.manageMembers` the server answers `FORBIDDEN`. An agent can be an admin only of a repository an agent owns, and an unclaimed agent can neither add members nor be one: both return `AGENT_NOT_ALLOWED` with a sentence saying so |
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
@@ -473,7 +479,7 @@ Long resources retain cursor paging. Repeat `repo`, `name` and `resource` with t
 Oversized full results return `workspace-result-too-large` and require individual resource reads.
 The MCP `core` maps shared operation names to tools and explains uploads and download links.
 If a named tool is absent from the connection's tool list, that step is unavailable; tell the user
-instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`.
+instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`, except the four an agent also gets in `core`.
 
 The server `instructions` carry the `core` Skill's workflow rules for clients without Skill support (ChatGPT,
 WorkBuddy): find the file, open a pull request, write, read back to verify, then mark ready and merge, or hand the
@@ -504,10 +510,10 @@ the draft page before the Skill exists. Ask-mode connections must switch to Auto
 with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `fork_list`, `fork_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for `fork_create`, `fork_delete`, the Issue tools, `pr_create`, `pr_edit`,
-`pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `space_node`, `share` and `claim`; `worktree:merge` for
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `repo_member_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for `fork_create`, `fork_delete`, the Issue tools, `pr_create`, `pr_edit`,
+`pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `repo_member_write`, `space_node`, `share` and `claim`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
-true only for `fork_delete`, `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
+true only for `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
@@ -624,7 +630,7 @@ The version 1 event has these fields:
 | `auth_kind` | `"pat"`, `"oauth"` or `"dev"` |
 | `client_id` | The PAT ID for `pat`, the OAuth `client_id` for `oauth`, `"dev"` for `dev` |
 | `client_name`, `client_version` | Request clientInfo in 2026-07-28. Both null in stateless 2025-11-25 |
-| `tool`, `toolset` | Tool name and group. Unknown tools use `unknown` and `core` |
+| `tool`, `toolset` | Tool name and the group it belongs to, `admin` for `repo_create` even on an agent's `core` connection. Unknown tools use `unknown` and `core` |
 | `repo` | Resolved Space ID for repository-scoped tools, otherwise null |
 | `node_id` | Optional Node ID of the file a successful `share` call read or set; omitted for other calls |
 | `unit_type` | Runtime Unit type for executor tools, otherwise null |

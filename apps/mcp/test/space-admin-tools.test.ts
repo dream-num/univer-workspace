@@ -139,7 +139,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     if (at("PATCH", "/api/spaces/team-2")) return Response.json({ ...created, ...fields });
     if (at("PATCH", "/api/spaces/team-1")) return Response.json({ ...team, ...fields });
     if (at("POST", "/api/team-spaces")) {
-      const input = body as { name: string; slug: string; publicRead?: boolean };
+      const input = body as { name: string; slug: string; publicRead?: boolean; proposals?: string };
       created = {
         ...team,
         id: "team-2",
@@ -147,6 +147,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
         slug: input.slug,
         fullName: `user-1/${input.slug}`,
         publicRead: input.publicRead ?? false,
+        proposals: input.proposals ?? "members",
       };
       return Response.json(created, { status: 201 });
     }
@@ -437,7 +438,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it("edits a repository only when something changes and maps visibility to publicRead", async () => {
     const client = await connect();
     const nothing = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team" } });
-    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility or slug." });
+    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility, proposals or slug." });
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     const edited = await client.callTool({
       name: "repo_edit",
@@ -451,6 +452,25 @@ describe("space, unit, repository admin, label and merge tools", () => {
         body: { name: "Renamed", description: "", publicRead: true, slug: "renamed" },
       },
     ]);
+  });
+
+  it("sets who may propose when creating and editing a repository", async () => {
+    const client = await connect();
+    const created = await client.callTool({
+      name: "repo_create",
+      arguments: { slug: "docs", public: true, proposals: "accountable" },
+    });
+    expect(created.structuredContent).toMatchObject({ publicRead: true, proposals: "accountable" });
+    const edited = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", proposals: "anyone" } });
+    expect(edited.structuredContent).toMatchObject({ proposals: "anyone" });
+    expect(writesOf()).toEqual([
+      { method: "POST", path: "/api/team-spaces", body: { name: "docs", slug: "docs", publicRead: true, proposals: "accountable" } },
+      { method: "PATCH", path: "/api/spaces/team-1", body: { proposals: "anyone" } },
+    ]);
+    requests.length = 0;
+    const invalid = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", proposals: "everyone" } });
+    expect(invalid.isError).toBe(true);
+    expect(writesOf()).toEqual([]);
   });
 
   it("sends a person's token session to the browser to make a repository public", async () => {

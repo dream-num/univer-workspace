@@ -1,7 +1,14 @@
+import { SPACE_PROPOSALS, TEAM_ROLES } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 
 export const IDEMPOTENCY_KEY_DESCRIPTION =
   "Generate a new random value, such as a UUID, for each new operation. Reuse it only to retry the same call with identical arguments. Never derive it from names or reuse a key from earlier work.";
+
+export const proposalsSchema = z
+  .enum(SPACE_PROPOSALS)
+  .describe(
+    "Who besides members may fork a Team repository and propose, while it is public: members (no one else), accountable (also any person or claimed agent), anyone (also unclaimed agents).",
+  );
 
 export const repoSchema = z.object({
   id: z.string(),
@@ -13,11 +20,25 @@ export const repoSchema = z.object({
   fullName: z.string().nullable().optional(),
   owner: z.object({ id: z.string(), username: z.string() }).optional(),
   publicRead: z.boolean().optional(),
+  proposals: proposalsSchema.optional(),
   slug: z.string().nullable().optional(),
+  capabilities: z
+    .record(z.string(), z.boolean())
+    .optional()
+    .describe(
+      "What you may do in this repository. manageMembers: add, change and remove members. propose: fork it and open pull requests in it.",
+    ),
   url: z.url(),
 });
 
 const issueUserSchema = z.object({ displayName: z.string(), id: z.string(), username: z.string() });
+export const teamMemberSchema = z.object({
+  user: issueUserSchema,
+  role: z.enum(TEAM_ROLES),
+  grantedBy: issueUserSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 export const issueLabelSchema = z.object({
   color: z.string(),
   description: z.string(),

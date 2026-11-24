@@ -10,7 +10,12 @@ import {
   parseNodePage,
   parseNodeResponse,
   parseSpace,
+  parseTeamMember,
+  parseTeamMembers,
   parseTrashBatch,
+  type WorkspaceTeamMember,
+  type WorkspaceTeamMembers,
+  type WorkspaceTeamRole,
   type WorkspaceAccessRole,
   type WorkspaceLinkSharing,
   type WorkspaceNode,
@@ -18,6 +23,7 @@ import {
   type WorkspaceNodeDirectory,
   type WorkspaceNodeResource,
   type WorkspaceSpace,
+  type WorkspaceSpaceProposals,
   type WorkspaceTrashBatch,
   type WorkspaceUnitType,
 } from "./space-model.js";
@@ -25,6 +31,7 @@ import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
 import type { WorkspaceUnit, WorkspaceWorktree } from "./worktree-model.js";
 import { repoUrl } from "./urls.js";
 import { usernameKey } from "./username.js";
+import { findUser } from "./users.js";
 
 export type WorkspaceResourceKindFilter = WorkspaceNodeResource["kind"] | "none";
 export interface BrowseSpaceInput {
@@ -75,7 +82,7 @@ export function nodeMoveParent(
 }
 
 export const REPO_DESCRIPTION_MAX = 350;
-export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "slug"] as const;
+export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "proposals", "slug"] as const;
 export type RepoEditField = (typeof REPO_EDIT_FIELDS)[number];
 
 /** Creates a Team Space repository: the name defaults to the slug and the description is a second call. */
@@ -84,6 +91,7 @@ export async function createRepo(
   input: {
     readonly description?: string;
     readonly name?: string;
+    readonly proposals?: WorkspaceSpaceProposals;
     readonly public?: boolean;
     readonly slug: string;
   },
@@ -101,6 +109,7 @@ export async function createRepo(
       name: input.name ?? input.slug,
       slug: input.slug,
       ...(input.public === true ? { publicRead: true } : {}),
+      ...(input.proposals === undefined ? {} : { proposals: input.proposals }),
     });
   } catch (error) {
     if (!isInteractiveSessionRequired(error)) throw error;
@@ -119,12 +128,13 @@ export function repoEditPatch(
   input: {
     readonly description?: string;
     readonly name?: string;
+    readonly proposals?: WorkspaceSpaceProposals;
     readonly slug?: string;
     readonly visibility?: "public" | "private";
   },
   accepted: readonly RepoEditField[] = REPO_EDIT_FIELDS,
   name: ParameterName = plainName,
-): { description?: string; name?: string; publicRead?: boolean; slug?: string } {
+): { description?: string; name?: string; proposals?: WorkspaceSpaceProposals; publicRead?: boolean; slug?: string } {
   if (accepted.every((field) => input[field] === undefined)) {
     throw workspaceError(
       "workspace-argument-invalid",
@@ -135,6 +145,7 @@ export function repoEditPatch(
     ...(input.name === undefined ? {} : { name: input.name }),
     ...(input.description === undefined ? {} : { description: input.description }),
     ...(input.visibility === undefined ? {} : { publicRead: input.visibility === "public" }),
+    ...(input.proposals === undefined ? {} : { proposals: input.proposals }),
     ...(input.slug === undefined ? {} : { slug: input.slug }),
   };
 }
@@ -157,6 +168,19 @@ export async function editRepo(
       { url },
     );
   }
+}
+
+const membersPath = (spaceId: string): string => `/api/team-spaces/${encodeURIComponent(spaceId)}/members`;
+
+async function putMember(
+  http: WorkspaceHttp,
+  spaceId: string,
+  userId: string,
+  role: WorkspaceTeamRole,
+): Promise<WorkspaceTeamMember> {
+  return parseTeamMember(
+    await http.json(`${membersPath(spaceId)}/${encodeURIComponent(userId)}`, { body: { role }, method: "PUT" }),
+  );
 }
 
 const isInteractiveSessionRequired = (error: unknown): error is WorkspaceApplicationError =>
@@ -208,6 +232,7 @@ export class WorkspaceSpaceFeature {
   /** Creates a Team Space. Without `slug` the server derives one from the name. */
   public async create(input: {
     readonly name: string;
+    readonly proposals?: WorkspaceSpaceProposals;
     readonly publicRead?: boolean;
     readonly slug?: string;
   }): Promise<WorkspaceSpace> {
@@ -221,6 +246,7 @@ export class WorkspaceSpaceFeature {
     input: {
       readonly description?: string;
       readonly name?: string;
+      readonly proposals?: WorkspaceSpaceProposals;
       readonly publicRead?: boolean;
       readonly slug?: string;
     },
@@ -231,6 +257,55 @@ export class WorkspaceSpaceFeature {
         method: "PATCH",
       }),
     );
+  }
+
+  public async members(spaceId: string): Promise<WorkspaceTeamMembers> {
+    return parseTeamMembers(await (await this.authenticatedHttp()).json(membersPath(spaceId)));
+  }
+
+  /** Adds a user, named by username or user ID, or changes the role of one who is already a member. */
+  public async addMember(spaceId: string, user: string, role: WorkspaceTeamRole): Promise<WorkspaceTeamMember> {
+    const http = await this.authenticatedHttp();
+    let found: { readonly id: string } | undefined;
+    try {
+      found = await findUser(http, user);
+    } catch (error) {
+      // User search refuses only an unclaimed agent, which the member ceiling refuses as well.
+      if (!(error instanceof WorkspaceApplicationError) || error.code !== "AGENT_NOT_ALLOWED") throw error;
+      throw workspaceError(error.code, "An unclaimed agent cannot add Team Space members. A person must claim it first.");
+    }
+    if (found === undefined) {
+      throw workspaceError(
+        "workspace-not-found",
+        `No user named or identified by "${user}" can join. Unclaimed and stopped agents cannot be members.`,
+      );
+    }
+    return await putMember(http, spaceId, found.id, role);
+  }
+
+  /** Changes the role of a current member, named by username or user ID. */
+  public async editMember(spaceId: string, user: string, role: WorkspaceTeamRole): Promise<WorkspaceTeamMember> {
+    const member = await this.member(spaceId, user);
+    return await putMember(await this.authenticatedHttp(), spaceId, member.user.id, role);
+  }
+
+  /** Removes a current member, named by username or user ID; a member may remove themselves. */
+  public async removeMember(spaceId: string, user: string): Promise<{ readonly removed: string }> {
+    const member = await this.member(spaceId, user);
+    await (await this.authenticatedHttp()).request(`${membersPath(spaceId)}/${encodeURIComponent(member.user.id)}`, {
+      method: "DELETE",
+    });
+    return { removed: member.user.username };
+  }
+
+  private async member(spaceId: string, user: string): Promise<WorkspaceTeamMember> {
+    const { members } = await this.members(spaceId);
+    const member = members.find((item) => item.user.id === user) ??
+      members.find((item) => usernameKey(item.user.username) === usernameKey(user));
+    if (member === undefined) {
+      throw workspaceError("workspace-not-found", `"${user}" is not a member of this repository.`);
+    }
+    return member;
   }
 
   public async getStar(spaceId: string): Promise<{ readonly starCount: number; readonly starred: boolean }> {

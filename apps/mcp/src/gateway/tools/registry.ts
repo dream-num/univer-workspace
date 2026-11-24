@@ -59,6 +59,8 @@ import { skillsReadTool } from "./core/skills-read.js";
 import { blobGetTool } from "./files/blob-get.js";
 import { repoCreateTool } from "./admin/repo-create.js";
 import { repoEditTool } from "./admin/repo-edit.js";
+import { repoMemberListTool } from "./admin/repo-member-list.js";
+import { repoMemberWriteTool } from "./admin/repo-member-write.js";
 import { labelListTool } from "./admin/label-list.js";
 import { labelWriteTool } from "./admin/label-write.js";
 import { spaceNodeTool } from "./admin/space-node.js";
@@ -132,6 +134,8 @@ export const tools: readonly ToolDefinition[] = [
   lintTool,
   repoCreateTool,
   repoEditTool,
+  repoMemberListTool,
+  repoMemberWriteTool,
   labelListTool,
   labelWriteTool,
   spaceNodeTool,
