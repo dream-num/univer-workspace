@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { WorktreeReviewPanel } from "./worktree-review-panel";
+import { PullRequestChecks, WorktreeReviewPanel } from "./worktree-review-panel";
 
 const state = vi.hoisted(() => ({
   pending: false,
@@ -340,4 +340,18 @@ it("lists each check with its state and every result, marking those out of date 
   const hidden = worktree(false);
   hidden.capabilities.review = false;
   expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: hidden }))).not.toContain("totals-match");
+});
+
+it("says plainly when the repository declares no checks, where the reader asks for it", () => {
+  const checks = (explainNone: boolean) =>
+    renderToStaticMarkup(createElement(PullRequestChecks, { worktreeId: "worktree-1", explainNone }));
+  state.checks = [];
+  expect(checks(true)).toContain("checksNoneDeclared");
+  expect(checks(false)).toBe("");
+  state.checks = [{ name: "smoke", declared: false, state: "missing", results: [] }];
+  expect(checks(true)).toMatch(/checksNoneDeclared.*smoke/su);
+  state.checks = [{ name: "totals-match", declared: true, state: "missing", results: [] }];
+  expect(checks(true)).not.toContain("checksNoneDeclared");
+  state.checks = undefined;
+  expect(checks(true), "nothing while the checks load").toBe("");
 });

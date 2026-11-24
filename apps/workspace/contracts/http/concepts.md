@@ -509,7 +509,8 @@ current setting without an actor. `personalSharing` holds the Link Sharing and N
 assignee created or last changed in its own Personal Space after that assignment. It is `null`
 unless the caller is that assignee or the user who claimed it, because a link-shared Node's ID is
 its access link. The pages and files the linked pull requests published come from
-`GET /api/worktrees/{worktreeId}/html-view-drafts`, under that pull request's own rules.
+`GET /api/worktrees/{worktreeId}/html-view-drafts`, and their check results from
+`GET /api/worktrees/{worktreeId}/checks`, each under that pull request's own rules.
 
 The timeline merges comments, events and verdicts in chronological order. A verdict appears as
 an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`. Event payloads are
