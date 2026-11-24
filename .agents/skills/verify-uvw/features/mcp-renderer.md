@@ -108,10 +108,10 @@ MR10_W2=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 $V cli mr10-deck unit create --worktree "$MR10_W2" --space "$MR10_SPACE" --type slide --name 'Shot deck' --json
 MR10_D=$(jq -r .unit.unitId "$EVIDENCE/mr10-deck.out")
 for n in 1 2; do (V=$(realpath "$V") && cd "$FIX/deck" && $V cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json); done
-$V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
-jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck.result.json"
-jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck.out"
-curl -fsS -D "$EVIDENCE/mr10-deck-download.headers" -o "$EVIDENCE/mr10-deck-page-01.png" "$(jq -r '.images[0].download.url' "$EVIDENCE/mr10-deck.out")"
+$V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck-shot screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
+jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck-shot.result.json"
+jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck-shot.out"
+curl -fsS -D "$EVIDENCE/mr10-deck-download.headers" -o "$EVIDENCE/mr10-deck-page-01.png" "$(jq -r '.images[0].download.url' "$EVIDENCE/mr10-deck-shot.out")"
 grep -i '^content-type: image/png' "$EVIDENCE/mr10-deck-download.headers"
 magick "$EVIDENCE/mr10-deck-page-01.png" -resize 40% "$EVIDENCE/mr10-deck-page-01-small.png"
 
@@ -292,7 +292,7 @@ $V mcp-logs | jq -s --arg since "$since" '[.[] | select(.event == "mcp.tool_call
 jq -e 'length >= 1 and all(.[]; .outcome == "ok" and .cost.render_pages == 1 and .client_name == null)' "$EVIDENCE/mr12-opencode.event.json"
 
 # A two-page deck above 1 MiB (MR10): download links, no image part, and the model reports them
-MR12_DECK=$(jq -r .unitId "$EVIDENCE/mr10-deck.out"); MR12_DECK_W=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
+MR12_DECK=$(jq -r .unitId "$EVIDENCE/mr10-deck-shot.out"); MR12_DECK_W=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 (cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
   "Call the screenshot tool of the verify-uvw MCP server once with unit \"$MR12_DECK\" and worktree \"$MR12_DECK_W\". Report how many images came back and, for each one, its page, size in bytes, and whether the result gave a download link. Do not repeat any URL." < /dev/null) > "$EVIDENCE/mr12-opencode-deck.jsonl"

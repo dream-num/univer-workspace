@@ -82,7 +82,7 @@ try {
   browser("open", draft.previewUrl);
   browser("wait", "--text", "1 unverified");
   let page = browser("get", "text", "body");
-  assert(page.includes("script-file") && page.includes(quote));
+  assert(page.includes("Script won't run") && page.includes(quote), "The page must show the script-file finding's label and the verified quote.");
   assert(page.includes(`SKILL.md:${draft.review[0].line}`), "Verified review must display its line.");
   assert.equal(browser("eval", `document.querySelector('a[href="${sourceUrl}"]') !== null`).trim(), "true");
   screenshot("mr15-draft");

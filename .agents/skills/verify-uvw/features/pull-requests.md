@@ -31,6 +31,9 @@ only read proposes a change the same way and leaves the merge to them.
 
 Preconditions:
 
+- Start the run in MCP mode, because **Propose through MCP** and the `space_node` refusals call `$V mcp`:
+  `VERIFY_UVW_MCP=1 $V up`, then `$V user` and `$V doctor`. Every other step runs the same in MCP mode. If the run
+  is already up without it, run `$V down`, `VERIFY_UVW_MCP=1 $V up --reuse`, `$V user` and `$V doctor`.
 - Baseline run with `$V user` done. `O=verify-$VERIFY_UVW_RUN`, `R=$O/personal`.
 - Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 
@@ -77,7 +80,7 @@ that someone else holds, where the run user can only read:
   `uh inspect range A1:B2 --unit $U --trunk --worksheet index:1` still shows H's values.
   `$V cli pp-ready pr ready $P -R <H>/team-pr --json state,visibility` prints
   `{"state": "ready", "visibility": "space"}`: marking it ready shares it, because its author cannot merge it.
-- **Propose through MCP.** In [MCP mode](../references/mcp-mode.md), `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
+- **Propose through MCP.** On the MCP-mode run from the preconditions ([MCP mode](../references/mcp-mode.md)), `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
   then `unit_add` (`worktree`, `resource`), `unit_create` (`worktree`, `space`, `type`, `name`), `execute`
   (`worktree`, `unit`, `code`) and `pr_ready` (`repo`, `number`) succeed the same way, and `pr_ready` returns
   `visibility: "space"`. `$V mcp pp-mcp-merge pr_merge '{"repo":"<H>/team-pr","number":<n>}'` exits `1`

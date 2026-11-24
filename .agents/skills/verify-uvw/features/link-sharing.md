@@ -38,6 +38,7 @@ Preconditions:
 - Baseline run with `$V user`, browser signed in as the baseline user (see [auth](./auth.md)).
 - A Sheet `Verify Budget` with `Rent`/`1200` in A1:B1, created as in [create-document](./create-document.md).
   `N` is its Node ID: `nodes[0].nodeId` from `$V cli doc-find space find "Verify Budget" --space "verify-$VERIFY_UVW_RUN/personal" --json`.
+- For LS6, build the web app before `up`, as LS6 says.
 
 - **LS1. Show.** Run `$V cli share-show share "$N" --json`. Output has `url: "$ORIGIN/nodes/$N"`,
   `name: "Verify Budget"`, `link: "off"`, `owner.username: "verify-<run-id>"` and an `access` sentence:
@@ -69,10 +70,14 @@ Preconditions:
   same MCP and uvw prompts as `Hand to my agent` and a link `Sign up free`, which opens
   `/login?mode=register&returnTo=/nodes/<N>?copy=<key>`. Register there; the browser lands on a new copy and
   `copyCount` is `2`.
-- **LS6. Link preview.** With the link `viewer`, `curl -s "http://127.0.0.1:<server port>/nodes/$N"` returns the
-  app shell with `<title>Verify Budget · Univer Workspace</title>`, `og:title`, `og:description`
-  (`Shared from Univer Workspace`; `Accept-Language: zh-CN` gives `分享自 Univer Workspace`), `og:type`,
-  `og:site_name`, and headers `Vary: Accept-Language` and `Cache-Control: public, max-age=0`. Without
+- **LS6. Link preview.** The server serves link previews from `apps/workspace/dist/public` only when it exists at
+  `up`, so before `up` run `pnpm --filter '@univerjs/univer-workspace^...' build`, then
+  `pnpm --filter @univerjs/univer-workspace build:web`. If the run is already up without it, build, then run
+  `$V down`, `$V up --reuse` and `$V user`, and set up the preconditions again. With the link `viewer`,
+  `curl -s "http://127.0.0.1:<server port>/nodes/$N"` returns the app shell with
+  `<title>Verify Budget · Univer Workspace</title>`, `og:title`, `og:description` (`Shared from Univer Workspace`;
+  `Accept-Language: zh-CN` gives `分享自 Univer Workspace`), `og:type`, `og:site_name`, and headers
+  `Vary: Accept-Language` and `Cache-Control: public, max-age=0`. Without
   `PUBLIC_ORIGIN` it ends with `twitter:card` `summary`; in an MCP run (`PUBLIC_ORIGIN` is the web origin) it adds
   `og:url`, `og:image` `$ORIGIN/link-preview/sheet.png` (1200×630, alt `Univer Workspace spreadsheet`),
   `twitter:image` and `twitter:card` `summary_large_image`. With the link `off` there are no `og:` tags.

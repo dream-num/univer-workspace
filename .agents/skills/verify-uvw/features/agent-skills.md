@@ -93,7 +93,9 @@ aria() {
 }
 home() { agent-browser open "$ORIGIN/home"; agent-browser wait '[contenteditable=true]'; }
 repo() { agent-browser open "$ORIGIN/spaces/$SPACE/agents"; agent-browser wait '[contenteditable=true]'; }
-edit() { agent-browser click "$1"; agent-browser press Meta+a; agent-browser press Backspace; agent-browser fill "$1" "$2"; }
+# The composer selects all on Meta+a on macOS and Control+a elsewhere; agent-browser has no ControlOrMeta.
+MOD=$([ "$(uname)" = Darwin ] && echo Meta || echo Control)
+edit() { agent-browser click "$1"; agent-browser press "$MOD+a"; agent-browser press Backspace; agent-browser fill "$1" "$2"; }
 send() { edit '[contenteditable=true]' "$1"; agent-browser press Enter; agent-browser wait 'textarea'; agent-browser wait --fn 'document.querySelector("textarea") && !document.querySelector("button[aria-label=Stop]")'; }
 follow() { agent-browser fill textarea "$1"; agent-browser press Enter; agent-browser wait --fn 'document.querySelector("textarea").value === "" && !document.querySelector("button[aria-label=Stop]")'; }
 ```
