@@ -217,7 +217,9 @@ CREATE TABLE worktrees (
   number BIGINT,
   created_via TEXT CHECK (created_via IN ('browser', 'agent')),
   fork_id TEXT REFERENCES forks(id) ON DELETE SET NULL,
+  issue_id TEXT,
   CONSTRAINT worktrees_fork_team CHECK (fork_id IS NULL OR kind = 'team'),
+  CONSTRAINT worktrees_issue_team CHECK (issue_id IS NULL OR kind = 'team'),
   CHECK (
     (kind = 'user' AND team_space_id IS NULL AND visibility = 'private')
     OR
@@ -239,6 +241,9 @@ CREATE UNIQUE INDEX worktrees_user_number
 CREATE UNIQUE INDEX worktrees_open_fork
   ON worktrees(fork_id)
   WHERE fork_id IS NOT NULL AND processed_at IS NULL;
+CREATE INDEX worktrees_issue
+  ON worktrees(issue_id)
+  WHERE issue_id IS NOT NULL;
 
 CREATE TABLE worktree_units (
   worktree_id TEXT NOT NULL,
@@ -675,6 +680,8 @@ CREATE TABLE issues (
 );
 CREATE INDEX issues_space_state_created ON issues(space_id, state, created_at DESC, id);
 CREATE INDEX issues_space_state_updated ON issues(space_id, state, updated_at DESC, id);
+-- issues is created after worktrees, so the Issue link's foreign key is added here.
+ALTER TABLE worktrees ADD CONSTRAINT worktrees_issue_id_fkey FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE SET NULL;
 CREATE TABLE issue_comments (
   id TEXT PRIMARY KEY,
   issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,

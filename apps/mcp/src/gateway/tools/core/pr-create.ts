@@ -3,13 +3,14 @@ import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION, worktreeSchema } from "../schemas.js";
 import { repoInput, resolveRepo } from "./issue-support.js";
-import { prWithUrl, spaceFeature, visibilityInput, worktreeFeature } from "./pr-support.js";
+import { issueLinkInput, prWithUrl, spaceFeature, visibilityInput, worktreeFeature } from "./pr-support.js";
 
 const inputSchema = z.object({
   repo: repoInput,
   title: z.string(),
   body: z.string().optional().describe("Markdown."),
   visibility: visibilityInput.optional(),
+  issue: issueLinkInput.optional(),
   idempotency_key: z
     .string()
     .optional()
@@ -26,7 +27,7 @@ export const prCreateTool: ToolDefinition = {
   outputSchema: worktreeSchema,
   annotations: writeAnnotations,
   async run(context, args) {
-    const { repo, title, body, visibility, idempotency_key } = inputSchema.parse(args);
+    const { repo, title, body, visibility, issue, idempotency_key } = inputSchema.parse(args);
     const space = await pullRequestSpace(
       spaceFeature(context),
       async () => context.user.id,
@@ -39,6 +40,7 @@ export const prCreateTool: ToolDefinition = {
       ...(body === undefined ? {} : { summary: body }),
       ...(idempotency_key === undefined ? {} : { idempotencyKey: idempotency_key }),
       ...(visibility === undefined ? {} : { visibility }),
+      ...(issue === undefined ? {} : { issueNumber: issue }),
     });
     return { output: prWithUrl(context, worktree, space.id), repo: space.id };
   },

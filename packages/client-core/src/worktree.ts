@@ -97,6 +97,7 @@ export class WorkspaceWorktreeFeature {
 
   public async create(input: {
     readonly idempotencyKey?: string;
+    readonly issueNumber?: number;
     readonly name: string;
     readonly scope:
       | { readonly kind: "user" }
@@ -113,6 +114,7 @@ export class WorkspaceWorktreeFeature {
         scope: input.scope,
         ...(input.summary === undefined ? {} : { summary: input.summary }),
         ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
+        ...(input.issueNumber === undefined ? {} : { issueNumber: input.issueNumber }),
       },
       operation: async (sameInput) => {
         const body = await http.json("/api/worktrees", {
@@ -120,6 +122,7 @@ export class WorkspaceWorktreeFeature {
             kind: sameInput.scope.kind === "user" ? "user" : "team",
             name: sameInput.name,
             summary: sameInput.summary ?? null,
+            ...(sameInput.issueNumber === undefined ? {} : { issueNumber: sameInput.issueNumber }),
             ...(sameInput.scope.kind === "space"
               ? {
                   teamSpaceId: sameInput.scope.spaceId,
@@ -141,6 +144,7 @@ export class WorkspaceWorktreeFeature {
       readonly name?: string;
       readonly summary?: string | null;
       readonly visibility?: "private" | "space";
+      readonly issueNumber?: number | null;
     },
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");

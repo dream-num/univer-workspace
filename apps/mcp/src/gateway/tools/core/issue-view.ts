@@ -14,7 +14,7 @@ export const issueViewTool: ToolDefinition = {
   scope: "read",
   title: "View Issue",
   description:
-    "Show an Issue with its body, labels, assignees and referenced files. Set comments to include the timeline.",
+    "Show an Issue with its body, labels, assignees, referenced files and linked pull requests. Set comments to include the timeline.",
   inputSchema,
   outputSchema: issueSchema.extend({ timeline: z.array(issueTimelineItemSchema).optional() }),
   annotations: readOnlyAnnotations,

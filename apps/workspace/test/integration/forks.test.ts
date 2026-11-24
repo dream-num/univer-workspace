@@ -222,6 +222,23 @@ describe("writing through a fork", () => {
     expect(await database.all("SELECT fork_id FROM worktrees WHERE id = $1", [((await plain.json()) as { id: string }).id])).toEqual([{ fork_id: null }]);
   }, 60_000);
 
+  it("links the pull request a fork opens to an upstream Issue, which then lists it", async () => {
+    const { origin } = await start();
+    const { holder, agent, team } = await upstream(origin);
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const opened = await send(origin, "POST", `/api/spaces/${team}/issues`, { title: "Fix totals", assigneeUserIds: [agent.id] }, holder.cookie);
+    const issue = (await opened.json()) as { number: number };
+    const fork = await createFork(origin, agent, team, "fix-totals");
+    const { worktree } = await writeThrough(origin, agent, fork, budget);
+
+    const linked = await send(origin, "PATCH", `/api/worktrees/${worktree.id}`, { issueNumber: issue.number }, agent.cookie);
+    expect(await linked.json()).toMatchObject({ worktree: { id: worktree.id, issue: { number: issue.number, title: "Fix totals", state: "open" } } });
+    const view = await send(origin, "GET", `/api/spaces/${team}/issues/${issue.number}`, undefined, holder.cookie);
+    expect(((await view.json()) as { pullRequests: unknown }).pullRequests).toEqual([
+      expect.objectContaining({ id: worktree.id, title: "fix-totals", state: "draft", author: expect.objectContaining({ id: agent.id }), mergedBy: null }),
+    ]);
+  }, 60_000);
+
   it("puts two concurrent first writes into one open Worktree, and the losing open leaves one empty Collaboration Worktree (A4.5)", async () => {
     const { origin, database } = await start();
     const { holder, agent, team } = await upstream(origin);

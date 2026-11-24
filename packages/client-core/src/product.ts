@@ -44,6 +44,7 @@ export type {
   WorkspaceIssue,
   WorkspaceIssueLabel,
   WorkspaceIssuePage,
+  WorkspaceIssuePullRequest,
   WorkspaceIssueReference,
   WorkspaceIssueState,
   WorkspaceIssueStateReason,

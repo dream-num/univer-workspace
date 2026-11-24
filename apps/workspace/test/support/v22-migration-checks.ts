@@ -48,7 +48,7 @@ export function verifyV22Migration(open: (filename: string) => SqliteDatabase): 
       const migrated = open(filename);
       const db = migrated.connection;
       assert.deepEqual(rows(db), before);
-      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 29);
+      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 30);
       assert.equal(db.prepare("SELECT count(*) AS n FROM executor_access").get()?.n, 0);
       if (seeded) {
         db.exec(`
@@ -89,7 +89,7 @@ export function verifyV22Migration(open: (filename: string) => SqliteDatabase): 
     );
     const before = rows(broken);
     broken.close();
-    assert.throws(() => open(filename), /V22 to V29 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V22 to V30 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v22-backup-"))!,

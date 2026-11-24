@@ -1,7 +1,7 @@
 # Issues and pull requests over MCP
 
 An agent connected to the MCP gateway creates, views, lists, edits, comments on, closes and reopens Issues, and
-creates, views, lists, edits, readies, searches and browses pull requests. Each result matches what `uvw --json`
+creates, views, lists, edits, readies, searches and browses pull requests, and links a pull request to the Issue it serves. Each result matches what `uvw --json`
 shows for the same object, errors keep their Workspace codes, and every call leaves a usage event.
 
 ## Sub-features
@@ -27,6 +27,7 @@ shows for the same object, errors keep their Workspace codes, and every call lea
   repositories, never from a private one the caller cannot see, each with `capabilities`, and the same in uvw.
 - MP12 runs two claimed agents with prompts that carry no task: B3 finds the Issue assigned to it and proposes,
   then A3 finds the reviewable pull request and merges it.
+- MP13 links the pull request a claimed agent's fork opens to an Issue assigned to it, refuses an unknown Issue number, and shows the link in MCP, uvw, the Issue page and the pull request header.
 
 ## How to get to it (user POV)
 
@@ -453,6 +454,52 @@ Pass when B3's events show `search` before its first write and no `pr_merge`, it
 A3 and the pull request's author is B3, and no event or transcript result holds `AGENT_NOT_ALLOWED` or
 `INTERACTIVE_SESSION_REQUIRED`. After the claims nobody acts, and nobody relays task content. If the model fails for
 a model reason, rerun with `--model console-deepseek/deepseek-flash#max` under an `-attempt2` label and report both.
+
+### MP13. A fork's pull request serves an Issue
+
+The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
+fork, links the pull request its first write opens with `pr_edit`, and both sides show the link in MCP, uvw and the
+browser. MP13 uses one `principal`, which counts toward the 5 agents per hour.
+
+```bash
+$V cli mpl-repo repo create issue-link --name "Issue link" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mpl-repo.out")
+$V principal linker mpl-a
+A=$(jq -r .agent.username "$EVIDENCE/principal-linker.json")
+$V mcp --as linker mpl-claim claim '{}'
+```
+
+Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+`mpl-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Then:
+
+```bash
+$V cli mpl-member repo member add "$A" --role viewer -R "$O/issue-link" --json
+$V cli mpl-issue issue create -R "$O/issue-link" -t "Fix the totals" -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mpl-issue.out")
+$V mcp --as linker mpl-fork fork_create "{\"repo\":\"$O/issue-link\",\"name\":\"totals\"}"
+F=$(jq -r .fullName "$EVIDENCE/mpl-fork.out")
+$V mcp --as linker mpl-write unit_create "{\"worktree\":\"$F\",\"space\":\"$O/issue-link\",\"type\":\"sheet\",\"name\":\"Totals\"}"
+$V mcp --as linker mpl-fork-view fork_view "{\"fork\":\"$F\"}"
+PN=$(jq -r .worktree.number "$EVIDENCE/mpl-fork-view.out")
+$V mcp --as linker mpl-missing pr_edit "{\"repo\":\"$O/issue-link\",\"number\":\"$PN\",\"issue\":99999}"
+test $? -eq 1
+jq -e '.code == "INVALID_INPUT"' "$EVIDENCE/mpl-missing.out"
+$V mcp --as linker mpl-link pr_edit "{\"repo\":\"$O/issue-link\",\"number\":\"$PN\",\"issue\":$N}"
+jq -e --argjson n "$N" '.issue == {number: $n, title: "Fix the totals", state: "open"}' "$EVIDENCE/mpl-link.out"
+$V mcp --as linker mpl-issue-view issue_view "{\"repo\":\"$O/issue-link\",\"number\":\"$N\"}"
+jq -e --argjson pn "$PN" --arg a "$A" '.pullRequests | length == 1 and .[0].number == $pn and .[0].state == "draft" and .[0].author.username == $a' "$EVIDENCE/mpl-issue-view.out"
+$V cli mpl-pr-view-cli pr view "$PN" -R "$O/issue-link"
+grep -F "issue: #$N Fix the totals [open]" "$EVIDENCE/mpl-pr-view-cli.out"
+$V cli mpl-issue-view-cli issue view "$N" -R "$O/issue-link"
+grep -F "pull request: #$PN totals [draft]" "$EVIDENCE/mpl-issue-view-cli.out"
+```
+
+In the run browser, signed in as O, open `$ORIGIN/spaces/$T/issues/$N` and screenshot the `Pull requests` section as
+`mpl-issue-page.png`. Click the pull request there and screenshot its header as `mpl-pr-header.png`.
+
+Pass when every command exits as shown, the unknown Issue number is `INVALID_INPUT`, `pr_edit` returns the linked Issue,
+`issue_view` lists the fork's pull request with A as its author, both uvw views print the link, the Issue page
+lists the pull request and its state, and the pull request header names `Serves #N Fix the totals`.
 
 ## Gotchas
 

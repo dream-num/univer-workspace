@@ -6,6 +6,7 @@ import {
   CircleDot,
   CircleSlash,
   Ellipsis,
+  GitPullRequest,
   Paperclip,
   Pencil,
   Tag,
@@ -43,6 +44,10 @@ import { IssueStateBadge } from "./issue-state";
 import { issueQueryOptions, issueTimelineQueryOptions } from "./issues.queries";
 
 type Issue = components["schemas"]["Issue"];
+const PULL_STATE_LABELS: Record<components["schemas"]["WorktreeState"], MessageKey> = {
+  draft: "worktreeStateDraft", ready: "worktreeStateReady", merging: "worktreeStateMerging",
+  merged: "worktreeStateMerged", discarded: "worktreeStateDiscarded",
+};
 type TimelineComment = components["schemas"]["IssueTimelineComment"];
 type TimelineEvent = components["schemas"]["IssueTimelineEvent"];
 type PublicUser = components["schemas"]["PublicUser"];
@@ -701,6 +706,33 @@ function IssueSidebar({
           </ul>
         ) : (
           <Muted>{t("issueNoReferences")}</Muted>
+        )}
+      </SidebarSection>
+      <SidebarSection title={t("issuePullRequests")} className="max-lg:col-span-full">
+        {issue.pullRequests.length ? (
+          <ul className="m-0 grid list-none gap-1.5 p-0" data-issue-pull-requests="">
+            {issue.pullRequests.map((pull) => (
+              <li key={pull.id} className="flex min-w-0 items-center gap-2 text-sm">
+                <GitPullRequest className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                {pull.number === null ? (
+                  <span className="truncate">{pull.title}</span>
+                ) : (
+                  <Link
+                    to="/spaces/$spaceId/pulls/$number"
+                    params={{ spaceId: issue.space.id, number: String(pull.number) }}
+                    className="truncate text-foreground no-underline hover:underline"
+                  >
+                    {pull.title} <span className="text-muted-foreground">#{pull.number}</span>
+                  </Link>
+                )}
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  {t(PULL_STATE_LABELS[pull.state])}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Muted>{t("issueNoPullRequests")}</Muted>
         )}
       </SidebarSection>
     </aside>

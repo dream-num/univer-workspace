@@ -140,7 +140,7 @@ UNIVER_LICENSE_KEY=<licenseKey.txt 的内容>
 
 同一 Space 下的仓库页面共用 GitHub 风格的导航和 Star / Unstar 收藏按钮。收藏绑定当前登录用户和 Space，刷新或重启后仍保留，访问权限独立控制。`GET`、`PUT` 和 `DELETE /api/spaces/{spaceId}/star` 均要求已登录且当前可访问相应 Space，并返回 `{ starred, starCount }`。写入幂等。面包屑导航从 `SpaceView.owner` 获取所有者 ID 和用户名。当前没有 Watch、Fork 或 GitHub 专有页签。[对照与验证记录](docs/proposals/repository-framework-star.md)
 
-仓库的 Pull requests 使用现有 Worktree 流程。列表支持 Open/Closed 筛选和本地文本搜索。详情的 Overview 展示摘要与评审操作，Files changed 用于选择文档、查看草稿和对比改动。Wiki 和全局工作台沿用原有仪表盘，此流程不引入 GitHub PR 模型、评论、分支或检查。[参考、功能映射与验证](docs/proposals/repository-pull-requests-tab.md)
+仓库的 Pull requests 使用现有 Worktree 流程。列表支持 Open/Closed 筛选和本地文本搜索。详情的 Overview 展示摘要与评审操作，Files changed 用于选择文档、查看草稿和对比改动。Pull request 可以关联同一仓库的一个 Issue：详情页头部显示这个 Issue，Issue 页列出关联到它的 Pull requests。Wiki 和全局工作台沿用原有仪表盘，此流程不引入 GitHub PR 模型、评论、分支或检查。[参考、功能映射与验证](docs/proposals/repository-pull-requests-tab.md)
 
 仓库 Settings 使用分组侧栏，名称和描述可分别保存。在 Danger Zone 更改公开读取权限需确认。团队仓库公开读取时，还可选择协作者之外谁能提交 Pull request。协作者管理和回收站沿用既有权限和 API。[对照、差异与验证](docs/proposals/repository-settings-tab.md)
 

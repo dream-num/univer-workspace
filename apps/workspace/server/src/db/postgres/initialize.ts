@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -106,6 +106,14 @@ CREATE UNIQUE INDEX worktrees_open_fork
 
 async function addProposals(client: PoolClient): Promise<void> {
   await client.query("ALTER TABLE spaces ADD COLUMN proposals TEXT NOT NULL DEFAULT 'members' CHECK (proposals IN ('members', 'accountable', 'anyone'))");
+}
+
+async function addIssueLink(client: PoolClient): Promise<void> {
+  await client.query(`ALTER TABLE worktrees ADD COLUMN issue_id TEXT REFERENCES issues(id) ON DELETE SET NULL;
+ALTER TABLE worktrees ADD CONSTRAINT worktrees_issue_team CHECK (issue_id IS NULL OR kind = 'team');
+CREATE INDEX worktrees_issue
+  ON worktrees(issue_id)
+  WHERE issue_id IS NOT NULL;`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

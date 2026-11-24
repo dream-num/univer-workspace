@@ -2,6 +2,7 @@ import type { UnitType } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { OperationState } from "../resources/resources.types.js";
+import type { IssueState } from "../issues/issues.types.js";
 import type { WorktreeKind, WorktreeVisibility } from "./worktrees.types.js";
 
 export interface WorktreeCursor {
@@ -31,6 +32,11 @@ export interface WorktreeRow {
   readonly claimer_display_name: string | null;
   readonly claimer_avatar_url: string | null;
   readonly team_space_name: string | null;
+  readonly issue_id: string | null;
+  /** Null when no Issue is linked or the actor cannot read the Team Space. */
+  readonly issue_number: number | null;
+  readonly issue_title: string | null;
+  readonly issue_state: IssueState | null;
   readonly actor_owns_team_space: 0 | 1 | null;
   readonly actor_member_role: "admin" | "editor" | "viewer" | null;
   readonly actor_proposes: 0 | 1 | null;
@@ -107,6 +113,7 @@ export interface WorktreesRepository {
     readonly kind: WorktreeKind | null;
     readonly teamSpaceId: string | null;
     readonly creatorUserId?: string;
+    readonly issueId?: string;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
   }): Promise<WorktreeRow[]>;
@@ -126,6 +133,7 @@ export interface WorktreesRepository {
     readonly createdVia: WriteSource | null;
     readonly createdAt: number;
     readonly forkId: string | null;
+    readonly issueId: string | null;
   }): Promise<void>;
   findIdByNumber(
     scope: { readonly teamSpaceId: string } | { readonly creatorUserId: string },
@@ -138,8 +146,10 @@ export interface WorktreesRepository {
     readonly name?: string;
     readonly summary?: string | null;
     readonly visibility?: WorktreeVisibility;
+    readonly issueId?: string | null;
     readonly updatedAt: number;
   }): Promise<boolean>;
+  findIssueId(teamSpaceId: string, number: number): Promise<string | null>;
   units(worktreeId: string): Promise<WorktreeUnitRow[]>;
   addTrunkUnit(input: {
     readonly worktreeId: string;

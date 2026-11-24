@@ -27,7 +27,7 @@ export const ISSUE_LIST_JSON_FIELDS = [
   "referenceCount", "space", "state", "stateReason", "title", "updatedAt",
 ] as const satisfies readonly (keyof WorkspaceIssueSummary)[];
 export const ISSUE_JSON_FIELDS = [
-  ...ISSUE_LIST_JSON_FIELDS, "body", "capabilities", "references",
+  ...ISSUE_LIST_JSON_FIELDS, "body", "capabilities", "references", "pullRequests",
 ] as const satisfies readonly (keyof WorkspaceIssue)[];
 const COMMENT_JSON_FIELDS = ["author", "body", "createdAt", "id", "type", "updatedAt"] as const satisfies
   readonly (keyof Extract<WorkspaceIssueTimelineItem, { type: "comment" }>)[];
@@ -106,7 +106,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     );
 
   const view = new Command("view")
-    .description("Show an Issue with its body, labels, assignees and referenced files")
+    .description("Show an Issue with its body, labels, assignees, referenced files and linked pull requests")
     .argument("<number>", "Issue number (12 or #12) or Issue URL")
     .option(...REPO_OPTION)
     .option("-c, --comments", "include every comment and event")
@@ -130,6 +130,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
             `${issue.author.username} opened ${issue.createdAt}${issue.labels.length ? ` · ${issue.labels.map((label) => label.name).join(", ")}` : ""}`,
             ...(issue.assignees.length ? [`assignees: ${issue.assignees.map((user) => user.username).join(", ")}`] : []),
             ...(issue.references.length ? [`files: ${issue.references.map((ref) => ref.name ?? ref.nodeId).join(", ")}`] : []),
+            ...issue.pullRequests.map((pull) => `pull request: ${pull.number === null ? pull.id : `#${String(pull.number)}`} ${pull.title} [${pull.state}]`),
             "",
             issue.body,
             ...(timeline === undefined ? [] : ["", JSON.stringify(timeline, null, 2)]),

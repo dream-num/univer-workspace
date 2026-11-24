@@ -121,6 +121,13 @@ export function createWorktreesModule(options: {
       : null;
   }
 
+  async function linkedIssueId(userId: string, teamSpaceId: string, number: number): Promise<string> {
+    if (!(await options.access.resolveSpace(userId, teamSpaceId))) throw forbidden();
+    const issueId = await options.repository.findIssueId(teamSpaceId, number);
+    if (!issueId) throw invalidInput(`Issue #${number} does not exist in this Team Space.`, "issueNumber");
+    return issueId;
+  }
+
   async function context(userId: string, worktreeId: string): Promise<WorktreeContext> {
     const row = await options.repository.get(worktreeId, userId);
     // Ask the Collaboration Service only about a Worktree the actor would see if it were merged.
@@ -257,6 +264,28 @@ export function createWorktreesModule(options: {
       };
     },
 
+    async pullRequestsForIssue(userId, issueId) {
+      // shortcut: reads the newest MAX_ISSUE_PULL_REQUESTS links; page the list when an Issue gathers more.
+      const rows = await options.repository.listCandidates({
+        userId, scope: "all", kind: "team", teamSpaceId: null, issueId,
+        search: "", order: "createdAtDesc", cursor: null, limit: MAX_ISSUE_PULL_REQUESTS,
+      });
+      const linked = [];
+      for (const row of rows.filter((candidate) => isDiscoverable(candidate, true))) {
+        const { status } = await backendCall(() => options.backend.getWorktree(row.id, userId));
+        if (isDiscoverable(row, status === "merged")) linked.push({ row, status });
+      }
+      const mergers = await options.repository.mergers(linked.filter(({ status }) => status === "merged").map(({ row }) => row.id));
+      return linked.map(({ row, status }) => ({
+        id: row.id, number: row.number, title: row.name, state: status,
+        author: {
+          id: row.creator_user_id, username: row.creator_username,
+          displayName: row.creator_display_name, avatarUrl: row.creator_avatar_url,
+        },
+        mergedBy: mergers.get(row.id) ?? null,
+      }));
+    },
+
     async list(userId, query) {
       const limit = validLimit(query.limit);
       const scope = validScope(query.scope);
@@ -373,11 +402,13 @@ export function createWorktreesModule(options: {
         if (!space || space.type !== "team") throw notFound();
         if (!space.capabilities.propose) throw forbidden();
       }
+      const issueId = input.issueNumber === null ? null : await linkedIssueId(userId, input.teamSpaceId!, input.issueNumber);
       const payload = {
         ...input,
         worktreeId: randomUUID(),
         createdVia,
         forkId,
+        issueId,
       };
       const reserved = await options.repository.reserveOperation({
         id: operationId,
@@ -395,6 +426,8 @@ export function createWorktreesModule(options: {
         readonly worktreeId: string;
         readonly createdVia?: WriteSource | null;
         readonly forkId?: string | null;
+        readonly issueNumber?: number | null;
+        readonly issueId?: string | null;
       }>(reserved.row, "create_worktree", userId);
       assertSameCreate({ ...input, forkId }, stable);
       if (reserved.row.state !== "completed") {
@@ -413,6 +446,7 @@ export function createWorktreesModule(options: {
             createdAt: now(),
             createdVia: stable.createdVia ?? null,
             forkId: stable.forkId ?? null,
+            issueId: stable.issueId ?? null,
           });
           await options.repository.completeOperation(
             operationId,
@@ -457,7 +491,13 @@ export function createWorktreesModule(options: {
       const value = await context(userId, worktreeId);
       if (!canManageSummary(userId, value.row)) throw forbidden();
       const previousAudience = await options.repository.audience(worktreeId);
-      const patch = validPatch(inputValue);
+      const { issueNumber, ...patch } = validPatch(inputValue);
+      if (issueNumber !== undefined && issueNumber !== null && value.row.kind !== "team") {
+        throw invalidInput("Only a Team Worktree can serve an Issue.", "issueNumber");
+      }
+      const issueId = issueNumber === undefined || issueNumber === null
+        ? issueNumber
+        : await linkedIssueId(userId, value.row.team_space_id!, issueNumber);
       if (
         patch.visibility !== undefined &&
         value.row.kind !== "team"
@@ -479,6 +519,7 @@ export function createWorktreesModule(options: {
         id: worktreeId,
         actorId: userId,
         ...patch,
+        ...(issueId === undefined ? {} : { issueId }),
         updatedAt: now(),
       });
       if (!applied) throw forbidden();
@@ -1404,6 +1445,9 @@ function summaryView(
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     capabilities,
+    issue: row.issue_number === null || row.issue_title === null || row.issue_state === null
+      ? null
+      : { number: row.issue_number, title: row.issue_title, state: row.issue_state },
   };
 }
 
@@ -1464,6 +1508,7 @@ function validCreate(value: unknown): {
   readonly summary: string | null;
   readonly visibility: WorktreeVisibility;
   readonly teamSpaceId: string | null;
+  readonly issueNumber: number | null;
 } {
   const record = requiredRecord(value);
   const kind =
@@ -1483,19 +1528,37 @@ function validCreate(value: unknown): {
       kind === "user"
         ? null
         : requiredId(record.teamSpaceId, "teamSpaceId"),
+    issueNumber: kind === "user"
+      ? userWorktreeIssue(record.issueNumber)
+      : validIssueNumber(record.issueNumber),
   };
+}
+
+function validIssueNumber(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw invalidInput("issueNumber must be a positive integer or null.", "issueNumber");
+  }
+  return value as number;
+}
+
+function userWorktreeIssue(value: unknown): null {
+  if (validIssueNumber(value) !== null) throw invalidInput("Only a Team Worktree can serve an Issue.", "issueNumber");
+  return null;
 }
 
 function validPatch(value: unknown): {
   readonly name?: string;
   readonly summary?: string | null;
   readonly visibility?: WorktreeVisibility;
+  readonly issueNumber?: number | null;
 } {
   const record = requiredRecord(value);
   const patch: {
     name?: string;
     summary?: string | null;
     visibility?: WorktreeVisibility;
+    issueNumber?: number | null;
   } = {};
   if (Object.hasOwn(record, "name")) patch.name = validName(record.name);
   if (Object.hasOwn(record, "summary")) {
@@ -1504,6 +1567,7 @@ function validPatch(value: unknown): {
   if (Object.hasOwn(record, "visibility")) {
     patch.visibility = validVisibility(record.visibility);
   }
+  if (Object.hasOwn(record, "issueNumber")) patch.issueNumber = validIssueNumber(record.issueNumber);
   if (Object.keys(patch).length === 0) {
     throw invalidInput("At least one Worktree field is required.");
   }
@@ -1728,6 +1792,7 @@ function validNumber(value: unknown): number {
 
 const MAX_ACTIVITY_ROWS = 1000;
 const MAX_MERGE_LOOKUPS = 200;
+const MAX_ISSUE_PULL_REQUESTS = 100;
 const WORKTREE_STATES: readonly WorktreeState[] = ["draft", "ready", "merging", "merged", "discarded"];
 
 /** `state` may repeat; an absent filter returns every state. */
@@ -1909,9 +1974,10 @@ function operationPayload<T>(
 
 function assertSameCreate(
   input: ReturnType<typeof validCreate> & { readonly forkId: string | null },
-  stable: ReturnType<typeof validCreate> & {
+  stable: Omit<ReturnType<typeof validCreate>, "issueNumber"> & {
     readonly worktreeId: string;
     readonly forkId?: string | null;
+    readonly issueNumber?: number | null;
   }
 ): void {
   assertJsonIntent(input, {
@@ -1921,6 +1987,7 @@ function assertSameCreate(
     visibility: stable.visibility,
     teamSpaceId: stable.teamSpaceId,
     forkId: stable.forkId ?? null,
+    issueNumber: stable.issueNumber ?? null,
   });
 }
 

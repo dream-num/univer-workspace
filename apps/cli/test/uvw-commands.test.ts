@@ -63,6 +63,7 @@ const issue = (overrides: Record<string, unknown> = {}) => ({
   number: 3,
   referenceCount: 0,
   references: [],
+  pullRequests: [],
   space: { id: "space-1", name: "Docs" },
   state: "open",
   stateReason: null,
@@ -1273,6 +1274,33 @@ async function run(command: Command, args: readonly string[]): Promise<string> {
   await program.parseAsync([command.name(), ...args], { from: "user" });
   return output;
 }
+
+describe("uvw pull request Issue links", () => {
+  it("sends --issue on create and edit, and shows the link in pr view and issue view", async () => {
+    const { repoContext } = context();
+    const linked = worktree({ issue: { number: 3, state: "open", title: "Third" } });
+    const create = vi.fn(async () => linked);
+    const update = vi.fn(async () => linked);
+    const worktrees = { create, getByNumber: async () => linked, update } as unknown as WorkspaceWorktreeFeature;
+    const spaces = { get: async () => teamSpace } as unknown as WorkspaceSpaceFeature;
+    const pr = createPullRequestCommands({ context: repoContext, origin: async () => ORIGIN, spaces, userId: async () => "u1", worktrees })[0]!;
+
+    await run(pr, ["create", "-R", "alice/docs", "-t", "Fix", "--issue", "#3"]);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ issueNumber: 3 }));
+    await run(pr, ["edit", "12", "-R", "alice/docs", "--issue", "3"]);
+    expect(update.mock.calls).toEqual([["wt-1", { issueNumber: 3 }]]);
+    await expect(run(pr, ["edit", "12", "-R", "alice/docs", "--issue", "three"])).rejects.toMatchObject({ exitCode: 1 });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(await run(pr, ["view", "12", "-R", "alice/docs"])).toContain("issue: #3 Third [open]");
+
+    const author = { displayName: "A", id: "u1", username: "alice" };
+    const issues = {
+      get: async () => issue({ pullRequests: [{ author, id: "wt-1", mergedBy: null, number: 12, state: "draft", title: "Fix" }] }),
+    } as unknown as WorkspaceIssueFeature;
+    const view = createIssueCommand({ context: repoContext, feature: issues, origin: async () => ORIGIN });
+    expect(await run(view, ["view", "3", "-R", "alice/docs"])).toContain("pull request: #12 Fix [draft]");
+  });
+});
 
 describe("malformed Browser URL errors", () => {
   it.each(["%", "%ZZ", "%C3%28"])("presents invalid path encoding %s without a stack or product requests", async (encoded) => {

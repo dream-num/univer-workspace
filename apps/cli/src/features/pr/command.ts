@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import {
   findPullRequest,
   listPullRequests,
@@ -25,7 +25,18 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 export const PR_JSON_FIELDS = [
   "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "createdVia", "updatedAt",
   "capabilities",
+  "issue",
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
+
+const ISSUE_OPTION = [
+  "--issue <number>",
+  "the Issue in the same repository that this pull request serves (12 or #12; Team Space repositories only)",
+  (value: string): number => {
+    const match = /^#?([1-9]\d{0,9})$/.exec(value.trim());
+    if (!match) throw new InvalidArgumentError("workspace-argument-invalid: --issue must be an Issue number such as 12 or #12.");
+    return Number(match[1]);
+  },
+] as const;
 
 interface RepoOption {
   readonly repo?: string;
@@ -169,6 +180,7 @@ function build(
         [
           `${label(worktree)} ${worktree.name} [${worktree.state}]`,
           `id: ${worktree.id}${worktree.creator ? ` · created by ${worktree.creator.username}` : ""}`,
+          ...(worktree.issue ? [`issue: #${String(worktree.issue.number)} ${worktree.issue.title} [${worktree.issue.state}]`] : []),
           ...(worktree.summary ? ["", worktree.summary] : []),
           ...(worktree.units.length
             ? [
@@ -191,6 +203,7 @@ function build(
     .option("-b, --body <markdown>")
     .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
     .option("--visibility <visibility>", "private or space (Team Space repositories only)")
+    .option(...ISSUE_OPTION)
     .option("--idempotency-key <key>", "retry-safe key for this creation")
     .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
@@ -200,6 +213,7 @@ function build(
             body?: string;
             bodyFile?: string;
             idempotencyKey?: string;
+            issue?: number;
             title: string;
             visibility?: string;
           },
@@ -216,6 +230,7 @@ function build(
             ...(options.visibility === undefined
               ? {}
               : { visibility: oneOf(options.visibility, ["private", "space"], "--visibility") }),
+            ...(options.issue === undefined ? {} : { issueNumber: options.issue }),
           });
           return { worktree, url: base === undefined ? undefined : pullUrl(base, worktree, undefined, space.id) };
         });
@@ -224,26 +239,27 @@ function build(
     );
 
   const edit = new Command(names.edit)
-    .description("Change a pull request's title, body or visibility")
+    .description("Change a pull request's title, body, visibility or the Issue it serves")
     .argument("<pr>")
     .option(...REPO_OPTION)
     .option("-t, --title <title>")
     .option("-b, --body <markdown>")
     .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
     .option("--visibility <visibility>", "private or space (Team Space repositories only)")
+    .option(...ISSUE_OPTION)
     .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
       async (
         argument: string,
         options: JsonFieldsOption &
-          RepoOption & { body?: string; bodyFile?: string; title?: string; visibility?: string },
+          RepoOption & { body?: string; bodyFile?: string; issue?: number; title?: string; visibility?: string },
       ) => {
         const { worktree, url } = await executeCommand(edit, async () => {
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
-          if (options.title === undefined && body === undefined && options.visibility === undefined) {
+          if (options.title === undefined && body === undefined && options.visibility === undefined && options.issue === undefined) {
             throw workspaceError(
               "workspace-argument-invalid",
-              "Nothing to change: pass --title, --body/--body-file or --visibility.",
+              "Nothing to change: pass --title, --body/--body-file, --visibility or --issue.",
             );
           }
           const target = await writeTarget(argument, options);
@@ -253,6 +269,7 @@ function build(
             ...(options.visibility === undefined
               ? {}
               : { visibility: oneOf(options.visibility, ["private", "space"], "--visibility") }),
+            ...(options.issue === undefined ? {} : { issueNumber: options.issue }),
           });
           return { worktree, url: target.url };
         });

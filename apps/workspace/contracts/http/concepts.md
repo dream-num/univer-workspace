@@ -437,6 +437,14 @@ by ID.
 Issues exist only in Team Spaces. A Personal Space returns `409 CONFLICT`; a Space the caller
 cannot discover returns `404`. Every endpoint requires a login Session.
 
+A Team Worktree, a pull request, may serve one Issue of its Team Space: `issueNumber` on
+`POST /api/worktrees` or `PATCH /api/worktrees/{worktreeId}` sets the link and `null` removes it.
+Whoever may change the pull request's summary sets it, and only while they can read the Team
+Space; otherwise the request gets `403 FORBIDDEN`. A User Worktree, or a number with no Issue
+in that Team Space, is `400 INVALID_INPUT`. A fork's pull request is linked the same way once
+its first write has opened it. `WorktreeSummary.issue` names the Issue, and `Issue.pullRequests`
+lists the linked pull requests the caller may discover, with their state and merger.
+
 An Issue is addressed by its Space-scoped number (`#12`) in the path and by an opaque ID
 elsewhere (comments, labels). Numbers increase inside a Space and are never reused.
 

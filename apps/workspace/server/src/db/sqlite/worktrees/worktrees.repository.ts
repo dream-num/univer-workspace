@@ -75,6 +75,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly kind: WorktreeKind | null;
     readonly teamSpaceId: string | null;
     readonly creatorUserId?: string;
+    readonly issueId?: string;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
   }): Promise<WorktreeRow[]> {
@@ -98,6 +99,10 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     if (input.creatorUserId) {
       predicates.push("worktree.creator_user_id = $creatorUserId");
       parameters.creatorUserId = input.creatorUserId;
+    }
+    if (input.issueId) {
+      predicates.push("worktree.issue_id = $issueId");
+      parameters.issueId = input.issueId;
     }
     if (input.touchedSince !== undefined) {
       predicates.push("(worktree.created_at >= $touchedSince OR worktree.processed_at >= $touchedSince)");
@@ -183,6 +188,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly createdVia: WriteSource | null;
     readonly createdAt: number;
     readonly forkId: string | null;
+    readonly issueId: string | null;
   }): Promise<void> {
     // The number is allocated inside the insert transaction (BEGIN IMMEDIATE), so
     // concurrent writers serialize. Team Worktrees continue the Space's shared
@@ -209,9 +215,9 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
           `INSERT INTO worktrees
             (
               id, number, name, summary, creator_user_id, kind, team_space_id,
-              visibility, created_at, updated_at, created_via, fork_id
+              visibility, created_at, updated_at, created_via, fork_id, issue_id
             )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.id,
@@ -225,7 +231,8 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
           input.createdAt,
           input.createdAt,
           input.createdVia,
-          input.forkId
+          input.forkId,
+          input.issueId
         );
     });
   }
@@ -251,6 +258,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       SET name = COALESCE($name, name),
           summary = CASE WHEN $setSummary THEN $summary ELSE summary END,
           visibility = COALESCE($visibility, visibility),
+          issue_id = CASE WHEN $setIssue THEN $issueId ELSE issue_id END,
           updated_at = $updatedAt
       WHERE id = $id AND (
         creator_user_id = $actorId OR
@@ -266,9 +274,18 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       setSummary: Number(input.summary !== undefined),
       summary: input.summary ?? null,
       visibility: input.visibility ?? null,
+      setIssue: Number(input.issueId !== undefined),
+      issueId: input.issueId ?? null,
       updatedAt: input.updatedAt,
     });
     return Number(result.changes) === 1;
+  }
+
+  async findIssueId(teamSpaceId: string, number: number): Promise<string | null> {
+    const row = this._database.connection
+      .prepare("SELECT id FROM issues WHERE space_id = ? AND number = ?")
+      .get(teamSpaceId, number) as { id: string } | undefined;
+    return row?.id ?? null;
   }
 
   async units(worktreeId: string): Promise<WorktreeUnitRow[]> {
@@ -678,6 +695,9 @@ function worktreeSelect(): string {
             claimer.display_name AS claimer_display_name,
             claimer.avatar_url AS claimer_avatar_url,
             team.name AS team_space_name,
+            issue.number AS issue_number,
+            issue.title AS issue_title,
+            issue.state AS issue_state,
             ${ownsSpaceSql("team.owner_user_id")} AS actor_owns_team_space,
             member.role AS actor_member_role,
             ${proposesSql("team")} AS actor_proposes,
@@ -699,5 +719,9 @@ function worktreeSelect(): string {
           LEFT JOIN space_members AS member
             ON member.space_id = worktree.team_space_id
            AND member.user_id = $userId
-           AND NOT ${ownerSuspendedSql("team.owner_user_id")}`;
+           AND NOT ${ownerSuspendedSql("team.owner_user_id")}
+          LEFT JOIN issues AS issue
+            ON issue.id = worktree.issue_id
+           AND (${ownsSpaceSql("team.owner_user_id")} OR member.user_id IS NOT NULL
+             OR (team.public_read = 1 AND NOT ${ownerSuspendedSql("team.owner_user_id")}))`;
 }

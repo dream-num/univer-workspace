@@ -82,6 +82,7 @@ describe("repository data boundaries", () => {
       claimer: null,
       unitCount: 0,
       units: [],
+      issue: null,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-02T00:00:00Z",
       processedAt: "2026-01-02T00:00:00Z",

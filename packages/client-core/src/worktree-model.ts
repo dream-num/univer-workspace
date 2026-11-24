@@ -1,6 +1,6 @@
 import { workspaceError } from "./errors.js";
 import { isWorkspaceRecord } from "./http.js";
-import type { WriteSource } from "./issue-model.js";
+import type { WorkspaceIssueState, WriteSource } from "./issue-model.js";
 import { parseUnitType, type WorkspaceUnitType } from "./space-model.js";
 
 export type WorkspaceWorktreeState = "draft" | "ready" | "merging" | "merged" | "discarded";
@@ -65,6 +65,8 @@ export interface WorkspaceWorktree {
   readonly units: readonly WorkspaceUnit[];
   /** What the signed-in user may do with it now. Absent in responses that omit it. */
   readonly capabilities?: WorkspaceWorktreeCapabilities;
+  /** The Issue a Team Worktree serves; null when none is linked or the caller cannot read its Space. */
+  readonly issue?: { readonly number: number; readonly title: string; readonly state: WorkspaceIssueState } | null;
 }
 
 export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWorktree {
@@ -119,7 +121,16 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
           ) as WorkspaceWorktreeCapabilities,
         }
       : {}),
+    ...parseIssueLink(value["issue"]),
   };
+}
+
+function parseIssueLink(value: unknown): Pick<WorkspaceWorktree, "issue"> {
+  if (value === null) return { issue: null };
+  return isWorkspaceRecord(value) && Number.isSafeInteger(value["number"]) && typeof value["title"] === "string" &&
+    (value["state"] === "open" || value["state"] === "closed")
+    ? { issue: { number: value["number"] as number, title: value["title"], state: value["state"] } }
+    : {};
 }
 
 function parseCreator(value: unknown): { readonly creator?: { readonly id: string; readonly username: string } } {
@@ -219,7 +230,7 @@ function parseTarget(value: unknown): WorkspaceUnit["target"] {
   return { parentNodeId: value["parentNodeId"], spaceId: value["spaceId"] };
 }
 
-function isState(value: unknown): value is WorkspaceWorktreeState {
+export function isState(value: unknown): value is WorkspaceWorktreeState {
   return (
     value === "draft" ||
     value === "ready" ||

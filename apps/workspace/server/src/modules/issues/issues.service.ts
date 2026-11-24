@@ -28,6 +28,7 @@ import {
   type IssueStateReason,
   type IssueSummaryView,
   type IssueTimelineItem,
+  type IssuePullRequestView,
   type IssueView,
   type IssuesModule,
 } from "./issues.types.js";
@@ -45,6 +46,7 @@ export function createIssuesModule(options: {
   readonly access: AccessResolver;
   readonly now?: () => number;
   readonly onChanged?: (change: IssueProductChange) => void;
+  readonly pullRequests?: (userId: string, issueId: string) => Promise<readonly IssuePullRequestView[]>;
 }): IssuesModule {
   const { repository, access } = options;
   const now = options.now ?? Date.now;
@@ -89,7 +91,7 @@ export function createIssuesModule(options: {
     };
   }
 
-  function issueView(userId: string, { row, space, summary, references }: IssueDetail): IssueView {
+  async function issueView(userId: string, { row, space, summary, references }: IssueDetail): Promise<IssueView> {
     const editable = space.member && (row.author_user_id === userId || space.capabilities.triageIssues);
     return {
       ...summaryView(row, summary),
@@ -101,6 +103,7 @@ export function createIssuesModule(options: {
         triage: space.capabilities.triageIssues,
         comment: space.member,
       },
+      pullRequests: await options.pullRequests?.(userId, row.id) ?? [],
     };
   }
 

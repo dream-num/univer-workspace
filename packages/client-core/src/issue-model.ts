@@ -1,5 +1,6 @@
 import { workspaceError } from "./errors.js";
 import { isWorkspaceRecord } from "./http.js";
+import { isState, type WorkspaceWorktreeState } from "./worktree-model.js";
 
 export type WriteSource = "browser" | "agent" | "unknown";
 
@@ -57,6 +58,16 @@ export interface WorkspaceIssue extends WorkspaceIssueSummary {
     readonly triage: boolean;
   };
   readonly references: readonly WorkspaceIssueReference[];
+  readonly pullRequests: readonly WorkspaceIssuePullRequest[];
+}
+
+export interface WorkspaceIssuePullRequest {
+  readonly author: WorkspaceIssueUser;
+  readonly id: string;
+  readonly mergedBy: WorkspaceIssueUser | null;
+  readonly number: number | null;
+  readonly state: WorkspaceWorktreeState;
+  readonly title: string;
 }
 
 export interface WorkspaceIssuePage {
@@ -162,6 +173,7 @@ export function parseIssue(value: unknown): WorkspaceIssue {
   if (
     typeof record["body"] !== "string" ||
     !Array.isArray(record["references"]) ||
+    !(record["pullRequests"] === undefined || Array.isArray(record["pullRequests"])) ||
     !isWorkspaceRecord(capabilities) ||
     typeof capabilities["edit"] !== "boolean" ||
     typeof capabilities["close"] !== "boolean" ||
@@ -180,6 +192,27 @@ export function parseIssue(value: unknown): WorkspaceIssue {
       triage: capabilities["triage"],
     },
     references: record["references"].map((reference) => parseReference(reference)),
+    pullRequests: ((record["pullRequests"] ?? []) as unknown[]).map((pullRequest) => parsePullRequest(pullRequest)),
+  };
+}
+
+function parsePullRequest(value: unknown): WorkspaceIssuePullRequest {
+  if (
+    !isWorkspaceRecord(value) ||
+    typeof value["id"] !== "string" ||
+    !(value["number"] === null || Number.isSafeInteger(value["number"])) ||
+    typeof value["title"] !== "string" ||
+    !isState(value["state"])
+  ) {
+    throw invalidResponse("Workspace Issue contains an invalid pull request");
+  }
+  return {
+    author: parseUser(value["author"]),
+    id: value["id"],
+    mergedBy: value["mergedBy"] === null ? null : parseUser(value["mergedBy"]),
+    number: value["number"] as number | null,
+    state: value["state"],
+    title: value["title"],
   };
 }
 

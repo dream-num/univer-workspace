@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS worktrees (
   number INTEGER,
   created_via TEXT CHECK (created_via IN ('browser', 'agent')),
   fork_id TEXT REFERENCES forks(id) ON DELETE SET NULL CHECK (fork_id IS NULL OR kind = 'team'),
+  issue_id TEXT REFERENCES issues(id) ON DELETE SET NULL CHECK (issue_id IS NULL OR kind = 'team'),
   CHECK (
     (kind = 'user' AND team_space_id IS NULL AND visibility = 'private')
     OR
@@ -255,6 +256,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS worktrees_user_number
 CREATE UNIQUE INDEX IF NOT EXISTS worktrees_open_fork
   ON worktrees(fork_id)
   WHERE fork_id IS NOT NULL AND processed_at IS NULL;
+CREATE INDEX IF NOT EXISTS worktrees_issue
+  ON worktrees(issue_id)
+  WHERE issue_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS worktree_units (
   worktree_id TEXT NOT NULL,
@@ -780,7 +784,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 29;
+PRAGMA user_version = 30;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>

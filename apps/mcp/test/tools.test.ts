@@ -570,6 +570,18 @@ describe("Issue tools and gateway infrastructure", () => {
     ]);
   });
 
+  it("links a pull request to the Issue it serves and removes the link with null", async () => {
+    await start();
+    await call("pr_create", { repo: "bob/team", title: "T", issue: 7 });
+    await call("pr_edit", { repo: "bob/team", number: "3", issue: 7 });
+    await call("pr_edit", { repo: "bob/team", number: "3", issue: null });
+    expect(writesOf().map((r) => r.body)).toEqual([
+      { kind: "team", name: "T", summary: null, issueNumber: 7, teamSpaceId: "team-1", visibility: "private" },
+      { issueNumber: 7 },
+      { issueNumber: null },
+    ]);
+  });
+
   it("moves a ready pull request back to draft with undo", async () => {
     await start();
     wt3State = "ready";

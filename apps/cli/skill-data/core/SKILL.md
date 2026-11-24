@@ -303,8 +303,9 @@ to restate it.
 2. `references[]` lists the files the Issue points at. Use `resource.id` as the
    `resourceId` and `nodeId` to stage them. A reference with `available: false` was trashed or
    became unreadable; say so instead of guessing which file was meant.
-3. Follow "Start a new task" in a **new** Space-scoped pull request titled `#12 <Issue title>`. The
-   Worktree does not link to the Issue itself, so that name is what ties them together for reviewers.
+3. Follow "Start a new task" in a **new** Space-scoped pull request created with `--issue 12`, so the
+   Issue lists it. Through a fork, link the pull request its first write opens with
+   `uvw pr edit <pr> -R <owner>/<slug> --issue 12`.
 4. Verify and hand off as usual, then report on the Issue. Post the review URL with what you changed;
    write multi-line Markdown through stdin so nothing needs shell escaping:
 

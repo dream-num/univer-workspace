@@ -98,6 +98,7 @@ function worktree(reopen: boolean): Worktree {
     unitCount: 0,
     processedAt: null,
     createdAt: "2026-11-15T00:00:00Z",
+    issue: null,
     updatedAt: "2026-11-15T00:00:00Z",
     units: [],
     capabilities: {
