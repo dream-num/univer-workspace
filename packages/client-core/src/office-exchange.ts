@@ -427,11 +427,12 @@ function requireCreatedUnit(
     readonly name: string;
     readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   },
-): void {
+): asserts unit is WorkspaceUnit & { readonly nodeId: string } {
   if (
     // Through a fork the Unit lands in the fork's open Worktree, whose ID the request did not name.
     (unit.worktreeId !== input.worktreeId && !isForkAddress(input.worktreeId)) ||
     unit.source !== "worktree" ||
+    unit.nodeId === null ||
     unit.type !== input.type ||
     unit.name !== input.name ||
     unit.target?.spaceId !== input.spaceId ||

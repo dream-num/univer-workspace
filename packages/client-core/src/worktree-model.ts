@@ -30,9 +30,10 @@ export interface WorkspaceUnit {
   readonly change: "modified" | "added" | "deleted" | "unchanged";
   readonly draftHeadRevision: number;
   readonly freshness: WorkspaceUnitFreshness | null;
-  readonly mergeResult: "pending" | "merged" | "unchanged" | "conflict" | "failed";
+  readonly mergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
   readonly name: string;
-  readonly nodeId: string;
+  /** Null once the file has no Node, as after permanent deletion. */
+  readonly nodeId: string | null;
   readonly resourceId: string;
   readonly source: "trunk" | "worktree";
   readonly target: { readonly parentNodeId: string | null; readonly spaceId: string } | null;
@@ -224,8 +225,7 @@ export function parseUnit(value: unknown, worktreeId: string): WorkspaceUnit {
     value["unitId"].length === 0 ||
     typeof value["resourceId"] !== "string" ||
     value["resourceId"].length === 0 ||
-    typeof value["nodeId"] !== "string" ||
-    value["nodeId"].length === 0 ||
+    (value["nodeId"] !== null && (typeof value["nodeId"] !== "string" || value["nodeId"].length === 0)) ||
     (value["source"] !== "trunk" && value["source"] !== "worktree") ||
     typeof value["name"] !== "string" ||
     !isRevision(value["draftHeadRevision"]) ||
@@ -331,6 +331,7 @@ function isMergeResult(value: unknown): value is WorkspaceUnit["mergeResult"] {
     value === "pending" ||
     value === "merged" ||
     value === "unchanged" ||
+    value === "removed" ||
     value === "conflict" ||
     value === "failed"
   );

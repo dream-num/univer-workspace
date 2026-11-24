@@ -150,9 +150,11 @@ export const unitSchema = z.object({
     .describe(
       "How far trunk moved since this trunk file joined the pull request. Null for a new file and once the pull request is no longer draft or ready. current: trunk has not moved. behind: trunk changed the file since, within the limits. stale: more than 100 revisions behind, or added more than 7 days ago. The server instructions say what to do with each; none of them blocks a merge.",
     ),
-  mergeResult: z.enum(["pending", "merged", "unchanged", "conflict", "failed"]),
+  mergeResult: z
+    .enum(["pending", "merged", "unchanged", "removed", "conflict", "failed"])
+    .describe("removed: the pull request deleted this file."),
   name: z.string(),
-  nodeId: z.string(),
+  nodeId: z.string().nullable().describe("Null once the file is permanently deleted."),
   resourceId: z.string(),
   source: z.enum(["trunk", "worktree"]),
   target: z.object({ parentNodeId: z.string().nullable(), spaceId: z.string() }).nullable(),

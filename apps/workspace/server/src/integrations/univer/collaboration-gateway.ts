@@ -56,6 +56,7 @@ import {
   protocolUser,
 } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
+import { ApplicationError } from "../../middleware/errors.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
@@ -449,6 +450,10 @@ export function createCollaborationGateway(options: {
       if (!unit) {
         response.status(404).json({ message: "Worktree Unit not found." });
         return;
+      }
+      // Review does not require reading removed files, so a removed file's Trunk copy may be in Trash or gone.
+      if (unit.source === "trunk" && !(await access.resolveUnitContent(userId, unit.unitId))?.capabilities.openContent) {
+        throw new ApplicationError("CONFLICT", 409, "This file is in Trash or no longer readable, so there is nothing to compare.");
       }
       response.json(
         await createWorkspaceUnitComparison({

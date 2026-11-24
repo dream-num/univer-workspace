@@ -53,6 +53,18 @@ describe("Workspace Worktree model and workflow", () => {
     }
   });
 
+  it("reads a merged pull request that deleted a file, in Trash and after permanent deletion", () => {
+    const removed = { change: "deleted", mergeResult: "removed" };
+    const worktree = parseWorktree(rawWorktree("wt-1", "merged", [
+      rawUnit({ ...removed, unitId: "in-trash" }),
+      rawUnit({ ...removed, unitId: "purged", name: "Removed resource", nodeId: null }),
+    ]), "wt-1");
+    expect(worktree.units.map(({ unitId, nodeId, change, mergeResult }) => ({ unitId, nodeId, change, mergeResult }))).toEqual([
+      { unitId: "in-trash", nodeId: "node-1", change: "deleted", mergeResult: "removed" },
+      { unitId: "purged", nodeId: null, change: "deleted", mergeResult: "removed" },
+    ]);
+  });
+
   it.each([
     [{ view: "active" } as const, "/api/worktrees?scope=active"],
     [

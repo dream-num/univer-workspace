@@ -43,6 +43,9 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   no budget.
 - MP15 declares two checks in `.agents/checks.md`, has a claimed Viewer agent report them with `pr_check`, shows them
   in the browser, marks them out of date after a Trunk edit, and counts the results of a claimed Editor agent.
+- MP16 reads a merged pull request that deleted a file with uvw and MCP, before and after the file is deleted
+  permanently, and answers 409 in every comparison mode for a file moved to Trash under an open pull request, whose
+  page shows the deletion note and no server error.
 
 ## How to get to it (user POV)
 
@@ -52,7 +55,8 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, and MI14 calls
 `unit_add`, `execute`, `pr_check` and `pr_merge`. A person
-judges an Issue's whole task in the `Acceptance` view of its page.
+judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses `uvw space node trash` and the
+repository's `Trash` page.
 
 ## Driving it with agent-browser and uvw
 
@@ -934,6 +938,69 @@ Pass when the draft report exits 1 with `CONFLICT`, A's results are current but 
 2 missing, the first screenshot shows them, the Trunk merge leaves A's results `current: false` and the second
 screenshot marks them out of date, B's results count and both checks read `passed`, they still do after B merges, and a
 report on the merged pull request exits 1 with `CONFLICT`.
+
+### MP16. Pull requests that delete a file
+
+The run user O puts two Sheets, `Archive` and `Direct`, on the Trunk of its Personal Space. One pull request deletes
+`Archive` and merges, and uvw and MCP read it before and after O deletes the file permanently. Two open pull requests,
+a draft and a ready one, mark `Direct` for deletion, and then O moves `Direct` to Trash on Trunk.
+
+```bash
+R="$O/personal"
+$V cli mpd-seed pr create -R "$R" -t "Seed" --json id,number
+for name in Archive Direct; do
+  $V cli "mpd-$name" unit create --worktree "$(jq -r .id "$EVIDENCE/mpd-seed.out")" --space "$R" --type sheet --name "$name" --json
+done
+$V cli mpd-seed-ready pr ready "$(jq -r .number "$EVIDENCE/mpd-seed.out")" -R "$R" --json state
+$V cli mpd-seed-merge pr merge "$(jq -r .number "$EVIDENCE/mpd-seed.out")" -R "$R" --json state
+for k in archive draft ready; do $V cli "mpd-pr-$k" pr create -R "$R" -t "Remove $k" --json id,number; done
+$V cli mpd-add-archive unit add --worktree "$(jq -r .id "$EVIDENCE/mpd-pr-archive.out")" --resource "$(jq -r .unit.resourceId "$EVIDENCE/mpd-Archive.out")" --json
+for k in draft ready; do
+  $V cli "mpd-add-$k" unit add --worktree "$(jq -r .id "$EVIDENCE/mpd-pr-$k.out")" --resource "$(jq -r .unit.resourceId "$EVIDENCE/mpd-Direct.out")" --json
+done
+$V cli mpd-personal repo view "$R" --json id
+P=$(jq -r .id "$EVIDENCE/mpd-personal.out")
+```
+
+In the run browser, signed in as O, open each of the three pull requests at `$ORIGIN/spaces/$P/pulls/<number>`, click
+`Files changed`, then `Mark for deletion`. The file reads `Deleted`. While the archive pull request is a draft, its
+default and `?baseMode=base` comparisons still answer 200:
+
+```bash
+W=$(jq -r .id "$EVIDENCE/mpd-pr-archive.out"); U=$(jq -r .unit.unitId "$EVIDENCE/mpd-Archive.out")
+agent-browser eval "Promise.all(['', '?baseMode=base'].map((m) => fetch('/universer-api/worktrees/$W/units/$U/comparison' + m).then((r) => r.status))).then((s) => s.join(' '))" | tee "$EVIDENCE/mpd-comparison-readable.txt"
+NA=$(jq -r .number "$EVIDENCE/mpd-pr-archive.out")
+$V cli mpd-archive-ready pr ready "$NA" -R "$R" --json state
+$V cli mpd-archive-merge pr merge "$NA" -R "$R" --json state
+$V cli mpd-ready-ready pr ready "$(jq -r .number "$EVIDENCE/mpd-pr-ready.out")" -R "$R" --json state
+$V cli mpd-view pr view "$NA" -R "$R" --json
+$V mcp mpd-view-mcp pr_view "{\"repo\":\"$R\",\"number\":\"$NA\"}"
+for f in mpd-view mpd-view-mcp; do
+  jq -e '.state == "merged" and ([.units[] | {change, mergeResult}] == [{change: "deleted", mergeResult: "removed"}])' "$EVIDENCE/$f.out"
+done
+```
+
+Open `$ORIGIN/spaces/$P/trash`, click `Remove` on `Archive` and confirm `Remove`, so the merged file has no Node. Then:
+
+```bash
+$V cli mpd-view-purged pr view "$NA" -R "$R" --json
+$V mcp mpd-view-purged-mcp pr_view "{\"repo\":\"$R\",\"number\":\"$NA\"}"
+for f in mpd-view-purged mpd-view-purged-mcp; do jq -e '[.units[] | .nodeId] == [null]' "$EVIDENCE/$f.out"; done
+$V cli mpd-trash space node trash "$(jq -r .unit.nodeId "$EVIDENCE/mpd-Direct.out")" --json
+U=$(jq -r .unit.unitId "$EVIDENCE/mpd-Direct.out")
+for k in draft ready; do
+  W=$(jq -r .id "$EVIDENCE/mpd-pr-$k.out")
+  agent-browser eval "Promise.all(['', '?baseMode=base', '?view=preview', '?view=merged', '?baseMode=parent&view=merged'].map((m) => fetch('/universer-api/worktrees/$W/units/$U/comparison' + m).then((r) => r.status))).then((s) => s.join(' '))" | tee "$EVIDENCE/mpd-comparison-$k.txt"
+done
+grep -c '"statusCode":500' "$EVIDENCE/../logs/server.log"
+```
+
+Open each open pull request's `Files changed`, click `Compare`, and screenshot `mp16-trashed-removal.png`. The file
+reads `Deleted`, and the panel says `This document is marked for deletion. Its content will not be published.`
+
+Pass when the draft's readable comparisons answer 200, both reads of the merged pull request exit 0 with
+`mergeResult: "removed"`, also after permanent deletion with `nodeId: null`, every comparison mode answers 409 for both
+open pull requests, the server log has no 500, and the screenshot shows the deletion note and no error.
 
 ## Gotchas
 
