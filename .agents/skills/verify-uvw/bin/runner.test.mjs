@@ -98,6 +98,8 @@ test('the report, verdict, turns and usage come from the last result record, wit
   const record = (result) => JSON.stringify({ type: 'result', result, num_turns: 2 });
   assert.equal(readTranscript(`${record('RESULT: ISSUES')}\n${record('no verdict yet')}\n`, '/x').result, null);
   assert.equal(readTranscript(`${record('MX1: FAIL\nRESULT: ISSUES')}\nnot json\n`, '/x').result, 'ISSUES');
+  assert.equal(readTranscript(`${record('See /tmp/verify-uvw-slc/slc/evidence/a.png and /tmp/verify-uvw/t/evidence/b.png')}\n`, '/b/runs').report,
+    'See /b/runs/slc/evidence/a.png and /b/runs/t/evidence/b.png');
 });
 
 test('brief --own refuses a host-only feature or journey set, skips marked journeys, and the host brief ignores marks', () => {

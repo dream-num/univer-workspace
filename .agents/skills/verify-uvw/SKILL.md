@@ -213,9 +213,13 @@ $V runner --jobs 3 --keep issues auth create-document
   gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
   `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
   journeys that call `docker` or `agent-up`, and the whole MCP security feature, are marked `(host only)`.
-- Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/`: `summary.md`, and for each task
-  `report.md` (its evidence paths open on the host), `transcript.jsonl`, `result.json`,
-  `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
+- Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
+  `summary.md`, and for each task `report.md` (its evidence paths open on the host), `transcript.jsonl`,
+  `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
+- Evidence never stays in a container. `task.sh` sets `VERIFY_UVW_EVIDENCE_ROOT` to the task's `runs/`, and
+  `up` then makes each run's `evidence/` and `logs/` links into it, so files reach the host as they are written.
+  That covers runs a recipe starts under its own `VERIFY_UVW_ROOT`, and a batch stopped by Ctrl-C or a failed
+  container keeps everything written so far. `data/`, `home/` and `user.pw` stay in the container.
 - Treat a report as a claim, as in the previous section. Open the evidence before you repeat a `PASS` or a
   `FAIL`.
 - Exit codes: `0` when every task reported, `3` when Docker is missing or a task is host only, `4` when a

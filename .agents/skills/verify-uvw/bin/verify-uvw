@@ -583,7 +583,15 @@ cmd_up() {
     [[ "$agent_port" =~ ^[0-9]+$ && "$agent_port" -ge 1 && "$agent_port" -le 65535 ]] || die "choose VERIFY_UVW_AGENT_PORT between 1 and 65535"
     [[ "$agent_port" != "$server_port" && "$agent_port" != "$web_port" && ( "$mcp_enabled" != 1 || "$agent_port" != "$mcp_port" ) && -z "$(listener_pid "$agent_port")" ]] || die "Agent port $agent_port is occupied or shared with this run"
   fi
-  mkdir -p "$run"/{data,home,logs,evidence}
+  mkdir -p "$run"/{data,home}
+  # The verify runner points this at a host mount, so evidence and logs leave its container as they are written.
+  if [[ -n "${VERIFY_UVW_EVIDENCE_ROOT:-}" ]]; then
+    local kept="$VERIFY_UVW_EVIDENCE_ROOT/$id" d
+    mkdir -p "$kept"/{logs,evidence}
+    for d in logs evidence; do [[ -e "$run/$d" ]] || ln -s "$kept/$d" "$run/$d"; done
+  else
+    mkdir -p "$run"/{logs,evidence}
+  fi
   (umask 077 && openssl rand -hex 24 >"$run/home/workspace-metrics-token")
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")

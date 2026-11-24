@@ -58,7 +58,7 @@ export function readTranscript(text, runsDir) {
     .map((line) => { try { return JSON.parse(line); } catch { return null; } })
     .findLast((r) => r?.type === 'result');
   if (!record) return null;
-  const report = String(record.result ?? '').replaceAll('/tmp/verify-uvw/', `${runsDir}/`);
+  const report = String(record.result ?? '').replace(/\/tmp\/verify-uvw(?:-[a-z0-9]+)?\//g, `${runsDir}/`);
   const u = record.usage;
   return {
     report,
