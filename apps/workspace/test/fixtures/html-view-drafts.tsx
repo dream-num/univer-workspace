@@ -10,7 +10,7 @@ const scenario = new URLSearchParams(location.search).get("draft") ?? "create";
 const state = scenario === "conflicted" || scenario === "expired" || scenario === "rejected" || scenario === "published" ? scenario : "pending";
 let draft: components["schemas"]["HtmlViewDraft"] = {
   id: scenario, author: { id: "fixture-owner", username: "alice", displayName: "Fixture Owner", avatarUrl: null },
-  kind: scenario === "replace" ? "replace" : "create", state,
+  kind: scenario === "replace" ? "replace" : "create", page: true, state,
   name: "Sales page.univer.html", spaceId: "sales", parentNodeId: "reports", targetResourceId: scenario === "replace" ? "old-page" : null,
   baseEtag: scenario === "replace" ? '"v1"' : null, byteSize: 200, createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z",
   decidedAt: null, supersededBy: null, published: state === "published" ? { nodeId: "published-page", resourceId: "page", etag: '"v2"' } : null,

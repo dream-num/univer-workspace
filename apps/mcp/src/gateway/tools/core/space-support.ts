@@ -27,6 +27,13 @@ export const worktreeOrForkInput = z
   .describe(
     "Worktree ID: the id of a pull request, as returned by pr_create or pr_view. Or a fork address <owner>/<name> from fork_create.",
   );
+export const forkAddressInput = z
+  .string()
+  .refine(
+    (value) => isForkAddress(value),
+    "This tool takes a fork address <owner>/<name> as worktree. A file changes only through a fork, as a draft its pull request publishes.",
+  )
+  .describe("A fork address <owner>/<name> from fork_create, to work on the upstream's file through the fork.");
 export const resourceKindInput = z
   .enum(["none", "univer", "blob"])
   .describe("none: organizing folders only; univer: documents; blob: uploaded files.");

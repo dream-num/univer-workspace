@@ -374,7 +374,7 @@ Work through a fork when the user asks for one or gives you one. Before you fork
 `uvw repo view <owner>/<slug> --json capabilities`: `propose` says whether you may. Members may, and a
 public repository's `proposals` setting decides for anyone else. Pass the fork's name where a command
 takes `--worktree <id>`: `execute`, `unit list/add/create`, `import`, `inspect`, `outline`, `read`, `find`,
-`screenshot`, and `lint`. Other commands, and `unit create --from`, need the Worktree `id` from
+`screenshot`, `lint`, `blob download` and `blob replace`. Other commands, and `unit create --from`, need the Worktree `id` from
 `uvw fork view <fork> --json worktree`, which exists after the fork's first write.
 
 ```bash

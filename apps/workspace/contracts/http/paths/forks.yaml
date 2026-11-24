@@ -229,3 +229,90 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+
+/api/forks/{forkId}/blob-resources/{resourceId}/content:
+  parameters:
+    - name: forkId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: resourceId
+      in: path
+      required: true
+      schema:
+        type: string
+  put:
+    tags: [Forks]
+    operationId: replaceForkBlobContent
+    summary: Propose new bytes for an upstream file through the fork, as a draft its pull request's merge publishes.
+    description: |
+      Takes the request of `PUT /api/blob-resources/{resourceId}/content`, but never writes the upstream. The bytes
+      become a `replace` draft (`page: false`) attached to the fork's open Worktree, which a `clean` fork opens as
+      `POST /api/forks/{forkId}/units` does. When that Worktree is not a draft the request returns
+      `409 FORK_WORKTREE_NOT_DRAFT`. The Resource must be a ready Blob of the upstream that the caller can read,
+      otherwise `404`. A page (`.univer.html`) is refused with `403 HTML_VIEW_DRAFT_REQUIRED`; pages change through
+      HTML View drafts. `If-Match` must be the file's current ETag, otherwise `412`. The draft supersedes the
+      caller's pending draft of the same file in that Worktree, and a pull request holds at most 20 pending drafts,
+      pages and files together (`409`). Repeating a request with the same Idempotency-Key, target, `If-Match` and
+      `Content-Length` returns its draft with `200` and does not read the new body. While the first request still
+      receives bytes, or after it failed, the key returns `409`; use a new key after a failure. Merging the pull
+      request publishes the draft as the merger, by the rules for pages: the merger needs edit access to the file,
+      a file whose upstream ETag changed after intake ends `conflicted` and keeps the upstream bytes, and when the
+      draft's author cannot write the file, only a person merging in the browser with the reviewed list publishes it.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+        description: Exactly one quoted strong ETag of the upstream file, as Blob content or `blob_download` returns it.
+      - name: Content-Length
+        in: header
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    responses:
+      "200":
+        description: The draft this Idempotency-Key already made.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkBlobWrite
+      "201":
+        description: The new draft, attached to the fork's open Worktree.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkBlobWrite
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: Insufficient permission, `HTML_VIEW_DRAFT_REQUIRED` for a page, or `AGENT_QUOTA_EXCEEDED` when an unclaimed agent stores a file above 10 MB.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+      "412":
+        description: The upstream file changed since the supplied ETag. Download it through the fork again.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "413":
+        $ref: ../schemas/common.yaml#/PayloadTooLarge

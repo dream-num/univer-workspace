@@ -897,7 +897,7 @@ function assertDownloadAvailable(view: Awaited<ReturnType<typeof getBlob>>): voi
     );
   }
 }
-async function* checkedBlobContent(
+export async function* checkedBlobContent(
   response: Response,
   expectedByteSize: number,
 ): AsyncIterable<Uint8Array> {

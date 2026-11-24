@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { checkedBlobContent, WorkspaceBlobFeature } from "./blob.js";
 import { executeWithStableIdentity, WorkspaceApplicationError, workspaceError } from "./errors.js";
+import { contentLength, inspectSource, memorySource, openSource, prepareDownload, type WorkspaceBlobBytes } from "./files.js";
+import { findWorkspaceHtmlViewDraft, parseHtmlViewDraft, type WorkspaceHtmlViewDraft } from "./html-view-draft.js";
 import { isWorkspaceRecord, type AuthenticatedWorkspaceHttp, type WorkspaceHttp } from "./http.js";
 import { resolveRepoReference, type ResolvedWorkspaceRepo } from "./repo-ref.js";
 import type { WorkspaceRuntimeScope } from "./runtime-target.js";
@@ -152,6 +155,115 @@ export class WorkspaceForkFeature {
     return summary;
   }
 
+  /**
+   * Proposes new bytes for an upstream file that is not a page, as a draft attached to the fork's open Worktree,
+   * which a clean fork opens. The upstream keeps its bytes until the pull request merges. `etag` is the upstream
+   * file's current ETag, which `openBlob` returns.
+   */
+  public async replaceBlob(
+    reference: string,
+    input: { readonly etag: string; readonly idempotencyKey?: string; readonly resourceId: string } &
+      ({ readonly filePath: string } | WorkspaceBlobBytes),
+  ): Promise<{ readonly worktree: WorkspaceForkWorktree; readonly draft: WorkspaceHtmlViewDraft }> {
+    const fork = await this.get(reference);
+    const source = "filePath" in input ? await inspectSource(input.filePath) : memorySource(input);
+    const http = await this.authenticatedHttp();
+    const identity = { etag: input.etag, forkId: fork.id, idempotencyKey: input.idempotencyKey ?? randomUUID(), resourceId: input.resourceId };
+    return await executeWithStableIdentity({
+      identity,
+      publicIdentity: { ...identity, fork: fork.fullName, byteSize: source.byteSize },
+      operation: async (same) => {
+        const body = await http.json(
+          `/api/forks/${encodeURIComponent(same.forkId)}/blob-resources/${encodeURIComponent(same.resourceId)}/content`,
+          {
+            method: "PUT",
+            ifMatch: same.etag,
+            idempotencyKey: same.idempotencyKey,
+            contentLength: source.byteSize,
+            contentType: "application/octet-stream",
+            streamBody: openSource(source),
+          },
+        );
+        const draft = parseHtmlViewDraft(body["draft"], http.origin);
+        if (draft.targetResourceId !== same.resourceId) {
+          throw workspaceError("workspace-result-mismatch", "Workspace returned a draft of a different file.");
+        }
+        return { worktree: requireForkWorktree(body["worktree"]), draft };
+      },
+    });
+  }
+
+  /**
+   * An upstream file as the fork sees it: the owner's pending draft of it in the fork's open Worktree, or the
+   * upstream bytes. `etag` is the upstream ETag either way, the one `replaceBlob` takes. The caller must consume or
+   * close the stream.
+   */
+  public async openBlob(reference: string, resourceId: string) {
+    const fork = await this.get(reference);
+    const blobs = new WorkspaceBlobFeature(this.authenticatedHttp);
+    const { node } = await blobs.get(resourceId);
+    const upstream = requireUpstream(fork);
+    if (node.spaceId !== upstream.id) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        `Resource ${resourceId} is not a file of ${upstream.fullName ?? upstream.id}, the upstream of fork ${fork.fullName}.`,
+        { fork: fork.fullName, resourceId },
+      );
+    }
+    const http = await this.authenticatedHttp();
+    const draft = fork.worktree === null ? undefined : await findWorkspaceHtmlViewDraft(this.authenticatedHttp, http.origin, {
+      authorId: fork.owner.id, resourceId, worktreeId: fork.worktree.id,
+    });
+    if (draft === undefined) return { ...(await blobs.downloadStream(resourceId)), draft: null };
+    const response = await http.request(`/api/html-view-drafts/${encodeURIComponent(draft.id)}/content`, { acceptEncoding: "identity" });
+    const byteSize = contentLength(response, "Blob");
+    if (byteSize === undefined || response.body === null) {
+      await response.body?.cancel();
+      throw workspaceError("workspace-invalid-response", "Workspace draft content response is missing its bytes or Content-Length.");
+    }
+    return {
+      content: checkedBlobContent(response, byteSize),
+      resourceId,
+      nodeId: node.nodeId,
+      spaceId: node.spaceId,
+      fileName: node.name,
+      byteSize,
+      mediaType: response.headers.get("content-type") ?? "application/octet-stream",
+      etag: draft.baseEtag,
+      draft,
+      close: async () => {
+        await response.body?.cancel();
+      },
+    };
+  }
+
+  /** `openBlob` written to a local file. */
+  public async downloadBlob(
+    reference: string,
+    input: { readonly force?: boolean; readonly outputPath: string; readonly resourceId: string },
+  ): Promise<Record<string, unknown>> {
+    const target = await prepareDownload({ kind: "blob", outputPath: input.outputPath, ...(input.force === true ? { force: true } : {}) });
+    try {
+      const stream = await this.openBlob(reference, input.resourceId);
+      try {
+        const written = await target.writeAndCommit(stream.content, stream.byteSize);
+        return {
+          resourceId: stream.resourceId,
+          nodeId: stream.nodeId,
+          outputPath: written.outputPath,
+          byteSize: written.byteSize,
+          mediaType: stream.mediaType,
+          etag: stream.etag,
+          draft: stream.draft,
+        };
+      } finally {
+        await stream.close();
+      }
+    } finally {
+      await target.discard();
+    }
+  }
+
   /** What `WorkspaceSpaceFeature.browse` and `find` list for the fork: the upstream as its open Worktree sees it. */
   public async listing(fork: WorkspaceFork): Promise<Pick<BrowseSpaceInput, "overlay" | "spaceId">> {
     const upstream = requireUpstream(fork);
@@ -270,6 +382,12 @@ function parseFork(value: unknown): WorkspaceFork {
     worktree,
     createdAt: value["createdAt"],
   };
+}
+
+function requireForkWorktree(value: unknown): WorkspaceForkWorktree {
+  const worktree = parseForkWorktree(value);
+  if (worktree === null) throw invalidResponse("Workspace response is missing the fork's Worktree.");
+  return worktree;
 }
 
 function parseForkWorktree(value: unknown): WorkspaceForkWorktree | null {

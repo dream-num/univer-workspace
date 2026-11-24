@@ -53,7 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks(); requests.length = 0;
   viewer = "alice";
   draft = {
-    id: "draft-1", author: { id: "alice", username: "alice", displayName: "Alice", avatarUrl: null }, kind: "create", state: "pending", publishWhen: "publish", spaceId: "sales", parentNodeId: "folder-1",
+    id: "draft-1", author: { id: "alice", username: "alice", displayName: "Alice", avatarUrl: null }, kind: "create", page: true, state: "pending", publishWhen: "publish", spaceId: "sales", parentNodeId: "folder-1",
     name: "Sales.univer.html", targetResourceId: null, baseEtag: null, byteSize: 100,
     createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, supersededBy: null, published: null,
   };
@@ -137,6 +137,25 @@ it.each(["published", "rejected", "expired", "conflicted"] as const)("keeps a re
   expect(container.textContent).not.toContain("A newer draft replaced this one");
   expect(container.textContent).toContain(state === "conflicted" ? "The page changed" : state[0]!.toUpperCase() + state.slice(1));
   expect(container.querySelector("button")).toBeNull();
+});
+
+it("shows a reviewer a file draft's name, size and download, and never loads its bytes into a preview", async () => {
+  viewer = "eve";
+  draft = { ...draft, kind: "replace", page: false, name: "report.pdf", byteSize: 2048, parentNodeId: null, targetResourceId: "report", baseEtag: '"v1"', publishWhen: "merge", sourceWorktreeId: "pr-3" };
+  await render("page");
+  await waitFor(() => expect(container.textContent).toContain("report.pdf"));
+  expect(container.textContent).toContain("Replace file · Pending review · 2 KB");
+  expect(container.textContent).toContain("Alice uploaded this file.");
+  const download = container.querySelector<HTMLAnchorElement>("a[download]");
+  expect({ href: download?.getAttribute("href"), name: download?.getAttribute("download") }).toEqual({ href: "/api/html-view-drafts/draft-1/content", name: "report.pdf" });
+  expect(container.querySelector("[data-preview]")).toBeNull();
+  expect(container.querySelector("button")).toBeNull();
+  expect(count("/content")).toBe(0);
+
+  draft = { ...draft, state: "conflicted" };
+  await act(async () => queries.clear());
+  await render("page");
+  await waitFor(() => expect(container.textContent).toContain("The file changed since the Agent drafted it."));
 });
 
 it("labels the change reason and disables Send for blank input or a running session", async () => {

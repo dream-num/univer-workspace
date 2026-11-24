@@ -182,17 +182,18 @@ underscores or hyphens. After an unknown content commit, read back before retryi
 Work through a fork when the user asks for one or gives you one. `fork_create`
 returns its address `<you>/<name>`, and `fork_list` lists yours. Pass it as
 worktree to `execute`, `unit_list`, `unit_add`, `unit_create`, `import`,
-`inspect`, `outline`, `read`, `find`, `screenshot`, `print_pdf`, `html_view_read`
-and `html_view_save`, and as repo to `space_browse` and `space_find`. Skip
-`pr_create`: the first write opens the fork's pull request in the upstream.
+`inspect`, `outline`, `read`, `find`, `screenshot`, `print_pdf`, `html_view_read`,
+`html_view_save`, `blob_download` and `blob_replace`, and as repo to
+`space_browse` and `space_find`. Skip `pr_create`: the first write opens the
+fork's pull request in the upstream.
 Other tools, and `unit_create` with from, take worktree.id from `fork_view`.
 
-- A read shows the fork's version of a file it changed and the upstream's trunk
-  for every other file. A file the fork has not changed reads its formulas and
+- A read shows the fork's version of a file it changed and trunk for every
+  other file. A file the fork has not changed reads its formulas and
   embeds from trunk, even when they point at a file the fork changed. To check it
   against the fork's changes, add it with `unit_add` first.
 - `execute` through a fork adds the file to the pull request even when the code
-  only reads. Read with `read` or `inspect` instead.
+  only reads. Read with `read` or `inspect`.
 - Hand off with worktree.number from `fork_view` and the upstream as repo. A write
   to a ready pull request fails with `FORK_WORKTREE_NOT_DRAFT` until `pr_ready`
   with undo true. After a merge or discard the next write opens a new one.

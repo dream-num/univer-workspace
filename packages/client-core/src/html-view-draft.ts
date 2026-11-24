@@ -38,8 +38,9 @@ export async function readWorkspaceHtmlViewDraft(
 }
 
 /**
- * The author's newest pending draft of a page attached to a Worktree: the page as that pull request, or the fork
- * it belongs to, shows it. `baseEtag` is the ETag of the page it replaces, which is still current while it is pending.
+ * The author's newest pending draft of a page, or of another file, attached to a Worktree: the file as that pull
+ * request, or the fork it belongs to, shows it. `baseEtag` is the ETag of the file it replaces, which is still
+ * current while it is pending.
  */
 export async function findWorkspaceHtmlViewDraft(
   authenticatedHttp: AuthenticatedWorkspaceHttp,

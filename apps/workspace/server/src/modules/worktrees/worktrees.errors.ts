@@ -45,7 +45,7 @@ export function pageReviewRequired(row: PullRequestRow, pages: readonly string[]
   return new ApplicationError(
     "PAGE_REVIEW_REQUIRED",
     409,
-    `A person must merge this pull request in the browser, because its author cannot publish these pages alone: ${pages.join(", ")}. Review it at ${pullRequestUrl(row, publicOrigin)}.`,
+    `A person must merge this pull request in the browser, because its author cannot publish these pages or files alone: ${pages.join(", ")}. Review it at ${pullRequestUrl(row, publicOrigin)}.`,
   );
 }
 
@@ -53,7 +53,7 @@ export function pagesChanged(row: PullRequestRow, publicOrigin: string | null): 
   return new ApplicationError(
     "PAGES_CHANGED",
     409,
-    `The pages of this pull request changed since you reviewed it. Review them again at ${pullRequestUrl(row, publicOrigin)}.`,
+    `The pages or files of this pull request changed since you reviewed it. Review them again at ${pullRequestUrl(row, publicOrigin)}.`,
   );
 }
 

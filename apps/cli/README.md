@@ -258,7 +258,8 @@ uvw fork view <you>/<name>
 ```
 
 Pass the fork's name where these commands take `--worktree <id>`: `execute`, `unit list/add/create`,
-`import`, `inspect`, `outline`, `read`, `find`, `screenshot`, `lint`, `print-pdf` and `html-view validate`. `space browse <fork>` and
+`import`, `inspect`, `outline`, `read`, `find`, `screenshot`, `lint`, `print-pdf`, `html-view validate`, `blob download` and
+`blob replace`. `space browse <fork>` and
 `space find --space <fork>` list the upstream's files without the ones the fork removed and with the ones it
 created. `unit create --space <fork>` creates the file in the upstream. `import` takes the upstream's Space ID
 in `--space`. `unit create --from` and the other commands that take `--worktree` need the pull request's
@@ -278,6 +279,11 @@ and `pr create`, refuse a fork's name and say which repository it forks.
 The CLI saves no page drafts. `html-view create` publishes to a repository's trunk at once, so it refuses a fork's
 name in `--space`. A page change through a fork is an HTML View draft attached to the fork's pull request, which
 the MCP tool `html_view_save` saves with the fork's name as `worktree`.
+
+`blob replace --worktree <fork>` does not change the upstream file. Its bytes become a draft in the fork's pull
+request, which the merge publishes, and `blob download --worktree <fork>` returns that draft until then. Both take
+only a fork's name in `--worktree`, use the upstream file's ETag, and refuse a page (`.univer.html`). A fork
+replaces existing files only.
 
 Known limit: a file the fork has not changed reads its cross-file references (formulas, embeds) from trunk.
 When it references a file the fork changed, the read shows the trunk version of that file. Adding the file to

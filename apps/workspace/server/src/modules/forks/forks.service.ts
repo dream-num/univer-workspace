@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
-import type { WriteSource } from "../identity/index.js";
+import type { HtmlViewDraftsModule, HtmlViewDraftView } from "../html-view-drafts/index.js";
+import type { Principal, WriteSource } from "../identity/index.js";
 import { validSlug } from "../spaces/space-slug.js";
 import type { SpaceProposals, SpacesModule } from "../spaces/index.js";
 import type { WorktreesModule, WorktreeState, WorktreeSummary, WorktreeUnit } from "../worktrees/index.js";
@@ -30,6 +32,14 @@ export interface ForksModule {
     operationId: unknown,
     createdVia: WriteSource | null,
   ): Promise<{ readonly status: 200 | 201; readonly body: { readonly worktree: WorktreeSummary } }>;
+  replaceBlob(
+    actor: Principal,
+    forkId: string,
+    resourceId: string,
+    operationId: unknown,
+    input: { readonly ifMatch: unknown; readonly contentLength: unknown },
+    body: Readable,
+  ): Promise<{ readonly status: 200 | 201; readonly body: { readonly worktree: WorktreeSummary; readonly draft: HtmlViewDraftView } }>;
 }
 
 // A reader of a public Team Space is refused only by the Space's `proposals` setting, so the refusal names it.
@@ -53,6 +63,7 @@ export function createForksModule(options: {
   readonly access: AccessResolver;
   readonly spaces: SpacesModule;
   readonly worktrees: WorktreesModule;
+  readonly drafts: Pick<HtmlViewDraftsModule, "replaceBlob">;
   readonly now?: () => number;
 }): ForksModule {
   const now = options.now ?? Date.now;
@@ -174,6 +185,14 @@ export function createForksModule(options: {
       const { units: _units, opened, ...worktree } = await draftWorktree(userId, forkId, key, createdVia);
       if (!worktree.capabilities.editDraft) throw new ApplicationError("FORBIDDEN", 403, "This Worktree action is not allowed.");
       return { status: opened ? 201 : 200, body: { worktree } };
+    },
+
+    async replaceBlob(actor, forkId, resourceId, operationIdValue, input, body) {
+      const key = validOperationId(operationIdValue);
+      const { opened: _opened, ...worktree } = await draftWorktree(actor.user.id, forkId, key, actor.writeSource);
+      if (!worktree.capabilities.editDraft) throw new ApplicationError("FORBIDDEN", 403, "This Worktree action is not allowed.");
+      const { status, draft } = await options.drafts.replaceBlob(actor, key, { resourceId, ...input }, worktree, body);
+      return { status, body: { worktree: (await openWorktree(actor.user.id, worktree.id))!, draft } };
     },
   };
 }

@@ -255,7 +255,7 @@ describe("merging the pages a person reviewed", () => {
     const value = worktree(false);
     value.capabilities.merge = true;
     state.pages = [listedPage("draft-1", "pending")];
-    state.post.mockResolvedValue({ error: { error: { code: "PAGES_CHANGED", message: "The pages of this pull request changed since you reviewed it." } } });
+    state.post.mockResolvedValue({ error: { error: { code: "PAGES_CHANGED", message: "The pages or files of this pull request changed since you reviewed it." } } });
     renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
     state.clicks.get("confirmMerge")!();
     await vi.waitFor(() => expect(state.error).toHaveBeenCalledWith("pagesChangedReviewAgain"));
@@ -278,6 +278,27 @@ it.each([{ publishedPages: [] }, { publishedPages: [{ draftId: "draft-1", name: 
     expect(renderToStaticMarkup(call![1].description)).toContain('href="/nodes/page-1"');
     expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["html-view-drafts"] });
   } else expect(state.success).toHaveBeenCalledTimes(1);
+});
+
+it("lists a file draft beside the pages with its size and a download in place of a preview, and counts it in the merge", async () => {
+  const value = worktree(false);
+  value.capabilities.merge = true;
+  state.pages = [listedPage("page-draft", "pending"), { ...listedPage("file-draft", "pending"), name: "report.pdf", page: false, byteSize: 2048 }];
+  const html = renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+  expect(html).toContain("Pages and files");
+  expect(html).toContain('href="/api/html-view-drafts/file-draft/content" download="report.pdf"');
+  expect(html).toContain("2 KB");
+  expect(html).not.toContain('href="/drafts/file-draft"');
+  expect(html).toContain('href="/drafts/page-draft"');
+  expect(html).toContain("mergePublishesPage(1) mergeReplacesFile(1)");
+
+  state.post.mockResolvedValue({ data: { worktree: { state: "merged" }, publishedPages: [{ draftId: "file-draft", name: "report.pdf", nodeId: "file-node" }] } });
+  state.clicks.get("confirmMerge")!();
+  await vi.waitFor(() => expect(state.success).toHaveBeenCalled());
+  expect(state.post).toHaveBeenCalledWith("/api/worktrees/{worktreeId}/merge", expect.objectContaining({ body: { pageDraftIds: ["page-draft", "file-draft"] } }));
+  const description = renderToStaticMarkup(state.success.mock.calls[0]![1].description);
+  expect(description).toContain("fileReplaced(1)");
+  expect(description).not.toContain("pagePublished");
 });
 
 it("lists each page the pull request carries with its author, state and preview, to a reviewer only", () => {

@@ -21,6 +21,8 @@
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
 - 提供 fork workflow（`WorkspaceForkFeature`）：create、list、按 `owner/name` 或 ID 读取、delete，经 fork 写入路由添加或新建 Unit；
   `openWorktree` 为不加 Unit 的写入（如页面草稿）打开或返回 fork 的 draft Worktree。
+  `replaceBlob` 把上游 Blob 的新字节存成挂在 fork Worktree 上的文件草稿，`openBlob` 与 `downloadBlob` 返回调用者在 fork 里的
+  pending 草稿或上游字节，ETag 都是上游的。
   `readScope` 与 `writeScope` 把一个 fork address 和 Unit 解析成 Trunk 或 fork 当前打开的 Worktree，写入时先把上游 Trunk 文件加入
   该 Worktree，首次写入会打开它。`listing` 配合 `WorkspaceSpaceFeature.browse`/`find` 的 `overlay` 列出 fork 看到的上游目录。
   `resolveRepoOrFork` 先解析仓库，`owner/name` 在仓库查找 404 后才查 fork；`resolveRepoReference` 仍只返回 Space。

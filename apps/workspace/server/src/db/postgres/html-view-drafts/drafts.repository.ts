@@ -28,10 +28,10 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
       .prepare("SELECT * FROM html_view_drafts WHERE author_user_id = ? AND idempotency_key = ?")
       .get(userId, key) as DraftRow | undefined;
   }
-  async currentEtag(resourceId: string): Promise<string | undefined> {
-    return (await this.database
-      .prepare("SELECT etag FROM blob_resources WHERE resource_id = ?")
-      .get(resourceId))?.etag as string | undefined;
+  async currentTarget(resourceId: string): Promise<{ etag: string; originalFilename: string } | undefined> {
+    return await this.database
+      .prepare("SELECT etag, original_filename AS \"originalFilename\" FROM blob_resources WHERE resource_id = ?")
+      .get(resourceId) as { etag: string; originalFilename: string } | undefined;
   }
   async reserve(
     input: Pick<
@@ -92,9 +92,9 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
           .run(id, row.author_user_id, now, now, previous.id);
         await enqueueObjectDeletion(db, previous.object_key, "blob_upload_abandoned", now);
       }
-      await db.prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?,
+      await db.prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?, sha256 = ?,
         expires_at = ?, updated_at = ? WHERE id = ?`)
-        .run(stored.mediaType, stored.etag, now + 7 * 86400000, now, id);
+        .run(stored.mediaType, stored.etag, stored.sha256, now + 7 * 86400000, now, id);
       return (await this.find(id))!;
     });
   }
@@ -129,7 +129,7 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
         });
         state = "published";
       } else {
-        requireDraftResource(await this.access.readResourceAccess(userId, row.target_resource_id!));
+        requireDraftResource(await this.access.readResourceAccess(userId, row.target_resource_id!), "editContent", row);
         await assertFileQuota(db, userId, 0);
         const swapped = await swapBlobContent(db, {
           resourceId: row.target_resource_id!,

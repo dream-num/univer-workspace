@@ -296,7 +296,7 @@ describe("Workspace application Commander adapters", () => {
     const upload = vi.fn(async () => ({ uploadId: "upload-1" }));
     const get = vi.fn(async () => ({ resource: { resourceId: "resource-1" } }));
     const download = vi.fn(async () => ({ outputPath: "/tmp/output.bin" }));
-    const command = createBlobCommand({ download, get, upload } as unknown as WorkspaceBlobFeature);
+    const command = createBlobCommand({ download, get, upload } as unknown as WorkspaceBlobFeature, {} as never);
 
     await run(command, [
       "upload",
@@ -335,7 +335,7 @@ describe("Workspace application Commander adapters", () => {
   it("maps Blob replacement and returns its recorded identity and ETag", async () => {
     const result = { operationId: "replace-key", resourceId: "resource-1", etag: '"v2"' };
     const replace = vi.fn(async () => result);
-    const command = createBlobCommand({ replace } as unknown as WorkspaceBlobFeature);
+    const command = createBlobCommand({ replace } as unknown as WorkspaceBlobFeature, {} as never);
     const output = await run(command, [
       "replace",
       "--resource",
@@ -361,7 +361,7 @@ describe("Workspace application Commander adapters", () => {
     "requires %s before attempting a Blob replacement",
     async (missing) => {
       const replace = vi.fn();
-      const command = createBlobCommand({ replace } as unknown as WorkspaceBlobFeature);
+      const command = createBlobCommand({ replace } as unknown as WorkspaceBlobFeature, {} as never);
       for (const child of command.commands) child.exitOverride();
       const pairs = [
         ["--resource", "resource-1"],

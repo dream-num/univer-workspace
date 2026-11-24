@@ -88,6 +88,9 @@
     tags: [Blobs]
     operationId: getHtmlViewDraftContent
     summary: Read unpublished draft bytes as inert text, as the author or a reviewer of the source pull request.
+    description: |
+      A page draft is served as `text/plain`. A file draft (`page: false`) is served as an `application/octet-stream`
+      attachment named after the file, so it never renders on the reviewer's origin.
     responses:
       "200":
         description: Current draft or idempotent replay.
@@ -104,10 +107,18 @@
             schema:
               type: string
               const: private, no-store
+          Content-Disposition:
+            description: Present for a file draft only.
+            schema:
+              type: string
         content:
           text/plain; charset=utf-8:
             schema:
               type: string
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
       "400":
         $ref: ../schemas/common.yaml#/BadRequest
       "401":
@@ -184,8 +195,8 @@
   get:
     tags: [Blobs]
     operationId: listWorktreeHtmlViewDrafts
-    summary: List the HTML View drafts a pull request carries, for anyone who may review it.
-    description: Includes drafts by any author and terminal drafts, so a reviewer sees each page's result. Callers without `review` on the pull request get `404`.
+    summary: List the HTML View and file drafts a pull request carries, for anyone who may review it.
+    description: Includes drafts by any author and terminal drafts, so a reviewer sees each page's and file's result. Callers without `review` on the pull request get `404`.
     responses:
       "200":
         description: Drafts attached to the pull request.

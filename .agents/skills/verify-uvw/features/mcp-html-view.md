@@ -309,7 +309,7 @@ Then open `$ORIGIN/nodes/$PN?view=immersive` in E's session, wait 6 s and save `
 
 Pass when `mpm-role` says `viewer`, `mpm-save` is a pending `replace` draft with `publishWhen: "merge"`, and
 `mpm-save-direct` has `code: "FORBIDDEN"` and `Cannot edit draft target.`. `mpm-e-cli-merge` exits `1` with
-`PAGE_REVIEW_REQUIRED: A person must merge this pull request in the browser, because its author cannot publish these pages alone: Budget.univer.html. Review it at <web origin>/spaces/<T>/pulls/<P>.`
+`PAGE_REVIEW_REQUIRED: A person must merge this pull request in the browser, because its author cannot publish these pages or files alone: Budget.univer.html. Review it at <web origin>/spaces/<T>/pulls/<P>.`
 (status 409), the pull request is still `ready`, Trunk B2 is still `42`, and the page still reads
 `Budget by holder`. The dialog says `Merging will publish 1 page.`, and the toast says `Published 1 page` with
 `Open page`. Afterwards Trunk B2 is `77`, the page HTML is O's byte for byte, the draft is `published`, and the

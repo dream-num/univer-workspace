@@ -52,6 +52,7 @@ import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktre
 import { WorktreeReviewHeader } from "./worktree-review-header";
 import { worktreeHtmlViewDraftsQueryOptions } from "../html-views/drafts/draft-queries";
 import { useDraftMessages } from "../html-views/drafts/messages";
+import { formatSkillFileSize } from "../skill-drafts/review-presentation";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
@@ -107,7 +108,9 @@ export function WorktreeReviewPanel({
   const pageList = useQuery({ ...worktreeHtmlViewDraftsQueryOptions(worktree.id), enabled: worktree.capabilities.review });
   // The merge acts on every page listed pending or conflicted: it publishes the first and leaves the second conflicted.
   const mergePages = pageList.data?.filter((draft) => draft.state === "pending" || draft.state === "conflicted");
-  const pagesToPublish = pageList.data?.filter((draft) => draft.state === "pending").length ?? 0;
+  const pagesToPublish = pageList.data?.filter((draft) => draft.state === "pending" && draft.page !== false).length ?? 0;
+  const filesToReplace = pageList.data?.filter((draft) => draft.state === "pending" && draft.page === false).length ?? 0;
+  const fileDraftIds = new Set(pageList.data?.filter((draft) => draft.page === false).map((draft) => draft.id));
 
   const removal = useToggleUnitRemoval(worktree.id);
   const action = useWorktreeLifecycle(worktree.id);
@@ -119,12 +122,16 @@ export function WorktreeReviewPanel({
         if (value === "reopen" && state === "draft") {
           onSelectedViewChange?.("agent");
         }
-        const firstPage = publishedPages[0];
+        const pages = publishedPages.filter((page) => !fileDraftIds.has(page.draftId));
+        const files = publishedPages.length - pages.length;
         const feedback = reviewActionFeedback(value, state);
         if (feedback.kind === "success") {
-          if (firstPage) {
+          if (publishedPages.length) {
             toast.success(t(feedback.message), {
-              description: <>{t(publishedPages.length === 1 ? "pagePublished" : "pagesPublished", { count: publishedPages.length })} <a className="underline" href={`/nodes/${encodeURIComponent(firstPage.nodeId)}`}>{t("openPublishedPage")}</a></>,
+              description: <>
+                {pages[0] ? <>{t(pages.length === 1 ? "pagePublished" : "pagesPublished", { count: pages.length })} <a className="underline" href={`/nodes/${encodeURIComponent(pages[0].nodeId)}`}>{t("openPublishedPage")}</a> </> : null}
+                {files ? t(files === 1 ? "fileReplaced" : "filesReplaced", { count: files }) : null}
+              </>,
             });
           } else toast.success(t(feedback.message));
         } else if (feedback.kind === "info") {
@@ -185,7 +192,8 @@ export function WorktreeReviewPanel({
       ) : worktree.capabilities.merge ? (
         <ConfirmDialog
           title={t("mergeConfirm")}
-          description={t("mergeDescription") + (pagesToPublish > 0 ? ` ${t(pagesToPublish === 1 ? "mergePublishesPage" : "mergePublishesPages", { count: pagesToPublish })}` : "")}
+          description={t("mergeDescription") + (pagesToPublish > 0 ? ` ${t(pagesToPublish === 1 ? "mergePublishesPage" : "mergePublishesPages", { count: pagesToPublish })}` : "")
+            + (filesToReplace > 0 ? ` ${t(filesToReplace === 1 ? "mergeReplacesFile" : "mergeReplacesFiles", { count: filesToReplace })}` : "")}
           confirmText={t("confirmMerge")}
           cancelText={t("cancel")}
           onConfirm={() => runAction("merge", mergePages?.map((draft) => draft.id))}
@@ -281,16 +289,20 @@ function PageDrafts({ worktreeId }: { readonly worktreeId: string }) {
   const drafts = useQuery(worktreeHtmlViewDraftsQueryOptions(worktreeId));
   if (drafts.isError) return <p role="alert" className="m-0 border-t border-border px-4 py-3 text-sm text-destructive">{drafts.error.message}</p>;
   if (!drafts.data?.length) return null;
+  const heading = drafts.data.some((draft) => draft.page === false) ? m.pagesAndFiles : m.pages;
   return (
-    <section aria-label={m.pages} className="border-t border-border px-4 py-3">
-      <h2 className="m-0 mb-2 text-xs font-semibold text-muted-foreground">{m.pages}</h2>
+    <section aria-label={heading} className="border-t border-border px-4 py-3">
+      <h2 className="m-0 mb-2 text-xs font-semibold text-muted-foreground">{heading}</h2>
       <ul className="m-0 grid list-none gap-2 p-0">
         {drafts.data.map((draft) => (
           <li key={draft.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="min-w-0 flex-1 break-words font-medium">{draft.name}</span>
             <span className="text-muted-foreground">{m.byAuthor(draft.author.displayName)}</span>
             <Badge variant="outline">{draft.state === "conflicted" ? m.conflictedState : m[draft.state]}</Badge>
-            <a className="text-primary underline" href={`/drafts/${encodeURIComponent(draft.id)}`}>{m.previewPage}</a>
+            {draft.page === false ? <>
+              <span className="text-muted-foreground">{formatSkillFileSize(draft.byteSize)}</span>
+              <a className="text-primary underline" href={`/api/html-view-drafts/${encodeURIComponent(draft.id)}/content`} download={draft.name}>{m.download}</a>
+            </> : <a className="text-primary underline" href={`/drafts/${encodeURIComponent(draft.id)}`}>{m.previewPage}</a>}
           </li>
         ))}
       </ul>
