@@ -9,11 +9,14 @@ import type {
   LinkSharingRow,
   MembershipRow,
   NodeOwnerRow,
+  PersonalSharingRow,
 } from "./permissions.repository.js";
 import type {
+  AccessChanges,
   NodeLinkSharing,
   NodeGrant,
   GrantRole,
+  PersonalSharingChange,
   PublicUser,
   TeamMembership,
   TeamRole,
@@ -67,7 +70,19 @@ export interface PermissionsModule {
     input: unknown
   ): Promise<NodeLinkSharing>;
   nodeOwnerCategory(nodeId: string): Promise<Exclude<PrincipalCategory, "anonymous">>;
+  /**
+   * Who may read content now, as the actors last set it, each after its own `since`: memberships
+   * of this Team Space they granted, and, for a reader who owns an actor's Personal Space (the actor
+   * or its claimer), the Link Sharing and Node Grants they set there.
+   */
+  accessChangesBy(
+    readerUserId: string,
+    spaceId: string,
+    actors: readonly { readonly userId: string; readonly since: number }[]
+  ): Promise<AccessChanges>;
 }
+
+export const MAX_ACCESS_CHANGES = 50;
 
 export function createPermissionsModule(options: {
   readonly repository: PermissionsRepository;
@@ -186,7 +201,48 @@ export function createPermissionsModule(options: {
     async nodeOwnerCategory(nodeId) {
       return principalCategory(ownerView(await options.repository.findNodeOwner(nodeId)).owner);
     },
+
+    async accessChangesBy(readerUserId, spaceId, actors) {
+      const space = requireTeam(await options.access.resolveSpace(readerUserId, spaceId));
+      const since = new Map(actors.map((actor) => [actor.userId, actor.since]));
+      const members = (await options.repository.listMembers(spaceId))
+        .filter((row) => row.updated_at > (since.get(row.granted_by_id) ?? Infinity))
+        .sort((a, b) => b.updated_at - a.updated_at);
+      let personal: PersonalSharingChange[] | null = null;
+      for (const { userId, since } of actors) {
+        const rows = await options.repository.listPersonalSharing(readerUserId, userId, since, MAX_ACCESS_CHANGES + 1);
+        if (rows === null) continue;
+        const actor = await requireUser(options.repository, userId);
+        (personal ??= []).push(...rows.map((row) => personalSharingView(actor, row)));
+      }
+      personal?.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return {
+        publicRead: space.publicRead,
+        members: members.slice(0, MAX_ACCESS_CHANGES).map(membershipView),
+        membersTruncated: members.length > MAX_ACCESS_CHANGES,
+        personalSharing: personal && {
+          items: personal.slice(0, MAX_ACCESS_CHANGES),
+          truncated: personal.length > MAX_ACCESS_CHANGES,
+        },
+      };
+    },
   };
+}
+
+function personalSharingView(actor: PublicUser, row: PersonalSharingRow): PersonalSharingChange {
+  const common = {
+    actor,
+    node: { id: row.node_id, name: row.node_name },
+    role: row.role,
+    updatedAt: new Date(row.updated_at).toISOString(),
+  };
+  return row.kind === "link"
+    ? { ...common, kind: "link", enabled: row.enabled === 1 }
+    : {
+        ...common,
+        kind: "grant",
+        user: { id: row.user_id, username: row.username, displayName: row.display_name, avatarUrl: row.avatar_url },
+      };
 }
 
 function membershipView(row: MembershipRow): TeamMembership {

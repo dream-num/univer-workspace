@@ -45,7 +45,7 @@ Sheet、Doc、Slide、Base 和 Board 的评论锚点保存在 Unit 快照与变�
 
 审阅 Worktree 时默认打开 Agent 草稿，也可以切换到只读的并排对比视图。拥有草稿编辑权限的用户可以在浏览器修改草稿，更改会同步给同一 Worktree 中的 Agent。Worktree 进入就绪状态后，有重新打开权限的用户可以点击**继续编辑**，将其转回草稿状态。主线审阅、合并预览和对比视图均为只读。切换视图或提交审阅前，请等待编辑器同步完成。
 
-服务端还原并解码主线和草稿的权威状态，用匹配的 History SDK 适配器计算语义差异，通过需要认证的内部接口 `/universer-api` 返回结果。浏览器为对比视图提供 Univer 预设和插件，也可继续使用正式版、Agent 草稿和合并预览的 iframe 视图。内部对比接口可通过 `baseMode=base` 将左侧固定为该 Unit 在 Worktree 中记录的基线版本。右侧可选 `view=draft`、`view=preview`（仅限就绪状态）或 `view=merged`（仅限已合并状态）。合并结果按 SDK 保存的合并修订号读取。缺少该修订号时，无法还原合并当时的固定版本。浏览器默认对比当前主线与草稿。Agent 使用这些模式审阅历史基线。在 Worktree 内新建的 Unit 基线为空，丢弃 Worktree 后仍可审阅。
+服务端还原并解码主线和草稿的权威状态，用匹配的 History SDK 适配器计算语义差异，通过需要认证的内部接口 `/universer-api` 返回结果。浏览器为对比视图提供 Univer 预设和插件，也可继续使用正式版、Agent 草稿和合并预览的 iframe 视图。内部对比接口可通过 `baseMode=base` 将左侧固定为该 Unit 在 Worktree 中记录的基线版本，或通过 `baseMode=parent` 配合 `view=merged` 将左侧固定为这个 Unit 合入前一刻的主线版本。右侧可选 `view=draft`、`view=preview`（仅限就绪状态）或 `view=merged`（仅限已合并状态）。合并结果按 SDK 保存的合并修订号读取。缺少该修订号时，无法还原合并当时的固定版本。浏览器默认对比当前主线与草稿。Agent 使用这些模式审阅历史基线。在 Worktree 内新建的 Unit 基线为空，丢弃 Worktree 后仍可审阅。已合并的 Worktree 删除的主线 Unit 在任何模式下都没有对比，接口返回 `409`，因为它的文件在回收站里，谁都打不开。
 
 在草稿 Worktree 中可以将单个 Unit 标记为删除，也可以撤销标记。就绪后删除标记被冻结，要修改需先重新打开 Worktree。合并时，已标记的 Unit 不参与内容发布，已有文档随后移入回收站。在同一 Worktree 内新建又取消的 Unit 不会发布。丢弃整个 Worktree 会保留已有文档。单个 Unit 的合并结果 `removed` 只表示其内容已排除。等到 Worktree 状态为 `merged` 且合并 Operation 已完成，才表示文档删除完成。如果本次操作结束后 Worktree 仍为就绪状态，需要再次合并。要找回合并时删除的文档，请从回收站恢复。
 

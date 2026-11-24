@@ -135,6 +135,12 @@ export interface RecordVerdict {
 
 export type LabelFields = Pick<LabelRow, "name" | "color" | "description">;
 
+/** A current assignee and the time of its latest `assigned` event. */
+export interface AssignmentRow {
+  readonly user_id: string;
+  readonly assigned_at: number;
+}
+
 export interface IssuesRepository {
   createIssue(input: CreateIssue): Promise<IssueDetail>;
   updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
@@ -153,6 +159,7 @@ export interface IssuesRepository {
   updateComment(userId: string, id: string, body: string, now: number): Promise<CommentRow>;
   deleteComment(userId: string, id: string, now: number): Promise<string>;
   timeline(issueId: string, cursor: TimelineCursor | null, limit: number): Promise<TimelineRow[]>;
+  assignments(issueId: string): Promise<AssignmentRow[]>;
   listLabels(spaceId: string): Promise<Array<LabelRow & { open_issue_count: number }>>;
   findLabel(id: string): Promise<LabelRow | null>;
   insertLabel(userId: string, input: LabelRow & { now: number }): Promise<void>;

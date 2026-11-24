@@ -285,6 +285,45 @@
       "409":
         $ref: ../schemas/common.yaml#/Conflict
 
+/api/spaces/{spaceId}/issues/{number}/access-changes:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  get:
+    tags: [Issues]
+    operationId: getIssueAccessChanges
+    summary: Show who may read content now, as the Issue's assignees set it after they were assigned.
+    description: |
+      For each current assignee, counted from its latest assignment: the memberships of this Team
+      Space it granted, and the Link Sharing settings and Node Grants it set in its own Personal
+      Space. Only a reader who is that assignee, or who claimed that agent, gets the Personal Space
+      rows, because a link-shared Node's ID is its access link. Every row is the current setting, not
+      a history: a later change by someone else replaces it, and a removed grant disappears.
+    responses:
+      "200":
+        description: The current settings each assignee changed, and the Space's public-read state.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueAccessChanges
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
 /api/issue-comments/{commentId}:
   parameters:
     - name: commentId

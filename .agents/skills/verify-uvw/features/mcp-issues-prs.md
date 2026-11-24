@@ -18,6 +18,10 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MI11 returns a structured `workspace-argument-invalid` for an invalid argument and records its usage event.
 - MI12 has a claimed Viewer agent submit an Issue it worked in a fork pull request, the run user send it back and
   accept it in the browser, and the agent find the sent-back Issue with `search` and `acceptance`.
+- MI13 has a claimed Editor agent merge three pull requests linked to an Issue and submit it, after the run user merges a
+  fourth linked one that deletes a file. The run user judges and accepts it in the Issue page's acceptance panel,
+  comparing every changed file before and after its merge, sees the deleted file by name as moved to Trash with no
+  comparison, and sees the agent's later Link Sharing there, which a member does not.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -43,7 +47,8 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `pr_check`,
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
-`whoami` and `pr_merge` as an agent.
+`whoami` and `pr_merge` as an agent, and MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`. A person
+judges an Issue's whole task in the `Acceptance` view of its page.
 
 ## Driving it with agent-browser and uvw
 
@@ -290,6 +295,127 @@ Pass when every command exits as shown: A submits as a Viewer assignee but may n
 `INVALID_INPUT`, O's `acceptance` search lists the submitted Issue, the browser send-back shows the reason in the
 timeline, A finds the sent-back Issue with `acceptance`, resubmits, and O's browser accept closes the Issue as
 completed with one `issue-closed` activity event.
+
+### MI13. Judge the whole task in the acceptance panel
+
+The run user O claims an agent A, makes it an Editor of a Team Space with three Sheets on Trunk, and assigns it an
+Issue. A opens three pull requests linked to the Issue, two that change two Sheets and one that adds a Doc, and merges
+them. O opens and merges a fourth linked pull request that deletes the third Sheet, Archive, and then A submits. O opens
+the Issue page on its `Acceptance` view, compares every changed file before and after its merge, sees Archive as moved
+to Trash with no comparison, finds no outward actions, and accepts. Then A turns on Link Sharing for a file in its own Personal Space: O, who claimed A, sees
+it in the panel, and a member E sees neither the row nor the Node ID. MI13 uses one `principal`, which counts toward the
+5 agents per hour.
+
+```bash
+R="$O/acceptance-panel"
+sheet() { jq -nc --arg w "$1" --arg u "$(jq -r .unit.unitId "$EVIDENCE/$2.out")" --arg c "const ws = univerAPI.getActiveWorkbook().getActiveSheet(); $3" '{worktree:$w,unit:$u,code:$c}'; }
+$V cli mip-repo repo create acceptance-panel --name "Acceptance panel" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mip-repo.out")
+$V mcp mip-seed pr_create "{\"repo\":\"$R\",\"title\":\"Seed\"}"
+W0=$(jq -r .id "$EVIDENCE/mip-seed.out"); N0=$(jq -r .number "$EVIDENCE/mip-seed.out")
+$V mcp mip-budget unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Budget\"}"
+$V mcp mip-regions unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Regions\"}"
+$V mcp mip-archive unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Archive\"}"
+$V mcp mip-budget-seed execute "$(sheet "$W0" mip-budget 'ws.getRange("A1:B3").setValues([["Item","Budget"],["Rent",3000],["Marketing",2500]]);')"
+$V mcp mip-regions-seed execute "$(sheet "$W0" mip-regions 'ws.getRange("A1:A3").setValues([["Region"],["North"],["South"]]);')"
+$V mcp mip-seed-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N0\"}"
+$V mcp mip-seed-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N0\"}"
+$V principal panel mip-a
+A=$(jq -r .agent.username "$EVIDENCE/principal-panel.json")
+$V mcp --as panel mip-claim claim '{}'
+```
+
+Open the `claimUrl` from `mip-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+`mip-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+cache. Create member E in a second browser session: with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e`, pin the
+language and view as [the skill](../SKILL.md#drive) does, open `/login`, click the `Create account` mode button, fill
+`Username` with `mip-e-$VERIFY_UVW_RUN`, `Display name` and `Password`, and submit. Then:
+
+```bash
+E="mip-e-$VERIFY_UVW_RUN"
+$V cli mip-member repo member add "$A" --role editor -R "$R" --json
+$V cli mip-member-e repo member add "$E" --role viewer -R "$R" --json
+$V cli mip-issue issue create -R "$R" -t "Raise Marketing, add West, write a summary" -b "Raise Marketing to 4000 in Budget, add the West region to Regions, and add a Summary Doc." -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mip-issue.out")
+pull() {
+  $V mcp --as panel "mip-pr-$1" pr_create "$(jq -nc --arg r "$R" --arg t "$2" --argjson n "$N" '{repo:$r,title:$t,issue:$n}')" >/dev/null
+  jq -r .id "$EVIDENCE/mip-pr-$1.out"
+}
+ready_merge() {
+  local n; n=$(jq -r .number "$EVIDENCE/mip-pr-$1.out")
+  $V mcp --as panel "mip-ready-$1" pr_ready "{\"repo\":\"$R\",\"number\":\"$n\"}"
+  $V mcp --as panel "mip-merge-$1" pr_merge "{\"repo\":\"$R\",\"number\":\"$n\"}"
+}
+W1=$(pull budget "Raise Marketing to 4000")
+$V mcp --as panel mip-add-budget unit_add "{\"worktree\":\"$W1\",\"resource\":\"$(jq -r .unit.resourceId "$EVIDENCE/mip-budget.out")\"}"
+$V mcp --as panel mip-edit-budget execute "$(sheet "$W1" mip-add-budget 'ws.getRange("B3").setValue(4000);')"
+ready_merge budget
+W2=$(pull regions "Add the West region")
+$V mcp --as panel mip-add-regions unit_add "{\"worktree\":\"$W2\",\"resource\":\"$(jq -r .unit.resourceId "$EVIDENCE/mip-regions.out")\"}"
+$V mcp --as panel mip-edit-regions execute "$(sheet "$W2" mip-add-regions 'ws.getRange("A4").setValue("West");')"
+ready_merge regions
+W3=$(pull summary "Write the summary")
+$V mcp --as panel mip-add-summary unit_create "{\"worktree\":\"$W3\",\"space\":\"$R\",\"type\":\"doc\",\"name\":\"Summary\"}"
+ready_merge summary
+$V mcp --as panel mip-notes-pr pr_create "{\"repo\":\"$A/personal\",\"title\":\"Notes\"}"
+NP=$(jq -r .number "$EVIDENCE/mip-notes-pr.out")
+$V mcp --as panel mip-notes unit_create "{\"worktree\":\"$(jq -r .id "$EVIDENCE/mip-notes-pr.out")\",\"space\":\"$A/personal\",\"type\":\"sheet\",\"name\":\"Notes\"}"
+NOTES=$(jq -r .unit.nodeId "$EVIDENCE/mip-notes.out")
+$V mcp --as panel mip-notes-ready pr_ready "{\"repo\":\"$A/personal\",\"number\":\"$NP\"}"
+$V mcp --as panel mip-notes-merge pr_merge "{\"repo\":\"$A/personal\",\"number\":\"$NP\"}"
+$V cli mip-pr-archive pr create -R "$R" -t "Remove the archive" --issue "$N" --json id,number
+W4=$(jq -r .id "$EVIDENCE/mip-pr-archive.out"); N4=$(jq -r .number "$EVIDENCE/mip-pr-archive.out")
+UA=$(jq -r .unit.unitId "$EVIDENCE/mip-archive.out")
+$V cli mip-add-archive unit add --worktree "$W4" --resource "$(jq -r .unit.resourceId "$EVIDENCE/mip-archive.out")" --json
+```
+
+In the run browser, signed in as O, open `$ORIGIN/spaces/$T/pulls/$N4`, wait for Archive to load, and click
+`Mark for deletion`. Then:
+
+```bash
+$V cli mip-ready-archive pr ready "$N4" -R "$R" --json state
+$V cli mip-merge-archive pr merge "$N4" -R "$R" --json state
+jq -e '.state == "merged"' "$EVIDENCE/mip-merge-archive.out"
+$V mcp --as panel mip-submit issue_verdict "$(jq -nc --arg r "$R" --arg n "$N" '{repo:$r,number:$n,verdict:"submit",body:"Raised Marketing to 4000, added West, and added a Summary Doc in three pull requests."}')"
+jq -e '.acceptance.kind == "submitted" and (.pullRequests | length) == 4 and all(.pullRequests[]; .state == "merged")' "$EVIDENCE/mip-submit.out"
+```
+
+In the run browser, signed in as O at 1440 × 900, note the time, open `$ORIGIN/spaces/$T/issues/$N`, and screenshot it as
+`mip-panel.png`. The page opens on `Acceptance`, and the panel reads, in order: `Task` with the Issue text, A's
+submission, the four pull requests, each `Merged`, A's three `opened by` and `merged by` A and `Remove the archive`
+`opened by` and `merged by` O, and `Outward actions` with `None` under all three parts and the sentence about copies.
+Under `Remove the archive`, Archive has no `Compare` button and reads `Deleted by this pull request and moved to Trash.`:
+screenshot that card (`[data-acceptance-pull="$W4"]`) as `mip-deleted.png`, and in the same page run `agent-browser eval
+"fetch('/universer-api/worktrees/$W4/units/$UA/comparison?baseMode=parent&view=merged').then((r) => r.status)"` into
+`mip-deleted-comparison.txt`, which holds 409. Click `Compare` beside each other file (`[data-acceptance-pull="<id>"] li
+button`), wait about 9 s, and screenshot each as `mip-compare-<budget|regions|summary>.png`: Budget's `Before merge`
+has 2500 in B3 and `After merge` 4000, Regions gains West in A4, and Summary's left side is `Not present on this side`.
+Click `Accept`, note the time, and record both in `mip-timing.txt`. Then:
+
+```bash
+$V mcp --as panel mip-share share "{\"node\":\"$NOTES\",\"link\":\"viewer\"}"
+```
+
+Reload O's page. A closed Issue opens on `Conversation`, so choose `Acceptance`, and screenshot `Outward actions` as
+`mip-claimer.png`. At 390 × 844, check that `document.documentElement.scrollWidth` is 390, and screenshot the same part as
+`mip-claimer-narrow.png` and Budget's comparison as `mip-compare-narrow.png`. In E's session, open the same page,
+choose `Acceptance` and screenshot `Outward actions` as `mip-member.png`, then open
+`$ORIGIN/api/spaces/$T/issues/$N/access-changes` and save the page text as `mip-member-access.json`:
+
+```bash
+jq -e '.personalSharing == null and .members == []' "$EVIDENCE/mip-member-access.json"
+! grep -F "$NOTES" "$EVIDENCE/mip-member-access.json"
+$V cli mip-final issue view "$N" -R "$R" --json state,stateReason,acceptance,pullRequests
+jq -e '.state == "closed" and .acceptance.kind == "accepted" and (.pullRequests | length) == 4 and all(.pullRequests[]; .state == "merged")' "$EVIDENCE/mip-final.out"
+AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e agent-browser close
+```
+
+Pass when every command exits as shown, the panel lists all four merged pull requests with every changed file and its
+before and after, names the deleted Archive as moved to Trash with no comparison while its comparison request gets 409,
+shows no outward action before the share, and accepting closes the Issue as completed. After the share, O's
+panel lists `Notes Link Sharing on (Can view), set by` A under the Personal Space part, the narrow page has no
+horizontal scroll and its comparison shows both sides' cells, and E's panel says `Only the assignee and the user who
+claimed it can see this part.` while E's response has `personalSharing: null` and not the Notes Node ID.
 
 ### MP1. Pull request create
 

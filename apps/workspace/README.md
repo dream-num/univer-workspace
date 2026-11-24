@@ -92,12 +92,15 @@ with the matching History SDK adapter, and returns them through the
 authenticated internal `/universer-api` boundary. The Browser supplies its own
 Univer presets and plugins to the comparison viewer; official, agent, and
 merge-preview iframe views remain available. The internal comparison endpoint accepts
-`baseMode=base` to pin the left side to the Unit's captured baseline, and `view=draft`,
+`baseMode=base` to pin the left side to the Unit's captured baseline, or `baseMode=parent`
+with `view=merged` to pin it to Trunk just before that Unit's merge, and `view=draft`,
 `view=preview` (ready only), or `view=merged` (merged only) for the right side.
 Recorded merge views use the SDK's stored merge revision; Units without that revision
 cannot claim an immutable merge result. The default remains current Trunk versus draft
 for existing Browser consumers. Agent requires these modes for historical Base review;
 new Worktree-local Units have an empty Base and remain reviewable after discard.
+A trunk Unit that a merged Worktree deleted has no comparison in any mode and gets `409`,
+because its file is in Trash, where no one opens it.
 
 Draft Worktrees can also mark individual Units for deletion and undo that intent.
 Ready Worktrees freeze the intent; reopen one before changing it. Merging excludes
@@ -776,7 +779,7 @@ An assignee of an open Issue, with any member role, submits it for acceptance wi
 and assumed. Whoever may close the Issue, its author or a member who may triage Issues, then accepts it, which closes it
 as completed, or sends it back with a reason, after which an assignee submits again. Use `POST
 /api/spaces/{spaceId}/issues/{number}/verdicts`, `uvw issue submit|accept|send-back`, the MCP `issue_verdict` tool, or
-the Accept and Send back form on the Issue page. The Issue shows its latest verdict as `acceptance`, the timeline shows
+the Accept and Send back buttons in the Issue page's acceptance panel. The Issue shows its latest verdict as `acceptance`, the timeline shows
 every verdict, and `acceptance=submitted|sent_back` filters Issue lists.
 
 V30→V31 adds the empty table `issue_verdicts` with the index `issue_verdicts_issue`, and the nullable column

@@ -155,16 +155,17 @@ export interface WorktreeUnitComparisonPayload {
   };
 }
 
-export function worktreeUnitComparisonQueryOptions(worktreeId: string, unitId: string) {
+/** `draft` compares current Trunk with the draft; `merge` compares Trunk just before the merge with its result. */
+export function worktreeUnitComparisonQueryOptions(worktreeId: string, unitId: string, of: "draft" | "merge" = "draft") {
   return queryOptions({
-    queryKey: [...worktreesQueryKey, "comparison", worktreeId, unitId] as const,
+    queryKey: [...worktreesQueryKey, "comparison", worktreeId, unitId, of] as const,
     // Returning from the live draft editor must compare its latest confirmed edits.
     staleTime: 0,
     queryFn: async (): Promise<WorktreeUnitComparisonPayload> => {
       const response = await fetch(
         `/universer-api/worktrees/${encodeURIComponent(
           worktreeId,
-        )}/units/${encodeURIComponent(unitId)}/comparison`,
+        )}/units/${encodeURIComponent(unitId)}/comparison${of === "merge" ? "?baseMode=parent&view=merged" : ""}`,
         { credentials: "include" },
       );
       if (!response.ok) {

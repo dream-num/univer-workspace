@@ -44,6 +44,22 @@ export interface LinkSharingRow {
   readonly updated_at: number;
 }
 
+export type PersonalSharingRow = {
+  readonly node_id: string;
+  readonly node_name: string;
+  readonly role: GrantRole;
+  readonly updated_at: number;
+} & (
+  | { readonly kind: "link"; readonly enabled: 0 | 1 }
+  | {
+      readonly kind: "grant";
+      readonly user_id: string;
+      readonly username: string;
+      readonly display_name: string;
+      readonly avatar_url: string | null;
+    }
+);
+
 export interface NodeOwnerRow {
   readonly username: string;
   readonly kind: "human" | "agent";
@@ -74,6 +90,11 @@ export interface PermissionsRepository {
   }): Promise<GrantRow>;
   removeGrant(actorUserId: string, nodeId: string, userId: string): Promise<GrantRole | null>;
   findLinkSharing(nodeId: string): Promise<LinkSharingRow | null>;
+  /**
+   * The Link Sharing settings and Node Grants in the actor's own Personal Space that the actor created
+   * or last changed after `since`, up to `limit` of each kind, or null when the reader does not own that Space.
+   */
+  listPersonalSharing(readerUserId: string, actorUserId: string, since: number, limit: number): Promise<PersonalSharingRow[] | null>;
   findNodeOwner(nodeId: string): Promise<NodeOwnerRow>;
   upsertLinkSharing(input: {
     readonly nodeId: string;

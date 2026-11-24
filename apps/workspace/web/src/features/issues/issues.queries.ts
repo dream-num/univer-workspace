@@ -90,6 +90,19 @@ export function issueQueryOptions(spaceId: string, number: number) {
   });
 }
 
+export function issueAccessChangesQueryOptions(spaceId: string, number: number) {
+  return queryOptions({
+    queryKey: [...issuesQueryKey, "access-changes", spaceId, number] as const,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/spaces/{spaceId}/issues/{number}/access-changes", {
+        params: { path: { spaceId, number } },
+      });
+      if (error) throw apiError(error);
+      return data;
+    },
+  });
+}
+
 const MAX_TIMELINE_PAGES = 25;
 
 export function issueTimelineQueryOptions(spaceId: string, number: number) {

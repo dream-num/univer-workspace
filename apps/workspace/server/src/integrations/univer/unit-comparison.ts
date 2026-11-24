@@ -53,8 +53,14 @@ interface ComparisonSide {
   readonly unitData: unknown | null;
 }
 
+/**
+ * The left side: current Trunk, the Unit's captured baseline, or, with `view=merged`, Trunk just
+ * before this merge wrote the Unit.
+ */
+type BaseMode = "trunk" | "base" | "parent";
+
 export interface WorkspaceUnitComparisonPayload {
-  readonly baseMode: "trunk" | "base";
+  readonly baseMode: BaseMode;
   readonly view: "draft" | "merged" | "preview";
   readonly result: Omit<IUnitComparisonResult, "items" | "productContext"> & {
     readonly items: readonly (IUnitComparisonItem & {
@@ -81,7 +87,7 @@ export async function createWorkspaceUnitComparison(input: {
   readonly unitType: UnitType;
   readonly source: "trunk" | "worktree";
   readonly change: "modified" | "added" | "deleted" | "unchanged";
-  readonly baseMode?: "trunk" | "base";
+  readonly baseMode?: BaseMode;
   readonly view?: "draft" | "merged" | "preview";
 }): Promise<WorkspaceUnitComparisonPayload> {
   const type = toUniverType(input.unitType);
@@ -112,12 +118,15 @@ export async function createWorkspaceUnitComparison(input: {
   if (view === "preview" && worktree.status !== "ready") {
     throw new ApplicationError("CONFLICT", 409, "A merge preview is only available for a ready Worktree.");
   }
+  if (input.change === "deleted" && input.source === "trunk" && worktree.status === "merged") {
+    throw new ApplicationError("CONFLICT", 409, "This pull request deleted the file and moved it to Trash, so there is nothing to compare.");
+  }
   if (baseMode === "base" && input.source === "trunk" && unit.baselineTrunkRevision === undefined) {
     throw new ApplicationError("CONFLICT", 409, "The Worktree base revision is unavailable.");
   }
   const leftPromise = input.source === "trunk"
     ? loadTrunkSide(input.materializer, input.service, input.unitId, type, context,
-        baseMode === "base" ? unit.baselineTrunkRevision : undefined)
+        baseMode === "base" ? unit.baselineTrunkRevision : baseMode === "parent" ? revisionBeforeMerge(unit) : undefined)
     : Promise.resolve(null);
   const rightPromise = input.change === "deleted"
     ? Promise.resolve(null)
@@ -206,6 +215,17 @@ async function loadMergedSide(
     throw new ApplicationError("CONFLICT", 409, "This Unit has no recorded merge-result revision.");
   }
   return loadTrunkSide(materializer, service, unit.unitID, type, context, unit.mergeResult.trunkRevision);
+}
+
+/** A merge writes one Trunk changeset per Unit, so Trunk before it is one revision earlier. */
+function revisionBeforeMerge(unit: WorktreeUnitData): number {
+  if (unit.mergeResult?.status !== "merged") {
+    throw new ApplicationError("CONFLICT", 409, "This Unit has no recorded merge-result revision.");
+  }
+  const revision = unit.mergeResult.trunkRevision - 1;
+  // Revision 0 asks for the latest Trunk, which would compare the merge result with itself.
+  if (revision < 1) throw new ApplicationError("CONFLICT", 409, "This Unit has no Trunk revision before its merge.");
+  return revision;
 }
 
 async function loadPreviewSide(
