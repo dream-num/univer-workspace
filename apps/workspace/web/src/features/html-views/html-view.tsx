@@ -12,7 +12,7 @@ import {
 import { useI18n } from "../../shared/i18n";
 import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
-import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError, type HtmlViewEngine, type HtmlViewSourceWorktree } from "./workspace-binding-engine";
+import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError, HtmlViewUndeclaredSourceError, type HtmlViewEngine, type HtmlViewSourceWorktree } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
 import { resolveWorkspaceMedia, workspaceMediaSources } from "./workspace-media";
@@ -30,6 +30,7 @@ export function HtmlView({
   hideDraftNotice = false,
   onSourceLoaded,
   sourceWorktree,
+  allowedUnitIds,
   trialAction,
 }: {
   source: string;
@@ -39,6 +40,8 @@ export function HtmlView({
   /** For hosts that label trial mode themselves. */
   hideDraftNotice?: boolean;
   sourceWorktree?: HtmlViewSourceWorktree | undefined;
+  /** For a reader who did not write the page: only these Units load, and the page is told when it asks for another. */
+  allowedUnitIds?: readonly string[] | undefined;
   onSourceLoaded?: (unitId: string, engine: HtmlViewEngine) => void;
   trialAction?: ReactNode;
   allowedOrigins?: readonly string[];
@@ -61,6 +64,13 @@ export function HtmlView({
   const unsynced = useRef(false);
   const [error, setError] = useState("");
   const [inspecting, setInspecting] = useState(false);
+  const [blocked, setBlocked] = useState<readonly string[]>([]);
+  useEffect(() => setBlocked([]), [source, allowedUnitIds]);
+  const allowUnit = useMemo(() => allowedUnitIds && ((unitId: string) => {
+    if (allowedUnitIds.includes(unitId)) return true;
+    setBlocked((ids) => ids.includes(unitId) ? ids : [...ids, unitId]);
+    return false;
+  }), [allowedUnitIds]);
   const loadEngine = useCallback(
     async (unitId: string, signal: AbortSignal) => {
       if (!user) throw new Error("Session is not ready.");
@@ -71,16 +81,19 @@ export function HtmlView({
         () => setTrial(true),
         draft,
         sourceWorktree,
+        allowUnit,
       ).catch((error: unknown) => {
         if (error instanceof HtmlViewSourceSheetRequiredError)
           throw new Error(translation.current("htmlViewSourceSheetRequired"));
+        if (error instanceof HtmlViewUndeclaredSourceError)
+          throw new Error(translation.current("htmlViewUndeclaredSource"));
         throw error;
       });
       writeModes.set(unitId, engine.writeMode);
       onSourceLoaded?.(unitId, engine);
       return engine;
     },
-    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft, sourceWorktree, onSourceLoaded],
+    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft, sourceWorktree, allowUnit, onSourceLoaded],
   );
   useEffect(() => {
     if (inspecting) native.close();
@@ -129,6 +142,7 @@ export function HtmlView({
           actionsContainer,
         )}
       {draft && !hideDraftNotice && <p role="status" className="m-0 shrink-0 border-b border-border px-4 py-2 text-sm">{t("htmlViewDraftNotice")}</p>}
+      {blocked.length > 0 && <p role="alert" className="m-0 shrink-0 border-b border-border bg-amber-50 px-4 py-2 text-sm text-amber-950">{t("htmlViewUndeclaredSourcesBlocked", { units: blocked.join(", ") })}</p>}
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}

@@ -21,6 +21,19 @@ export function htmlViewDraftQueryOptions(draftId: string) {
   });
 }
 
+export function worktreeHtmlViewDraftsQueryOptions(worktreeId: string) {
+  return queryOptions({
+    queryKey: ["html-view-drafts", "worktree", worktreeId],
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/worktrees/{worktreeId}/html-view-drafts", {
+        params: { path: { worktreeId } }, signal,
+      });
+      if (error) throw apiError(error);
+      return data.drafts;
+    },
+  });
+}
+
 export function draftContentQueryOptions(draftId: string) {
   return queryOptions({
     queryKey: ["html-view-drafts", draftId, "content"],

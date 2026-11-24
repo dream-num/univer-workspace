@@ -313,7 +313,7 @@ export function createWorkspaceApplication(
     publishMergedPages: (worktreeId) => htmlViewDrafts.publishForWorktree(worktreeId),
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
-  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees });
+  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees, users: identity });
   const forks = createForksModule({ repository: repositories.forks, access, spaces, worktrees });
   const activity = createActivityModule({ access, worktrees, issues });
   const univerAssets = createUniverAssetsModule({

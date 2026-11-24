@@ -43,6 +43,7 @@ let rejectWait: Promise<void> | undefined;
 let notFound: boolean;
 let sourceNumber: number | null;
 let sourceState: "ready" | "merged" | "discarded";
+let viewer: string;
 const requests: Request[] = [];
 const NativeRequest = globalThis.Request;
 
@@ -50,8 +51,9 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   window.localStorage.setItem("univer-workspace-language", "en-US");
   vi.clearAllMocks(); requests.length = 0;
+  viewer = "alice";
   draft = {
-    id: "draft-1", kind: "create", state: "pending", publishWhen: "publish", spaceId: "sales", parentNodeId: "folder-1",
+    id: "draft-1", author: { id: "alice", username: "alice", displayName: "Alice", avatarUrl: null }, kind: "create", state: "pending", publishWhen: "publish", spaceId: "sales", parentNodeId: "folder-1",
     name: "Sales.univer.html", targetResourceId: null, baseEtag: null, byteSize: 100,
     createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, supersededBy: null, published: null,
   };
@@ -63,6 +65,7 @@ beforeEach(() => {
     const request = input instanceof NativeRequest ? input : new Request(input, init);
     requests.push(request);
     const path = new URL(request.url).pathname;
+    if (path === "/api/session") return Response.json({ authenticated: true, user: { id: viewer } });
     if (path.endsWith("/content")) return new Response(html, { headers: { "Content-Type": "text/html" } });
     if (path.endsWith("/publish")) {
       if (publishStatus === 409) draft = { ...draft, state: "conflicted" };
@@ -108,7 +111,7 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
-async function click(label: string) { await act(async () => button(label).click()); }
+async function click(label: string) { await waitFor(() => button(label)); await act(async () => button(label).click()); }
 function count(suffix: string) { return requests.filter((request) => new URL(request.url).pathname.endsWith(suffix)).length; }
 async function reason(value: string) {
   const input = container.querySelector("textarea");
@@ -280,7 +283,7 @@ it.each(["conflicted", "expired", "rejected", "published"] as const)("shows %s w
 it("shows a not-found message for a 404", async () => {
   notFound = true;
   await render();
-  await waitFor(() => expect(container.textContent).toContain("Draft not found or not yours."));
+  await waitFor(() => expect(container.textContent).toContain("Draft not found, or you cannot review it."));
   expect(count("/content")).toBe(0);
 });
 
@@ -369,6 +372,27 @@ it.each(["page", "card"] as const)("previews PR sources and waits for merge in t
   await click("Publish");
   expect(count("/publish")).toBe(0);
   expect(button("Reject").disabled).toBe(false);
+});
+
+it.each(["page", "card"] as const)("lets a reviewer who did not write the page only preview it, against its declared Sheets, in the %s", async (presentation) => {
+  viewer = "reviewer";
+  draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge";
+  html = '<p data-univer-cell-text="source-unit:sheet-1:B2"></p>';
+  await render(presentation);
+  await waitFor(() => expect(container.textContent).toContain("Alice wrote this page. The preview is read-only and loads only the Sheets it declares."));
+  if (presentation === "card") await click("Open draft preview");
+  await waitFor(() => expect(preview.html).toHaveBeenCalled());
+  expect(preview.html.mock.lastCall?.[0]).toMatchObject({ draft: true, allowedUnitIds: ["source-unit"], sourceWorktree: { id: "pr-3" } });
+  expect([...document.querySelectorAll("button")].map((item) => item.textContent)).not.toContain("Publish");
+  expect([...document.querySelectorAll("button")].map((item) => item.textContent)).not.toContain("Reject");
+  expect(count("/publish") + count("/reject")).toBe(0);
+});
+
+it("lets the author's own preview load whatever the author can read", async () => {
+  await render();
+  await waitFor(() => expect(preview.html).toHaveBeenCalled());
+  await waitFor(() => expect(button("Publish").disabled).toBe(false));
+  expect(preview.html.mock.lastCall?.[0]).toMatchObject({ allowedUnitIds: undefined });
 });
 
 it("unlocks a pending draft after a token merge without automatic publication", async () => {

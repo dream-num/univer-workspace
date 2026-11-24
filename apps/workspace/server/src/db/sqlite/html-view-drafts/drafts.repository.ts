@@ -13,6 +13,11 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
       .prepare("SELECT * FROM html_view_drafts WHERE source_worktree_id = ? AND state = 'pending' ORDER BY created_at, id")
       .all(worktreeId) as unknown as DraftRow[];
   }
+  async listForWorktree(worktreeId: string): Promise<DraftRow[]> {
+    return this.database.connection
+      .prepare("SELECT * FROM html_view_drafts WHERE source_worktree_id = ? AND state NOT IN ('receiving', 'superseded') ORDER BY created_at, id")
+      .all(worktreeId) as unknown as DraftRow[];
+  }
   async find(id: string): Promise<DraftRow | undefined> {
     return this._findSync(id);
   }

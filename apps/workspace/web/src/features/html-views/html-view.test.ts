@@ -21,7 +21,7 @@ const mocks = await vi.hoisted(async () => {
   return { core: resolvePeer("@univerjs/core"), facade: resolvePeer("@univerjs/core/facade"),
     binding: resolvePeer("@univerjs-labs/binding-engine"),
     collaborationUI: resolvePeer("@univerjs-pro/collaboration-client-ui"), bridge: vi.fn((source: string, _nonce: string, _nativePreview: boolean) => source + "<!-- navigation bridge -->"), GET: vi.fn(), POST: vi.fn(), collaboration: vi.fn(), override: vi.fn(), reference: vi.fn(), render: vi.fn(), cell: vi.fn(), flush: vi.fn(), editable: vi.fn(),
-    service: { setCurrentUser: vi.fn(), dispose: vi.fn(), updatePermissionPoint: vi.fn() } };
+    service: { setCurrentUser: vi.fn(), dispose: vi.fn(), updatePermissionPoint: vi.fn() }, plugins: [] as unknown[] };
 });
 vi.mock("../../shared/api/client", () => ({ api: { GET: mocks.GET, POST: mocks.POST } }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: { authenticated: true, user: { id: "owner", displayName: "Owner" } } }) }));
@@ -33,7 +33,7 @@ vi.mock("@univerjs/univer-workspace-html-viewer", () => ({ WorkspaceHtmlViewer: 
 vi.mock(mocks.core, async (original) => ({
   ...await original<typeof import("@univerjs/core")>(),
   Univer: class {
-    registerPlugin() {}
+    registerPlugin(_plugin: unknown, config?: unknown) { mocks.plugins.push(config); }
     __getInjector() { return { add() {}, get: () => mocks.service }; }
     dispose() {}
   },
@@ -59,6 +59,7 @@ import { HtmlView } from "./html-view";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.plugins.length = 0;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   window.localStorage.setItem("univer-workspace-language", "en-US");
   mocks.override.mockReturnValue([]);
@@ -192,4 +193,39 @@ it.each([
   } else expect(mocks.GET).toHaveBeenCalledWith("/api/unit-resources/{unitId}", expect.anything());
   expect(engine).toMatchObject({ writeMode: draft ? "trial" : "saved" });
   engine.dispose();
+});
+
+it("loads only declared Units for a reader who did not write the page and tells them what it refused", async () => {
+  type Reference = { readonly ref: { readonly unit: { readonly selector: string } } };
+  const ensureUnit = vi.fn(async (input: Reference) => ({ unitId: input.ref.unit.selector }));
+  mocks.reference.mockReturnValue({ registrationId: "references", provider: { ensureUnit } });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(LanguageProvider, null,
+      createElement(HtmlView, { source: "<p>Someone else's page</p>", draft: true, allowedUnitIds: ["unit"], immersive: true, actionsContainer: null }))));
+    const props: ComponentProps<typeof WorkspaceHtmlViewer> = mocks.render.mock.lastCall![0];
+    await act(async () => {
+      await expect(props.loadEngine("private-sheet", new AbortController().signal)).rejects.toThrow("This preview loads only the Sheets the page declares.");
+    });
+    expect(mocks.GET).not.toHaveBeenCalled();
+    expect(mocks.POST).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("The page asked for data it does not declare. The preview refused: private-sheet");
+
+    const engine = await props.loadEngine("unit", new AbortController().signal);
+    expect(engine).toMatchObject({ writeMode: "trial" });
+    const embed = mocks.plugins.find((config) => config && typeof config === "object" && "resourceRefUnitProviderRegistrations" in config) as {
+      readonly resourceRefUnitProviderRegistrations: readonly { readonly provider: { ensureUnit(input: Reference): Promise<unknown> } }[];
+    };
+    const references = embed.resourceRefUnitProviderRegistrations[0]!.provider;
+    await act(async () => {
+      await expect(references.ensureUnit({ ref: { unit: { selector: "other-sheet" } } })).rejects.toThrow();
+    });
+    expect(ensureUnit).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("private-sheet, other-sheet");
+    await expect(references.ensureUnit({ ref: { unit: { selector: "unit" } } })).resolves.toEqual({ unitId: "unit" });
+    engine.dispose();
+  } finally {
+    await act(async () => root.unmount());
+  }
 });

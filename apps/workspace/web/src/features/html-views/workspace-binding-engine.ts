@@ -16,6 +16,7 @@ import type { components } from "../../../../generated/http/schema";
 export type HtmlViewSourceWorktree = Pick<components["schemas"]["WorktreeDetail"], "id" | "state" | "units">;
 
 export class HtmlViewSourceSheetRequiredError extends Error {}
+export class HtmlViewUndeclaredSourceError extends Error {}
 
 export type HtmlViewEngine = Awaited<ReturnType<typeof createWorkspaceBindingEngine>>;
 export interface HtmlViewCellMeta { readonly formula: boolean; readonly dateFormat: boolean }
@@ -31,8 +32,11 @@ export async function createWorkspaceBindingEngine(
   onTrialStarted?: () => void,
   draft = false,
   sourceWorktree?: HtmlViewSourceWorktree,
+  /** When set, no Unit outside it loads, neither for the page nor for references inside its Sheets. */
+  allowUnit?: (unitId: string) => boolean,
 ) {
   signal.throwIfAborted();
+  if (allowUnit && !allowUnit(unitId)) throw new HtmlViewUndeclaredSourceError();
   const worktree = draft && sourceWorktree?.state !== "merged" ? sourceWorktree : undefined;
   const mappedUnit = worktree?.units.find((unit) => unit.unitId === unitId);
   let canEdit = false;
@@ -93,13 +97,20 @@ export async function createWorkspaceBindingEngine(
       },
       registerEmbed(univer) {
         runtime = univer;
+        const references = createWorkspaceReferencedUnitProviderRegistration({
+          hostContext,
+          resolveSnapshotService: () => univer.__getInjector().get(SnapshotService),
+        });
         univer.registerPlugin(UniverEmbedPlugin, {
-          resourceRefUnitProviderRegistrations: [
-            createWorkspaceReferencedUnitProviderRegistration({
-              hostContext,
-              resolveSnapshotService: () => univer.__getInjector().get(SnapshotService),
-            }),
-          ],
+          resourceRefUnitProviderRegistrations: [allowUnit ? {
+            ...references,
+            provider: {
+              ensureUnit: async (input) => {
+                if (!allowUnit(input.ref.unit.selector)) throw new HtmlViewUndeclaredSourceError();
+                return references.provider.ensureUnit(input);
+              },
+            },
+          } : references],
         });
         // Referenced charts resolve through the embed runtime, so they must be
         // registered after UniverEmbedPlugin owns the referenced-Unit policy.

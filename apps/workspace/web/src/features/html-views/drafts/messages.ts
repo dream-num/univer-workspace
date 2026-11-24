@@ -18,7 +18,9 @@ export const draftMessages = {
     pending: "Pending review", published: "Published", rejected: "Rejected", expired: "Expired",
     conflicted: "The page changed since the Agent drafted it. Ask the Agent to revise it.",
     sourceDiscarded: "The source PR was discarded, so this page will not be published. Ask the Agent to revise it.",
-    notFound: "Draft not found or not yours.", openPage: "Open page",
+    notFound: "Draft not found, or you cannot review it.", openPage: "Open page",
+    pages: "Pages", previewPage: "Preview", conflictedState: "Conflicted", byAuthor: (name: string) => `by ${name}`,
+    reviewNotice: (name: string) => `${name} wrote this page. The preview is read-only and loads only the Sheets it declares.`,
   },
   "zh-CN": {
     publishPage: "发布新页面", replacePage: "替换页面", publish: "发布", reject: "拒绝",
@@ -37,7 +39,9 @@ export const draftMessages = {
     pending: "等待审阅", published: "已发布", rejected: "已拒绝", expired: "已过期",
     conflicted: "页面在 Agent 起草后已更改，请让 Agent 修改草稿。",
     sourceDiscarded: "来源 PR 已丢弃，这个页面不会发布。请让 Agent 修改草稿。",
-    notFound: "草稿不存在或不属于你。", openPage: "打开页面",
+    notFound: "草稿不存在，或者你不能评审它。", openPage: "打开页面",
+    pages: "页面", previewPage: "预览", conflictedState: "有冲突", byAuthor: (name: string) => `${name} 提交`,
+    reviewNotice: (name: string) => `这个页面由 ${name} 编写。预览为只读，只加载页面声明的 Sheet。`,
   },
 };
 

@@ -66,6 +66,8 @@ paths:
     $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts~1{draftId}~1publish
   /api/html-view-drafts/{draftId}/reject:
     $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts~1{draftId}~1reject
+  /api/worktrees/{worktreeId}/html-view-drafts:
+    $ref: ./paths/html-view-drafts.yaml#/~1api~1worktrees~1{worktreeId}~1html-view-drafts
   /apps/{nodeId}/run:
     $ref: ./paths/views.yaml#/~1apps~1{nodeId}~1run
   /api/session:

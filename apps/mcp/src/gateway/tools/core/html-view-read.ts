@@ -4,7 +4,7 @@ import { RESULT_LIMIT, resultTooLarge, serializedLength } from "../../paging.js"
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 
 const inputSchema = z.object({
-  draft: z.string().min(1).optional().describe("Author-owned pending draft ID. Omit resource. Returns HTML without an etag."),
+  draft: z.string().min(1).optional().describe("Pending draft ID, your own or one on a pull request you can review. Omit resource. Returns HTML without an etag."),
   resource: z.string().min(1).optional().describe("Resource ID of the .univer.html page to revise."),
 });
 
@@ -14,7 +14,7 @@ export const htmlViewReadTool: ToolDefinition = {
   scope: "read",
   title: "Read an HTML View page",
   description:
-    "Read a .univer.html Blob as inline HTML plus its exact quoted strong ETag. Use its resource as page in html_view_save to revise it. Alternatively pass draft to read your pending draft HTML without an etag, then revise with html_view_save draft. Pages too large for the inline result are refused; the HTML is never truncated.",
+    "Read a .univer.html Blob as inline HTML plus its exact quoted strong ETag. Use its resource as page in html_view_save to revise it. Alternatively pass draft to read a pending draft's HTML without an etag: your own, which you revise with html_view_save draft, or one on a pull request you can review. Pages too large for the inline result are refused; the HTML is never truncated.",
   inputSchema,
   outputSchema: z.union([z.object({ draft: z.string(), space: z.string(), name: z.string(), html: z.string(), previewUrl: z.url() }), z.object({
     resource: z.string(), node: z.string(), space: z.string(), name: z.string(),

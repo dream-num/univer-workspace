@@ -1,6 +1,9 @@
+import type { User } from "../identity/index.js";
+
 export type HtmlViewDraftState = "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
 export interface HtmlViewDraftView {
   readonly id: string;
+  readonly author: User;
   readonly kind: "create" | "replace";
   readonly state: HtmlViewDraftState;
   readonly publishWhen?: "merge" | "publish";

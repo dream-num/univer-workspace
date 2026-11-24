@@ -126,7 +126,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stage an HTML View for interactive author approval. */
+        /**
+         * Stage an HTML View for interactive author approval.
+         * @description Every Unit the page binds must be in the source pull request or readable by the author, otherwise `403`.
+         *     A draft attached to a pull request that is ready or merging is refused with `409`; reopen it first.
+         */
         post: operations["submitHtmlViewDraft"];
         delete?: never;
         options?: never;
@@ -143,7 +147,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read an author-owned draft, deriving expiry and stale target state. */
+        /**
+         * Read a draft as its author or as a reviewer of its source pull request, deriving expiry and stale target state.
+         * @description Anyone else, including a reviewer of a draft with no source pull request, gets `404`.
+         */
         get: operations["getHtmlViewDraft"];
         put?: never;
         post?: never;
@@ -162,7 +169,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read author-owned unpublished draft bytes as inert text. */
+        /** Read unpublished draft bytes as inert text, as the author or a reviewer of the source pull request. */
         get: operations["getHtmlViewDraftContent"];
         put?: never;
         post?: never;
@@ -204,6 +211,28 @@ export interface paths {
         put?: never;
         /** Reject a draft as its interactive author. */
         post: operations["rejectHtmlViewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/worktrees/{worktreeId}/html-view-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List the HTML View drafts a pull request carries, for anyone who may review it.
+         * @description Includes drafts by any author and terminal drafts, so a reviewer sees each page's result. Callers without `review` on the pull request get `404`.
+         */
+        get: operations["listWorktreeHtmlViewDrafts"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2917,7 +2946,7 @@ export interface components {
             parentNodeId?: string | null;
             /** @description Trimmed name; .univer.html is appended when absent. */
             name: string;
-            /** @description A reviewable pull request that has not been discarded. Merged pull requests are accepted. */
+            /** @description A reviewable pull request in draft. A ready or merging pull request is refused with 409 until it is reopened. Merged pull requests are accepted, discarded ones are refused. */
             sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
@@ -2927,14 +2956,14 @@ export interface components {
             resourceId: string;
             /** @description One quoted strong ETag, as returned by Blob content. */
             etag: string;
-            /** @description A reviewable pull request that has not been discarded. Merged pull requests are accepted. */
+            /** @description A reviewable pull request in draft. A ready or merging pull request is refused with 409 until it is reopened. Merged pull requests are accepted, discarded ones are refused. */
             sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
         } | {
             /** @constant */
             kind: "revise";
-            /** @description Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded. */
+            /** @description Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded. Refused with 409 while the old or new source pull request is ready or merging. */
             draftId: string;
             /** @description Override the source PR; otherwise inherit the previous draft's source. */
             sourceWorktreeId?: string;
@@ -2943,6 +2972,7 @@ export interface components {
         };
         HtmlViewDraft: {
             id: string;
+            author: components["schemas"]["PublicUser"];
             /** @enum {string} */
             kind: "create" | "replace";
             /** @enum {string} */
@@ -2978,6 +3008,10 @@ export interface components {
         };
         HtmlViewDraftEnvelope: {
             draft: components["schemas"]["HtmlViewDraft"];
+        };
+        HtmlViewDraftList: {
+            /** @description Every draft attached to the pull request, oldest first, except superseded revisions. */
+            drafts: components["schemas"]["HtmlViewDraft"][];
         };
         AnonymousSession: {
             /** @constant */
@@ -4802,6 +4836,30 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listWorktreeHtmlViewDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Drafts attached to the pull request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HtmlViewDraftList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     runStandaloneHtmlApp: {

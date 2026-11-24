@@ -185,7 +185,7 @@ function RepositoryPullRequestPage({
           view: nextView,
         })
       }
-      layout={({ review, actions }) => (
+      layout={({ review, actions, pages }) => (
         <RepositoryPullRequestLayout
           worktree={query.data.worktree}
           presentation={{ spaceId, section, listFilters }}
@@ -193,6 +193,7 @@ function RepositoryPullRequestPage({
           selectedView={view}
           review={review}
           actions={actions}
+          pages={pages}
         />
       )}
     />
