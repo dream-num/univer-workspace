@@ -2,7 +2,8 @@
 
 An agent connected to the MCP gateway creates, views, lists, edits, comments on, closes and reopens Issues, and
 creates, views, lists, edits, readies, searches and browses pull requests, and links a pull request to the Issue it serves. Each result matches what `uvw --json`
-shows for the same object, errors keep their Workspace codes, and every call leaves a usage event.
+shows for the same object, errors keep their Workspace codes, and every call leaves a usage event. An agent past
+its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `whoami` shows it what it has used.
 
 ## Sub-features
 
@@ -28,20 +29,23 @@ shows for the same object, errors keep their Workspace codes, and every call lea
 - MP12 runs two claimed agents with prompts that carry no task: B3 finds the Issue assigned to it and proposes,
   then A3 finds the reviewable pull request and merges it.
 - MP13 links the pull request a claimed agent's fork opens to an Issue assigned to it, refuses an unknown Issue number, and shows the link in MCP, uvw, the Issue page and the pull request header.
+- MP14 drives an agent to its budget of 10 open pull requests, shows the refusal, its event and metric, and frees a
+  place with a merge that `whoami` counts. The run user has no budget.
 
 ## How to get to it (user POV)
 
 An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue_list`, `issue_edit`,
 `issue_comment`, `issue_set_state`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `search` and
 `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
-its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them.
+its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
+`whoami` and `pr_merge` as an agent.
 
 ## Driving it with agent-browser and uvw
 
 Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
 `$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
-[MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MI1 through MI11 use the Team Space, and MP1 through MP10 the Personal Space:
+[MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MI1 through MI11 use the Team Space, MP1 through MP10 the Personal Space, and MP14 an agent's Personal Space:
 
 ```bash
 O=verify-$VERIFY_UVW_RUN
@@ -500,6 +504,44 @@ In the run browser, signed in as O, open `$ORIGIN/spaces/$T/issues/$N` and scree
 Pass when every command exits as shown, the unknown Issue number is `INVALID_INPUT`, `pr_edit` returns the linked Issue,
 `issue_view` lists the fork's pull request with A as its author, both uvw views print the link, the Issue page
 lists the pull request and its state, and the pull request header names `Serves #N Fix the totals`.
+
+### MP14. An agent's budget
+
+An agent principal (see [the principals reference](../references/stories.md)) opens pull requests in its own Personal
+Space until its budget of 10 is used. Creating the principal counts toward the 5 agents an hour.
+
+```bash
+$V principal budget mcp-budget-principal
+A=$(jq -r '.agent.username' "$EVIDENCE/principal-budget.json")
+$V mcp --as budget mcp-budget-before whoami
+jq -e '.budget == {openWorktrees: {used: 0, limit: 10}, merges: {used: 0, limit: 50}}' "$EVIDENCE/mcp-budget-before.out"
+for n in $(seq 1 10); do
+  $V mcp --as budget "mcp-budget-pr-$n" pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task $n\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-$n\"}" || break
+done
+$V mcp --as budget mcp-budget-full whoami
+jq -e '.budget.openWorktrees == {used: 10, limit: 10}' "$EVIDENCE/mcp-budget-full.out"
+$V mcp --as budget mcp-budget-over pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task 11\"}"
+test $? -eq 1
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and (.message | contains("at most 10 open pull requests. Merge or discard one"))' "$EVIDENCE/mcp-budget-over.out"
+jq -e '.outcome == "tool_error" and .error_code == "AGENT_QUOTA_EXCEEDED" and .principal_category == "agent_unclaimed"' "$EVIDENCE/mcp-budget-over.event.json"
+$V metrics | grep 'workspace_ceiling_denials_total{action="openWorktree"' > "$EVIDENCE/mcp-budget-denials.txt"
+grep -F 'code="AGENT_QUOTA_EXCEEDED",principal_category="agent_unclaimed"} 1' "$EVIDENCE/mcp-budget-denials.txt"
+$V mcp --as budget mcp-budget-replay pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task 10\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-10\"}"
+diff <(jq -S '{id, number}' "$EVIDENCE/mcp-budget-pr-10.out") <(jq -S '{id, number}' "$EVIDENCE/mcp-budget-replay.out")
+N=$(jq -r '.number' "$EVIDENCE/mcp-budget-pr-1.out")
+$V mcp --as budget mcp-budget-ready pr_ready "{\"repo\":\"$A/personal\",\"number\":\"$N\"}"
+$V mcp --as budget mcp-budget-merge pr_merge "{\"repo\":\"$A/personal\",\"number\":\"$N\"}"
+$V mcp --as budget mcp-budget-after whoami
+jq -e '.budget == {openWorktrees: {used: 9, limit: 10}, merges: {used: 1, limit: 50}}' "$EVIDENCE/mcp-budget-after.out"
+$V mcp --as budget mcp-budget-freed pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task 11\"}"
+$V mcp mcp-budget-person whoami
+jq -e 'has("budget") | not' "$EVIDENCE/mcp-budget-person.out"
+```
+
+Pass when all ten creations succeed, the eleventh exits 1 with `AGENT_QUOTA_EXCEEDED` and a message that says to merge or
+discard one, its event records the code for an `agent_unclaimed` principal, the denial counter for `openWorktree` reads 1,
+the replay with the tenth key returns the tenth pull request, the merge leaves 9 open and 1 merge in `whoami`, the next
+creation succeeds, and the run user's `whoami` has no `budget`.
 
 ## Gotchas
 
