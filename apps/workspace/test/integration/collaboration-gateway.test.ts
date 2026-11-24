@@ -3,6 +3,7 @@ import { getDocsEmptySnapshot, JSONX, TextXActionType, getBasesEmptySnapshot } f
 import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univerjs-pro/slides";
 import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
 import { createDefaultBaseTableSnapshot } from "@univerjs-pro/bases";
+import { RevertRevisionMutation } from "@univerjs-pro/collaboration";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -2236,6 +2237,122 @@ describe("content permission integration", () => {
     }
   });
 
+  describe("Trunk restore", () => {
+    const restore = (client: Awaited<ReturnType<typeof sheetSubmit>>, baseRev: number, revision: number) =>
+      client.submit(baseRev, RevertRevisionMutation.id, { revision });
+    const writeB2 = (client: Awaited<ReturnType<typeof sheetSubmit>>, baseRev: number, v: string) =>
+      client.submit(baseRev, "sheet.mutation.set-range-values", { cellValue: { 1: { 1: { v } } } });
+    function headRevision(f: Awaited<ReturnType<typeof fixture>>) {
+      const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
+      try {
+        return database
+          .prepare("SELECT head_revision FROM collaboration_units WHERE unit_id = ?")
+          .get(f.unitId)?.head_revision;
+      } finally {
+        database.close();
+      }
+    }
+    async function protectB2(f: Awaited<ReturnType<typeof fixture>>, owner: Awaited<ReturnType<typeof sheetSubmit>>) {
+      const created = await f.authz(f.owner.cookie, "/3/object", {
+        objectType: 3,
+        selectRangeObject: { unitID: f.unitId, name: "B2", collaborators: [], scope: { read: 1, edit: 2 } },
+      });
+      const { objectID } = (await created.json()) as { objectID: string };
+      expect(
+        await owner.submit(1, "sheet.mutation.add-range-protection", {
+          rules: [
+            {
+              id: "protected-b2",
+              permissionId: objectID,
+              unitId: f.unitId,
+              subUnitId: owner.sheetId,
+              unitType: 3,
+              ranges: [{ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }],
+              viewState: "othersCanView",
+              editState: "onlyMe",
+            },
+          ],
+        }),
+      ).toBe("changeset_ack");
+      return objectID;
+    }
+
+    it("refuses a restore over a protected range unless the submitter may edit that range", async () => {
+      const f = await fixture();
+      const owner = await sheetSubmit(f, f.owner.cookie);
+      const editor = await sheetSubmit(f, f.editor.cookie);
+      const objectID = await protectB2(f, owner);
+      expect(await writeB2(owner, 2, "owner-b2")).toBe("changeset_ack");
+      expect(
+        await editor.submit(3, "sheet.mutation.set-range-values", { cellValue: { 0: { 0: { v: "editor-a1" } } } }),
+      ).toBe("changeset_ack");
+
+      expect(await restore(editor, 4, 2)).toBe("permission_rej");
+      expect(headRevision(f)).toBe(4);
+      expect(await restore(owner, 4, 2)).toBe("changeset_ack");
+
+      const grant = await f.authz(
+        f.owner.cookie,
+        `/3/object/${objectID}`,
+        {
+          unitID: f.unitId,
+          objectID,
+          objectType: 3,
+          name: "B2",
+          strategies: [],
+          scope: { read: 1, edit: 0 },
+          collaborators: { collaborators: [{ id: f.editor.id, role: 1 }] },
+        },
+        "PUT",
+      );
+      expect(grant.status).toBe(200);
+      expect(await restore(editor, 5, 4)).toBe("changeset_ack");
+      expect(headRevision(f)).toBe(6);
+    });
+
+    it("refuses an editor's restore to a revision before the range protection existed", async () => {
+      const f = await fixture();
+      const owner = await sheetSubmit(f, f.owner.cookie);
+      const editor = await sheetSubmit(f, f.editor.cookie);
+      await protectB2(f, owner);
+
+      expect(await restore(editor, 2, 1)).toBe("permission_rej");
+      expect(await writeB2(editor, 2, "still protected")).toBe("permission_rej");
+      expect(await restore(owner, 2, 1)).toBe("changeset_ack");
+      expect(await writeB2(editor, 3, "rule removed by the owner")).toBe("changeset_ack");
+      expect(await restore(editor, 4, 3)).toBe("changeset_ack");
+    });
+
+    it("lets an editor restore a Sheet with no protection", async () => {
+      const f = await fixture();
+      const editor = await sheetSubmit(f, f.editor.cookie);
+      expect(await writeB2(editor, 1, "editor-b2")).toBe("changeset_ack");
+      expect(await restore(editor, 2, 1)).toBe("changeset_ack");
+      expect(headRevision(f)).toBe(3);
+    });
+
+    it("refuses a restore over a protected worksheet unless the submitter may edit it", async () => {
+      const f = await fixture();
+      const owner = await sheetSubmit(f, f.owner.cookie);
+      const editor = await sheetSubmit(f, f.editor.cookie);
+      expect(await writeB2(editor, 1, "before protection")).toBe("changeset_ack");
+      const created = await f.authz(f.owner.cookie, "/2/object", {
+        objectType: 2,
+        worksheetObject: { unitID: f.unitId, name: "Sheet", collaborators: [], scope: { read: 1, edit: 2 } },
+      });
+      const { objectID } = (await created.json()) as { objectID: string };
+      expect(
+        await owner.submit(2, "sheet.mutation.add-worksheet-protection", {
+          rule: { permissionId: objectID, unitType: 2, unitId: f.unitId, subUnitId: owner.sheetId, name: "", description: "" },
+        }),
+      ).toBe("changeset_ack");
+      expect(await writeB2(editor, 3, "denied")).toBe("permission_rej");
+
+      expect(await restore(editor, 3, 2)).toBe("permission_rej");
+      expect(await restore(owner, 3, 2)).toBe("changeset_ack");
+    });
+  });
+
   it.each(["doc", "slide", "board", "base"] as const)(
     "enforces real %s content edits and keeps unrelated edits working",
     async (kind) => {
@@ -2385,6 +2502,8 @@ describe("content permission integration", () => {
       const unrelatedEdit = edit(false);
       expect(await editor.submit(2, unrelatedEdit.id, unrelatedEdit.params)).toBe("changeset_ack");
       expect(await owner.submit(3, protectedEdit.id, protectedEdit.params)).toBe("changeset_ack");
+      expect(await editor.submit(4, RevertRevisionMutation.id, { revision: 3 })).toBe("permission_rej");
+      expect(await owner.submit(4, RevertRevisionMutation.id, { revision: 3 })).toBe("changeset_ack");
     },
   );
 

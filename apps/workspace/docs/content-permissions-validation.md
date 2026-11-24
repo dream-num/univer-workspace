@@ -25,7 +25,8 @@ pnpm --filter @univerjs/univer-workspace exec vitest run --config vitest.config.
 
 覆盖：14 类对象的创建/查询/更新、Viewer/外部用户越权、跨 Unit 隔离、有限协作者候选、
 Owner 接管、创建者失去文件权限、重启持久化；Sheet 单元格、Doc 段落、Slide 元素、
-Board 元素、Base 视图的真实写入拒绝与未保护目标成功；Worktree 禁止管理、保护写入拒绝、
+Board 元素、Base 视图的真实写入拒绝与未保护目标成功；Trunk restore 按提交者对 head 上每个保护对象的 Edit
+拒绝或接受；Worktree 禁止管理、保护写入拒绝、
 普通编辑合并成功、草稿写入后撤销 ACL 时合并不落入 Trunk。
 
 迁移矩阵同时针对源码及生产构建：V0–V7 升级、V7 空库/已有 Blob 与未完成恢复状态、
@@ -47,6 +48,8 @@ A3 普通输入成功并显示已同步。重启 Server、刷新浏览器后，�
 - ACL 先于绑定持久化，未绑定或解绑对象保留供重试/undo/history；只在永久删除资源时级联清理。
 - 候选成员仅列出明确 Space/祖先 Node 授权用户，不枚举全站、匿名或链接访问者。
 - 所有保护覆盖依赖 SDK mutation 分析；不在 Workspace 复制分析器或兜底放行失败 mutation。
+  例外是 Trunk restore（`RevertRevisionMutation`）：SDK 只列出 Unit，`collaboration-gateway.ts` 的
+  workaround 另外要求 head 上每个保护对象的 Edit，见 `docs/design/agent-mode/phase-6-restore-probe.zh-CN.md` 第 8 节。
 - 数据库提升版本和历史测试更新属于必要迁移范围，不涉及业务表重构。
 
 ## 本次执行结果
