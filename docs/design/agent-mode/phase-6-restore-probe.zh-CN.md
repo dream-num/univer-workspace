@@ -161,6 +161,8 @@ PDF 没有保护对象。`@univerjs/protocol` 1.6.1 的 `UnitObject` 只有 PDF 
 
 独立复核在真实应用里用 Browser 走了一遍（PR 575 的复核评论）。H 在 B2 上加了只有自己能编辑的区域保护，E 是 editor。E 改不了 B2；E 在 Trunk 的 History 界面里，对保护之前和之后的每个版本，“Restore this version” 都是禁用的，点击没有反应，Trunk 不变。H 的同一个按钮可用，同一个 E 在没有保护的 Sheet 上也可用。原因在 SDK 1.6.1 的界面层：`sheets-history` 的 `canRevert` 和 `sheets-history-ui` 的 `_checkCanRevert` 要求 Unit、每个 worksheet 和每条区域保护规则的 Edit，`edit-history-ui` 的 `restore()` 在 `canRestore` 为 false 时直接返回。服务端的检查和界面的规则一致。
 
+加上检查之后，在真实应用里又走了一遍（verify-uvw 运行 `p68g`）。H 在 Sheet `Protected` 上给 B2 加了只有自己能编辑的区域保护，之后把 B2 改掉，再在 History 界面恢复到加保护的那个版本，Trunk 从 revision 5 到 6，B2 回到旧值，保护还在。E 是 editor，在自己建的 Sheet `Plain` 上用 History 界面恢复，也成功了。E 在 `Protected` 上的“Restore this version”仍然是禁用的。绕开界面时，E 的会话经实时 endpoint 直接提交一个恢复 `Protected` 的 restore，得到 `permission_rej`，Trunk 停在 revision 6，内容不变。同一个脚本、同一个 E 对 `Plain` 提交，得到 `changeset_ack`。
+
 ## 9. 问题 7：恢复到哪个 revision
 
 记录 `pre-merge-revision`，`CONFIRMED`。
@@ -210,7 +212,7 @@ SDK 不为 `unchanged` 的 Unit 记录 `trunkRevision`（`unit-comparison.ts:204
 
 - Slide、Board、Base 和 PDF 的 restore 内容。脚本只测了 Sheet 和 Doc。产品测试在 Slide、Board、Base 上提交过 restore，只核对了接受和拒绝，没有比较内容。
 - 脚本里的 worksheet 保护和对象级保护。脚本只测了 Sheet 的区域保护，其余由产品测试覆盖（第 8 节）。
-- Browser。History 界面的 restore 发出的 changeset 是否和脚本相同，以及客户端收到 restore 之后的 `OT_CONFLICT` 时怎样处理。界面对没有区域编辑权的 editor 禁用 restore，这一点已由独立复核确认（第 8 节）。
+- Browser 的部分细节。History 界面发出的 changeset 没有和脚本逐项比较，客户端收到 restore 之后的 `OT_CONFLICT` 时怎样处理也没有测。界面的 restore 在检查之下照常成功、界面对没有区域编辑权的 editor 禁用 restore，这两点在真实应用里核对过（第 8 节）。
 - 脚本经过实时 endpoint 的 restore。脚本直接调用 `UniverCollabService.submitChangeset`，第 8 节的产品测试经过实时 endpoint。
 - 历史很长或 Unit 很大时 restore 的耗时，包括第 8 节的检查物化 head 的耗时。
 - 同一个 `sid` 里 `reqId` 能否跳号，以及去重记录会不会过期。
