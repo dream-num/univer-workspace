@@ -143,6 +143,7 @@ describe("gateway over real HTTP and the MCP client", () => {
   let expireDuringTool: boolean;
   let missingRepoCode: string;
   let principal: Record<string, unknown>;
+  const agentBudget = { openWorktrees: { used: 10, limit: 10 }, merges: { used: 2, limit: 50 } };
   beforeEach(async () => {
     principal = { kind: "human" };
     clients = [];
@@ -176,6 +177,7 @@ describe("gateway over real HTTP and the MCP client", () => {
           JSON.stringify({
             authenticated: true,
             user: { id: subject.id, displayName: subject.name, ...principal },
+            ...(principal.kind === "agent" ? { budget: agentBudget } : {}),
           }),
         );
       } else if (expireDuringTool) {
@@ -689,7 +691,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       ]);
       expect(await names("?toolsets=all")).toEqual([...agentCore, ...filesNames, ...agentAdmin]);
       const whoami = await (await connect()).callTool({ name: "whoami", arguments: {} });
-      expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject });
+      expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject, budget: agentBudget });
     },
   );
 
@@ -725,7 +727,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"47b527eaece7497581e3db08a0b376665d8c2801a275d5aab896cc19d7b97a95"`);
+    expect(digest).toMatchInlineSnapshot(`"d8707a2c20f927bfad0d04ee8880baa7edcd438edb0de8865b530bceb2b280bd"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {

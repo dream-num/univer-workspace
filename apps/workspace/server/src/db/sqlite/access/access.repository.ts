@@ -1,4 +1,4 @@
-import { assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import { AGENT_MERGE_WINDOW_MS, assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { SqliteDatabase } from "../connection.js";
 import type {
@@ -166,6 +166,35 @@ export function assertProposalQuota(database: DatabaseSync, userId: string, spac
   assertCeiling(requesterCategory(row), "openProposal", { open: row.open });
 }
 
+/**
+ * Worktrees the User created and has not merged or discarded, creations whose Worktree row is not
+ * written yet included, and the merges it started within the window.
+ */
+function readBudget(database: DatabaseSync, userId: string, now: number) {
+  return database.prepare(`SELECT
+    (SELECT COUNT(*) FROM worktrees WHERE creator_user_id = $userId AND processed_at IS NULL)
+    + (SELECT COUNT(*) FROM operations
+       WHERE actor_user_id = $userId AND kind = 'create_worktree' AND state = 'pending'
+         AND NOT EXISTS (SELECT 1 FROM worktrees WHERE id = json_extract(operations.payload_json, '$.worktreeId'))) AS open,
+    (SELECT COUNT(*) FROM operations
+     WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since) AS merged`)
+    .get({ userId, since: now - AGENT_MERGE_WINDOW_MS }) as
+    { readonly open: number; readonly merged: number };
+}
+
+/** Counted in the transaction that records the next create or merge, so concurrent ones cannot pass an agent's budget. People are not counted. */
+export function assertAgentBudget(
+  database: DatabaseSync,
+  userId: string,
+  action: "openWorktree" | "mergeWorktree",
+  now: number,
+  adding = 1,
+): void {
+  const principal = requesterCategory(readRequester(database, userId));
+  if (principal === "human") return;
+  assertCeiling(principal, action, { ...readBudget(database, userId, now), adding });
+}
+
 export class SqliteAccessRepository implements AccessRepository {
   // Reuse SQL compilation, not authorization results. Every execution binds
   // the current actor and reads current data on this repository's connection.
@@ -241,6 +270,10 @@ export class SqliteAccessRepository implements AccessRepository {
 
   async countOwnedFiles(userId: string, operationId: string | null): Promise<number> {
     return countOwnedFiles(this._database.connection, userId, operationId);
+  }
+
+  async readBudget(userId: string, now: number): Promise<{ readonly open: number; readonly merged: number }> {
+    return readBudget(this._database.connection, userId, now);
   }
 
   async resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null> {

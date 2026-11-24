@@ -190,6 +190,8 @@ export interface WorktreesRepository {
     result: Readonly<Record<string, unknown>>,
     completedAt: number
   ): Promise<WorktreeOperationRow>;
+  /** Puts a failed Operation back to pending before it runs again, as a retry does, counting the place it takes. */
+  retryOperation(operationId: string, actorUserId: string, retriedAt: number): Promise<void>;
   failOperation(
     operationId: string,
     error: { readonly code: string; readonly message: string },

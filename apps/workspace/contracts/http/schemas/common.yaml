@@ -86,7 +86,8 @@ Forbidden:
     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
     keep more than 20 files across its Spaces, pending pull-request files included, or store one file
-    above 10 MiB) and
+    above 10 MiB, and any agent would have more than 10 open Worktrees or start more than 50 merges in
+    24 hours) and
     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
     or updates a Space with `publicRead: true`).
   content:

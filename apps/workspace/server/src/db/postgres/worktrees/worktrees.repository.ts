@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { forbidden, forkAlreadyOpen, notFound } from "../../../modules/worktrees/worktrees.errors.js";
 import { checkCreateTarget, checkProposalTarget } from "../access/resource-target.js";
-import { type PostgresAccessRepository, assertFileQuota, assertProposalQuota, ownerSuspendedSql, ownsSpaceSql, proposesSql, spaceOwnerIdsSql } from "../access/access.repository.js";
+import { type PostgresAccessRepository, assertAgentBudget, assertFileQuota, assertProposalQuota, ownerSuspendedSql, ownsSpaceSql, proposesSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
+import { retryFailed } from "../operations/operations.repository.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
 import type { PublicUser } from "../../../modules/permissions/index.js";
@@ -589,9 +590,14 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           (await this.proposalSpace(input.payload.worktreeId)) !== null,
         );
         await assertFileQuota(database, input.actorUserId, 1, input.id);
-      } else if (input.kind === "create_worktree" && input.payload.teamSpaceId !== null) {
-        await this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null, true);
-        await assertProposalQuota(database, input.actorUserId, input.payload.teamSpaceId);
+      } else if (input.kind === "create_worktree") {
+        if (input.payload.teamSpaceId !== null) {
+          await this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null, true);
+          await assertProposalQuota(database, input.actorUserId, input.payload.teamSpaceId);
+        }
+        await assertAgentBudget(database, input.actorUserId, "openWorktree", input.createdAt);
+      } else if (input.kind === "merge_worktree") {
+        await assertAgentBudget(database, input.actorUserId, "mergeWorktree", input.createdAt);
       } else if (input.kind === "add_worktree_unit") {
         const resource = await this.access.readResourceAccess(input.actorUserId, input.payload.resourceId);
         if (!resource || resource.kind !== "univer") throw notFound();
@@ -661,6 +667,10 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
         completedAt,
         operationId
       );
+  }
+
+  async retryOperation(operationId: string, actorUserId: string, retriedAt: number): Promise<void> {
+    await this._database.transaction(async (db) => await retryFailed(db, operationId, actorUserId, retriedAt));
   }
 
   async failOperation(

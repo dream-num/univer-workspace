@@ -72,6 +72,14 @@ export interface AuthenticatedSession {
   readonly authenticationMethods: AuthenticationMethods;
   /** Present only when the operator granted the User the shared MCP executor. */
   readonly executorAccess?: true;
+  /** Present only for an agent, and only on `GET /api/session`. */
+  readonly budget?: AgentBudget;
+}
+
+/** What an agent has used of the limits every agent works within. */
+export interface AgentBudget {
+  readonly openWorktrees: { readonly used: number; readonly limit: number };
+  readonly merges: { readonly used: number; readonly limit: number };
 }
 
 export type SessionView =

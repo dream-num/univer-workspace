@@ -119,6 +119,37 @@ AuthenticatedSession:
     executorAccess:
       const: true
       description: Present only when an operator granted this User the shared MCP executor with `db:executor-access`.
+    budget:
+      $ref: "#/AgentBudget"
+
+AgentBudget:
+  type: object
+  additionalProperties: false
+  description: |
+    Present only for an agent, on `GET /api/session`. What it has used of the limits every agent works
+    within; people have none. A create or merge past a limit is refused with `403 AGENT_QUOTA_EXCEEDED`.
+  required: [openWorktrees, merges]
+  properties:
+    openWorktrees:
+      $ref: "#/BudgetUse"
+      description: |
+        Worktrees (pull requests) the agent created that are not merged or discarded, those still being
+        created included. Merging or discarding one frees its place.
+    merges:
+      $ref: "#/BudgetUse"
+      description: Merges the agent started in the last 24 hours. Each leaves the count 24 hours after it started.
+
+BudgetUse:
+  type: object
+  additionalProperties: false
+  required: [used, limit]
+  properties:
+    used:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
 
 SessionView:
   oneOf:

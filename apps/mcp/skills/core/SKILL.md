@@ -54,7 +54,7 @@ Toolsets:
 
 Unavailable operations:
 
-- `auth *` -> unavailable. Sign-in belongs to the MCP client; use `whoami` for identity.
+- `auth *` -> unavailable. Sign-in belongs to the MCP client; use `whoami` for identity and an agent's budget.
 - `config`, `daemon`, `screenshot setup`, `skills path`, `resources cache path`, `resources cache clear`, `-v` -> unavailable. Local environment management has no remote tool.
 - `html-view validate` -> unavailable. There is no standalone remote validation tool; follow the `html-view-creator` Skill.
 

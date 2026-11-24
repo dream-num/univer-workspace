@@ -12,7 +12,8 @@ export {
   requesterCategory,
 } from "./access.service.js";
 export type { AccessResolver } from "./access.service.js";
-export { assertCeiling, assertCreateFilesCeiling } from "./ceilings.js";
+export { AGENT_MERGE_WINDOW_MS, agentBudget, assertCeiling, assertCreateFilesCeiling } from "./ceilings.js";
+export type { BudgetUse } from "./ceilings.js";
 export type {
   AccessRole,
   BlobAvailability,

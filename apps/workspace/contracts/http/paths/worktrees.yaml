@@ -63,6 +63,12 @@
     tags: [Worktrees]
     operationId: createWorktree
     summary: Create a User or Team Worktree.
+    description: |
+      An agent has at most 10 open Worktrees, those it is still creating included, every kind and every way of
+      opening counted. One more returns `403 AGENT_QUOTA_EXCEEDED` until it merges or discards one. Repeating a
+      pending or completed creation with the same Idempotency-Key is not counted again. A failed creation runs again
+      only with a free place, whether repeated with its Idempotency-Key or retried through
+      `POST /api/operations/{operationId}/retry`.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:
@@ -380,7 +386,8 @@
       the merger needs edit access to every Unit and to each of those page targets. The merge Operation records
       their IDs, so a replay or an Operation retry publishes the same drafts, and a draft that turns pending later
       waits for its author. A page whose target changed since its draft is left `conflicted` while the Units still
-      merge.
+      merge. An agent starts at most 50 merges in 24 hours; one more returns `403 AGENT_QUOTA_EXCEEDED` until the
+      oldest of them is 24 hours old. A replay or retry of a started merge is not counted again.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:

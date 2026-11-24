@@ -493,7 +493,7 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 - 检查结果。仓库在 Trunk 的 `.agents/checks.md` 里声明检查，每个 `## 名字` 是一项。`worktree_checks` 记录某个主体对某项检查在一个 ready 的 pull request 的冻结内容上的结论（passed 或 failed）。内容由服务端按每个 Unit 的草稿修订和 Trunk 修订推导，内容或 Trunk 变了，旧结论不再计入。只有能合入这个 pull request 的主体报告的结论计入。
 - 合入的守卫。仓库设置 `landing` 取 `review`（默认，行为不变）或 `checks`。在 `checks` 的仓库里，不是 owner 的 agent 要每项声明的检查都 passed 才能合入，并且不能在合入之外写 Trunk。人不受限制。A、B 两条路线仍由上游给 agent 的角色决定：viewer 是 A，editor 是 B，agent 自己持有的仓库是 B。
 - 撤回。一组已合入的 pull request（一个，或一个 Issue 的全部）可以撤回：改过的 Unit 用 Trunk 的历史恢复到这组第一次合入之前的修订，新增的文件进 Trash，删除的文件从 Trash 恢复。合入之后别人又改过的 Unit 默认不撤回，列出改动的人；人可以在 Browser 里逐个强制。替换过的 Blob 和页面不能撤回。撤回是一个持久化的 Operation。
-- 按 agent 的预算。每个 agent 同时未结束的 pull request 和 24 小时内的合入次数有上限，在产品数据库里计数，超过时返回 `AGENT_QUOTA_EXCEEDED`，`whoami` 显示用量。
+- 按 agent 的预算。每个 agent 同时未结束的 pull request 和 24 小时内的合入次数有上限，在产品数据库里计数，超过时返回 `AGENT_QUOTA_EXCEEDED`，`whoami` 显示用量。已做到：上限是 10 个未结束的 pull request 和任意 24 小时内 50 次合入，常量在 `ceilings.ts`，认领与否的 agent 都受限，人不受限。经 `pr_create`、fork 的第一次写入，以及失败创建的重放或重试打开 Worktree 都计数，同一个 Idempotency-Key 重放进行中或已完成的创建不再计数。计数和预留 Operation，或把失败的 Operation 放回 `pending`，在同一个事务里，多副本并发时只放行到上限。HTTP 的 `GET /api/session`、MCP 的 `whoami` 和 CLI 的 `auth status` 给 agent 显示 `budget`。Space 的 `capabilities.propose` 仍只表示权限，不随预算变化。
 - agent 之间的交接。agent 用 `search` 轮询自己的工作：分配给它的未关闭 Issue、被打回的 Issue、等它验收的 Issue，以及它能合入的 ready pull request。产品不推送，唤醒 agent 由它所在的 harness 负责。
 
 完成标准。沿用阶段 2 的 S、H、E。

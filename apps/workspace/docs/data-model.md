@@ -583,6 +583,11 @@ copy_node
 Node/Resource/Unit ID；相同 Idempotency Key 只能重放相同意图。Lease、Attempt、
 `next_attempt_at` 和最后错误字段支持后台恢复。
 
+agent 的预算不另存计数，在预留 Operation 或把失败的 Operation 放回 `pending` 的事务里从现有行读出：未结束的 Worktree 是 `creator_user_id` 为它、
+`processed_at` 为空的 `worktrees` 行，加上 payload 的 `worktreeId` 还没有 Worktree 行的 `pending` `create_worktree`
+Operation，至多 10 个；合入是 `actor_user_id` 为它、最近 24 小时创建的 `merge_worktree` Operation，至多 50 次。
+两项都走 `operations_actor` 与 `worktrees_creator` 索引，超出时返回 `AGENT_QUOTA_EXCEEDED`。人不受限制，也不计数。
+
 V3 Operation JSON 只使用明确的 Node/Resource/Unit 或 Blob 上传身份，不读取旧
 `entryId`、`fileId` 或 `fileEntryId`。
 

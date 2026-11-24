@@ -152,8 +152,9 @@
       finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
       Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. An owner
       who may no longer propose in the upstream gets `403 FORBIDDEN`, and so does one who is not a Space Member
-      and already holds 3 open proposals there. The Unit's content is then written through the Worktree, as in
-      any other Worktree.
+      and already holds 3 open proposals there. Opening the Worktree counts against an agent's 10 open Worktrees
+      (`403 AGENT_QUOTA_EXCEEDED`), as `POST /api/worktrees` does. The Unit's content is then written through the
+      Worktree, as in any other Worktree.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:
@@ -203,7 +204,8 @@
       The Collaboration SDK readies and merges a Worktree with no Unit, so a proposal of pages alone is a pull
       request like any other. When the open Worktree is not a draft, the request returns
       `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, and a fork whose upstream its owner
-      can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`.
+      can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`,
+      and an agent already at 10 open Worktrees `403 AGENT_QUOTA_EXCEEDED`.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     responses:
@@ -299,7 +301,7 @@
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
       "403":
-        description: Insufficient permission, `HTML_VIEW_DRAFT_REQUIRED` for a page, or `AGENT_QUOTA_EXCEEDED` when an unclaimed agent stores a file above 10 MB.
+        description: Insufficient permission, `HTML_VIEW_DRAFT_REQUIRED` for a page, or `AGENT_QUOTA_EXCEEDED` when an unclaimed agent stores a file above 10 MB or an agent at 10 open Worktrees writes to a `clean` fork.
         content:
           application/json:
             schema:

@@ -8,7 +8,7 @@
 
 - 提供 Workspace HTTP transport、错误和 result-unknown 语义。
 - 提供 storage-neutral 的 password login、browser approval、访客 agent 创建（`createGuestAgent`）、`whoami` 和 remote logout 协议。
-  `whoami` 的 subject 只在主体是 agent 时带 `kind` 和 `claimed`。
+  `whoami` 的 subject 只在主体是 agent 时带 `kind` 和 `claimed`，agent 的 `whoami` 还带服务端给出的 `budget`。
 - 提供 Space/Node 模型、严格响应解析和远程 workflow。服务端报全 Space `capabilities` 时，Space 视图保留它（如 `manageMembers`、`propose`）；Team Space 的 `proposals` 设置随 Space 视图读出，也能在创建和修改仓库时传入。
 - 提供 Team Space 成员 workflow（`WorkspaceSpaceFeature` 的 `members`、`addMember`、`editMember`、`removeMember`）：
   `addMember` 经 user search 按 username 或 user ID 找到用户，`editMember` 与 `removeMember` 只在现有成员里查找。

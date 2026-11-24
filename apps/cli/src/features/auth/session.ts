@@ -10,6 +10,7 @@ import {
   startCliLogin as startCliLoginProtocol,
   whoami as whoamiProtocol,
   type PendingCliLogin,
+  type WorkspaceBudget,
   type WorkspaceSubject,
   WorkspaceHttp,
 } from "@univerjs/univer-workspace-client-core/product";
@@ -114,7 +115,7 @@ export class WorkspaceAuth {
     return { status: "authenticated", origin: result.origin, subject: result.subject };
   }
 
-  public async whoami(): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject }> {
+  public async whoami(): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject; readonly budget?: WorkspaceBudget }> {
     return await whoamiProtocol(await this.authenticatedHttp("client"));
   }
 

@@ -1063,7 +1063,7 @@ describe("uvw auth guest", () => {
     await Promise.all(homes.splice(0).map(async (path) => await rm(path, { force: true, recursive: true })));
   });
 
-  async function guestHome(respond: () => Response) {
+  async function guestHome(respond: (path: string) => Response) {
     const home = await mkdtemp(join(tmpdir(), "uvw-guest-"));
     homes.push(home);
     const config = createWorkspaceConfig({ UNIVER_HOME: home });
@@ -1071,16 +1071,18 @@ describe("uvw auth guest", () => {
     const sessionPath = join(home, "session.json");
     const requests: { readonly body: unknown; readonly cookie: string | null; readonly path: string }[] = [];
     const fetcher: typeof fetch = async (input, init) => {
+      const path = `${init?.method ?? "GET"} ${new URL(String(input)).pathname}`;
       requests.push({
-        body: JSON.parse(String(init?.body)),
+        body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
         cookie: new Headers(init?.headers).get("cookie"),
-        path: `${String(init?.method)} ${new URL(String(input)).pathname}`,
+        path,
       });
-      return respond();
+      return respond(path);
     };
+    const auth = (...args: string[]) => run(createAuthCommand(new WorkspaceAuth({ config, fetcher, sessionPath })), args);
     return {
-      guest: async (...args: string[]) =>
-        await run(createAuthCommand(new WorkspaceAuth({ config, fetcher, sessionPath })), ["guest", ...args]),
+      guest: async (...args: string[]) => await auth("guest", ...args),
+      status: async (...args: string[]) => await auth("status", ...args),
       requests,
       session: async () => JSON.parse(await readFile(sessionPath, "utf8")) as unknown,
     };
@@ -1106,6 +1108,16 @@ describe("uvw auth guest", () => {
       origin: ORIGIN,
       repo: "budget-bot-x7k2/personal",
     });
+  });
+
+  it("shows an agent its budget in auth status, in text and in --json", async () => {
+    const budget = { openWorktrees: { used: 10, limit: 10 }, merges: { used: 2, limit: 50 } };
+    const home = await guestHome((path) => path === "GET /api/session"
+      ? Response.json({ authenticated: true, user: { id: "agent-1", displayName: "budget-bot-x7k2", kind: "agent", claimed: false }, budget })
+      : created());
+    await home.guest();
+    expect(await home.status()).toContain("Budget: 10/10 open pull requests, 2/50 merges in the last 24 hours");
+    expect(JSON.parse(await home.status("--json"))).toMatchObject({ budget });
   });
 
   it("refuses while a session is stored and sends no request", async () => {

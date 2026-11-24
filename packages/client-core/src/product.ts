@@ -14,6 +14,7 @@ export {
   type CliLoginCompletion,
   type PendingCliLogin,
   type WorkspaceAuthentication,
+  type WorkspaceBudget,
   type WorkspaceSubject,
 } from "./auth.js";
 export {

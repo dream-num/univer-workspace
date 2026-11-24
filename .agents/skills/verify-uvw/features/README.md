@@ -48,7 +48,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull
   request, search and browse tools with uvw, including idempotency keys and preserved errors. MP11 lists reviewable
   pull requests, and MP12 has two agents find their own work with prompts that carry no task. MP13 links a fork's
-  pull request to an Issue and checks both sides in MCP, uvw and the browser.
+  pull request to an Issue and checks both sides in MCP, uvw and the browser. MP14 drives an
+  agent to its budget of open pull requests and counts a merge in `whoami`.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,
