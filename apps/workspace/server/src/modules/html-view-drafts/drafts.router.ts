@@ -43,6 +43,11 @@ export function createHtmlViewDraftsRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json({ draft: await options.drafts.get(actor.user.id, String(request.params.draftId)) });
   });
+  router.get("/worktrees/:worktreeId/html-view-drafts", async (request, response) => {
+    const actor = await options.identity.requireSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.json({ drafts: await options.drafts.listForWorktree(actor.user.id, String(request.params.worktreeId)) });
+  });
   router.get("/html-view-drafts/:draftId/content", async (request, response) => {
     const actor = await options.identity.requireSession(request.headers.cookie);
     const opened = await options.drafts.openContent(actor.user.id, String(request.params.draftId));

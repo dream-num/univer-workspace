@@ -3,6 +3,9 @@
     tags: [Blobs]
     operationId: submitHtmlViewDraft
     summary: Stage an HTML View for interactive author approval.
+    description: |
+      Every Unit the page binds must be in the source pull request or readable by the author, otherwise `403`.
+      A draft attached to a pull request that is ready or merging is refused with `409`; reopen it first.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:
@@ -52,7 +55,8 @@
   get:
     tags: [Blobs]
     operationId: getHtmlViewDraft
-    summary: Read an author-owned draft, deriving expiry and stale target state.
+    summary: Read a draft as its author or as a reviewer of its source pull request, deriving expiry and stale target state.
+    description: Anyone else, including a reviewer of a draft with no source pull request, gets `404`.
     responses:
       "200":
         description: Current draft or idempotent replay.
@@ -80,7 +84,7 @@
   get:
     tags: [Blobs]
     operationId: getHtmlViewDraftContent
-    summary: Read author-owned unpublished draft bytes as inert text.
+    summary: Read unpublished draft bytes as inert text, as the author or a reviewer of the source pull request.
     responses:
       "200":
         description: Current draft or idempotent replay.
@@ -167,3 +171,26 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+/api/worktrees/{worktreeId}/html-view-drafts:
+  parameters:
+    - name: worktreeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Blobs]
+    operationId: listWorktreeHtmlViewDrafts
+    summary: List the HTML View drafts a pull request carries, for anyone who may review it.
+    description: Includes drafts by any author and terminal drafts, so a reviewer sees each page's result. Callers without `review` on the pull request get `404`.
+    responses:
+      "200":
+        description: Drafts attached to the pull request.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/html-view-drafts.yaml#/HtmlViewDraftList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound

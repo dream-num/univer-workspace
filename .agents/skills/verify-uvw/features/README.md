@@ -61,8 +61,9 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   errors, stale sessions and concurrency; MT1, MV1 and Typst jobs cover the compilers.
 - [Screenshots, PDF and lint over MCP](./mcp-renderer.md): MR9-MR12 and MV2 cover the renderer role,
   `screenshot`, `print_pdf`, `lint`, opencode reading an image, and real-font SVG.
-- [HTML View drafts over MCP](./mcp-html-view.md): MHV1-MHV4 cover validation parity, missing sources, draft
-  save, retry and revision, then preview and publish.
+- [HTML View drafts over MCP](./mcp-html-view.md): MHV1-MHV7 cover validation parity, missing sources, draft
+  save, retry and revision, then preview and publish, and a reviewer's page list, isolated preview and the
+  ready freeze.
 - [MCP production shape and per-account tools](./mcp-production.md): MB1-MB6 cover tool lists without a
   renderer, the executor allowlist with `*` and `workspace`, and `/readyz`.
 - [Read Sheet Units](./sheet-lens.md): SLC1-SLC10 cover `uvw outline`, `read` and `find` on the

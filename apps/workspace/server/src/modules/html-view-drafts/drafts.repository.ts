@@ -6,6 +6,8 @@ import type { DraftRow } from "./drafts.types.js";
 
 export interface HtmlViewDraftsRepository {
   pendingForWorktree(worktreeId: string): Promise<DraftRow[]>;
+  /** Every draft attached to the Worktree except receiving and superseded ones, oldest first. */
+  listForWorktree(worktreeId: string): Promise<DraftRow[]>;
   find(id: string): Promise<DraftRow | undefined>;
   findKey(userId: string, key: string): Promise<DraftRow | undefined>;
   currentEtag(resourceId: string): Promise<string | undefined>;

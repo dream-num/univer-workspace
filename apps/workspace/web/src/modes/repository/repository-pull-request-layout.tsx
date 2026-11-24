@@ -38,6 +38,7 @@ export function RepositoryPullRequestLayout({
   selectedView,
   review,
   actions,
+  pages,
 }: {
   readonly worktree: components["schemas"]["WorktreeDetail"];
   readonly presentation: RepositoryReviewPresentation;
@@ -45,6 +46,7 @@ export function RepositoryPullRequestLayout({
   readonly selectedView: WorktreeReviewView;
   readonly review: ReactNode;
   readonly actions: ReactNode;
+  readonly pages?: ReactNode;
 }) {
   const { t, language } = useI18n();
   const { spaceId, section } = presentation;
@@ -175,6 +177,7 @@ export function RepositoryPullRequestLayout({
           ) : null}
         </div>
       </div>
+      {pages}
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-surface p-4 [&_button]:max-w-full [&_button]:whitespace-normal">
         {section === "overview" ? (
           <PullRequestLink

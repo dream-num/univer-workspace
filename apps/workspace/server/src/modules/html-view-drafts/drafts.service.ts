@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { z } from "zod";
-import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
+import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewDocument } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { logger } from "../../logging/logger.js";
-import type { WorktreesModule } from "../worktrees/index.js";
+import type { WorktreeDetail, WorktreesModule } from "../worktrees/index.js";
+import type { IdentityModule } from "../identity/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
 import { type HtmlViewDraftsRepository, assertDraftDestination, requireDraftResource, requirePendingDraft, draftConflict } from "./drafts.repository.js";
@@ -44,17 +45,35 @@ export function createHtmlViewDraftsModule(options: {
   access: AccessResolver;
   store: BlobStore;
   worktrees: Pick<WorktreesModule, "get">;
+  users: Pick<IdentityModule, "findUsers">;
   now?: () => number;
 }) {
   const { repository, access, store } = options;
   const now = options.now ?? Date.now;
   // Concurrent retries for the same draft must share one object upload.
   const receiving = new Map<string, Promise<DraftRow>>();
+  const draftNotFound = () => new ApplicationError("NOT_FOUND", 404, "Draft not found.");
   async function requireDraft(userId: string, draftId: string): Promise<DraftRow> {
     const row = await repository.find(draftId);
-    if (!row || row.author_user_id !== userId || row.state === "receiving")
-      throw new ApplicationError("NOT_FOUND", 404, "Draft not found.");
+    if (!row || row.author_user_id !== userId || row.state === "receiving") throw draftNotFound();
     return row;
+  }
+  async function readableDraft(userId: string, draftId: string) {
+    const row = await repository.find(draftId);
+    if (!row || row.state === "receiving") throw draftNotFound();
+    if (row.author_user_id === userId) return { row, source: undefined };
+    const source = row.source_worktree_id === null ? undefined : await reviewable(userId, row.source_worktree_id);
+    if (!source) throw draftNotFound();
+    return { row, source };
+  }
+  async function reviewable(userId: string, worktreeId: string): Promise<WorktreeDetail | undefined> {
+    try {
+      const { worktree } = await options.worktrees.get(userId, worktreeId);
+      return worktree.capabilities.review ? worktree : undefined;
+    } catch (error) {
+      if (error instanceof ApplicationError && error.status === 404) return undefined;
+      throw error;
+    }
   }
   async function validateCreate(userId: string, spaceId: string, parentNodeId: string | null) {
     const target =
@@ -68,24 +87,32 @@ export function createHtmlViewDraftsModule(options: {
     return requireDraftResource(target);
   }
   async function sourceWorktree(userId: string, worktreeId: string) {
-    const { worktree } = await options.worktrees.get(userId, worktreeId);
-    if (!worktree.capabilities.review)
-      throw new ApplicationError("NOT_FOUND", 404, "Source pull request not found.");
+    const worktree = await reviewable(userId, worktreeId);
+    if (!worktree) throw new ApplicationError("NOT_FOUND", 404, "Source pull request not found.");
     return worktree;
   }
-  async function view(row: DraftRow): Promise<HtmlViewDraftView> {
+  async function requireReadableBindings(userId: string, document: HtmlViewDocument, source: WorktreeDetail | undefined) {
+    const mapped = new Set(source?.units.map((unit) => unit.unitId));
+    for (const unitId of getHtmlViewUnitIds(document)) {
+      if (!mapped.has(unitId) && !(await access.resolveUnitContent(userId, unitId))?.capabilities.openContent)
+        throw new ApplicationError("FORBIDDEN", 403, `The page binds a Sheet you cannot read: ${unitId}.`);
+    }
+  }
+  async function view(row: DraftRow, readerId: string, known?: WorktreeDetail): Promise<HtmlViewDraftView> {
     if (row.state === "receiving") throw draftConflict("Draft content is still receiving.");
     let state: HtmlViewDraftView["state"] = row.state;
     const source = state === "pending" && row.source_worktree_id !== null
-      ? await sourceWorktree(row.author_user_id, row.source_worktree_id) : undefined;
+      ? known ?? await sourceWorktree(readerId, row.source_worktree_id) : undefined;
     if (source?.state === "discarded") state = "conflicted";
     if (state === "pending" && row.expires_at <= now()) state = "expired";
     else if (state === "pending" && row.kind === "replace") {
       const etag = await repository.currentEtag(row.target_resource_id!);
       if (etag !== undefined && etag !== row.base_etag) state = "conflicted";
     }
+    const [author] = await options.users.findUsers([row.author_user_id]);
     return {
       id: row.id,
+      author: author!,
       kind: row.kind,
       state,
       ...(state === "pending" ? { publishWhen: source && source.state !== "merged" ? "merge" as const : "publish" as const } : {}),
@@ -112,7 +139,7 @@ export function createHtmlViewDraftsModule(options: {
   }
   async function publish(userId: string, draftId: string) {
     const row = await requireDraft(userId, draftId);
-    if (row.state === "published") return view(row);
+    if (row.state === "published") return view(row, userId);
     requirePendingDraft(row, now());
     if (row.source_worktree_id !== null) {
       const worktree = await sourceWorktree(userId, row.source_worktree_id);
@@ -121,7 +148,7 @@ export function createHtmlViewDraftsModule(options: {
     }
     const decided = await repository.decide(row.id, userId, "publish", now());
     if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
-    return view(decided);
+    return view(decided, userId);
   }
   return {
     async submit(userId: string, keyValue: unknown, body: unknown) {
@@ -146,17 +173,24 @@ export function createHtmlViewDraftsModule(options: {
       let row = await repository.findKey(userId, key.data);
       if (previous && !row) {
         requirePendingDraft(previous, now());
-        const state = (await view(previous)).state;
+        const state = (await view(previous, userId)).state;
         if (state !== "pending") throw draftConflict(`Draft is ${state}.`);
       }
-      if (input.sourceWorktreeId !== undefined &&
-          (await sourceWorktree(userId, input.sourceWorktreeId)).state === "discarded")
-        throw draftConflict("Source pull request was discarded.");
+      const source = input.sourceWorktreeId === undefined ? undefined : await sourceWorktree(userId, input.sourceWorktreeId);
+      if (source?.state === "discarded") throw draftConflict("Source pull request was discarded.");
+      const left = previous?.source_worktree_id && previous.source_worktree_id !== input.sourceWorktreeId
+        ? await sourceWorktree(userId, previous.source_worktree_id) : undefined;
+      // A reviewer must merge the pages they saw, so a pull request under review takes no page changes.
+      for (const worktree of [source, left]) {
+        if (worktree?.state === "ready" || worktree?.state === "merging")
+          throw draftConflict(`Pull request #${worktree.number ?? worktree.id} is ${worktree.state}. Reopen it to change its pages.`);
+      }
       const bytes = Buffer.from(input.html, "utf8");
       if (bytes.length > 512 * 1024)
         throw new ApplicationError("PAYLOAD_TOO_LARGE", 413, "HTML View exceeds 512 KiB.");
+      let document: HtmlViewDocument;
       try {
-        parseHtmlView(input.html);
+        document = parseHtmlView(input.html);
       } catch {
         throw new ApplicationError("INVALID_INPUT", 400, "Invalid HTML View structure.");
       }
@@ -171,6 +205,7 @@ export function createHtmlViewDraftsModule(options: {
         throw new ApplicationError("INVALID_INPUT", 400, "Draft name is too long.");
       let created = false;
       if (!row) {
+        await requireReadableBindings(userId, document, source);
         let spaceId: string;
         let displayName: string;
         if (input.kind === "create") {
@@ -248,14 +283,20 @@ export function createHtmlViewDraftsModule(options: {
           if (receiving.get(reserved.id) === pending) receiving.delete(reserved.id);
         }
       }
-      return { status: created ? 201 : 200, draft: await view(row) };
+      return { status: created ? 201 : 200, draft: await view(row, userId) };
     },
     async get(userId: string, draftId: string) {
-      return view(await requireDraft(userId, draftId));
+      const { row, source } = await readableDraft(userId, draftId);
+      return view(row, userId, source);
+    },
+    async listForWorktree(userId: string, worktreeId: string) {
+      const source = await reviewable(userId, worktreeId);
+      if (!source) throw new ApplicationError("NOT_FOUND", 404, "Pull request not found.");
+      return Promise.all((await repository.listForWorktree(worktreeId)).map((row) => view(row, userId, source)));
     },
     async openContent(userId: string, draftId: string) {
-      const row = await requireDraft(userId, draftId);
-      if (row.state !== "pending" || !["pending", "conflicted"].includes((await view(row)).state))
+      const { row, source } = await readableDraft(userId, draftId);
+      if (row.state !== "pending" || !["pending", "conflicted"].includes((await view(row, userId, source)).state))
         throw draftConflict("Draft bytes are no longer available.");
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
@@ -276,11 +317,11 @@ export function createHtmlViewDraftsModule(options: {
     },
     async reject(userId: string, draftId: string) {
       const row = await requireDraft(userId, draftId);
-      if (row.state === "rejected") return view(row);
+      if (row.state === "rejected") return view(row, userId);
       requirePendingDraft(row, now());
       const decided = await repository.decide(row.id, userId, "reject", now());
       if (decided.state !== "rejected") throw draftConflict(`Draft is ${decided.state}.`);
-      return view(decided);
+      return view(decided, userId);
     },
     async expireDue(time: number, limit: number) {
       return repository.expireDue(time, limit, [...receiving.keys()]);

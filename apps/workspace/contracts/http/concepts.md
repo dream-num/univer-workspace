@@ -336,6 +336,14 @@ Other Members cannot discover it. A space-visible Team Worktree can be discovere
 reviewed read-only by current Space Members, and marked ready and merged by the Team Space
 Owner, Admins and Editors with edit access to every target.
 
+HTML View drafts attached to a pull request through `sourceWorktreeId` are pages its merge
+publishes. Whoever may review the pull request, which `capabilities.review` reports, lists them
+with `GET /api/worktrees/{worktreeId}/html-view-drafts`, whatever their author, and reads each
+draft and its content. Anyone else gets `404`. Only a draft's author publishes or rejects it.
+While the pull request is `ready` or `merging`, creating or revising a draft attached to it gets
+`409`; reopen it first. Every Unit a page binds must be in the pull request or readable by the
+draft's author when it is saved, otherwise `403`.
+
 ## Forks
 
 A fork is one User's named view of a whole Team Space, its upstream. Creating one with

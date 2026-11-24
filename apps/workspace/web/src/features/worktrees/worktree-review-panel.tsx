@@ -49,6 +49,8 @@ import {
 } from "./worktree-review-presentation";
 import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktree-review-search";
 import { WorktreeReviewHeader } from "./worktree-review-header";
+import { worktreeHtmlViewDraftsQueryOptions } from "../html-views/drafts/draft-queries";
+import { useDraftMessages } from "../html-views/drafts/messages";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
@@ -68,7 +70,7 @@ export function WorktreeReviewPanel({
   readonly selectedUnitId?: string | null;
   readonly selectedView?: WorktreeReviewView;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
-  readonly layout?: (parts: { readonly review: ReactNode; readonly actions: ReactNode }) => ReactNode;
+  readonly layout?: (parts: { readonly review: ReactNode; readonly actions: ReactNode; readonly pages: ReactNode }) => ReactNode;
 }) {
   const { t } = useI18n();
   const session = useQuery(sessionQueryOptions);
@@ -208,6 +210,7 @@ export function WorktreeReviewPanel({
       ) : null}
     </>
   );
+  const pages = worktree.capabilities.review ? <PageDrafts worktreeId={worktree.id} /> : null;
   const review = (
     <article className="flex h-full min-h-0 flex-col">
       <WorktreeReviewHeader
@@ -239,6 +242,7 @@ export function WorktreeReviewPanel({
           </>
         }
       />
+      {layout ? null : pages}
 
       {!worktree.capabilities.review ? (
         <Empty className="my-auto" title={t("noReviewPermission")} />
@@ -262,7 +266,29 @@ export function WorktreeReviewPanel({
       )}
     </article>
   );
-  return layout ? layout({ review, actions: lifecycleActions }) : review;
+  return layout ? layout({ review, actions: lifecycleActions, pages }) : review;
+}
+
+function PageDrafts({ worktreeId }: { readonly worktreeId: string }) {
+  const m = useDraftMessages();
+  const drafts = useQuery(worktreeHtmlViewDraftsQueryOptions(worktreeId));
+  if (drafts.isError) return <p role="alert" className="m-0 border-t border-border px-4 py-3 text-sm text-destructive">{drafts.error.message}</p>;
+  if (!drafts.data?.length) return null;
+  return (
+    <section aria-label={m.pages} className="border-t border-border px-4 py-3">
+      <h2 className="m-0 mb-2 text-xs font-semibold text-muted-foreground">{m.pages}</h2>
+      <ul className="m-0 grid list-none gap-2 p-0">
+        {drafts.data.map((draft) => (
+          <li key={draft.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="min-w-0 flex-1 break-words font-medium">{draft.name}</span>
+            <span className="text-muted-foreground">{m.byAuthor(draft.author.displayName)}</span>
+            <Badge variant="outline">{draft.state === "conflicted" ? m.conflictedState : m[draft.state]}</Badge>
+            <a className="text-primary underline" href={`/drafts/${encodeURIComponent(draft.id)}`}>{m.previewPage}</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function UnitReview({

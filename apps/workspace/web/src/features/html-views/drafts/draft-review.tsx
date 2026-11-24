@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../../shared/api/errors";
+import { sessionQueryOptions } from "../../auth";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
 import { nodeQueryOptions } from "../../nodes/nodes.queries";
@@ -48,6 +49,8 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   readonly requestChangesDisabled: boolean;
 }) {
   const m = useDraftMessages();
+  const session = useQuery(sessionQueryOptions);
+  const author = session.data?.authenticated === true && session.data.user.id === draft.author.id;
   const sourceWorktree = useQuery({ ...worktreeQueryOptions(draft.sourceWorktreeId ?? ""), enabled: !!draft.sourceWorktreeId });
   const waiting = draft.publishWhen === "merge";
   const queries = useQueryClient();
@@ -67,6 +70,8 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   const [changes, setChanges] = useState<string | null>(null);
   const markSeen = useCallback(() => setSeen(true), []);
   const { sourceIds, sources } = useHtmlViewSources(draft.sourceWorktreeId && !sourceWorktree.data ? undefined : content.data, sourceWorktree.data?.worktree);
+  // Someone else's page code must not act as the reader, so it reaches only the Sheets it declares.
+  const allowedUnitIds = useMemo(() => author ? undefined : sourceIds ?? [], [author, sourceIds]);
   const disabled = publish.isPending || reject.isPending;
   const error = publish.error ?? reject.error ?? content.error ?? sourceWorktree.error;
   const decide = (approved: boolean) => {
@@ -84,7 +89,7 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   }
   const destination = repository.data;
   const previewProps = {
-    sourceWorktree: sourceWorktree.data?.worktree,
+    sourceWorktree: sourceWorktree.data?.worktree, allowedUnitIds,
     html: content.data ?? "", replacing: draft.kind === "replace",
     current: current.data?.resource.kind === "blob" ? current.data.resource : undefined,
     currentError: current.isError,
@@ -109,13 +114,16 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
           <dt>{m.scope}</dt><dd>{destination ? destination.publicRead ? m.publicPage : m.privatePage : m.unknownVisibility}</dd>
           <dt>{m.sourceSheets}</dt><dd>{sourceIds === null ? m.sourcesUnavailable : sourceIds.length === 0 ? m.noSourceSheets : sourceIds.map((id, index) => (waiting ? sourceWorktree.data?.worktree.units.find((unit) => unit.unitId === id)?.name : undefined) ?? sources[index]?.data?.node.name ?? id).join(", ")}</dd>
         </dl>
-        {!waiting && <p className="mt-3 text-sm text-muted-foreground">{m.publishNotice}</p>}
+        {author ? !waiting && <p className="mt-3 text-sm text-muted-foreground">{m.publishNotice}</p> :
+          <p className="mt-3 text-sm text-muted-foreground">{m.reviewNotice(draft.author.displayName)}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {presentation === "card" && <Button variant="secondary" disabled={!previewReady || disabled} onClick={() => setPreview(true)}>{m.draftPreview}</Button>}
-        <Button disabled={disabled || waiting || presentation === "card" && !seen} onClick={() => decide(true)}>{m.publish}</Button>
-        <Button variant="secondary" disabled={disabled} onClick={() => decide(false)}>{m.reject}</Button>
-        {onRequestChanges && <>
+        {author && <>
+          <Button disabled={disabled || waiting || presentation === "card" && !seen} onClick={() => decide(true)}>{m.publish}</Button>
+          <Button variant="secondary" disabled={disabled} onClick={() => decide(false)}>{m.reject}</Button>
+        </>}
+        {author && onRequestChanges && <>
           <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={openChanges}>{m.requestChanges}</Button>
           <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={() => onRequestChanges(m.changeStyleMessage)}>{m.changeStyle}</Button>
         </>}
@@ -129,12 +137,12 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
       </label>
       <Button type="submit" disabled={disabled || requestChangesDisabled || !changes.trim()}>{m.sendChanges}</Button>
     </form>}
-    {presentation === "card" && !seen && !waiting && <p className="mt-3 text-sm text-muted-foreground">{m.previewFirst}</p>}
+    {presentation === "card" && author && !seen && !waiting && <p className="mt-3 text-sm text-muted-foreground">{m.previewFirst}</p>}
     {presentation === "page" && (!previewReady ? <p role="status" className="p-5">{content.isPending ? m.loading : m.previewUnavailable}</p> :
       <Suspense fallback={<p role="status">{m.loading}</p>}><DraftVersions {...previewProps} /></Suspense>)}
     {presentation === "card" && preview && previewReady && <Suspense fallback={<p role="status">{m.loading}</p>}>
-      <DraftPreview {...previewProps} name={draft.name} disabled={disabled} publishDisabled={waiting} waitingNotice={waitingNotice} onOpened={markSeen} onClose={() => setPreview(false)} onDecide={decide}
-        onRequestChanges={onRequestChanges ? openChanges : undefined} requestChangesDisabled={requestChangesDisabled} />
+      <DraftPreview {...previewProps} name={draft.name} disabled={disabled} publishDisabled={waiting} waitingNotice={waitingNotice} onOpened={markSeen} onClose={() => setPreview(false)} onDecide={author ? decide : undefined}
+        onRequestChanges={author && onRequestChanges ? openChanges : undefined} requestChangesDisabled={requestChangesDisabled} />
     </Suspense>}
   </>;
 }

@@ -1,9 +1,11 @@
 HtmlViewDraft:
   type: object
-  required: [id, kind, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published, supersededBy]
+  required: [id, author, kind, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published, supersededBy]
   properties:
     id:
       type: string
+    author:
+      $ref: ./identity.yaml#/PublicUser
     kind:
       type: string
       enum: [create, replace]
@@ -59,6 +61,15 @@ HtmlViewDraftEnvelope:
   properties:
     draft:
       $ref: '#/HtmlViewDraft'
+HtmlViewDraftList:
+  type: object
+  required: [drafts]
+  properties:
+    drafts:
+      type: array
+      description: Every draft attached to the pull request, oldest first, except superseded revisions.
+      items:
+        $ref: '#/HtmlViewDraft'
 SubmitHtmlViewDraft:
   oneOf:
     - type: object
@@ -79,7 +90,7 @@ SubmitHtmlViewDraft:
           type: string
           minLength: 1
           maxLength: 255
-          description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
+          description: A reviewable pull request in draft. A ready or merging pull request is refused with 409 until it is reopened. Merged pull requests are accepted, discarded ones are refused.
         html:
           type: string
           description: Structurally valid HTML View, at most 512 KiB UTF-8.
@@ -99,7 +110,7 @@ SubmitHtmlViewDraft:
           type: string
           minLength: 1
           maxLength: 255
-          description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
+          description: A reviewable pull request in draft. A ready or merging pull request is refused with 409 until it is reopened. Merged pull requests are accepted, discarded ones are refused.
         html:
           type: string
           description: Structurally valid HTML View, at most 512 KiB UTF-8.
@@ -112,7 +123,7 @@ SubmitHtmlViewDraft:
           const: revise
         draftId:
           type: string
-          description: Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded.
+          description: Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded. Refused with 409 while the old or new source pull request is ready or merging.
         sourceWorktreeId:
           type: string
           description: Override the source PR; otherwise inherit the previous draft's source.

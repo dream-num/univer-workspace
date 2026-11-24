@@ -12,14 +12,16 @@ const state = vi.hoisted(() => ({
   error: vi.fn(),
   info: vi.fn(),
   me: "user-2" as string | null,
+  pages: undefined as unknown,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  queryOptions: <T,>(options: T) => options,
   useQueries: () => [],
   useQuery: (options: { queryKey?: readonly unknown[] }) =>
     options.queryKey?.[0] === "session" && state.me
       ? { data: { authenticated: true, user: { id: state.me } } }
-      : {},
+      : options.queryKey?.[1] === "worktree" ? { data: state.pages } : {},
   useQueryClient: () => ({ invalidateQueries: state.invalidate }),
   useMutation: (config: {
     mutationFn: (value: unknown) => Promise<unknown>;
@@ -114,6 +116,7 @@ function worktree(reopen: boolean): Worktree {
 beforeEach(() => {
   state.pending = false;
   state.me = "user-2";
+  state.pages = undefined;
   state.clicks.clear();
   vi.clearAllMocks();
   state.post.mockResolvedValue({ data: { worktree: { state: "draft" } } });
@@ -238,4 +241,21 @@ it.each([{ publishedPages: [] }, { publishedPages: [{ draftId: "draft-1", name: 
     expect(renderToStaticMarkup(call![1].description)).toContain('href="/nodes/page-1"');
     expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["html-view-drafts"] });
   } else expect(state.success).toHaveBeenCalledTimes(1);
+});
+
+it("lists each page the pull request carries with its author, state and preview, to a reviewer only", () => {
+  state.pages = [
+    { id: "draft-1", name: "Budget.univer.html", state: "pending", author: { id: "user-3", username: "eve", displayName: "Eve", avatarUrl: null } },
+    { id: "draft-2", name: "Old.univer.html", state: "conflicted", author: { id: "user-1", username: "alice", displayName: "Alice", avatarUrl: null } },
+  ];
+  const html = renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: worktree(false) }));
+  expect(html).toContain("Budget.univer.html");
+  expect(html).toContain("by Eve");
+  expect(html).toContain("Pending review");
+  expect(html).toContain("Conflicted");
+  expect(html).toContain('href="/drafts/draft-1"');
+  expect(html).toContain('href="/drafts/draft-2"');
+  const hidden = worktree(false);
+  hidden.capabilities.review = false;
+  expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: hidden }))).not.toContain("/drafts/");
 });

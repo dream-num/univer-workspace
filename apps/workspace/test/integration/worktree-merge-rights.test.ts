@@ -645,6 +645,70 @@ describe("what each member can do with a Team pull request", () => {
   }, 120_000);
 });
 
+describe("who sees the pages a pull request publishes", () => {
+  it("shows them to whoever may review it, only to them, and keeps them as reviewed while it is ready", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, admin, editor, viewer, outsider } = s;
+    const pull = await openPull(origin, editor, s.id, "space");
+    const budget = await addFile(origin, editor, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    const { sheetId, head } = await sheetIn(origin, editor, pull, budget.unitId);
+    expect(await writeDraft(origin, editor, pull, budget.unitId, { sheetId, head }, "proposed")).toBe("committed");
+    const page = (unitId: string, title: string) =>
+      `<!doctype html><html><head><title>${title}</title></head><body><output data-univer-cell-text="${unitId}:${sheetId}:A1">-</output></body></html>`;
+    const save = (body: object) => post(origin, editor, "/api/html-view-drafts", body);
+    const first = await made<{ draft: { id: string } }>(await save({ kind: "create", spaceId: s.id, name: "Budget page", html: page(budget.unitId, "First"), sourceWorktreeId: pull }));
+    const read = (actor: Actor, path: string) => send(origin, "GET", path, undefined, actor.cookie);
+
+    for (const reviewer of [owner, admin, viewer]) {
+      const listed = await read(reviewer, `/api/worktrees/${pull}/html-view-drafts`);
+      expect(listed.status).toBe(200);
+      const { drafts } = (await listed.json()) as { drafts: { id: string; author: { username: string }; state: string; publishWhen: string }[] };
+      expect(drafts.map((draft) => ({ id: draft.id, author: draft.author.username, state: draft.state, publishWhen: draft.publishWhen })))
+        .toEqual([{ id: first.draft.id, author: "editor", state: "pending", publishWhen: "merge" }]);
+      expect((await read(reviewer, `/api/html-view-drafts/${first.draft.id}`)).status).toBe(200);
+      expect(await (await read(reviewer, `/api/html-view-drafts/${first.draft.id}/content`)).text()).toBe(page(budget.unitId, "First"));
+      for (const action of ["publish", "reject"]) {
+        expect((await send(origin, "POST", `/api/html-view-drafts/${first.draft.id}/${action}`, undefined, reviewer.cookie)).status).toBe(404);
+      }
+    }
+    const preview = await post(origin, owner, `/api/worktrees/${pull}/units/${budget.unitId}/open`, { mode: "draft" });
+    expect((await preview.json()) as object).toMatchObject({ unit: { editorMode: "readOnly" }, collaborationScope: { kind: "worktree", worktreeId: pull } });
+    expect((await sheetIn(origin, owner, pull, budget.unitId)).draft).toBe("proposed");
+
+    for (const path of [`/api/worktrees/${pull}/html-view-drafts`, `/api/html-view-drafts/${first.draft.id}`, `/api/html-view-drafts/${first.draft.id}/content`]) {
+      expect((await read(outsider, path)).status).toBe(404);
+    }
+    const hidden = await openPull(origin, editor, s.id, "private");
+    const hiddenDraft = await made<{ draft: { id: string } }>(await save({ kind: "create", spaceId: s.id, name: "Hidden page", html: page(budget.unitId, "Hidden"), sourceWorktreeId: hidden }));
+    for (const path of [`/api/worktrees/${hidden}/html-view-drafts`, `/api/html-view-drafts/${hiddenDraft.draft.id}`, `/api/html-view-drafts/${hiddenDraft.draft.id}/content`]) {
+      expect((await read(owner, path)).status).toBe(404);
+    }
+
+    expect(await transition(origin, pull, "ready", editor)).toBe("ready");
+    const revise = { kind: "revise", draftId: first.draft.id, html: page(budget.unitId, "Revised") };
+    for (const refused of [revise, { kind: "create", spaceId: s.id, name: "Late page", html: page(budget.unitId, "Late"), sourceWorktreeId: pull }]) {
+      const response = await save(refused);
+      expect({ status: response.status, message: ((await response.json()) as { error: { message: string } }).error.message })
+        .toEqual({ status: 409, message: expect.stringContaining("Reopen it to change its pages.") });
+    }
+    expect((await post(origin, editor, `/api/worktrees/${pull}/reopen`)).status).toBe(200);
+    const revised = await made<{ draft: { id: string } }>(await save(revise));
+    const listed = (await (await read(owner, `/api/worktrees/${pull}/html-view-drafts`)).json()) as { drafts: { id: string }[] };
+    expect(listed.drafts.map((draft) => draft.id)).toEqual([revised.draft.id]);
+
+    const { spaces } = (await (await read(owner, "/api/spaces")).json()) as { spaces: { id: string; type: string }[] };
+    const ownersSheet = await trunkSheet(origin, owner, spaces.find((space) => space.type === "personal")!.id, "Salaries");
+    for (const unitId of [ownersSheet.unitId, "no-such-unit"]) {
+      const response = await save({ kind: "create", spaceId: s.id, name: "Leaky page", html: page(unitId, "Leaky"), sourceWorktreeId: pull });
+      expect({ status: response.status, message: ((await response.json()) as { error: { message: string } }).error.message })
+        .toEqual({ status: 403, message: `The page binds a Sheet you cannot read: ${unitId}.` });
+    }
+    const forecast = await addFile(origin, editor, pull, newSheet(s.id));
+    expect((await save({ kind: "create", spaceId: s.id, name: "Forecast page", html: page(forecast.unitId, "Forecast"), sourceWorktreeId: pull })).status).toBe(201);
+  }, 60_000);
+});
+
 interface Actor {
   readonly id: string;
   readonly cookie: string;
