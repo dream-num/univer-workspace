@@ -10,7 +10,7 @@
 - **人的动作和 6.8 一致。** 故事 1 两次：H 加成员，E 在 Browser 里合入。故事 2 一次：H 加成员。故事 3 在认领之后为零。
 - **中途没有拒绝。** 三个故事里，agent 收到的 `AGENT_NOT_ALLOWED` 和 `INTERACTIVE_SESSION_REQUIRED` 都是 0。transcript 里的工具结果、`mcp.tool_call` 事件和 `workspace_ceiling_denials_total` 三处分别计数，结果相同。所有事件的 `principal_category` 都是 `agent_claimed`。
 - **Trunk 只经合入改变。** 合入之前读回的 Trunk 和任务开始时相同，合入之后才出现 agent 的修改。故事 2 里 agent 自己合入，Trunk 修订从 2 变成 3，期间只有这一个修订。
-- **等人的占比。** 故事 1 是 36.6%（203.7 秒里有 74.5 秒在等 E），E 由驱动者按脚本扮演，所以这是下限。故事 2 和故事 3 是 0。
+- **等人的占比。** 故事 1 是 24.1%（203.7 秒里有 49.1 秒是 E 在 Browser 里评审和合入）。E 由驱动者按脚本扮演，真人只会更久，所以这是下限。另有 25.4 秒（12.5%）是驱动者在 A1 结束后读结果、读回 Trunk，和故事 3 的转达一样单独列出，不算等人。故事 2 和故事 3 是 0。
 - **故事 3 的交接靠驱动者转达。** “B 可以开始改了”和“B 提了 pull request”这两条消息，产品里没有通道送到 agent，本次由驱动者写进下一次运行的提示词。转达占任务时长的 25.9%。它不是产品里的人的动作，也不算等人，见 5.4。
 
 ## 2. 怎样复现
@@ -108,7 +108,7 @@ $V story --as a3 s3-a-merge mcp 'setup-principal-b3-xg8h 在你的仓库 budget-
 
 **Trunk。** 任务开始时（`s1-trunk-start.trunk.txt`）和合入前（`s1-trunk-before-merge.trunk.txt`）的目录和三张 Sheet 的 A1:D10 完全相同，只有三张 Sheet，第 5 行是空的。合入后（`s1-trunk-after-merge.trunk.txt`）目录多了 `/Q1 summary`，三张 Sheet 的第 5 行是 `Total` 和 `=SUM(B2:B4)`，值分别是 405、258、315。Trunk 上的 Doc 有一张表：North 405，South 258，East 315，Total 978（`s1-trunk-doc-after.out`）。pull request 的四个 Unit 结果都是 `merged`，作者是 A1（`s1-pr-after-merge.out`）。
 
-**时间。** 任务 203.7 秒，A1 运行 129.2 秒。等人 74.5 秒，占 36.6%（`acceptance-summary.json`）。其中 25.4 秒是驱动者读完 A1 的结果、读回 Trunk 之后才让 E 打开页面，49.1 秒是 E 在 Browser 里评审和合入。
+**时间。** 任务 203.7 秒，A1 运行 129.2 秒。等人 49.1 秒，占 24.1%，是 E 在 Browser 里评审和合入的时间。A1 结束到 E 合入共 74.5 秒（`acceptance-summary.json`），其余 25.4 秒（12.5%）是驱动者读完 A1 的结果、读回 Trunk 之后才让 E 打开页面。这一段和 5.4 的转达一样单独列出，不算等人。
 
 ## 4. 故事 2：上游允许 agent 自己合入
 
@@ -178,17 +178,17 @@ R 的 Trunk 由 A3 的认领人 C 读回。A3 的第一次运行之后（`s3-tru
 
 基线来自 [阶段 0 结果](phase-0-results.zh-CN.md) 第 10 节。
 
-| 1.3 的指标             | 故事                       | 阶段 0 基线                                               | 本次结果                                               | 证据                      |
-| ---------------------- | -------------------------- | --------------------------------------------------------- | ------------------------------------------------------ | ------------------------- |
-| 每个任务的人工介入次数 | 1                          | 走不完。第一步 `addTeamMember` 返回 `AGENT_NOT_ALLOWED`   | 2：头部加成员，尾部合入，中间 0                        | `timeline.tsv`            |
-| 每个任务的人工介入次数 | 2                          | 走不完。第一步 `addTeamMember` 返回 `AGENT_NOT_ALLOWED`   | 1：头部加成员，中间和尾部 0                            | `timeline.tsv`            |
-| 每个任务的人工介入次数 | 3                          | 走不完。第一步 `createTeamSpace` 返回 `AGENT_NOT_ALLOWED` | 认领之后 0                                             | `timeline.tsv`            |
-| 每个任务的人工介入次数 | 人用 PAT 交给 agent 的任务 | 网关的说明文字把 ready 和合入留给人，中途至少 1 次        | 本次没有测                                             |                           |
-| 任务总时长里等人的占比 | 1                          | 产品里没有记录                                            | 36.6%（74.5 / 203.7 秒），E 由驱动者按脚本扮演，是下限 | `acceptance-summary.json` |
-| 任务总时长里等人的占比 | 2                          | 产品里没有记录                                            | 0（0 / 53.3 秒）                                       | `acceptance-summary.json` |
-| 任务总时长里等人的占比 | 3                          | 产品里没有记录                                            | 0（0 / 228.5 秒），另有 25.9% 是驱动者转达             | `acceptance-summary.json` |
+| 1.3 的指标             | 故事                       | 阶段 0 基线                                               | 本次结果                                                                        | 证据                      |
+| ---------------------- | -------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------- |
+| 每个任务的人工介入次数 | 1                          | 走不完。第一步 `addTeamMember` 返回 `AGENT_NOT_ALLOWED`   | 2：头部加成员，尾部合入，中间 0                                                 | `timeline.tsv`            |
+| 每个任务的人工介入次数 | 2                          | 走不完。第一步 `addTeamMember` 返回 `AGENT_NOT_ALLOWED`   | 1：头部加成员，中间和尾部 0                                                     | `timeline.tsv`            |
+| 每个任务的人工介入次数 | 3                          | 走不完。第一步 `createTeamSpace` 返回 `AGENT_NOT_ALLOWED` | 认领之后 0                                                                      | `timeline.tsv`            |
+| 每个任务的人工介入次数 | 人用 PAT 交给 agent 的任务 | 网关的说明文字把 ready 和合入留给人，中途至少 1 次        | 本次没有测                                                                      |                           |
+| 任务总时长里等人的占比 | 1                          | 产品里没有记录                                            | 24.1%（49.1 / 203.7 秒），E 由驱动者按脚本扮演，是下限。另有 12.5% 是驱动者延迟 | `acceptance-summary.json` |
+| 任务总时长里等人的占比 | 2                          | 产品里没有记录                                            | 0（0 / 53.3 秒）                                                                | `acceptance-summary.json` |
+| 任务总时长里等人的占比 | 3                          | 产品里没有记录                                            | 0（0 / 228.5 秒），另有 25.9% 是驱动者转达                                      | `acceptance-summary.json` |
 
-1.3 的第三项也有了数字：三个故事里 agent 收到的 `AGENT_NOT_ALLOWED` 和 `INTERACTIVE_SESSION_REQUIRED` 都是 0，基线是每个故事至少 1 次。
+1.3 的第三项也有了数字：三个故事里 agent 收到的 `AGENT_NOT_ALLOWED` 和 `INTERACTIVE_SESSION_REQUIRED` 都是 0。阶段 0 时，故事 1 和故事 2 停在 H 的 `addTeamMember`，agent 还没有开始；故事 3 的 agent 第一步就收到 `AGENT_NOT_ALLOWED`。这一项的另一半，agent 读一次 `capabilities` 就知道能走到哪一步，本次没有单独测。
 
 ## 7. 没有测到的
 
@@ -197,5 +197,5 @@ R 的 Trunk 由 A3 的认领人 C 读回。A3 的第一次运行之后（`s3-tru
 - 人用 PAT 或 OAuth 授权的任务。三个故事的 agent 都是已认领的 agent principal，用自己的 token。阶段 1 改过的人的 token 会话（A1.1、A1.2）本次没有走。
 - 部署环境上的 `workspace_ceiling_denials_total` 和 `mcp.tool_call`。本次读的是隔离实例，计数只来自这三个故事和准备工作。
 - 其他客户端和模型。三个故事只用了 `mcp` 客户端和 `console-deepseek/deepseek-flash#high`。它们一次走通，所以没有按约定用 `#max` 或 `codex` 重跑。
-- 同一个仓库里多个 fork 并行、落后距离大于 0 时的合入、部分冲突，以及 HTML View 和其他 Blob。三个故事都没有涉及，pull request 里每个 Unit 的 `freshness` 都是 `current`。
+- 同一个仓库里多个 fork 并行、落后距离大于 0 时的合入、部分冲突，以及 HTML View 和其他 Blob。三个故事都没有涉及。被修改的 Unit 的 `freshness` 都是 `current`，故事 1 新加的 Doc 是 `null`（`s1-pr-before-merge.out`）。
 - 故事 2 合入的 pull request 是 `private`，因为作者自己能合入。H 作为 S 的 owner 读这个 pull request 时 `units` 为空（`s2-pr-after-merge.out`），E 读 S 的 activity 也看不到 #3（`s2-activity.json`）。人事后怎样看到 agent 自己合入了什么，本次只记录了这个现象，没有评估。
