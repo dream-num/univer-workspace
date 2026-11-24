@@ -12,10 +12,13 @@ import type {
   IUniverCommentService,
 } from "@univerjs-pro/collaboration-comment-service";
 import type { IUniverHistoryService } from "@univerjs-pro/collaboration-history-service";
+import { RevertRevisionMutation, transformSnapshotToSlideData } from "@univerjs-pro/collaboration";
 import {
+  type CommitChangesetMiddlewareContext,
   type IUnitSnapshotMaterializer,
   CollabError,
   isCommentOnlyChangeset,
+  type RequiredUnitPermission,
   type UniverCollabService,
 } from "@univerjs-pro/collaboration-service";
 import {
@@ -27,6 +30,8 @@ import {
 } from "@univerjs-pro/collaboration-transport-node";
 import {
   ErrorCode,
+  UnitAction,
+  UnitObject,
   UniverType,
 } from "@univerjs/protocol";
 import { UniverCollabWorktreeEndpoint } from "@univerjs-pro/collaboration-worktree-endpoint";
@@ -55,6 +60,15 @@ import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.j
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
+// Unit resources that bind protection objects, with the object type of their bindings. null: each binding names its own.
+const PROTECTION_RESOURCES = new Map<string, UnitObject | null>([
+  ["SHEET_WORKSHEET_PROTECTION_PLUGIN", UnitObject.Worksheet],
+  ["SHEET_RANGE_PROTECTION_PLUGIN", UnitObject.SelectRange],
+  ["DOC_OBJECT_PERMISSION_PLUGIN", null],
+  ["SLIDE_OBJECT_PERMISSION_PLUGIN", null],
+  ["BOARD_OBJECT_PERMISSION_PLUGIN", null],
+  ["BASE_OBJECT_PERMISSION_PLUGIN", null],
+]);
 // Transport middleware runs before route matching. Allow only these SDK read paths.
 const ANONYMOUS_READ_PATHS = [
   /^\/universer-api\/user\/session-ticket$/,
@@ -135,7 +149,10 @@ export function createCollaborationGateway(options: {
   });
   service.use("commitChangeset", async (context, next) => {
     await requireChangesetAccess(access, context.userID, context.request.changeset);
-    for (const requirement of context.requiredUnitPermissions) {
+    for (const requirement of [
+      ...context.requiredUnitPermissions,
+      ...(await protectionReplacedByRestore(context)),
+    ]) {
       if (!(await contentPermissions.allowed(context.userID, requirement))) {
         throw new CollabError("PERMISSION_DENIED", "Content permission denied.");
       }
@@ -143,6 +160,37 @@ export function createCollaborationGateway(options: {
     setFinalMutationSize(context.changeset);
     await next();
   });
+
+  // Workaround: SDK 1.6.1 analyzes a RevertRevisionMutation as Edit on the Unit only, so an editor could
+  // restore over content protected from them and drop its rule. Require Edit on every protection object
+  // bound at head, as the SDK History UI does before it offers restore. A rule bound only at the target
+  // comes back with the restore and narrows access. Remove once the SDK lists the objects a restore replaces.
+  async function protectionReplacedByRestore(
+    context: CommitChangesetMiddlewareContext
+  ): Promise<RequiredUnitPermission[]> {
+    const { unitID, mutations } = context.request.changeset;
+    if (!mutations.some(({ id }) => id === RevertRevisionMutation.id)) return [];
+    const { snapshot } = await options.snapshotMaterializer.materializeSnapshot(
+      await service.getUnitLoadDataWithBlocks(
+        { unitID, type: context.unit.type, revision: context.expectedHeadRevision },
+        { userID: context.userID, customData: context.customData }
+      )
+    );
+    // A Slide snapshot keeps its resources in originalMeta. A PDF has no protection objects.
+    const resources = snapshot.slide
+      ? transformSnapshotToSlideData(snapshot).resources
+      : (snapshot.workbook ?? snapshot.doc ?? snapshot.board)?.resources;
+    return (resources ?? []).flatMap(({ name, data }) => {
+      const objectType = PROTECTION_RESOURCES.get(name);
+      if (objectType === undefined) return [];
+      return protectionBindings(JSON.parse(data || "null")).map((binding) => ({
+        unitID,
+        objectID: binding.permissionId,
+        objectType: objectType ?? binding.objectType!,
+        action: UnitAction.Edit,
+      }));
+    });
+  }
 
   commentService.use("listComments", async (context, next) => {
     await requireCommentAccess(access, context.userID, context.request.unitID);
@@ -581,6 +629,16 @@ async function requireChangesetAccess(
   return isCommentOnlyChangeset(changeset)
     ? await requireUnitAccess(access, userId, changeset.unitID)
     : await requireUnitEdit(access, userId, changeset.unitID);
+}
+
+// Sheet rules nest by sheet or by Unit and object rules form a list. Each binding names its permissionId.
+function protectionBindings(
+  value: unknown
+): { readonly permissionId: string; readonly objectType?: UnitObject }[] {
+  if (!value || typeof value !== "object") return [];
+  return typeof (value as { permissionId?: unknown }).permissionId === "string"
+    ? [value as { permissionId: string; objectType?: UnitObject }]
+    : Object.values(value).flatMap(protectionBindings);
 }
 
 function protocolUnitType(unitType: UnitType | null): UniverType {

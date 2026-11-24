@@ -1,11 +1,11 @@
 # Agent Mode 阶段 6 的 Trunk restore 探针
 
 > 日期 2026-11-24。[规格](spec.zh-CN.md) 6.7 的撤回打算在本仓库用 Trunk 的 restore 组合出来，不改上游。这个做法依赖的 SDK 行为原先只来自类型声明、界面文字和压缩后的代码。本文在已安装的 SDK 1.6.1（`@univerjs-pro/collaboration` 和 `@univerjs-pro/collaboration-service`）上逐条运行复核，是 P6-8 开工前的闸，作用和 [阶段 0 结果](phase-0-results.zh-CN.md) 相同。
-> 每个结论都来自提交 `529b6edd` 上的脚本输出。两次完整运行的结论逐条相同，`errors` 都是 0。下文用“记录 `id`”指 `scenarios.restore.records` 里的一行，用字段名指它的 `observed`。文中的“计划”指协调者的阶段 6 工作计划，不在仓库里，它采纳的结论已写进规格 6.7。
+> 每个结论都来自提交 `529b6edd` 上的脚本输出。两次完整运行的结论逐条相同，`errors` 都是 0。产品随后在 Trunk 的 `commitChangeset` 中间件里加了 restore 的保护检查（第 8 节）。第 8 节的三条记录按加上检查之后重跑的输出写，其余记录在重跑中结论不变，`errors` 仍是 0。下文用“记录 `id`”指 `scenarios.restore.records` 里的一行，用字段名指它的 `observed`。文中的“计划”指协调者的阶段 6 工作计划，不在仓库里，它采纳的结论已写进规格 6.7。
 
 ## 1. 结论
 
-- **P6-8 的闸没有通过。** restore 只需要整个 Unit 的 Edit 权限，SDK 不按受保护的区域计算权限。一个没有区域编辑权的 editor 用 restore 覆盖了受保护的单元格，还删掉了保护规则本身，之后这个 editor 可以直接改那个单元格（第 8 节）。计划推断“受保护的区域会让整个 restore 被拒绝”，结果相反。计划里“能验收并能编辑每个 Unit 的主体可以撤回”这条规则，在有区域保护的 Unit 上不够，P6-8 开工前要先定规则（第 11 节）。Browser 的 History 界面挡住了这条路：没有区域编辑权的 editor 看到的“Restore this version”是禁用的（第 8 节）。但这个检查只在客户端，服务端照样接受这样的 restore，绕开界面直接提交的客户端，以及 P6-8 以撤回者身份在服务端提交的 restore，都不受它约束。
+- **受保护的内容由服务端守住。** SDK 1.6.1 对 restore 只要求整个 Unit 的 Edit，不按受保护的区域计算权限。没有服务端检查时，一个没有区域编辑权的 editor 用 restore 覆盖了受保护的单元格，还删掉了保护规则本身（第 8 节）。产品现在在 Trunk 的 `commitChangeset` 中间件里补上这一步：restore 要求提交者对 head 上每个保护对象有 Edit，和 Browser History 界面提供“Restore this version”之前的检查一致。没有这些权限的 restore 整个被拒绝，返回和其他内容权限失败相同的 `PERMISSION_DENIED`。绕开界面直接提交的客户端，以及 P6-8 以撤回者身份在服务端提交的 restore，都经过这道检查。计划里“能验收并能编辑每个 Unit 的主体可以撤回”这条规则，因此在有保护对象的 Unit 上还要求对每个保护对象有 Edit（第 11 节）。
 - **Sheet 和 Doc 一样，restore 只能在 head 上提交。** 计划说 restore 的 transform 只有 Sheet 有。实际上 Sheet 的 restore 在过期的 base revision 上同样得到 `OT_CONFLICT`，而同一个 base 上的普通修改能 transform 并提交。反方向也一样，restore 落地之后，基于更早 revision 的普通修改得到 `OT_CONFLICT`，Sheet 和 Doc 都是（第 5 节）。
 - **restore 本身符合规格 6.7。** Sheet 和 Doc 都能恢复到合入之前的 revision。restore 追加一个新的 revision，内容等于合入之前（Sheet 只差一个空资源的写法，见第 2 节），历史同时保留合入和 restore。它替换整个 Unit，合入之后别人的修改一起消失（第 3、4、7 节）。
 - **幂等成立，前提是原样重交。** 同一个 `sid` 和 `reqId` 原样重交返回 `already-committed`。head 前进之后、应用重启之后结果都一样。同样的 `sid` 和 `reqId` 换一个 base revision 重交，得到 `retry` 和 `REVISION_MISMATCH`，不生效。换一个 `reqId` 会再执行一次（第 6 节）。
@@ -113,31 +113,53 @@ Doc 的正文是 `One\rTwo\r\n`。E1 在 Worktree 里插入 `merged `，然后�
 
 ## 8. 问题 6：受保护的区域
 
-记录 `restore-protected-untouched`（`CONFIRMED`）、`restore-protected-range`（`REFUTED`）、`restore-removes-protection`（`REFUTED`）。
+记录 `restore-protected-untouched`（`REFUTED`）、`restore-protected-range`（`CONFIRMED`）、`restore-removes-protection`（`CONFIRMED`）。没有服务端检查时（`529b6edd`），三条依次是 `CONFIRMED`、`REFUTED`、`REFUTED`。
 
 H 通过 `/universer-api/authz/3/object` 建一条 SelectRange 保护，编辑范围是 `OneSelf`，再用 `sheet.mutation.add-range-protection` 把它绑定到 B2（revision 2）。做法和 `apps/workspace/test/integration/collaboration-gateway.test.ts` 里的“rejects protected cell writes server-side”相同。之后的顺序如下：
 
-1. E1 改 A1（revision 3），E2 restore 到 revision 2（revision 4）。
-2. H 改 B2（revision 5），E1 再改 A1（revision 6）。
-3. V 和 E2 各提交一次 restore 到 revision 4，H 也提交一次。
+1. E1 改 A1（revision 3），E2 restore 到 revision 2。
+2. H 改 B2（revision 4），E1 再改 A1（revision 5）。
+3. V 和 E2 各提交一次 restore 到 revision 3，H 也提交一次。
 4. E2 restore 到 revision 1，然后直接写 B2。
 
-| 提交                                                     | SDK 要求的权限                                         | 结果                                                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| E2 直接写 B2（`directB2ByEditorTwo`）                    | Workbook 的 Edit，加上这条保护（`objectType` 3）的 Edit | `rejected`，`PERMISSION_DENIED`，`Content permission denied.`                         |
-| E2 restore，恢复的内容不涉及 B2                          | Workbook 的 Edit                                       | `committed`                                                                            |
-| V 的 restore（`byViewer`）                               | 没有走到 commit 阶段，列表为空                         | `rejected`，`PERMISSION_DENIED`，`Unit is read-only.`                                 |
-| E2 restore 到 revision 4，会把 H 写在 B2 的值改回去（`byEditor`） | Workbook 的 Edit                               | `committed`，revision 7。B2 上 H 的值和 A1 上 E1 的值都不在了（`afterEditor` 的 `b2`、`a1` 都是 `null`） |
-| E2 restore 到 revision 1，那时还没有保护（`restore-removes-protection`） | Workbook 的 Edit                        | `committed`，revision 9。`SHEET_RANGE_PROTECTION_PLUGIN` 从含 `protected-b2` 的规则变成 `""`（`protectionBefore`、`protectionAfter`） |
-| 之后 E2 直接写 B2（`directB2ByEditorTwoAfter`）          | 未单独记录                                             | `committed`，revision 10，值在 Trunk 上                                                |
+| 提交                                                                     | SDK 要求的权限                                          | 结果                                                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| E2 直接写 B2（`directB2ByEditorTwo`）                                    | Workbook 的 Edit，加上这条保护（`objectType` 3）的 Edit | `rejected`，`PERMISSION_DENIED`，`Content permission denied.`                                                                     |
+| E2 restore 到 revision 2，恢复的内容不涉及 B2                            | Workbook 的 Edit                                        | `rejected`，`PERMISSION_DENIED`，`Content permission denied.`。head 仍是 3                                                         |
+| V 的 restore（`byViewer`）                                               | 没有走到 commit 阶段，列表为空                          | `rejected`，`PERMISSION_DENIED`，`Unit is read-only.`                                                                             |
+| E2 restore 到 revision 3，会把 H 写在 B2 的值改回去（`byEditor`）        | Workbook 的 Edit                                        | `rejected`，`PERMISSION_DENIED`。head 仍是 5，B2 上 H 的值和 A1 上 E1 的值都在（`afterEditor`）                                    |
+| H 的同一个 restore（`byOwner`）                                          | Workbook 的 Edit                                        | `committed`，revision 6。B2 和 A1 回到 revision 3 的内容（`afterOwner` 的 `b2`、`a1` 都是 `null`）                                  |
+| E2 restore 到 revision 1，那时还没有保护（`restore-removes-protection`） | Workbook 的 Edit                                        | `rejected`，`PERMISSION_DENIED`。`SHEET_RANGE_PROTECTION_PLUGIN` 不变，仍含 `protected-b2`（`protectionBefore`、`protectionAfter`） |
+| 之后 E2 直接写 B2（`directB2ByEditorTwoAfter`）                          | 未单独记录                                              | `rejected`，`PERMISSION_DENIED`，值不在 Trunk 上                                                                                   |
 
-viewer 被拒绝，说明产品的中间件对 restore 确实运行。拒绝 viewer 的是 `requireChangesetAccess`，它要求 Unit 的 `editContent`。
+没有服务端检查时，E2 的这两次 restore 都是 `committed`：第一次之后 B2 上 H 的值和 A1 上 E1 的值都不在了，第二次之后 `SHEET_RANGE_PROTECTION_PLUGIN` 变成 `""`，E2 随后直接写 B2 也成功了。
 
-editor 能通过，原因在权限计算。产品的 `commitChangeset` 中间件（`apps/workspace/server/src/integrations/univer/collaboration-gateway.ts:136`）逐项检查 SDK 算出的 `requiredUnitPermissions`。普通修改碰到 B2 时，SDK 列出这条保护，检查失败。restore 时 SDK 只列出 Unit 本身。`content-permissions.ts:99` 对 Unit 本身的要求只看 Unit 的 `editContent`，所以任何 editor 都能通过。restore 到保护之前，Unit 里的绑定就没了（`protectionAfter`）。产品数据库里那条规则的记录没有检查，按代码它只在永久删除 Resource 时删除（`content-permissions.ts:389`）。
+拒绝 viewer 的是 `requireChangesetAccess`，它要求 Unit 的 `editContent`。
 
-restore mutation 和它的权限分析（`enableUnitPermissionAnalysis`）归上游，所以这是上游的缺陷。产品可以在自己的中间件里加一道检查作为 workaround，按根 `AGENTS.md` 写明原因、影响和移除条件。
+“SDK 要求的权限”一列在加上检查前后相同。普通修改碰到 B2 时，SDK 列出这条保护。restore 时 SDK 只列出 Unit 本身。产品的 `commitChangeset` 中间件逐项检查 SDK 算出的 `requiredUnitPermissions`，对 Unit 本身只看 `editContent`，所以只靠这份列表，任何 editor 的 restore 都能通过，restore 到保护之前还会删掉 Unit 里的绑定。restore mutation 和它的权限分析（`enableUnitPermissionAnalysis`）归上游，所以这是上游的缺陷。
 
-独立复核在真实应用里用 Browser 走了一遍（PR 575 的复核评论）。H 在 B2 上加了只有自己能编辑的区域保护，E 是 editor。E 改不了 B2；E 在 Trunk 的 History 界面里，对保护之前和之后的每个版本，“Restore this version” 都是禁用的，点击没有反应，Trunk 不变。H 的同一个按钮可用，同一个 E 在没有保护的 Sheet 上也可用。原因在 SDK 1.6.1 的界面层：`sheets-history` 的 `canRevert` 和 `sheets-history-ui` 的 `_checkCanRevert` 要求 Unit、每个 worksheet 和每条区域保护规则的 Edit，`edit-history-ui` 的 `restore()` 在 `canRestore` 为 false 时直接返回。所以今天的 Browser 界面不会让 editor 绕过区域保护。服务端没有对应的检查，上面的脚本结果说明绕开界面直接提交的 restore 会被接受。经实时 endpoint 伪造这样的提交，没有在真实应用里运行。
+产品的 workaround 只有一处，是 `apps/workspace/server/src/integrations/univer/collaboration-gateway.ts` 的 `protectionReplacedByRestore`。changeset 含 `RevertRevisionMutation` 时，它用公开的 `getUnitLoadDataWithBlocks` 读出这次提交所在的 head revision（`expectedHeadRevision`），物化成快照，从 Unit 的资源里读出每个保护绑定，对每个绑定要求 Edit。判定用的是普通修改也在用的 `contentPermissions.allowed`。任何一项不满足，整个 restore 被拒绝。读的资源如下：
+
+| Unit  | 资源                                | 保护对象                                    |
+| ----- | ----------------------------------- | ------------------------------------------- |
+| Sheet | `SHEET_WORKSHEET_PROTECTION_PLUGIN` | worksheet 保护（`objectType` 2）            |
+| Sheet | `SHEET_RANGE_PROTECTION_PLUGIN`     | 区域保护规则（`objectType` 3）              |
+| Doc   | `DOC_OBJECT_PERMISSION_PLUGIN`      | section、paragraph、entity                  |
+| Slide | `SLIDE_OBJECT_PERMISSION_PLUGIN`    | page、element、master                       |
+| Board | `BOARD_OBJECT_PERMISSION_PLUGIN`    | element                                     |
+| Base  | `BASE_OBJECT_PERMISSION_PLUGIN`     | table、field、record、view、dashboard       |
+
+PDF 没有保护对象。`@univerjs/protocol` 1.6.1 的 `UnitObject` 只有 PDF 本身（`Pdf`），没有 PDF 内部的对象类型，`@univerjs-pro/pdfs` 也不注册保护资源。Slide 的快照把资源放在 `originalMeta` 里，所以 Slide 用公开的 `transformSnapshotToSlideData` 读，其他类型读快照元数据的 `resources`。
+
+检查只看 head 上的规则，不看目标 revision 上的规则。只在目标 revision 上绑定的规则，restore 之后重新生效，只会收紧谁能编辑。它保护的内容在 head 上不受保护，提交者用普通修改本来就能改。Browser 界面也只看当前加载的规则。
+
+检查和界面一样不看 restore 实际改到哪里，所以 `restore-protected-untouched` 的结论变了：恢复的内容不涉及 B2，没有 B2 编辑权的 E2 也被拒绝。界面对这样的 E 同样禁用每个版本的“Restore this version”。界面对 Unit 还要求 `RecoverHistory`，产品对它的判定和 Edit 相同（都只看 Unit 的 `editContent`），SDK 已经列出 Unit 的 Edit，所以不另外检查。Doc、Slide、Board、Base 的界面只检查 Unit 的 `RecoverHistory`，服务端对它们的保护对象多检查一步，restore 因此不能覆盖受保护的段落或元素。
+
+产品测试在 `apps/workspace/test/integration/collaboration-gateway.test.ts` 的“Trunk restore”一组和“enforces real %s content edits”里，经实时 endpoint（`/universer-api/comb/.../new_changes`）提交 restore。区域保护、保护之前的 revision、worksheet 保护，以及 Doc、Slide、Board、Base 的对象保护，各有被拒绝和被接受的用例。没有保护的 Sheet 照常可以 restore。
+
+移除条件：SDK 的权限分析为 restore 列出它替换的保护对象。
+
+独立复核在真实应用里用 Browser 走了一遍（PR 575 的复核评论）。H 在 B2 上加了只有自己能编辑的区域保护，E 是 editor。E 改不了 B2；E 在 Trunk 的 History 界面里，对保护之前和之后的每个版本，“Restore this version” 都是禁用的，点击没有反应，Trunk 不变。H 的同一个按钮可用，同一个 E 在没有保护的 Sheet 上也可用。原因在 SDK 1.6.1 的界面层：`sheets-history` 的 `canRevert` 和 `sheets-history-ui` 的 `_checkCanRevert` 要求 Unit、每个 worksheet 和每条区域保护规则的 Edit，`edit-history-ui` 的 `restore()` 在 `canRestore` 为 false 时直接返回。服务端的检查和界面的规则一致。
 
 ## 9. 问题 7：恢复到哪个 revision
 
@@ -177,9 +199,7 @@ SDK 不为 `unchanged` 的 Unit 记录 `trunkRevision`（`unit-comparison.ts:204
 
 本节是根据上面的结果给出的建议，没有运行。
 
-1. **先定受保护区域的规则。** 这是唯一的阻断项。任务撤回由服务端以撤回者的身份提交 restore。按现在的权限计算，一个 editor 或 editor 角色的 agent 能用撤回覆盖它改不了的区域，并删除保护。可选的做法有两种，由维护者决定：
-   - 本仓库加一个 workaround。在 Trunk 的 `commitChangeset` 中间件里，遇到 restore changeset 而 Unit 绑定了内容保护对象时，要求提交者对每个对象都有 Edit，否则拒绝。这和 Browser 界面已有的检查一致，也挡住绕开界面直接提交的客户端。写成一处隔离的 workaround，移除条件是上游修好权限分析。
-   - 上游修权限分析。restore 的权限分析按 head 和目标 revision 之间的差异列出受影响的对象，或者要求每个保护对象的管理权。这一项加到计划 2.5 的上游需求里。
+1. **撤回者要能编辑每个保护对象。** 任务撤回由服务端以撤回者的身份提交 restore，这个 restore 经过第 8 节的检查。撤回者对某个 Unit 在 head 上的任何一个保护对象没有 Edit 时，这个 Unit 的 restore 得到 `PERMISSION_DENIED`，什么都不改变。P6-8 应把它当作这个 Unit 不能由这个撤回者撤回，和“合入之后别人又改过”一样列出来，不要重试。上游的权限分析列出 restore 替换的保护对象之后，第 8 节的 workaround 删除，这条规则改由 SDK 的列表给出。这项上游需求还没有提交。
 2. **每个 restore 都在刚读到的 head 上提交。** 收到 `OT_CONFLICT` 时重读 head，重新检查有没有新的作者，再重交。Sheet 也要这样做。撤回落地时，正在编辑这个 Unit 的人还没提交的修改会被拒绝，撤回页面应该提示这一点。
 3. **Operation 先存下完整的 changeset，再提交。** 每个 Unit 存 `sid`、`reqId`、`baseRev` 和目标 revision。恢复执行时原样重交。结果是 `committed` 或 `already-committed` 就完成。结果是 `OT_CONFLICT` 说明它从未生效，这时把新的一次尝试（新的 `reqId`，base 是新的 head）写进 Operation，再提交。不要用同样的 `reqId` 配新的 base，那样只会得到 `REVISION_MISMATCH`。也不要在原样重交之前换 `reqId`，否则同一个 restore 可能执行两次。
 4. **按 `trunkRevision` 认合入的 revision。** 服务端从 SDK 的 `getWorktree` 读每个 Unit 的 `trunkRevision`，和 `unit-comparison.ts` 的做法一样。产品的 HTTP 视图不带它。
@@ -188,11 +208,11 @@ SDK 不为 `unchanged` 的 Unit 记录 `trunkRevision`（`unit-comparison.ts:204
 
 ## 12. 没有测到的
 
-- Slide、Board、Base 和 PDF 的 restore。只测了 Sheet 和 Doc。
-- Doc、Slide 等对象级保护和 worksheet 保护。只测了 Sheet 的区域保护。
+- Slide、Board、Base 和 PDF 的 restore 内容。脚本只测了 Sheet 和 Doc。产品测试在 Slide、Board、Base 上提交过 restore，只核对了接受和拒绝，没有比较内容。
+- 脚本里的 worksheet 保护和对象级保护。脚本只测了 Sheet 的区域保护，其余由产品测试覆盖（第 8 节）。
 - Browser。History 界面的 restore 发出的 changeset 是否和脚本相同，以及客户端收到 restore 之后的 `OT_CONFLICT` 时怎样处理。界面对没有区域编辑权的 editor 禁用 restore，这一点已由独立复核确认（第 8 节）。
-- 实时 endpoint（WebSocket）这条路径。脚本直接调用 `UniverCollabService.submitChangeset`。
-- 历史很长或 Unit 很大时 restore 的耗时。
+- 脚本经过实时 endpoint 的 restore。脚本直接调用 `UniverCollabService.submitChangeset`，第 8 节的产品测试经过实时 endpoint。
+- 历史很长或 Unit 很大时 restore 的耗时，包括第 8 节的检查物化 head 的耗时。
 - 同一个 `sid` 里 `reqId` 能否跳号，以及去重记录会不会过期。
 - restore 提交对 License 编辑连接的占用。
 - 产品对 restore 提交的后续处理，例如搜索索引和 HTML View 的刷新。它们和普通修改一样跟着 `changesetCommitted` 事件，没有逐项检查。
