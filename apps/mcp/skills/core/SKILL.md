@@ -309,8 +309,8 @@ it, or the person who claimed the authoring agent, or, in a Team repository once
 the pull request is visible to the repository, its Owner, an Admin or an Editor.
 With read access only you can still create a pull request in a Team repository,
 change it and mark it ready with `pr_ready`: that shows it to the repository's
-members, and one who can edit merges it. When `pr_merge` fails partway and the pull request stays
-`merging` or `merged`, call `pr_merge` again to finish it.
+members, and one who can edit merges it. If `pr_merge` fails partway, leaving it
+`merging` or `merged`, call it again to finish.
 Do not discard unless explicitly requested. Discard is irreversible.
 `pr_view` gives each file from trunk a `freshness` label. `current`: trunk has
 not moved. `behind`: trunk changed the file since; it merges without conflict, but
@@ -318,14 +318,14 @@ a result verified on the draft can be wrong once merged, so before merging check
 trunk that what your change depends on still holds, and after merging read it back.
 `stale` (more than 100 revisions behind, or added more than 7 days ago): redo the
 work in a new pull request, then give the user the stale one's link and say it can
-be discarded. Do not discard it unless they ask. Freshness never blocks a merge.
+be discarded. Freshness never blocks a merge.
 Trunk's `.agents/checks.md` may declare checks, each a `## name` with what to
 verify. Once a pull request is ready, before merging and when reviewing, verify
 each, on trunk when a file is `behind`, and report it with `pr_check`. `pr_view`
 lists them; a result counts while the content is unchanged and its reporter may merge.
+In a repository that requires checks, report every declared check, then merge.
 `share` works only on files in a Personal Space. For a Team repository, return the
 pull request link instead.
-An agent identity that returns a `share` url also says who can open it, from
-`access`. While unclaimed, it also gives the user the `claimUrl` from `share`, or
+An agent's `share` url also says, in `access`, who can open it. While unclaimed, it also gives the user the `claimUrl` from `share`, or
 from `claim`.
 There is no separate close or reopen tool for a pull request.

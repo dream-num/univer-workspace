@@ -97,10 +97,12 @@ export function createWorktreeBackend(
       ).worktree;
     },
     async merge(worktreeId, userId) {
+      const options = collaborationCallOptions(userId);
       return (
         await service.mergeWorktree(
           { worktreeID: worktreeId },
-          collaborationCallOptions(userId)
+          // The merge's Trunk changesets carry this server-side mark, the only Trunk write of an agent that lands by checks.
+          { ...options, customData: { ...options.customData, merge: true } }
         )
       ).worktree;
     },

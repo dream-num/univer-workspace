@@ -26,6 +26,8 @@ export function retryFailed(db: DatabaseSync, operationId: string, actorUserId: 
     );
   if (row?.kind === "create_worktree_unit") assertFileQuota(db, actorUserId, 0);
   if (row?.kind === "create_worktree") assertAgentBudget(db, actorUserId, "openWorktree", retriedAt, 0);
+  // A merge the checks gate refused left the budget, so running it again takes a place there again.
+  if (row?.kind === "merge_worktree") assertAgentBudget(db, actorUserId, "mergeWorktree", retriedAt, 0);
   return Boolean(row);
 }
 

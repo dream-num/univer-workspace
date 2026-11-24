@@ -168,6 +168,7 @@ export function createHtmlViewDraftsModule(options: {
       if (worktree.state === "discarded") throw draftConflict("Draft is conflicted because its source pull request was discarded.");
       if (worktree.state !== "merged") throw draftConflict(`Waiting for pull request #${worktree.number ?? worktree.id} to merge.`);
     }
+    await access.assertChangesTrunk(userId, row.space_id);
     const decided = await repository.decide(row.id, userId, "publish", now());
     if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
     return view(decided, userId);

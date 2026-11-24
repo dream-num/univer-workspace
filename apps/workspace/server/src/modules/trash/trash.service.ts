@@ -21,8 +21,15 @@ export function createTrashModule(options: {
 }): TrashModule {
   const now = options.now ?? Date.now;
 
+  async function assertChangesBatchSpace(userId: string, trashBatchId: string): Promise<void> {
+    const batch = await options.repository.findBatch(trashBatchId);
+    if (batch) await options.access.assertChangesTrunk(userId, batch.space_id);
+  }
+
   return {
     async trashNode(userId, nodeId) {
+      const node = await options.access.resolveNode(userId, nodeId);
+      if (node) await options.access.assertChangesTrunk(userId, node.spaceId);
       const batchId = randomUUID();
       await options.repository.trashNode({ batchId, nodeId, createdBy: userId, createdAt: now() });
       const batch = await options.repository.findBatch(batchId);
@@ -59,6 +66,7 @@ export function createTrashModule(options: {
     },
 
     async restore(userId, trashBatchId) {
+      await assertChangesBatchSpace(userId, trashBatchId);
       const restored = await options.repository.restore(trashBatchId, userId, now());
       if (restored === null) {
         throw new ApplicationError(
@@ -71,6 +79,7 @@ export function createTrashModule(options: {
     },
 
     async removePermanently(userId, trashBatchId) {
+      await assertChangesBatchSpace(userId, trashBatchId);
       const result = await options.repository.removePermanently(trashBatchId, userId, now());
       if (result === "nestedBatch") {
         throw new ApplicationError(

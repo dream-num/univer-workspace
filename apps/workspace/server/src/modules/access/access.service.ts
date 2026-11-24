@@ -1,5 +1,5 @@
 import { ANONYMOUS_USER_ID, principalCategory, type AgentBudget, type PrincipalCategory } from "../identity/index.js";
-import { agentBudget } from "./ceilings.js";
+import { agentBudget, assertCeiling, landsByChecks } from "./ceilings.js";
 import type {
   AccessRepository,
   NodeAuthorizationRow,
@@ -39,6 +39,8 @@ export interface AccessResolver {
   countOwnedFiles(userId: string, operationId?: string): Promise<number>;
   /** What the User has used of the budget every agent works within. */
   budget(userId: string): Promise<AgentBudget>;
+  /** Refuses a direct Trunk write by an agent the Space's `landing` setting gates; a merge is not one. */
+  assertChangesTrunk(userId: string, spaceId: string): Promise<void>;
 }
 
 export function createAccessResolver(repository: AccessRepository): AccessResolver {
@@ -98,6 +100,11 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     async budget(userId) {
       return agentBudget(await repository.readBudget(userId, Date.now()));
     },
+    async assertChangesTrunk(userId, spaceId) {
+      const space = await repository.resolveSpace(userId, spaceId);
+      if (space?.landing !== "checks" || space.owned) return;
+      assertCeiling(requesterCategory(await repository.findRequester(userId)), "changeTrunk", { landing: space.landing, owns: space.owned });
+    },
   };
 }
 
@@ -116,6 +123,7 @@ export function resolveStoredContentAccess(
     unitId: mapping.unit_id,
     unitType: mapping.unit_type,
     capabilities: resourceCapabilities(role, mapping.resource_kind),
+    landsByChecks: landsByChecks(requesterCategory(row), { landing: row.space_landing, owns: Boolean(row.requester_owns) }),
   };
 }
 
@@ -221,6 +229,7 @@ export function resolveStoredSpaceAccess(userId: string, row: StoredSpaceAccess)
     name: row.name,
     ownerUserId: row.ownerUserId,
     publicRead: row.publicRead,
+    landing: row.landing,
     role,
     member,
     capabilities: spaceCapabilities(role, { type: row.type, member, proposes: row.proposes }),

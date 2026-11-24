@@ -1,6 +1,7 @@
 import type {
   AccessRole,
   SpaceCapabilities,
+  SpaceLanding,
   SpaceType,
 } from "../access/index.js";
 
@@ -18,6 +19,7 @@ export interface SpaceView {
   readonly proposals: SpaceProposals;
   /** Hours after a submission at which an Issue nobody sent back is accepted; null when off. */
   readonly acceptAfterHours: number | null;
+  readonly landing: SpaceLanding;
   readonly description: string;
   readonly slug: string | null;
   readonly fullName: string | null;

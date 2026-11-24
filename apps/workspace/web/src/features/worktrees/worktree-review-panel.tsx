@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { components } from "../../../../generated/http/schema.js";
 import { sessionQueryOptions } from "../auth";
+import { spaceQueryOptions } from "../spaces/spaces.queries";
 import { ApiError } from "../../shared/api/errors";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import {
@@ -78,6 +79,9 @@ export function WorktreeReviewPanel({
   const { t } = useI18n();
   const session = useQuery(sessionQueryOptions);
   const me = session.data?.authenticated ? session.data.user.id : undefined;
+  const agent = session.data?.authenticated === true && session.data.user.kind === "agent";
+  const space = useQuery({ ...spaceQueryOptions(worktree.teamSpace?.id), enabled: agent && worktree.teamSpace !== null });
+  const landsByChecks = space.data?.landing === "checks" && (space.data.accessRole === "editor" || space.data.accessRole === "admin");
   const selectedUnit =
     selectedUnitId === undefined || selectedUnitId === null
       ? worktree.units[0]
@@ -148,16 +152,18 @@ export function WorktreeReviewPanel({
   const mergeHint =
     worktree.kind !== "team" || worktree.state !== "ready" || me === undefined
       ? null
-      : worktree.visibility === "space"
-        ? t(authorSide ? "memberWithEditAccessMerges" : "mergeNeedsEditAccess")
-        : authorSide
-          ? null
-          : worktree.claimer
-            ? t("onlyAuthorOrClaimerMerges", {
-                name: worktree.creator.displayName,
-                claimer: worktree.claimer.displayName,
-              })
-            : t("onlyAuthorMerges", { name: worktree.creator.displayName });
+      : agent && landsByChecks
+        ? t("checksRequiredToMerge")
+        : worktree.visibility === "space"
+          ? t(authorSide ? "memberWithEditAccessMerges" : "mergeNeedsEditAccess")
+          : authorSide
+            ? null
+            : worktree.claimer
+              ? t("onlyAuthorOrClaimerMerges", {
+                  name: worktree.creator.displayName,
+                  claimer: worktree.claimer.displayName,
+                })
+              : t("onlyAuthorMerges", { name: worktree.creator.displayName });
   const lifecycleActions = (
     <>
       {worktree.capabilities.reopen ? (

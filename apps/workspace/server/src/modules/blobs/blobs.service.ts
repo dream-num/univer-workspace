@@ -133,6 +133,8 @@ export function createBlobsModule(options: {
           "Blob exceeds the configured byte limit.",
         );
       assertCeiling(principalCategory(actor.user), "storeFile", { byteSize });
+      const target = await options.access.resolveResource(actor.user.id, resourceId);
+      if (target) await options.access.assertChangesTrunk(actor.user.id, target.node.spaceId);
       const intent = { resourceId, expectedEtag: ifMatch.slice(1, -1), byteSize };
       let reserved;
       try {
@@ -436,11 +438,12 @@ async function validateTarget(
     const space = await access.resolveSpace(userId, input.spaceId);
     if (!space) throw notFound();
     if (!space.capabilities.createAtRoot) throw forbidden();
-    return;
+  } else {
+    const parent = await access.resolveNode(userId, input.parentNodeId);
+    if (!parent || parent.spaceId !== input.spaceId) throw notFound();
+    if (!parent.capabilities.createChildren) throw forbidden();
   }
-  const parent = await access.resolveNode(userId, input.parentNodeId);
-  if (!parent || parent.spaceId !== input.spaceId) throw notFound();
-  if (!parent.capabilities.createChildren) throw forbidden();
+  await access.assertChangesTrunk(userId, input.spaceId);
 }
 
 function assertSameIntent(

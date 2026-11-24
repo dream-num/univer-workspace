@@ -746,6 +746,8 @@ function worktreeSelect(): string {
             claimer.display_name AS claimer_display_name,
             claimer.avatar_url AS claimer_avatar_url,
             team.name AS team_space_name,
+            team.owner_user_id AS team_owner_user_id,
+            team.landing AS team_landing,
             issue.number AS issue_number,
             issue.title AS issue_title,
             issue.state AS issue_state,

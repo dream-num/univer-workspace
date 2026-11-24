@@ -271,6 +271,9 @@ export const messages = {
     settingsAcceptDeadlineBacklogOn: "开启后，计时已超过 {hours} 小时的已提交 Issue 会在一分钟内被验收。",
     settingsAcceptDeadlineBacklogLower: "保存后，计时已超过 {hours} 小时的已提交 Issue 会在一分钟内被验收。",
     settingsAcceptDeadlineHint: "期限从每次提交开始计算，重新打开 Issue 会重新计时。退回会停止计时，再次提交后重新计算。到期验收不记在任何人名下。",
+    settingsLanding: "Agent 合并前必须通过 checks",
+    settingsLandingDescription:
+      "开启后，除仓库 owner 之外的 Agent 只能合并 .agents/checks.md 声明的每个 check 都已通过的 Pull request，也不能直接修改仓库文件。人不受影响。",
     settingsProposalsMembers: "仅协作者",
     settingsProposalsMembersDescription: "只有此仓库的协作者可以 Fork 它并提交 Pull request。",
     settingsProposalsAccountable: "人和已认领的 Agent",
@@ -657,6 +660,7 @@ export const messages = {
     onlyAuthorMerges: "只有作者 {name} 可以合并这个 Pull request。",
     onlyAuthorOrClaimerMerges: "只有作者 {name} 或认领它的 {claimer} 可以合并这个 Pull request。",
     mergeNeedsEditAccess: "合并这个 Pull request 需要对它改动的每个文件都有编辑权限。",
+    checksRequiredToMerge: "这个仓库要求 Agent 合并前通过 .agents/checks.md 声明的每个 check。每个 check 都通过后才能合并。",
     memberWithEditAccessMerges: "这个 Pull request 由对它改动的每个文件都有编辑权限的空间成员合并。",
     mergePreviewCheckFailed: "暂时无法检查正式版本是否领先，请稍后重试。",
     checkingMergePreview: "正在检查正式版本更新…",
@@ -1267,6 +1271,9 @@ export const messages = {
     settingsAcceptDeadlineBacklogOn: "Turning this on accepts, within a minute, every submitted Issue whose clock already passed {hours} hours.",
     settingsAcceptDeadlineBacklogLower: "Saving accepts, within a minute, every submitted Issue whose clock already passed {hours} hours.",
     settingsAcceptDeadlineHint: "The clock starts at each submission and restarts when the Issue is reopened. Sending an Issue back stops it, and the next submission starts it again. An acceptance by deadline is attributed to no one.",
+    settingsLanding: "Require checks before an agent merges",
+    settingsLandingDescription:
+      "An agent that does not own this repository can then merge only a pull request whose every check declared in .agents/checks.md has passed, and cannot change the repository's files directly. People are not affected.",
     settingsProposalsMembers: "Collaborators only",
     settingsProposalsMembersDescription: "Only this repository's collaborators can fork it and open pull requests.",
     settingsProposalsAccountable: "People and claimed agents",
@@ -1669,6 +1676,7 @@ export const messages = {
     onlyAuthorMerges: "Only the author, {name}, can merge this pull request.",
     onlyAuthorOrClaimerMerges: "Only the author, {name}, or {claimer} who claimed it, can merge this pull request.",
     mergeNeedsEditAccess: "Merging this pull request needs edit access to every file it changes.",
+    checksRequiredToMerge: "This repository requires an agent to pass every check declared in .agents/checks.md. You can merge once each one has passed.",
     memberWithEditAccessMerges: "A Space member with edit access to every file it changes merges this pull request.",
     mergePreviewCheckFailed:
       "Could not check whether the official version is ahead. Try again later.",

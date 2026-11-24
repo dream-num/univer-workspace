@@ -6,6 +6,7 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
 import {
+  landsByChecks,
   type AccessResolver,
   type ResourceAccess,
   type ResourceContentAccess,
@@ -37,8 +38,8 @@ import type {
   WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { checkNeedsReady, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
-import { CHECK_NAME, checksSummary, checkViews, contentKey } from "./checks.js";
+import { checkNeedsReady, checksRequired, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
+import { CHECK_NAME, checksSummary, checkViews, contentKey, type DeclaredChecksReader } from "./checks.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -47,6 +48,8 @@ interface WorktreeContext {
   readonly facts: WorktreeFacts;
   readonly capabilities: WorktreeCapabilities;
   readonly canSeeUnits: boolean;
+  /** Set when the actor lands by checks here: what blocks its merge now, or null once every declared check passed. */
+  readonly checksGate?: { readonly blocked: string | null };
 }
 
 /** What a Worktree decision reads: who the actor is to the author, their Team Space role, and their access to every Unit and pending page. */
@@ -91,8 +94,8 @@ export function createWorktreesModule(options: {
     unitIds: readonly string[]
   ) => Promise<void>;
   readonly pages: WorktreePages;
-  /** The check names a Team Space declares on its Trunk, as the user can read them. */
-  readonly declaredChecks: (userId: string, teamSpaceId: string) => Promise<readonly string[]>;
+  /** The checks a Team Space declares on its Trunk, as a user reads them and as the merge gate does. */
+  readonly declaredChecks: Pick<DeclaredChecksReader, "names" | "gate">;
   readonly publicOrigin: string | null;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
@@ -158,14 +161,7 @@ export function createWorktreesModule(options: {
       data.units,
       options.pages,
     );
-    return {
-      row,
-      state: data.status,
-      units,
-      facts: access.facts,
-      capabilities: access.capabilities,
-      canSeeUnits: access.canSeeUnits,
-    };
+    return withChecksGate(userId, { row, state: data.status, units, ...access });
   }
 
   async function authorMerges(value: WorktreeContext): Promise<boolean> {
@@ -197,11 +193,13 @@ export function createWorktreesModule(options: {
   async function checkList(userId: string, value: WorktreeContext): Promise<WorktreeCheck[]> {
     if (!value.capabilities.review) throw forbidden();
     const { row } = value;
-    const [declared, rows, key] = await Promise.all([
-      row.kind === "team" && row.team_space_id ? options.declaredChecks(userId, row.team_space_id) : [],
-      options.repository.checks(row.id),
-      currentContentKey(value),
-    ]);
+    return checkResults(value, row.kind === "team" && row.team_space_id ? await options.declaredChecks.names(userId, row.team_space_id) : []);
+  }
+
+  /** The declared checks and every reported one, each passed only by a current result of someone who may merge. */
+  async function checkResults(value: WorktreeContext, declared: readonly string[]): Promise<WorktreeCheck[]> {
+    const { row } = value;
+    const [rows, key] = await Promise.all([options.repository.checks(row.id), currentContentKey(value)]);
     const merges = new Map<string, boolean>();
     for (const result of rows) {
       if (result.content_key === key && !merges.has(result.reporter_user_id)) {
@@ -209,6 +207,23 @@ export function createWorktreesModule(options: {
       }
     }
     return checkViews(declared, rows, key, merges);
+  }
+
+  /**
+   * An agent that does not own a Team Space requiring checks merges there only once every check that Trunk declares
+   * has a counting pass on the current content. The server reads the declaration and recomputes the results each time.
+   */
+  async function withChecksGate(userId: string, value: WorktreeContext): Promise<WorktreeContext> {
+    const { row } = value;
+    if (!value.capabilities.merge || row.team_landing !== "checks" || !row.team_space_id || !row.team_owner_user_id ||
+        !landsByChecks(await options.access.principalCategory(userId), { landing: row.team_landing, owns: Boolean(row.actor_owns_team_space) })) {
+      return value;
+    }
+    const declaration = await options.declaredChecks.gate(row.team_space_id, row.team_owner_user_id);
+    const blocked = "problem" in declaration
+      ? `This repository requires checks before an agent merges, and its declaration cannot be used: ${declaration.problem} A person can merge this pull request, or fix .agents/checks.md on Trunk.`
+      : unmetChecks(await checkResults(value, declaration.names));
+    return { ...value, checksGate: { blocked }, capabilities: { ...value.capabilities, merge: blocked === null } };
   }
 
   async function detailWithChecks(userId: string, value: WorktreeContext): Promise<WorktreeDetail> {
@@ -408,9 +423,15 @@ export function createWorktreesModule(options: {
             data.units,
             options.pages,
           );
+          const { capabilities } = access.capabilities.merge && row.team_landing === "checks"
+            ? await withChecksGate(userId, {
+              row, state: data.status, ...access,
+              units: await mapUnits(unitRows, data.units, userId, pageAccess, openTrunk(data.status, userId), readsTeamSpace(row)),
+            })
+            : access;
           visible.push({
             row,
-            summary: summaryView(row, data.status, access.capabilities),
+            summary: summaryView(row, data.status, capabilities),
           });
         }
         lastScanned = batch.at(-1) ?? lastScanned;
@@ -914,6 +935,7 @@ export function createWorktreesModule(options: {
       const recordsApplied = resumeMerged && !unfinished && existing !== null &&
         !(await options.repository.mergers([worktreeId])).has(worktreeId);
       if (!value.capabilities.merge && existing?.state !== "completed" && !finishes && !recordsApplied) {
+        if (value.checksGate?.blocked) throw checksRequired(value.checksGate.blocked);
         if (!value.facts.authorOrClaimer && !value.facts.shared) throw onlyAuthorMerges(value.row);
         if (value.state === "ready" || unfinished) throw mergeNeedsEditAccess();
         throw forbidden();
@@ -958,6 +980,9 @@ export function createWorktreesModule(options: {
               now(),
             );
           }
+          // Checks and permissions may change while the merge waits, so the gate decides again just before Trunk moves.
+          const blocked = !resumeMerged && value.checksGate ? (await context(userId, worktreeId)).checksGate?.blocked : null;
+          if (blocked) throw checksRequired(blocked);
           const data = await backendCall(() =>
             resumeMerged
               ? options.backend.getWorktree(worktreeId, userId)
@@ -1100,15 +1125,20 @@ export function createWorktreesModule(options: {
       data.units,
       options.pages,
     );
-    return {
+    return withChecksGate(userId, {
       row: current,
       state: data.status,
       units: await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId), readsTeamSpace(current)),
-      facts: access.facts,
-      capabilities: access.capabilities,
-      canSeeUnits: access.canSeeUnits,
-    };
+      ...access,
+    });
   }
+}
+
+function unmetChecks(checks: readonly WorktreeCheck[]): string | null {
+  const unmet = checks.filter((check) => check.declared && check.state !== "passed");
+  if (!unmet.length) return null;
+  return `This repository requires every declared check to pass before an agent merges. Not passed on the current content: ${
+    unmet.map((check) => `${check.name} (${check.state})`).join(", ")}. Report each declared check on this content, then merge.`;
 }
 
 async function worktreeCapabilities(

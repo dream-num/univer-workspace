@@ -72,6 +72,8 @@ export function createResourcesModule(options: {
     }
     await options.repository.markAttempt(reservation.row.id, now());
     try {
+      // A retry, or recovery of a creation reserved before the Space required checks, decides again.
+      await options.access.assertChangesTrunk(reservation.row.actor_user_id, reservation.payload.spaceId);
       const created = await options.unitStore.createUnit({
         unitId: reservation.payload.unitId,
         unitType: reservation.payload.unitType,
@@ -156,6 +158,7 @@ export function createResourcesModule(options: {
     async create(userId, operationIdValue, inputValue, reserved) {
       const operationId = validOperationId(operationIdValue);
       const intent = validCreateResource(inputValue);
+      await options.access.assertChangesTrunk(userId, intent.spaceId);
       const reservation = await options.repository.reserveCreateResource({
         operationId,
         actorUserId: userId,
@@ -414,7 +417,7 @@ function operationError(error: unknown): {
   readonly message: string;
   readonly retryable: boolean;
 } {
-  if (error instanceof ApplicationError && (error.code === "NOT_FOUND" || error.code === "FORBIDDEN")) {
+  if (error instanceof ApplicationError && (error.code === "NOT_FOUND" || error.code === "FORBIDDEN" || error.code === "AGENT_NOT_ALLOWED")) {
     return { code: error.code, message: error.message, retryable: false };
   }
   if (error instanceof UnitStoreError) {

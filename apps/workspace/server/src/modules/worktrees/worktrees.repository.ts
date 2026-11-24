@@ -1,4 +1,4 @@
-import type { UnitType } from "../access/index.js";
+import type { SpaceLanding, UnitType } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { OperationState } from "../resources/resources.types.js";
@@ -32,6 +32,8 @@ export interface WorktreeRow {
   readonly claimer_display_name: string | null;
   readonly claimer_avatar_url: string | null;
   readonly team_space_name: string | null;
+  readonly team_owner_user_id: string | null;
+  readonly team_landing: SpaceLanding | null;
   readonly issue_id: string | null;
   /** Null when no Issue is linked or the actor cannot read the Team Space. */
   readonly issue_number: number | null;

@@ -3,7 +3,9 @@ import { ApplicationError } from "../../middleware/errors.js";
 import {
   assertCeiling,
   resolveStoredSpaceAccess,
+  SPACE_LANDINGS,
   type AccessResolver,
+  type SpaceLanding,
   type SpaceType,
 } from "../access/index.js";
 import { spaceNotFound, spaceUpdateForbidden } from "./spaces.errors.js";
@@ -37,6 +39,7 @@ export interface SpacesModule {
       readonly description?: unknown;
       readonly proposals?: unknown;
       readonly acceptAfterHours?: unknown;
+      readonly landing?: unknown;
     }
   ): Promise<SpaceView>;
 }
@@ -151,7 +154,8 @@ export function createSpacesModule(options: {
         input.publicRead === undefined &&
         input.description === undefined &&
         input.proposals === undefined &&
-        input.acceptAfterHours === undefined
+        input.acceptAfterHours === undefined &&
+        input.landing === undefined
       ) {
         throw new ApplicationError(
           "INVALID_INPUT",
@@ -161,7 +165,8 @@ export function createSpacesModule(options: {
       }
       const name = input.name === undefined ? undefined : validName(input.name);
       const publicRead = input.publicRead === undefined ? undefined : validBoolean(input.publicRead, "publicRead");
-      assertCeiling(await options.access.principalCategory(userId), "updateSpace", { publicRead: publicRead ?? access.publicRead });
+      const principal = await options.access.principalCategory(userId);
+      assertCeiling(principal, "updateSpace", { publicRead: publicRead ?? access.publicRead });
       const description = input.description === undefined ? undefined : validDescription(input.description);
       if (input.slug !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");
@@ -174,6 +179,11 @@ export function createSpacesModule(options: {
       if (acceptAfterHours !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has Issues to accept.", "acceptAfterHours");
       }
+      const landing = input.landing === undefined ? undefined : validLanding(input.landing);
+      if (landing !== undefined && access.type !== "team") {
+        throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space can require checks.", "landing");
+      }
+      if (landing !== undefined) assertCeiling(principal, "changeLanding", { owns: access.role === "owner" });
       const row = await options.repository.updateSettings(userId, spaceId, {
         ...(name !== undefined && { name }),
         ...(publicRead !== undefined && { publicRead }),
@@ -181,6 +191,7 @@ export function createSpacesModule(options: {
         ...(input.slug !== undefined && { slug: validSlug(input.slug) }),
         ...(proposals !== undefined && { proposals }),
         ...(acceptAfterHours !== undefined && { acceptAfterHours }),
+        ...(landing !== undefined && { landing }),
       }, now());
       if (!row) throw slugTaken();
       return spaceView(userId, row);
@@ -198,6 +209,7 @@ function spaceView(userId: string, row: SpaceListEntry): SpaceView {
     publicRead: access.publicRead,
     proposals: row.proposals,
     acceptAfterHours: row.acceptAfterHours,
+    landing: access.landing,
     description: row.description,
     ...fullNameOf(access.type, row.slug, row.ownerUsername),
     owner: { id: access.ownerUserId, username: row.ownerUsername },
@@ -245,6 +257,13 @@ function validBoolean(value: unknown, field: string): boolean {
     );
   }
   return value;
+}
+
+function validLanding(value: unknown): SpaceLanding {
+  if (!SPACE_LANDINGS.includes(value as SpaceLanding)) {
+    throw new ApplicationError("INVALID_INPUT", 400, `landing must be one of ${SPACE_LANDINGS.join(", ")}.`, "landing");
+  }
+  return value as SpaceLanding;
 }
 
 function validProposals(value: unknown): SpaceProposals {

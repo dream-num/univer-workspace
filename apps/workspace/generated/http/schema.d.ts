@@ -2616,6 +2616,13 @@ export interface paths {
          *     waits for its author. A page whose target changed since its draft is left `conflicted` while the Units still
          *     merge. An agent starts at most 50 merges in 24 hours; one more returns `403 AGENT_QUOTA_EXCEEDED` until the
          *     oldest of them is 24 hours old. A replay or retry of a started merge is not counted again.
+         *
+         *     In a Team Space whose `landing` is `checks`, an agent that does not own it merges only when every check
+         *     that Trunk's `.agents/checks.md` declares has a counting `passed` result on the current content. Otherwise
+         *     the merge returns `403 CHECKS_REQUIRED`, and the message names each check that has not passed with its
+         *     state, or says why the declaration cannot be used. The server reads the declaration and decides again just
+         *     before Trunk moves, so a merge Operation can also fail with `CHECKS_REQUIRED`. A refused merge does not
+         *     count toward the 50.
          */
         post: operations["mergeWorktree"];
         delete?: never;
@@ -2743,6 +2750,7 @@ export interface components {
         SpaceView: components["schemas"]["SpaceSummary"] & {
             proposals: components["schemas"]["SpaceProposals"];
             acceptAfterHours: components["schemas"]["SpaceAcceptAfterHours"];
+            landing: components["schemas"]["SpaceLanding"];
             /** @description URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed. */
             slug: string | null;
             /**
@@ -3716,6 +3724,15 @@ export interface components {
          */
         SpaceAcceptAfterHours: number | null;
         /**
+         * @description How an agent that does not own a Team Space lands changes on its Trunk. `review` is the default and asks
+         *     nothing extra. `checks` lets such an agent change Trunk only by merging a pull request whose every check
+         *     declared in Trunk's `.agents/checks.md` has a passing result, on the current content, from someone who may
+         *     merge it. Its direct Trunk writes return `403 AGENT_NOT_ALLOWED`. People and the agent that owns the Space are
+         *     never gated. Personal Spaces report `review`.
+         * @enum {string}
+         */
+        SpaceLanding: "review" | "checks";
+        /**
          * @description Ownership or Team membership, independent of the effective access role. Public readers have none.
          * @enum {string}
          */
@@ -3785,6 +3802,8 @@ export interface components {
             proposals?: components["schemas"]["SpaceProposals"];
             /** @description Team Spaces only. The owner or an admin may change it. `72` is the suggested value when turning it on. */
             acceptAfterHours?: components["schemas"]["SpaceAcceptAfterHours"];
+            /** @description Team Spaces only. The owner or an admin may change it, except an agent that does not own the Space. */
+            landing?: components["schemas"]["SpaceLanding"];
             /** @description Plain text. Surrounding whitespace is trimmed; an empty string clears the description. */
             description?: string;
         };
@@ -4692,7 +4711,8 @@ export interface components {
          *     insufficient, and when a proposer who is not a Space Member would hold more than 3 open
          *     proposals in one Team Space. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
          *     unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
-         *     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
+         *     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns, or an agent
+         *     that does not own a Team Space whose `landing` is `checks` writes its Trunk directly or changes `landing`),
          *     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
          *     keep more than 20 files across its Spaces, pending pull-request files included, or store one file
          *     above 10 MiB, and any agent would have more than 10 open Worktrees or start more than 50 merges in
@@ -9395,7 +9415,18 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /**
+             * @description The merger may not merge, as in the shared Forbidden response, or `CHECKS_REQUIRED`: the merger is an
+             *     agent held to the declared checks, and not every one has passed on the current content.
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             /**
              * @description The Worktree state does not allow a merge. `PAGE_REVIEW_REQUIRED`: a pending page's or file's author

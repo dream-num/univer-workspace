@@ -40,7 +40,7 @@ export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS ownerUserId,
   ${ownsSpaceSql("spaces.owner_user_id")} AS owned,
   spaces.public_read AS publicRead, space_members.role AS memberRole,
-  ${proposesSql("spaces")} AS proposes`;
+  ${proposesSql("spaces")} AS proposes, spaces.landing`;
 
 export type SqliteSpaceAccessRow = Omit<StoredSpaceAccess, "publicRead" | "owned" | "proposes"> & {
   readonly publicRead: 0 | 1;
@@ -51,7 +51,7 @@ export type SqliteSpaceAccessRow = Omit<StoredSpaceAccess, "publicRead" | "owned
 export function storedSpaceAccess(row: SqliteSpaceAccessRow): StoredSpaceAccess {
   return {
     id: row.id, type: row.type, name: row.name, ownerUserId: row.ownerUserId, owned: Boolean(row.owned),
-    memberRole: row.memberRole, publicRead: Boolean(row.publicRead), proposes: Boolean(row.proposes),
+    memberRole: row.memberRole, publicRead: Boolean(row.publicRead), proposes: Boolean(row.proposes), landing: row.landing,
   };
 }
 
@@ -168,7 +168,7 @@ export function assertProposalQuota(database: DatabaseSync, userId: string, spac
 
 /**
  * Worktrees the User created and has not merged or discarded, creations whose Worktree row is not
- * written yet included, and the merges it started within the window.
+ * written yet included, and the merges it started within the window, except those the checks gate refused.
  */
 function readBudget(database: DatabaseSync, userId: string, now: number) {
   return database.prepare(`SELECT
@@ -177,7 +177,8 @@ function readBudget(database: DatabaseSync, userId: string, now: number) {
        WHERE actor_user_id = $userId AND kind = 'create_worktree' AND state = 'pending'
          AND NOT EXISTS (SELECT 1 FROM worktrees WHERE id = json_extract(operations.payload_json, '$.worktreeId'))) AS open,
     (SELECT COUNT(*) FROM operations
-     WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since) AS merged`)
+     WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since
+       AND NOT (state = 'failed' AND last_error_code = 'CHECKS_REQUIRED')) AS merged`)
     .get({ userId, since: now - AGENT_MERGE_WINDOW_MS }) as
     { readonly open: number; readonly merged: number };
 }
@@ -338,7 +339,7 @@ export class SqliteAccessRepository implements AccessRepository {
     return this._database.connection
       .prepare(`
       SELECT ${nodeDisplayColumns()}
-        space.type AS space_type, space.name AS space_name,
+        space.type AS space_type, space.name AS space_name, space.landing AS space_landing,
         1 AS requester_owns, space.public_read,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
@@ -409,6 +410,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
            SELECT
              ${contentOnly ? "" : nodeDisplayColumns()}
              space.type AS space_type,
+             space.landing AS space_landing,
              ${contentOnly ? "" : "space.name AS space_name,"}
              ${ownsSpaceSql("space.owner_user_id")} AS requester_owns,
              space.public_read,

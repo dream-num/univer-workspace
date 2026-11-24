@@ -171,7 +171,7 @@ describe("repoEditPatch", () => {
     );
     expect(() => repoEditPatch({})).toThrowError(
       expect.objectContaining({
-        message: "Nothing to change: pass name, description, visibility, proposals, acceptAfterHours or slug.",
+        message: "Nothing to change: pass name, description, visibility, proposals, acceptAfterHours, landing or slug.",
       }),
     );
     expect(() => repoEditPatch({ slug: "s" }, ["name", "description", "visibility"])).toThrowError(

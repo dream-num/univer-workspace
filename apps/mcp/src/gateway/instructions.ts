@@ -105,6 +105,9 @@ export function buildServerInstructions(
           "pr_view gives each file that came from trunk a freshness label. current: trunk has not moved; continue as the workflow says. behind: trunk changed the file after it joined, and the two merge without conflict, but a result you verified on the draft can still be wrong once merged; before you merge, read the file on trunk and check that what your change depends on still holds, and after merging read the result back from trunk. stale: redo the work in a new pull request, then give the user the stale one's link and say it can be discarded; do not discard it unless they ask. Freshness never blocks a merge.",
         ]
       : []),
+    ...(finishes && has("pr_check")
+      ? ["In a repository that requires checks, report every declared check with pr_check, then merge."]
+      : []),
     has("html_view_save")
       ? "For a page sharing or presenting Workspace data, use an HTML View and read the html-view-creator Skill."
       : "This connection cannot draft pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.",

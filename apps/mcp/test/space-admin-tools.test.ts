@@ -112,6 +112,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let humanTokenSession = false;
   let sessionUser: Record<string, unknown> = user;
   let ownedByClaimedAgent = false;
+  let checksRequired: string | null = null;
 
   const fetcher: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -220,6 +221,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
       );
     }
     if (at("POST", "/api/nodes/sheet/copies")) return Response.json({ operation: { id: "k2" }, unit: unit() }, { status: 201 });
+    if (at("POST", "/api/worktrees/wt-3/merge") && checksRequired !== null) {
+      return Response.json({ error: { code: "CHECKS_REQUIRED", message: checksRequired } }, { status: 403 });
+    }
     if (at("POST", "/api/worktrees/wt-3/merge")) {
       prState = "merged";
       return Response.json({ worktree: worktree("merged") });
@@ -438,7 +442,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it("edits a repository only when something changes and maps visibility to publicRead", async () => {
     const client = await connect();
     const nothing = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team" } });
-    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility, proposals, acceptAfterHours or slug." });
+    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility, proposals, acceptAfterHours, landing or slug." });
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     const edited = await client.callTool({
       name: "repo_edit",
@@ -488,6 +492,15 @@ describe("space, unit, repository admin, label and merge tools", () => {
       expect((await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", acceptAfterHours: hours } })).isError).toBe(true);
     }
     expect(writesOf()).toEqual([]);
+  });
+
+  it("makes a repository require checks before an agent lands a change", async () => {
+    const client = await connect();
+    const edited = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", landing: "checks" } });
+    expect(edited.structuredContent).toMatchObject({ landing: "checks" });
+    expect(toolError(await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", landing: "strict" } })))
+      .toMatchObject({ code: "workspace-argument-invalid" });
+    expect(writesOf()).toEqual([{ method: "PATCH", path: "/api/spaces/team-1", body: { landing: "checks" } }]);
   });
 
   it("sends a person's token session to the browser to make a repository public", async () => {
@@ -605,6 +618,15 @@ describe("space, unit, repository admin, label and merge tools", () => {
     });
     expect(worktreeSchema.parse(merged.structuredContent).units).toEqual(worktreeSchema.parse(viewed.structuredContent).units);
     expect(writesOf()).toEqual([{ method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined }]);
+  });
+
+  it("passes on the checks a merge still needs", async () => {
+    const client = await connect();
+    prState = "ready";
+    checksRequired = "This repository requires every declared check to pass before an agent merges. Not passed on the current content: smoke (missing). Report each declared check on this content, then merge.";
+    expect(toolError(await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number: "3" } })))
+      .toMatchObject({ code: "CHECKS_REQUIRED", message: checksRequired });
+    checksRequired = null;
   });
 
   it.each(["merging", "merged"])("finishes a merge that stopped while %s, with the number sent as a number", async (state) => {

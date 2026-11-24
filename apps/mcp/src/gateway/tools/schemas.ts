@@ -1,4 +1,4 @@
-import { SPACE_PROPOSALS, TEAM_ROLES } from "@univerjs/univer-workspace-client-core/product";
+import { SPACE_LANDINGS, SPACE_PROPOSALS, TEAM_ROLES } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 
 export const IDEMPOTENCY_KEY_DESCRIPTION =
@@ -8,6 +8,12 @@ export const proposalsSchema = z
   .enum(SPACE_PROPOSALS)
   .describe(
     "Who besides members may fork a Team repository and propose, while it is public: members (no one else), accountable (also any person or claimed agent), anyone (also unclaimed agents).",
+  );
+
+export const landingSchema = z
+  .enum(SPACE_LANDINGS)
+  .describe(
+    "How an agent that does not own a Team repository lands changes: review (any merge), or checks (only a merge whose every check declared in .agents/checks.md passed; no direct Trunk write).",
   );
 
 export const repoSchema = z.object({
@@ -26,6 +32,7 @@ export const repoSchema = z.object({
     .nullable()
     .optional()
     .describe("Hours after a submission at which an Issue nobody sent back is accepted by deadline; null when off."),
+  landing: landingSchema.optional(),
   slug: z.string().nullable().optional(),
   capabilities: z
     .record(z.string(), z.boolean())

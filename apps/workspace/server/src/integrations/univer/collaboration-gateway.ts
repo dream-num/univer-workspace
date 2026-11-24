@@ -45,7 +45,7 @@ import type {
   WorktreeMiddlewareNext,
 } from "@univerjs-pro/collaboration-worktree-service";
 import { Router, type RequestHandler } from "express";
-import type { AccessResolver, ResourceContentAccess, UnitType } from "../../modules/access/index.js";
+import { assertCeiling, type AccessResolver, type ResourceContentAccess, type UnitType } from "../../modules/access/index.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
 import {
@@ -145,15 +145,15 @@ export function createCollaborationGateway(options: {
   service.use("deleteUnits", requireProductUnitLifecycle);
   service.use("recoverUnits", requireProductUnitLifecycle);
   service.use("submitChangeset", async (context, next) => {
-    await requireChangesetAccess(access, context.userID, context.request.changeset);
+    await requireTrunkChangeset(access, context);
     await next();
   });
   service.use("applyChangeset", async (context, next) => {
-    await requireChangesetAccess(access, context.userID, context.request.changeset);
+    await requireTrunkChangeset(access, context);
     await next();
   });
   service.use("commitChangeset", async (context, next) => {
-    await requireChangesetAccess(access, context.userID, context.request.changeset);
+    await requireTrunkChangeset(access, context);
     for (const requirement of [
       ...context.requiredUnitPermissions,
       ...(await protectionReplacedByRestore(context)),
@@ -635,6 +635,27 @@ async function requireUnitEdit(
     throw new CollabError("PERMISSION_DENIED", "Unit is read-only.");
   }
   return resource;
+}
+
+/** Changeset access, and for an agent that lands by checks, no Trunk change but a comment or its merge's own. */
+async function requireTrunkChangeset(
+  access: AccessResolver,
+  context: {
+    readonly userID: string;
+    readonly customData: CustomData;
+    readonly request: { readonly changeset: { readonly unitID: string; readonly mutations: readonly { readonly id: string }[] } };
+  },
+): Promise<void> {
+  const { changeset } = context.request;
+  const resource = await requireChangesetAccess(access, context.userID, changeset);
+  if (!resource.landsByChecks || isCommentOnlyChangeset(changeset)) return;
+  // Clients cannot set customData; only the product merge call marks it.
+  if (context.customData.source === "product-api" && context.customData.merge === true) return;
+  try {
+    assertCeiling(await access.principalCategory(context.userID), "changeTrunk", { landing: "checks", owns: false });
+  } catch (error) {
+    throw new CollabError("PERMISSION_DENIED", error instanceof Error ? error.message : "Trunk changes need a merge.");
+  }
 }
 
 // Comment anchors need Unit Comment, which every reader holds; every other changeset needs Edit.

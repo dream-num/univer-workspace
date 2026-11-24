@@ -1,4 +1,4 @@
-import type { AccessRole, BlobAvailability, ResourceKind, SpaceType, UnitType } from "./access.types.js";
+import type { AccessRole, BlobAvailability, ResourceKind, SpaceLanding, SpaceType, UnitType } from "./access.types.js";
 
 export interface ResolvedNodeRow {
   readonly id: string;
@@ -16,6 +16,7 @@ export interface ResolvedNodeRow {
   readonly updated_at: number;
   readonly space_type: SpaceType;
   readonly space_name: string;
+  readonly space_landing: SpaceLanding;
   readonly requester_owns: 0 | 1;
   readonly public_read: 0 | 1;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
@@ -37,6 +38,7 @@ export interface StoredSpaceAccess {
   readonly publicRead: boolean;
   readonly memberRole: Exclude<AccessRole, "owner"> | null;
   readonly proposes: boolean;
+  readonly landing: SpaceLanding;
 }
 
 export interface ResourceMappingRow {
@@ -58,6 +60,7 @@ export type NodeAuthorizationRow = Pick<
   ResolvedNodeRow,
   | "requester_owns"
   | "space_type"
+  | "space_landing"
   | "public_read"
   | "member_role"
   | "grant_role"

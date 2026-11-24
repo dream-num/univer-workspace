@@ -20,6 +20,8 @@ export interface WorkspaceSpace {
   readonly proposals?: WorkspaceSpaceProposals;
   /** Hours after a submission at which an Issue nobody sent back is accepted; null when off. */
   readonly acceptAfterHours?: number | null;
+  /** `checks`: an agent that does not own the Team Space lands changes only by a merge whose declared checks all passed. */
+  readonly landing?: WorkspaceSpaceLanding;
   readonly slug?: string | null;
   /** What the caller may do in the Space, on full Space views from a server that reports every one of them. */
   readonly capabilities?: WorkspaceSpaceCapabilities;
@@ -40,6 +42,9 @@ export type WorkspaceSpaceCapabilities = { readonly [Name in (typeof SPACE_CAPAB
 
 export const SPACE_PROPOSALS = ["members", "accountable", "anyone"] as const;
 export type WorkspaceSpaceProposals = (typeof SPACE_PROPOSALS)[number];
+
+export const SPACE_LANDINGS = ["review", "checks"] as const;
+export type WorkspaceSpaceLanding = (typeof SPACE_LANDINGS)[number];
 
 export const TEAM_ROLES = ["admin", "editor", "viewer"] as const;
 export type WorkspaceTeamRole = (typeof TEAM_ROLES)[number];
@@ -218,6 +223,9 @@ export function parseSpace(value: unknown): WorkspaceSpace {
       : {}),
     ...(value["acceptAfterHours"] === null || Number.isSafeInteger(value["acceptAfterHours"])
       ? { acceptAfterHours: value["acceptAfterHours"] as number | null }
+      : {}),
+    ...(SPACE_LANDINGS.includes(value["landing"] as WorkspaceSpaceLanding)
+      ? { landing: value["landing"] as WorkspaceSpaceLanding }
       : {}),
     ...(value["slug"] === null || typeof value["slug"] === "string" ? { slug: value["slug"] } : {}),
     ...(hasCapabilities

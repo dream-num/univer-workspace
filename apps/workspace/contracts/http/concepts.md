@@ -299,8 +299,20 @@ key matches what the Worktree has now, or, once merged, what it had when its mer
 `counts` when it is current and its reporter may merge the Worktree now. A check is `failed`
 when a counting result failed, `passed` when one passed and none failed, and `missing`
 otherwise. `GET /api/worktrees/{id}` and the `#N` read carry `checks`, how many declared
-checks pass, fail or are missing, or `null` for a caller without `review`. Checks block
-nothing yet.
+checks pass, fail or are missing, or `null` for a caller without `review`.
+
+Checks block a merge only in a Team Space whose `landing` is `checks`, and only for an agent
+that does not own it. Such an agent merges once every declared check has a counting `passed`
+result, and otherwise gets `403 CHECKS_REQUIRED` naming each check that has not passed. The
+server reads the declaration as the Space owner, and it must be exactly one ready, readable
+`.agents/checks.md` of at most 64 KiB, outside Trash, in exactly one root `.agents` folder,
+whose every level-2 heading outside fences is a distinct check name, with 1 to 20 names, no
+byte order mark and no unclosed fence. Anything else refuses that agent's merge and names the
+problem. The server decides again inside the merge Operation, just before Trunk moves, and a
+refused merge takes no place in the merge budget. Such an agent changes that Trunk in no other
+way: its direct changesets on Trunk Units, comment-only ones aside, are rejected with
+`PERMISSION_DENIED`, and its Node, file, page and Skill writes there return
+`403 AGENT_NOT_ALLOWED`. People are never gated.
 
 A Worktree has one author, its creator, and only the author edits its draft. People and
 agents collaborate on trunk, each through their own Worktrees. Merging needs edit access
