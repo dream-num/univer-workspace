@@ -3,7 +3,7 @@ import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import { validSlug } from "../spaces/space-slug.js";
-import type { SpacesModule } from "../spaces/index.js";
+import type { SpaceProposals, SpacesModule } from "../spaces/index.js";
 import type { WorktreesModule, WorktreeState, WorktreeSummary, WorktreeUnit } from "../worktrees/index.js";
 import type { ForksRepository, StoredFork } from "./forks.repository.js";
 import type { ForkState, ForkView } from "./forks.types.js";
@@ -25,6 +25,13 @@ export interface ForksModule {
     createdVia: WriteSource | null,
   ): Promise<{ readonly status: 200 | 201; readonly body: { readonly worktree: WorktreeSummary; readonly unit: WorktreeUnit } }>;
 }
+
+// A reader of a public Team Space is refused only by the Space's `proposals` setting, so the refusal names it.
+const PROPOSAL_REFUSALS: Readonly<Record<SpaceProposals, string>> = {
+  members: "This Team Space's proposals setting is members, so only its Space Members may fork it and propose changes. Ask its owner or an admin to add you or to change the setting.",
+  accountable: "This Team Space's proposals setting is accountable, so besides its Space Members only people and claimed agents may fork it and propose changes. An unclaimed agent needs a human to claim it first.",
+  anyone: "This account may not fork this Team Space or propose changes to it.",
+};
 
 // A merged or discarded Worktree stays open until its Operation finishes, so its fork still reads as merging.
 const FORK_STATES: Readonly<Record<WorktreeState, ForkState>> = {
@@ -90,11 +97,9 @@ export function createForksModule(options: {
       if (typeof input.upstreamSpaceId !== "string" || !input.upstreamSpaceId) {
         throw new ApplicationError("INVALID_INPUT", 400, "upstreamSpaceId is required.", "upstreamSpaceId");
       }
-      const upstream = await options.access.resolveSpace(userId, input.upstreamSpaceId);
+      const upstream = await options.spaces.get(userId, input.upstreamSpaceId).catch(nullWhenNotFound);
       if (!upstream || upstream.type !== "team") throw notFound();
-      if (!upstream.member) {
-        throw new ApplicationError("FORBIDDEN", 403, "A fork needs membership of its upstream Team Space, as its owner or as a Space Member of any role.");
-      }
+      if (!upstream.capabilities.propose) throw new ApplicationError("FORBIDDEN", 403, PROPOSAL_REFUSALS[upstream.proposals]);
       const result = await options.repository.create({
         id: randomUUID(),
         ownerUserId: userId,

@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V28 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V29 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -43,14 +43,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/sqlite/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/sqlite/migrations` 准备阶段：
 
-- Fresh：创建 V28；
-- V28：校验 Schema 指纹；
-- V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V28；
-- V0：一致性备份后直接迁移到 V28；
+- Fresh：创建 V29；
+- V29：校验 Schema 指纹；
+- V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V29；
+- V0：一致性备份后直接迁移到 V29；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V28 Query。
+Worktree 等业务模块只编译和运行 V29 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -133,7 +133,7 @@ Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多
 启动时以同一个 `config.database` 打开产品库和协同库，再构造应用 Service。协同工厂为 PostgreSQL 建立独立连接池，显式创建四个 SDK 适配器。Core 将 Sheet 块写入 S3，Worktree、History 和 Comment 继续使用 PostgreSQL。SQLite 后端先执行 `prepareCollaborationDatabase`
 （自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3，SDK 1.5.2 增加 Core 和 Worktree v3→v4）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
-Unit 创建事实、迁移副本验证和原子替换。组件版本见 [数据模型](data-model.md)。SQLite 产品数据库先准备到 V28，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Unit 创建事实、迁移副本验证和原子替换。组件版本见 [数据模型](data-model.md)。SQLite 产品数据库先准备到 V29，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -224,7 +224,7 @@ Team Space 的 Owner 和 Admin 另外可以修改可见性用于清理，但不�
 Browser 审阅面板在不能合并私有 Pull request 的成员面前因此同时写明作者和认领人；拿到 `404` 的人两者都看不到。
 其余情况下，调用者缺少某个目标的编辑权限时，拒绝信息说明缺少编辑权限。
 
-Team Space 的任何 Space Member 都能创建 Team Worktree，包括 Viewer。作者把自己能读的 Trunk Unit 加进来、新建指向这个
+Team Space 的任何 Space Member 都能创建 Team Worktree，包括 Viewer；Space 公开读取时，`proposals` 设置接纳的非成员读者也能，由 `proposesSql` 统一判断。作者把自己能读的 Trunk Unit 加进来、新建指向这个
 Space 的 Unit、编辑草稿并 Ready，都不需要编辑权限：草稿不写 Trunk，编辑权限只向合并的人要。作者自己不能合并时，Ready
 把可见性设为 `space`，让能合并的成员看到它。标记移除一个 Trunk Unit 仍要求对它的 Node 有 `trash`，所以 Viewer 不能提议
 删除文件。Trunk Unit 上的内容保护在草稿里照样生效，没有编辑权限的作者改不了保护规则覆盖的内容。合并时写入 Trunk 的身份是
@@ -483,7 +483,7 @@ Issue 写入不是跨系统写入，不使用 Operation，也不接受 `Idempote
 ## Forks
 
 `modules/forks` 的创建、读取与删除只读写产品数据库的 `forks` 行，不调用 Collaboration Service，因此不使用 Operation。
-创建以 `AccessResolver.resolveSpace` 解析 upstream：无法发现或为 Personal Space 返回 404，不是 `member` 返回 403。
+创建经 Spaces 模块读 upstream：无法发现或为 Personal Space 返回 404，`capabilities.propose` 为假返回 403，信息写明 upstream 的 `proposals` 设置。
 重复的同名同 upstream 创建返回已有行，所以不需要 `Idempotency-Key`。名字冲突检查、未认领 agent 的配额计数与插入在
 Repository 的同一事务内完成。读取以 owner 自己的身份经 Spaces 模块读 upstream（不可读时为 `null`），经 Worktrees
 模块读未处理的 Worktree，并由其状态推导 Fork 状态。删除只删行，外键把 Worktree 的 `fork_id` 置为 `NULL`。

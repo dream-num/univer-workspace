@@ -13,6 +13,7 @@ export interface SpaceCapabilities {
   readonly createIssue: boolean;
   readonly triageIssues: boolean;
   readonly manageIssueLabels: boolean;
+  readonly propose: boolean;
 }
 
 export interface NodeCapabilities {

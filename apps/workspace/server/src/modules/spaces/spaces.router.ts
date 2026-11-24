@@ -28,6 +28,7 @@ export function createSpacesRouter(options: {
           name: request.body?.name,
           slug: request.body?.slug,
           publicRead: request.body?.publicRead,
+          proposals: request.body?.proposals,
         })
       );
   });
@@ -83,6 +84,7 @@ export function createSpacesRouter(options: {
           name: request.body?.name,
           slug: request.body?.slug,
           publicRead: request.body?.publicRead,
+          proposals: request.body?.proposals,
           description: request.body?.description,
         }
       )

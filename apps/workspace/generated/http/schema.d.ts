@@ -1360,9 +1360,9 @@ export interface paths {
          *     Repeating the request with the same `name` and `upstreamSpaceId` returns the existing fork with
          *     `200`. A name that one of the owner's forks of another upstream, or one of the owner's Team Space
          *     slugs, already uses returns `409 SPACE_SLUG_TAKEN`. An upstream the caller cannot read, and a
-         *     Personal Space, return `404`. A caller who can read the upstream but is not its owner, the human
-         *     who claimed its agent owner, or one of its Space Members gets `403 FORBIDDEN`, because a fork
-         *     needs membership to propose. An unclaimed agent owns at most 3 forks (`403 AGENT_QUOTA_EXCEEDED`).
+         *     Personal Space, return `404`. A caller who can read the upstream but may not propose in it, see
+         *     `capabilities.propose` and the Space's `proposals` setting, gets `403 FORBIDDEN` with a message that
+         *     names the setting. An unclaimed agent owns at most 3 forks (`403 AGENT_QUOTA_EXCEEDED`).
          */
         post: operations["createFork"];
         delete?: never;
@@ -1440,8 +1440,10 @@ export interface paths {
          *     open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
          *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
          *     finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
-         *     Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. The
-         *     Unit's content is then written through the Worktree, as in any other Worktree.
+         *     Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. An owner
+         *     who may no longer propose in the upstream gets `403 FORBIDDEN`, and so does one who is not a Space Member
+         *     and already holds 3 open proposals there. The Unit's content is then written through the Worktree, as in
+         *     any other Worktree.
          */
         post: operations["addForkUnit"];
         delete?: never;
@@ -2524,6 +2526,7 @@ export interface components {
         };
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
+            proposals: components["schemas"]["SpaceProposals"];
             /** @description URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed. */
             slug: string | null;
             /**
@@ -3434,6 +3437,17 @@ export interface components {
             publicRead: boolean;
         };
         /**
+         * @description Who besides its Space Members may fork a Team Space and propose changes to it. `members` admits no one
+         *     else. `accountable` also admits any person and any claimed agent who can read the Space. `anyone` also
+         *     admits unclaimed agents. It takes effect only while `publicRead` is true. A proposer who is not a
+         *     Space Member can only write its own proposals, holds at most 3 open ones in the Space, and sees no
+         *     one else's. Moving back to `members`, or turning `publicRead` off, freezes such a proposer's drafts,
+         *     while a ready proposal stays for the members to review, merge or discard. Personal Spaces report
+         *     `members`.
+         * @enum {string}
+         */
+        SpaceProposals: "members" | "accountable" | "anyone";
+        /**
          * @description Ownership or Team membership, independent of the effective access role. Public readers have none.
          * @enum {string}
          */
@@ -3452,6 +3466,11 @@ export interface components {
             triageIssues: boolean;
             /** @description The caller may create, change and delete this Space's Issue labels. */
             manageIssueLabels: boolean;
+            /**
+             * @description The caller may fork this Team Space and open Team Worktrees in it, as its owner, as a Space Member,
+             *     or as a signed-in reader that the Space's `proposals` setting admits while it reads publicly.
+             */
+            propose: boolean;
         };
         MySpaceView: components["schemas"]["SpaceView"] & {
             /** @enum {string} */
@@ -3486,12 +3505,16 @@ export interface components {
             slug?: components["schemas"]["SpaceSlug"];
             /** @description Whether anyone with a link can read the Space without signing in. Omit to keep it private. */
             publicRead?: boolean;
+            /** @description Omit for `members`. */
+            proposals?: components["schemas"]["SpaceProposals"];
         };
         PatchSpace: {
             name?: string;
             /** @description Team Spaces only. The previous slug is not reserved or redirected. */
             slug?: components["schemas"]["SpaceSlug"];
             publicRead?: boolean;
+            /** @description Team Spaces only. The owner or an admin may change it. */
+            proposals?: components["schemas"]["SpaceProposals"];
             /** @description Plain text. Surrounding whitespace is trimmed; an empty string clears the description. */
             description?: string;
         };
@@ -3575,7 +3598,7 @@ export interface components {
             forks: components["schemas"]["ForkView"][];
         };
         CreateFork: {
-            /** @description The Team Space to fork. The caller must be its owner, the human who claimed its agent owner, or a Space Member of any role. */
+            /** @description The Team Space to fork. The caller must be allowed to propose in it, see `SpaceCapabilities.propose`. */
             upstreamSpaceId: string;
             name: components["schemas"]["SpaceSlug"];
         };
@@ -4238,7 +4261,8 @@ export interface components {
         };
         /**
          * @description The current User cannot perform this action. The code is `FORBIDDEN` when its role is
-         *     insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+         *     insufficient, and when a proposer who is not a Space Member would hold more than 3 open
+         *     proposals in one Team Space. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
          *     unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
          *     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
          *     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,

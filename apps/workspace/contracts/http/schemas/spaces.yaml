@@ -18,6 +18,7 @@ SpaceCapabilities:
     - createIssue
     - triageIssues
     - manageIssueLabels
+    - propose
   properties:
     browseRoot:
       type: boolean
@@ -38,6 +39,11 @@ SpaceCapabilities:
     manageIssueLabels:
       type: boolean
       description: The caller may create, change and delete this Space's Issue labels.
+    propose:
+      type: boolean
+      description: |
+        The caller may fork this Team Space and open Team Worktrees in it, as its owner, as a Space Member,
+        or as a signed-in reader that the Space's `proposals` setting admits while it reads publicly.
 
 SpaceSummary:
   type: object
@@ -58,8 +64,10 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName]
+      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName, proposals]
       properties:
+        proposals:
+          $ref: "#/SpaceProposals"
         slug:
           type: [string, "null"]
           description: URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed.
@@ -100,6 +108,18 @@ SpaceList:
       items:
         $ref: "#/SpaceView"
 
+SpaceProposals:
+  type: string
+  enum: [members, accountable, anyone]
+  description: |
+    Who besides its Space Members may fork a Team Space and propose changes to it. `members` admits no one
+    else. `accountable` also admits any person and any claimed agent who can read the Space. `anyone` also
+    admits unclaimed agents. It takes effect only while `publicRead` is true. A proposer who is not a
+    Space Member can only write its own proposals, holds at most 3 open ones in the Space, and sees no
+    one else's. Moving back to `members`, or turning `publicRead` off, freezes such a proposer's drafts,
+    while a ready proposal stays for the members to review, merge or discard. Personal Spaces report
+    `members`.
+
 SpaceSlug:
   type: string
   minLength: 1
@@ -122,6 +142,9 @@ CreateTeamSpace:
     publicRead:
       type: boolean
       description: Whether anyone with a link can read the Space without signing in. Omit to keep it private.
+    proposals:
+      $ref: "#/SpaceProposals"
+      description: Omit for `members`.
 
 PatchSpace:
   type: object
@@ -137,6 +160,9 @@ PatchSpace:
       description: Team Spaces only. The previous slug is not reserved or redirected.
     publicRead:
       type: boolean
+    proposals:
+      $ref: "#/SpaceProposals"
+      description: Team Spaces only. The owner or an admin may change it.
     description:
       type: string
       maxLength: 350

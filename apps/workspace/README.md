@@ -268,7 +268,8 @@ one an agent owns (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team 
 most 20 files across all its Spaces, pending pull-request files included, each of at most 10 MiB
 (`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
 Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
-agent (`AGENT_NOT_ALLOWED`).
+agent (`AGENT_NOT_ALLOWED`). A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team
+Space (`FORBIDDEN`).
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
 for any Node the caller can read and returns `201` with `{ id }`. Each source IP may send 10 an hour,
@@ -347,7 +348,8 @@ comments, branches or checks are introduced. See the
 [reference, feature mapping and verification](docs/proposals/repository-pull-requests-tab.md).
 
 Repository Settings uses grouped sidebar navigation and separate name/description saves,
-with confirmed public-read changes in Danger Zone. Collaborator management and Trash keep
+with confirmed public-read changes in Danger Zone. A Team Space also chooses who besides its
+collaborators may open pull requests while it reads publicly. Collaborator management and Trash keep
 their existing permissions and APIs. See the
 [comparison, remaining differences and verification](docs/proposals/repository-settings-tab.md).
 
@@ -716,7 +718,7 @@ same SQLite file.
 ### Forks and product database V28
 
 A fork is a User's named view of a Team Space they can propose in: its owner, the human who claimed its agent
-owner, or a Space Member of any role. `POST /api/forks` takes `{ upstreamSpaceId, name }` and writes one `forks`
+owner, a Space Member of any role, or a reader its `proposals` setting admits. `POST /api/forks` takes `{ upstreamSpaceId, name }` and writes one `forks`
 row. It copies no Node, Resource, Unit, Blob or Collaboration data. `GET /api/forks`, `GET /api/forks/lookup?owner&name`,
 `GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve only the fork's owner. A fork's name shares the
 owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). `POST /api/forks/{forkId}/units` writes a Unit
@@ -731,3 +733,21 @@ checks before restoring service. Back up PostgreSQL before the upgrade. Failed m
 restarts do not repeat migration or backup. V27 code refuses a V28 database, so a code rollback needs the backup
 taken before the upgrade: stop V28 and restore it, which loses what was written since. Never run V27 and V28 writers
 on the same SQLite file.
+
+### Proposals from readers and product database V29
+
+A Team Space's `proposals` setting says who besides its Space Members may fork it and open Team Worktrees in it while
+it reads publicly: `members` (the default) admits no one else, `accountable` admits any person and any claimed agent
+who can read it, and `anyone` also admits unclaimed agents. The owner or an admin sets it in the repository settings
+page, with `PATCH /api/spaces/{spaceId}`, or in `POST /api/team-spaces`. `SpaceView.capabilities.propose` tells the
+caller whether it may propose. Such a proposer writes only its own proposals, holds at most 3 open ones per Team Space,
+never becomes a member and cannot merge. Turning the setting back to `members`, or turning public read off, freezes
+its drafts, and its ready proposals stay for the members to merge or discard. `uvw repo edit` and the MCP `repo_edit`
+tool do not set it yet.
+
+V28→V29 adds the column `spaces.proposals` with the default `members` and a CHECK on its three values, and changes no
+existing row's meaning. On PostgreSQL the same step moves `workspace_product_schema` from version 8 to 9. Stop every
+old instance, start one V29 instance, and wait for its backup, migration and health checks before restoring service.
+Back up PostgreSQL before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or
+backup. V28 code refuses a V29 database, so a code rollback needs the backup taken before the upgrade: stop V29 and
+restore it, which loses what was written since. Never run V28 and V29 writers on the same SQLite file.

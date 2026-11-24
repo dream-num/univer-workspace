@@ -50,11 +50,11 @@ export class PostgresSpacesRepository implements SpacesRepository {
       let slug = input.slug ?? input.slugBase;
       for (let attempt = 2; ; attempt += 1) {
         const inserted = await client.query(`
-          INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
-          SELECT $1, 'team', $2, $3::text, $4, $5, $6, $6
+          INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at, proposals)
+          SELECT $1, 'team', $2, $3::text, $4, $5, $6, $6, $7
           WHERE NOT EXISTS (SELECT 1 FROM forks WHERE owner_user_id = $5 AND lower(name COLLATE "C") = lower($3::text COLLATE "C"))
           ON CONFLICT (owner_user_id, lower(slug COLLATE "C")) WHERE slug IS NOT NULL DO NOTHING`,
-          [input.id, input.name, slug, input.publicRead, input.ownerUserId, input.createdAt],
+          [input.id, input.name, slug, input.publicRead, input.ownerUserId, input.createdAt, input.proposals],
         );
         if (inserted.rowCount) break;
         if (input.slugBase === undefined) return null;
@@ -83,7 +83,7 @@ export class PostgresSpacesRepository implements SpacesRepository {
         const assignments = ["updated_at = $2"];
         const values: (string | number | boolean)[] = [spaceId, updatedAt];
         for (const [column, value] of [
-          ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug],
+          ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug], ["proposals", settings.proposals],
         ] as const) {
           if (value === undefined) continue;
           values.push(value);

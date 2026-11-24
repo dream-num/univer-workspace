@@ -83,7 +83,7 @@ for (const { name, open } of backends) {
         id: "home", slug: null, ownerUsername: "AlIce", publicRead: false, memberRole: null,
       });
       expect(await spaces.findViewByFullName("alice", "alice", "FIRST")).toMatchObject({ id: "own-a", slug: "First" });
-      expect(await spaces.getView("alice", "joined")).toMatchObject({ memberRole: "admin", publicRead: false });
+      expect(await spaces.getView("alice", "joined")).toMatchObject({ memberRole: "admin", publicRead: false, proposals: "members", proposes: true });
       expect(await spaces.findViewByFullName("alice", "Bob", "hidden")).toBeNull();
 
       // These times exceed 32-bit integer range. Repeating a star preserves its original position.
@@ -99,7 +99,7 @@ for (const { name, open } of backends) {
     });
 
     it("allocates generated slugs at insert and reports explicit per-owner conflicts", async () => {
-      const create = { name: "Group", ownerUserId: "alice", createdAt: 1, publicRead: false };
+      const create = { name: "Group", ownerUserId: "alice", createdAt: 1, publicRead: false, proposals: "members" } as const;
       const generated = await Promise.all(["new-1", "new-2", "new-3"].map((id) =>
         db.spaces.createTeamSpace({ ...create, id, slugBase: "group" })));
       expect(generated.map((space) => space?.slug).sort()).toEqual(["group", "group-2", "group-3"]);
@@ -107,8 +107,8 @@ for (const { name, open } of backends) {
         db.spaces.createTeamSpace({ ...create, id: slug, slug })));
       expect(explicit.filter(Boolean)).toHaveLength(1);
       expect(explicit).toContain(null);
-      expect(await db.spaces.createTeamSpace({ ...create, id: "other-build", slug: "BUILD", ownerUserId: "bob" }))
-        .toMatchObject({ id: "other-build" });
+      expect(await db.spaces.createTeamSpace({ ...create, id: "other-build", slug: "BUILD", ownerUserId: "bob", proposals: "anyone" }))
+        .toMatchObject({ id: "other-build", proposals: "anyone", proposes: true });
     });
 
     it("patches only supplied settings, preserves conflicting writes and rechecks membership", async () => {
@@ -116,8 +116,9 @@ for (const { name, open } of backends) {
       await Promise.all([
         spaces.updateSettings("alice", "joined", { name: "Renamed" }, 2),
         spaces.updateSettings("alice", "joined", { description: "About" }, 2),
+        spaces.updateSettings("alice", "joined", { proposals: "accountable" }, 2),
       ]);
-      expect(await spaces.getView("alice", "joined")).toMatchObject({ name: "Renamed", description: "About", publicRead: false });
+      expect(await spaces.getView("alice", "joined")).toMatchObject({ name: "Renamed", description: "About", publicRead: false, proposals: "accountable" });
       const racing = await Promise.all(["own-a", "own-b"].map((id) =>
         spaces.updateSettings("alice", id, { name: "Winner", slug: "claim" }, 3)));
       expect(racing.filter(Boolean)).toHaveLength(1);

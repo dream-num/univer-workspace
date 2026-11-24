@@ -11,7 +11,7 @@ beforeEach(async () => {
     INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES
       ('owner', 'owner', 'Owner', 1, 1), ('reader', 'reader', 'Reader', 1, 1)
   `);
-  await spaces.createTeamSpace({ id: "team", name: "Team", slug: "team", publicRead: false, ownerUserId: "owner", createdAt: 1 });
+  await spaces.createTeamSpace({ id: "team", name: "Team", slug: "team", publicRead: false, proposals: "members", ownerUserId: "owner", createdAt: 1 });
 });
 afterEach(() => database.close());
 

@@ -33,6 +33,7 @@ export interface WorktreeRow {
   readonly team_space_name: string | null;
   readonly actor_owns_team_space: 0 | 1 | null;
   readonly actor_member_role: "admin" | "editor" | "viewer" | null;
+  readonly actor_proposes: 0 | 1 | null;
   readonly actor_owns_creator_space: 0 | 1;
   readonly unit_count: number;
   readonly pending_page_drafts: number;

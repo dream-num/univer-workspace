@@ -88,7 +88,7 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 共享 MCP 执行层在同一个容器里为所有用户运行脚本，因此由运维决定谁能使用。运行 `pnpm db:executor-access grant <username or user id>` 授权，`revoke` 撤销，`list` 列出已授权的用户，没有时提示无人获得授权；生产构建使用 `db:executor-access:production`，运行时镜像内执行 `node dist/server/db/executor-access.js`。重复授权或撤销不会再次变更状态，参数同时指向两个用户时与 `db:ban-agent` 一样拒绝执行。没有任何 HTTP 接口能修改授权，用户和 Agent 都不能给自己授权。已授权用户的 `GET /api/session` 返回 `executorAccess: true`，令牌兑换返回 `executor_access: true`，未授权时不返回该字段。MCP 设置 `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` 后，网关和执行层约 30 秒后跟随授权变化，无需重启。MCP 从 `*` 或用户 ID 列表切换到 `workspace` 之前，先授权当前使用执行层的用户，`workspace` 不放行其他人。
 
-以下限制适用于所有角色，违规返回 `403`。Agent 可以创建团队空间，并成为它的所有者。未认领的 Agent 不能公开空间，不能成为团队空间成员，也不能添加成员。已认领的 Agent 在人持有的团队空间里可以是查看者或编辑者，在 Agent 持有的团队空间里还可以是管理员（`AGENT_NOT_ALLOWED`）。未认领的 Agent 最多持有 3 个团队空间，在它的全部空间里最多保留 20 个文件（含未完成 Pull request 中的新建文件），单个文件最多 10 MiB（`AGENT_QUOTA_EXCEEDED`），通过链接分享最多获得查看者（Viewer）权限。真人用户通过访问令牌兑换的会话也不能更改链接分享或公开空间（`INTERACTIVE_SESSION_REQUIRED`）。用户搜索结果不含未认领或已停用的 Agent，未认领 Agent 发起搜索会收到 `AGENT_NOT_ALLOWED`。
+以下限制适用于所有角色，违规返回 `403`。Agent 可以创建团队空间，并成为它的所有者。未认领的 Agent 不能公开空间，不能成为团队空间成员，也不能添加成员。已认领的 Agent 在人持有的团队空间里可以是查看者或编辑者，在 Agent 持有的团队空间里还可以是管理员（`AGENT_NOT_ALLOWED`）。未认领的 Agent 最多持有 3 个团队空间，在它的全部空间里最多保留 20 个文件（含未完成 Pull request 中的新建文件），单个文件最多 10 MiB（`AGENT_QUOTA_EXCEEDED`），通过链接分享最多获得查看者（Viewer）权限。真人用户通过访问令牌兑换的会话也不能更改链接分享或公开空间（`INTERACTIVE_SESSION_REQUIRED`）。用户搜索结果不含未认领或已停用的 Agent，未认领 Agent 发起搜索会收到 `AGENT_NOT_ALLOWED`。不是团队空间成员的提议者在一个团队空间里最多同时有 3 个未处理的 Team Worktree（`FORBIDDEN`）。
 
 可免凭据调用 `POST /api/nodes/:nodeId/reports` 举报调用方可读的节点。请求体为 `{ "reason" }`，最多 1,000 个字符，成功返回 `201` 和 `{ id }`。每个来源 IP 每小时最多举报十次，超出返回 `429` 和 `REPORT_RATE_LIMITED`。日志仅记录节点及举报 ID。
 
@@ -142,7 +142,7 @@ UNIVER_LICENSE_KEY=<licenseKey.txt 的内容>
 
 仓库的 Pull requests 使用现有 Worktree 流程。列表支持 Open/Closed 筛选和本地文本搜索。详情的 Overview 展示摘要与评审操作，Files changed 用于选择文档、查看草稿和对比改动。Wiki 和全局工作台沿用原有仪表盘，此流程不引入 GitHub PR 模型、评论、分支或检查。[参考、功能映射与验证](docs/proposals/repository-pull-requests-tab.md)
 
-仓库 Settings 使用分组侧栏，名称和描述可分别保存。在 Danger Zone 更改公开读取权限需确认。协作者管理和回收站沿用既有权限和 API。[对照、差异与验证](docs/proposals/repository-settings-tab.md)
+仓库 Settings 使用分组侧栏，名称和描述可分别保存。在 Danger Zone 更改公开读取权限需确认。团队仓库公开读取时，还可选择协作者之外谁能提交 Pull request。协作者管理和回收站沿用既有权限和 API。[对照、差异与验证](docs/proposals/repository-settings-tab.md)
 
 仓库 Pages 提供页面目录、复制和访问操作，默认页保存在当前浏览器。外观参考已发布的 Jekyll Primer 主题，仓库页头和页签顺序保持一致。[参考、差异与验证](docs/proposals/repository-pages-tab.md)
 

@@ -6,11 +6,16 @@ import type {
 
 export type SpaceAffiliation = "owner" | "member" | "none";
 
+/** Who besides Space Members may fork a public Team Space and propose changes to it. */
+export const SPACE_PROPOSALS = ["members", "accountable", "anyone"] as const;
+export type SpaceProposals = (typeof SPACE_PROPOSALS)[number];
+
 export interface SpaceView {
   readonly id: string;
   readonly type: SpaceType;
   readonly name: string;
   readonly publicRead: boolean;
+  readonly proposals: SpaceProposals;
   readonly description: string;
   readonly slug: string | null;
   readonly fullName: string | null;

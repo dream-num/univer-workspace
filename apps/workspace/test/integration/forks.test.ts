@@ -99,7 +99,7 @@ describe("forks", () => {
     await expectError(create(reader, team, "fix"), 404, "NOT_FOUND");
     expect((await send(origin, "PATCH", `/api/spaces/${team}`, { publicRead: true }, holder.cookie)).status).toBe(200);
     const refused = await expectError(create(reader, team, "fix"), 403, "FORBIDDEN");
-    expect(refused.message).toMatch(/membership/);
+    expect(refused.message).toMatch(/proposals setting is members/);
     await expectError(create(reader, await personalSpace(origin, reader), "fix"), 404, "NOT_FOUND");
     await expectError(create(holder, await personalSpace(origin, holder), "fix"), 404, "NOT_FOUND");
     for (const name of ["personal", "a/b", "-lead", "", 7]) await expectError(create(holder, team, name), 400, "INVALID_INPUT");
@@ -366,6 +366,195 @@ describe("writing through a fork", () => {
     expect(await writeThrough(origin, agent, fork, budget, key)).toMatchObject({ status: 201, worktree: { id: worktree.id } });
   }, 60_000);
 });
+
+describe("proposals from readers who are not Space Members", () => {
+  it("admits each kind of reader by the proposals setting, and none while the Space is not public", async () => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, "members");
+    const readers = { person: await person(origin, "reader"), "claimed agent": await outsider(origin, "claimed agent"), "unclaimed agent": await guestAgent(origin) };
+    const admitted: Record<string, readonly string[]> = { members: [], accountable: ["person", "claimed agent"], anyone: Object.keys(readers) };
+
+    for (const [proposals, kinds] of Object.entries(admitted)) {
+      expect(await settings(origin, holder, team, { proposals })).toMatchObject({ proposals, capabilities: { propose: true } });
+      expect(await spaceView(origin, editor, team)).toMatchObject({ affiliation: "member", capabilities: { propose: true } });
+      for (const [kind, reader] of Object.entries(readers)) {
+        const admits = kinds.includes(kind);
+        expect(await spaceView(origin, reader, team)).toMatchObject({
+          affiliation: "none", proposals, capabilities: { propose: admits, createIssue: false, createAtRoot: false },
+        });
+        const created = send(origin, "POST", "/api/forks", { upstreamSpaceId: team, name: `${proposals}-fork` }, reader.cookie);
+        if (admits) expect((await created).status).toBe(201);
+        else expect((await expectError(created, 403, "FORBIDDEN")).message).toContain(`proposals setting is ${proposals}`);
+      }
+    }
+
+    expect(await settings(origin, holder, team, { publicRead: false })).toMatchObject({ publicRead: false, proposals: "anyone" });
+    for (const reader of Object.values(readers)) {
+      expect((await send(origin, "GET", `/api/spaces/${team}`, undefined, reader.cookie)).status).toBe(404);
+      await expectError(send(origin, "POST", "/api/forks", { upstreamSpaceId: team, name: "private-fork" }, reader.cookie), 404, "NOT_FOUND");
+    }
+    expect(await spaceView(origin, editor, team)).toMatchObject({ capabilities: { propose: true } });
+    await expectError(send(origin, "PATCH", `/api/spaces/${team}`, { proposals: "everyone" }, holder.cookie), 400, "INVALID_INPUT");
+    await expectError(send(origin, "PATCH", `/api/spaces/${await personalSpace(origin, holder)}`, { proposals: "anyone" }, holder.cookie), 400, "INVALID_INPUT");
+    await expectError(send(origin, "PATCH", `/api/spaces/${team}`, { proposals: "members" }, editor.cookie), 403, "FORBIDDEN");
+    const created = await send(origin, "POST", "/api/team-spaces", { name: "Open", publicRead: true, proposals: "accountable" }, holder.cookie);
+    expect({ status: created.status, body: await created.json() }).toMatchObject({ status: 201, body: { proposals: "accountable", publicRead: true } });
+  }, 120_000);
+
+  it.each([
+    ["person", "accountable"],
+    ["claimed agent", "accountable"],
+    ["unclaimed agent", "anyone"],
+  ] as const)("takes a %s's proposal under %s from its fork to an editor's merge, without making it a member", async (kind, proposals) => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, proposals);
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const proposer = await outsider(origin, kind);
+    const fork = await createFork(origin, proposer, team, "fix-totals");
+
+    const { worktree, unit } = await writeThrough(origin, proposer, fork, budget);
+    expect(await worktreeView(origin, proposer, worktree.id)).toMatchObject({
+      visibility: "private", capabilities: { editDraft: true, addUnit: true, markReady: true, merge: false, discard: true },
+    });
+    await committed(origin, proposer, worktree.id, unit, [setCell(budget, 1, "proposed")]);
+    expect(await transition(origin, worktree.id, "ready", proposer)).toBe("ready");
+    expect(await transition(origin, worktree.id, "reopen", proposer)).toBe("draft");
+    expect(await transition(origin, worktree.id, "ready", proposer)).toBe("ready");
+    expect(await worktreeView(origin, proposer, worktree.id)).toMatchObject({ visibility: "space", capabilities: { merge: false } });
+    expect(await worktreeView(origin, editor, worktree.id)).toMatchObject({ capabilities: { merge: true } });
+    expect(await transition(origin, worktree.id, "merge", editor)).toBe("merged");
+    expect(await trunkText(origin, holder, budget)).toContain("proposed");
+
+    const { members } = (await (await send(origin, "GET", `/api/team-spaces/${team}/members`, undefined, holder.cookie)).json()) as { members: { user: { id: string } }[] };
+    expect(members.map((member) => member.user.id)).toEqual([editor.id]);
+    expect(await spaceView(origin, proposer, team)).toMatchObject({ affiliation: "none", accessRole: "viewer", capabilities: { createIssue: false } });
+    await expectError(send(origin, "POST", `/api/spaces/${team}/issues`, { title: "Totals" }, proposer.cookie), 403, "FORBIDDEN");
+    if (kind === "unclaimed agent") await expectError(setRole(origin, team, holder, proposer.id, "viewer"), 403, "AGENT_NOT_ALLOWED");
+  }, 90_000);
+
+  it("freezes a reader's draft once the setting goes back to members or the Space stops reading publicly, and keeps its ready proposal mergeable", async () => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, "accountable");
+    const [budget, forecast] = [await createSheet(origin, holder, team, "Budget"), await createSheet(origin, holder, team, "Forecast")];
+    const proposer = await person(origin, "proposer");
+    const [drafting, proposing] = [await createFork(origin, proposer, team, "fix-totals"), await createFork(origin, proposer, team, "add-forecast")];
+    const draft = await writeThrough(origin, proposer, drafting, budget);
+    const proposed = await writeThrough(origin, proposer, proposing, forecast);
+    await committed(origin, proposer, proposed.worktree.id, proposed.unit, [setCell(forecast, 1, "proposed")]);
+    expect(await transition(origin, proposed.worktree.id, "ready", proposer)).toBe("ready");
+
+    await settings(origin, holder, team, { proposals: "members" });
+    expect((await commit(origin, proposer, draft.worktree.id, draft.unit, [setCell(budget, 1, "late")])).status).toBe(403);
+    for (const resourceId of [budget.resourceId, forecast.resourceId]) {
+      await expectError(send(origin, "POST", `/api/forks/${drafting}/units`, { source: "trunk", resourceId },
+        proposer.cookie, { "idempotency-key": randomUUID() }), 403, "FORBIDDEN");
+    }
+    expect((await send(origin, "POST", `/api/worktrees/${draft.worktree.id}/ready`, undefined, proposer.cookie, { "idempotency-key": randomUUID() })).status).toBe(403);
+    expect(await worktreeView(origin, editor, proposed.worktree.id)).toMatchObject({ state: "ready", capabilities: { merge: true } });
+    expect(await transition(origin, proposed.worktree.id, "merge", editor)).toBe("merged");
+    expect(await trunkText(origin, holder, forecast)).toContain("proposed");
+
+    await settings(origin, holder, team, { proposals: "accountable" });
+    await committed(origin, proposer, draft.worktree.id, draft.unit, [setCell(budget, 1, "thawed")]);
+    await settings(origin, holder, team, { publicRead: false });
+    const refreshed = (await worktreeView(origin, proposer, draft.worktree.id)) as { capabilities: { editDraft: boolean }; units: Unit[] };
+    expect(refreshed.capabilities.editDraft).toBe(false);
+    expect((await commit(origin, proposer, draft.worktree.id, refreshed.units[0] ?? draft.unit, [setCell(budget, 2, "private")])).status).toBe(403);
+    expect(await transition(origin, draft.worktree.id, "discard", proposer)).toBe("discarded");
+  }, 90_000);
+
+  it("holds a reader who is not a Space Member to three open proposals, counting only open ones, and leaves members uncapped", async () => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, "accountable");
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const proposer = await person(origin, "proposer");
+    const forks: string[] = [];
+    for (const name of ["one", "two", "three", "four"]) forks.push(await createFork(origin, proposer, team, name));
+    const opened: string[] = [];
+    for (const fork of forks.slice(0, 3)) opened.push((await writeThrough(origin, proposer, fork, budget)).worktree.id);
+
+    const refused = await expectError(send(origin, "POST", `/api/forks/${forks[3]}/units`, { source: "trunk", resourceId: budget.resourceId },
+      proposer.cookie, { "idempotency-key": randomUUID() }), 403, "FORBIDDEN");
+    expect(refused.message).toMatch(/at most 3 open proposals/);
+    await expectError(send(origin, "POST", "/api/worktrees", { kind: "team", teamSpaceId: team, visibility: "private", name: "direct", summary: null },
+      proposer.cookie, { "idempotency-key": randomUUID() }), 403, "FORBIDDEN");
+    expect(await forkView(origin, proposer, forks[3]!)).toMatchObject({ state: "clean", worktree: null });
+
+    expect(await transition(origin, opened[0]!, "discard", proposer)).toBe("discarded");
+    expect(await writeThrough(origin, proposer, forks[3]!, budget)).toMatchObject({ status: 201 });
+    for (let pull = 0; pull < 4; pull += 1) await createPull(origin, editor, team, budget.resourceId);
+  }, 120_000);
+
+  it("never lets a reader who is not a Space Member merge, even a proposal without Units", async () => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, "accountable");
+    const proposer = await person(origin, "proposer");
+    const open = async (name: string) => {
+      const response = await send(origin, "POST", "/api/worktrees", { kind: "team", teamSpaceId: team, visibility: "private", name, summary: null },
+        proposer.cookie, { "idempotency-key": randomUUID() });
+      expect(response.status).toBe(201);
+      return ((await response.json()) as { id: string }).id;
+    };
+    const [proposed, frozen] = [await open("empty"), await open("frozen")];
+
+    expect(await transition(origin, proposed, "ready", proposer)).toBe("ready");
+    expect(await worktreeView(origin, proposer, proposed)).toMatchObject({ state: "ready", capabilities: { merge: false } });
+    expect((await send(origin, "POST", `/api/worktrees/${proposed}/merge`, undefined, proposer.cookie, { "idempotency-key": randomUUID() })).status).toBe(403);
+    expect(await worktreeView(origin, editor, proposed)).toMatchObject({ state: "ready", capabilities: { merge: true } });
+
+    await settings(origin, holder, team, { proposals: "members" });
+    expect(await worktreeView(origin, proposer, frozen)).toMatchObject({ state: "draft", capabilities: { markReady: false, merge: false } });
+    expect((await send(origin, "POST", `/api/worktrees/${frozen}/ready`, undefined, proposer.cookie, { "idempotency-key": randomUUID() })).status).toBe(403);
+  }, 90_000);
+
+  it("shows a reader's proposal to its author and, once ready, to members, but never to another reader", async () => {
+    const { origin } = await start();
+    const { holder, editor, team } = await publicUpstream(origin, "accountable");
+    const budget = await createSheet(origin, holder, team, "Budget");
+    const [author, other] = [await person(origin, "author"), await person(origin, "other")];
+    const { worktree, unit } = await writeThrough(origin, author, await createFork(origin, author, team, "fix-totals"), budget);
+    await createFork(origin, other, team, "other-fork");
+    const listed = async (actor: Actor) => ((await (await send(origin, "GET", `/api/worktrees?scope=all&kind=team&teamSpaceId=${team}`,
+      undefined, actor.cookie)).json()) as { items: { id: string }[] }).items.map((item) => item.id);
+
+    expect({ author: await listed(author), holder: await listed(holder), editor: await listed(editor), other: await listed(other) })
+      .toEqual({ author: [worktree.id], holder: [worktree.id], editor: [], other: [] });
+    expect(await transition(origin, worktree.id, "ready", author)).toBe("ready");
+    expect({ editor: await listed(editor), other: await listed(other) }).toEqual({ editor: [worktree.id], other: [] });
+    expect((await send(origin, "GET", `/api/worktrees/${worktree.id}`, undefined, other.cookie)).status).toBe(404);
+    const comments = await send(origin, "GET", `/universer-api/comment/unit/${unit.unitId}/list`, undefined, author.cookie);
+    expect(comments.status).toBe(200);
+  }, 90_000);
+});
+
+async function publicUpstream(origin: string, proposals: string) {
+  const [holder, editor] = await Promise.all([person(origin, "holder"), person(origin, "editor")]);
+  const team = await createRepo(origin, holder, "Team");
+  expect((await setRole(origin, team, holder, editor.id, "editor")).status).toBe(200);
+  await settings(origin, holder, team, { publicRead: true, proposals });
+  return { holder, editor, team };
+}
+
+async function outsider(origin: string, kind: "person" | "claimed agent" | "unclaimed agent"): Promise<Actor> {
+  if (kind === "person") return person(origin, "outsider");
+  const agent = await guestAgent(origin);
+  if (kind === "claimed agent") await claim(origin, agent, await person(origin, "claimer"));
+  return agent;
+}
+
+async function settings(origin: string, actor: Actor, spaceId: string, patch: Record<string, unknown>): Promise<unknown> {
+  const response = await send(origin, "PATCH", `/api/spaces/${spaceId}`, patch, actor.cookie);
+  if (response.status !== 200) throw new Error(`Space update failed with ${response.status}: ${await response.text()}`);
+  return response.json();
+}
+
+async function spaceView(origin: string, actor: Actor, spaceId: string): Promise<unknown> {
+  return (await send(origin, "GET", `/api/spaces/${spaceId}`, undefined, actor.cookie)).json();
+}
+
+async function worktreeView(origin: string, actor: Actor, worktreeId: string): Promise<unknown> {
+  return ((await (await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, actor.cookie)).json()) as { worktree: unknown }).worktree;
+}
 
 interface TestDatabase {
   rowCounts(): Promise<Record<string, number>>;

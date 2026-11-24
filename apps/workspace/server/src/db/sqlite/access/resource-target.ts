@@ -14,11 +14,11 @@ export function checkCreateTarget(access: TargetAccess, actorUserId: string, spa
   return parent.capabilities.createChildren ? "ok" : "forbidden";
 }
 
-/** A Team Worktree takes a proposal from any Space Member, so its target only has to exist in the Space. */
+/** A Team Worktree takes a proposal from anyone who may propose in its Space, so its target only has to exist there. */
 export function checkProposalTarget(access: TargetAccess, actorUserId: string, spaceId: string, parentNodeId: string | null) {
   const space = access.readSpaceAccess(actorUserId, spaceId);
   if (!space) return "notFound";
-  if (!space.member) return "forbidden";
+  if (!space.capabilities.propose) return "forbidden";
   if (parentNodeId === null) return "ok";
   return access.readNodeAccess(actorUserId, parentNodeId)?.spaceId === spaceId ? "ok" : "notFound";
 }

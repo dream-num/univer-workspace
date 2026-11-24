@@ -4,7 +4,7 @@ English | [简体中文](storage-migration.zh-CN.md)
 
 ## Migrate SQLite and local files to PostgreSQL and S3
 
-Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The source product database must be V28. For an older version, first [upgrade on SQLite](#sqlite-upgrades-and-recovery) and stop the upgraded instance before cutover. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [Workspace configuration](configuration.md#deployment-configurations) for target settings, credentials and bucket permissions.
+Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The source product database must be V29. For an older version, first [upgrade on SQLite](#sqlite-upgrades-and-recovery) and stop the upgraded instance before cutover. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [Workspace configuration](configuration.md#deployment-configurations) for target settings, credentials and bucket permissions.
 
 For an Alibaba Cloud OSS regional endpoint, use a bucket on which versioning has never been enabled. The migration reads the bucket versioning status (`oss:GetBucketVersioning`) before using the OSS no-overwrite header for uploads, including multipart completion.
 
@@ -27,7 +27,7 @@ For an Alibaba Cloud OSS regional endpoint, use a bucket on which versioning has
 
 4. Wait for a successful exit and the committed row counts. Start one instance with the target configuration. Through HTTP, sign in with an existing account, check a document, Worktree, history, comments and attachment, check cell values in an existing spreadsheet, edit a document and upload a file. Restart, read back the cells, edit and upload, then reopen traffic.
 
-The command reads the V28 product database and prepares the collaboration database on private temporary copies, preserving the originals and their journals. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, and copies Sheet blocks to the `sheet-blocks/` subdirectory, verifying their MessagePack bytes by readback. One PostgreSQL transaction imports the product data, all four collaboration components, the block index and each snapshot’s block references. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
+The command reads the V29 product database and prepares the collaboration database on private temporary copies, preserving the originals and their journals. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, and copies Sheet blocks to the `sheet-blocks/` subdirectory, verifying their MessagePack bytes by readback. One PostgreSQL transaction imports the product data, all four collaboration components, the block index and each snapshot’s block references. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
 
 **Interruption and rollback.** Keep source writers stopped after a failure. Empty target tables and some S3 objects may remain. The database import transaction rolls back as a unit. Fix the cause and rerun with the same source and destination. The command verifies and reuses identical objects and rejects mismatched or unrelated objects and populated target tables. It also rejects legacy collaboration resource data the target SDK cannot represent. If the connection drops during commit, inspect the target before reopening traffic or retrying. Before reopening traffic, you can stop the target and restart the source with its original configuration. After traffic resumes, rollback also requires transferring subsequent writes.
 
@@ -48,7 +48,7 @@ If the process is killed or the container disappears without a final status, ins
 
 ## SQLite upgrades and recovery
 
-Deployments that stay on SQLite upgrade at server startup. The current product schema is V28. Startup supports upgrades from V0 through V27.
+Deployments that stay on SQLite upgrade at server startup. The current product schema is V29. Startup supports upgrades from V0 through V28.
 
 1. Stop all Workspace writers. Back up the product database, collaboration database and local files at the same recovery point, including any SQLite WAL or journal files. Avoid opening the databases from the host while the container runs. On Kubernetes, use one replica and the `Recreate` strategy for the rollout.
 2. Start one new instance. Allow space for pre-upgrade backups, a staging copy of the collaboration database and a temporary component backup. Startup upgrades the product database, then checks collaboration component versions. When a collaboration upgrade is needed, the server takes an exclusive lock and creates `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak` beside the database. The staging copy replaces the original only after schema, foreign-key and integrity checks pass.

@@ -10,7 +10,7 @@ import { spaceNotFound, spaceUpdateForbidden } from "./spaces.errors.js";
 import type { SpacesRepository, SpaceListScope, SpaceListEntry } from "./spaces.repository.js";
 import type { SpacePinsRepository, StoredSpacePins } from "./space-pins.repository.js";
 import { RESERVED_SLUG, slugBaseFromName, validSlug } from "./space-slug.js";
-import type { MySpaceView, SpacePins, SpaceStar, SpaceView } from "./spaces.types.js";
+import { SPACE_PROPOSALS, type MySpaceView, type SpacePins, type SpaceProposals, type SpaceStar, type SpaceView } from "./spaces.types.js";
 
 export interface SpacesModule {
   list(userId: string): Promise<{ readonly spaces: readonly MySpaceView[] }>;
@@ -21,7 +21,7 @@ export interface SpacesModule {
   resetPins(userId: string): Promise<SpacePins>;
   createTeamSpace(
     userId: string,
-    input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown }
+    input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown; readonly proposals?: unknown }
   ): Promise<SpaceView>;
   get(userId: string, spaceId: string): Promise<SpaceView>;
   lookup(userId: string, owner: unknown, slug: unknown): Promise<SpaceView>;
@@ -35,6 +35,7 @@ export interface SpacesModule {
       readonly slug?: unknown;
       readonly publicRead?: unknown;
       readonly description?: unknown;
+      readonly proposals?: unknown;
     }
   ): Promise<SpaceView>;
 }
@@ -96,12 +97,14 @@ export function createSpacesModule(options: {
       const publicRead = input.publicRead === undefined
         ? false
         : validBoolean(input.publicRead, "publicRead");
+      const proposals = input.proposals === undefined ? "members" : validProposals(input.proposals);
       assertCeiling(await options.access.principalCategory(userId), "updateSpace", { publicRead });
       const row = await options.repository.createTeamSpace({
         id,
         name,
         ...(input.slug === undefined ? { slugBase: slugBaseFromName(name, id) } : { slug: validSlug(input.slug) }),
         publicRead,
+        proposals,
         ownerUserId: userId,
         createdAt: now(),
       });
@@ -144,7 +147,8 @@ export function createSpacesModule(options: {
         input.name === undefined &&
         input.slug === undefined &&
         input.publicRead === undefined &&
-        input.description === undefined
+        input.description === undefined &&
+        input.proposals === undefined
       ) {
         throw new ApplicationError(
           "INVALID_INPUT",
@@ -159,11 +163,16 @@ export function createSpacesModule(options: {
       if (input.slug !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");
       }
+      const proposals = input.proposals === undefined ? undefined : validProposals(input.proposals);
+      if (proposals !== undefined && access.type !== "team") {
+        throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space takes proposals.", "proposals");
+      }
       const row = await options.repository.updateSettings(userId, spaceId, {
         ...(name !== undefined && { name }),
         ...(publicRead !== undefined && { publicRead }),
         ...(description !== undefined && { description }),
         ...(input.slug !== undefined && { slug: validSlug(input.slug) }),
+        ...(proposals !== undefined && { proposals }),
       }, now());
       if (!row) throw slugTaken();
       return spaceView(userId, row);
@@ -179,6 +188,7 @@ function spaceView(userId: string, row: SpaceListEntry): SpaceView {
     type: access.type,
     name: access.name,
     publicRead: access.publicRead,
+    proposals: row.proposals,
     description: row.description,
     ...fullNameOf(access.type, row.slug, row.ownerUsername),
     owner: { id: access.ownerUserId, username: row.ownerUsername },
@@ -226,6 +236,13 @@ function validBoolean(value: unknown, field: string): boolean {
     );
   }
   return value;
+}
+
+function validProposals(value: unknown): SpaceProposals {
+  if (!SPACE_PROPOSALS.includes(value as SpaceProposals)) {
+    throw new ApplicationError("INVALID_INPUT", 400, `proposals must be one of ${SPACE_PROPOSALS.join(", ")}.`, "proposals");
+  }
+  return value as SpaceProposals;
 }
 
 function validName(value: unknown): string {

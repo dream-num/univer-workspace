@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { forbidden, forkAlreadyOpen, notFound } from "../../../modules/worktrees/worktrees.errors.js";
 import { checkCreateTarget, checkProposalTarget } from "../access/resource-target.js";
-import { type SqliteAccessRepository, assertFileQuota, ownerSuspendedSql, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
+import { type SqliteAccessRepository, assertFileQuota, assertProposalQuota, ownerSuspendedSql, ownsSpaceSql, proposesSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -188,7 +188,10 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     // Issue sequence; User Worktrees are numbered per creator.
     this._database.transaction((database) => {
       if (database.prepare("SELECT 1 FROM worktrees WHERE id = ?").get(input.id)) return;
-      if (input.kind === "team" && input.teamSpaceId) this.requireTarget(input.creatorUserId, input.teamSpaceId, null, true);
+      if (input.kind === "team" && input.teamSpaceId) {
+        this.requireTarget(input.creatorUserId, input.teamSpaceId, null, true);
+        assertProposalQuota(database, input.creatorUserId, input.teamSpaceId);
+      }
       if (input.forkId && database.prepare("SELECT 1 FROM worktrees WHERE fork_id = ? AND processed_at IS NULL").get(input.forkId)) throw forkAlreadyOpen();
       const next = (input.kind === "team"
         ? database.prepare(
@@ -570,6 +573,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
         assertFileQuota(database, input.actorUserId, 1, input.id);
       } else if (input.kind === "create_worktree" && input.payload.teamSpaceId !== null) {
         this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null, true);
+        assertProposalQuota(database, input.actorUserId, input.payload.teamSpaceId);
       } else if (input.kind === "add_worktree_unit") {
         const resource = this.access.readResourceAccess(input.actorUserId, input.payload.resourceId);
         if (!resource || resource.kind !== "univer") throw notFound();
@@ -675,6 +679,7 @@ function worktreeSelect(): string {
             team.name AS team_space_name,
             ${ownsSpaceSql("team.owner_user_id")} AS actor_owns_team_space,
             member.role AS actor_member_role,
+            ${proposesSql("team")} AS actor_proposes,
             (
               SELECT COUNT(*)
               FROM worktree_units AS counted

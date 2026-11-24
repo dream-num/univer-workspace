@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { spaceNodesQueryOptions } from "../nodes/nodes.queries";
@@ -12,6 +13,7 @@ export function useUpdateSpace(spaceId: string) {
       readonly slug?: string;
       readonly publicRead?: boolean;
       readonly description?: string;
+      readonly proposals?: components["schemas"]["SpaceProposals"];
     }) => {
       const { error } = await api.PATCH("/api/spaces/{spaceId}", {
         params: { path: { spaceId } },
