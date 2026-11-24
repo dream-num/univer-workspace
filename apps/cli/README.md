@@ -206,7 +206,10 @@ is refused. A pull request has one author, and only the author edits it. `pr mer
 file or folder the pull request changes. With that access the author can merge it, the person who claimed the
 authoring agent can, and so can the Owner, Admins and Editors of a Team Space once the pull request is visible to
 the Space. A member with read access only can still `pr create` in a Team Space, change the pull request and mark
-it `pr ready`, which makes it visible to the Space. The Owner and Admins get an error naming the author, and the
+it `pr ready`, which makes it visible to the Space. `pr create --issue <n>` and `pr edit <pr> --issue <n>` link a Team
+pull request to the Issue `#n` of its repository that it serves, if you may change its title and body and can read the
+repository. `pr view` shows that Issue, and `issue view` lists the linked pull requests.
+The Owner and Admins get an error naming the author, and the
 person who claimed an agent author, when they try to merge someone else's private pull request. Anyone else who
 lacks edit access gets an error saying so. A merge that stopped partway leaves the
 pull request `merging`, or `merged` before the server finished it; running `pr merge` again finishes it, for the

@@ -2404,7 +2404,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Worktree metadata or Team Worktree Visibility. */
+        /** Update Worktree metadata, Team Worktree Visibility, or the Issue it serves. */
         patch: operations["updateWorktree"];
         trace?: never;
     };
@@ -2761,6 +2761,11 @@ export interface components {
             body: string;
             references: components["schemas"]["IssueReference"][];
             capabilities: components["schemas"]["IssueCapabilities"];
+            /**
+             * @description The pull requests linked to this Issue that the caller may see, newest first: the 100 most
+             *     recently created links.
+             */
+            pullRequests: components["schemas"]["IssuePullRequest"][];
         };
         IssueSummary: {
             createdVia: components["schemas"]["WriteSource"];
@@ -2814,6 +2819,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             capabilities: components["schemas"]["WorktreeCapabilities"];
+            /**
+             * @description The Issue in the same Team Space that this pull request serves. Null when none is linked, and
+             *     for a caller who cannot read the Team Space.
+             */
+            issue: components["schemas"]["WorktreeIssue"] | null;
         };
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
             units: components["schemas"]["WorktreeUnit"][];
@@ -3651,6 +3661,13 @@ export interface components {
             discard: boolean;
         };
         /** @enum {string} */
+        IssueState: "open" | "closed";
+        WorktreeIssue: {
+            number: number;
+            title: string;
+            state: components["schemas"]["IssueState"];
+        };
+        /** @enum {string} */
         UnitType: "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
         WorktreeUnitTarget: {
             spaceId: string;
@@ -4070,8 +4087,6 @@ export interface components {
             name: string;
         };
         /** @enum {string} */
-        IssueState: "open" | "closed";
-        /** @enum {string} */
         IssueStateReason: "completed" | "not_planned";
         IssueLabel: {
             id: string;
@@ -4126,6 +4141,14 @@ export interface components {
             /** @description The caller may change labels, assignees and referenced files. */
             triage: boolean;
             comment: boolean;
+        };
+        IssuePullRequest: {
+            id: string;
+            number: number | null;
+            title: string;
+            state: components["schemas"]["WorktreeState"];
+            author: components["schemas"]["PublicUser"];
+            mergedBy: components["schemas"]["PublicUser"] | null;
         };
         UpdateIssue: {
             title?: string;
@@ -4228,6 +4251,11 @@ export interface components {
             name: string;
             summary: string | null;
         };
+        /**
+         * @description Links the Team Worktree to the Issue with this number in its Team Space; null removes the link.
+         *     The caller must be able to read the Team Space. A number with no Issue there is `INVALID_INPUT`.
+         */
+        IssueNumberLink: number | null;
         CreateTeamWorktree: {
             /** @constant */
             kind: "team";
@@ -4235,12 +4263,14 @@ export interface components {
             visibility: components["schemas"]["WorktreeVisibility"];
             name: string;
             summary: string | null;
+            issueNumber?: components["schemas"]["IssueNumberLink"];
         };
         CreateWorktree: components["schemas"]["CreateUserWorktree"] | components["schemas"]["CreateTeamWorktree"];
         PatchWorktree: {
             name?: string;
             summary?: string | null;
             visibility?: components["schemas"]["WorktreeVisibility"];
+            issueNumber?: components["schemas"]["IssueNumberLink"];
         };
         WorktreeUnitEnvelope: {
             unit: components["schemas"]["WorktreeUnit"];

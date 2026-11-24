@@ -296,6 +296,7 @@ export function createWorkspaceApplication(
     repository: repositories.issues,
     access,
     onChanged: (change) => worktreeChangeFeed.publishIssues(change),
+    pullRequests: (userId, issueId) => worktrees.pullRequestsForIssue(userId, issueId),
   });
   const worktreeBackend =
     dependencies.worktreeBackend ??

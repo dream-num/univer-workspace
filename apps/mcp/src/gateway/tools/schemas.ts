@@ -90,6 +90,18 @@ export const issueSchema = z.object({
     triage: z.boolean(),
   }),
   references: z.array(issueReferenceSchema),
+  pullRequests: z
+    .array(
+      z.object({
+        author: issueUserSchema,
+        id: z.string(),
+        mergedBy: issueUserSchema.nullable(),
+        number: z.number().nullable(),
+        state: z.enum(["draft", "ready", "merging", "merged", "discarded"]),
+        title: z.string(),
+      }),
+    )
+    .describe("Pull requests linked to this Issue that you may see, newest first."),
   url: z.url(),
 });
 export const issueCommentSchema = z.object({
@@ -172,6 +184,11 @@ export const worktreeSchema = z.object({
     })
     .optional()
     .describe("What you may do with this pull request now."),
+  issue: z
+    .object({ number: z.number(), title: z.string(), state: z.enum(["open", "closed"]) })
+    .nullable()
+    .optional()
+    .describe("The Issue this pull request serves; null when none is linked."),
   url: z.url(),
 });
 

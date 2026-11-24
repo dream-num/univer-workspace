@@ -108,8 +108,9 @@ _Avoid_: Unit permission
 
 **Issue**:
 A Team Space discussion item with a Space-scoped number, Markdown body, open or closed
-state, comments, labels, assignees, and references to Nodes. It records a need or defect
-and does not change Space content.
+state, comments, labels, assignees, and references to Nodes. It records a need or defect.
+It does not change Space content itself; it names the pull requests that do, each a Team
+Worktree of the same Space linked to it.
 _Avoid_: Ticket, Task
 
 **Issue Number**:
@@ -126,6 +127,11 @@ _Avoid_: Tag
 A link from an Issue to a Node in the same Space. It reads as unavailable once the Node
 enters Trash.
 _Avoid_: Attachment
+
+**Issue Link**:
+The Issue a Team Worktree names as the one it serves, in the same Team Space. A Team
+Worktree has at most one; an Issue lists the linked Team Worktrees its reader may discover.
+_Avoid_: Task link
 
 ## Change preparation
 

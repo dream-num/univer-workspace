@@ -319,13 +319,14 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 服务端入口将 `config.database` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务、封禁 Agent 与授予执行层的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
 
-`db/sqlite/schema.sql` 定义完整 V29 结构，`db/sqlite/initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V29；V29 校验指纹；V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
+`db/sqlite/schema.sql` 定义完整 V30 结构，`db/sqlite/initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V30；V30 校验指纹；V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 V23 新增 `executor_access` 表，记录运维授予共享 MCP 执行层的 User。
 V28 新增 `forks` 表，并给 `worktrees` 末尾追加可空 `fork_id` 与部分唯一索引 `worktrees_open_fork`；迁移只追加，不改已有行。PostgreSQL 对应版本 7 升级到版本 8。
 V29 给 `spaces` 追加 `proposals` 列（默认 `members`，带 CHECK）；迁移只追加，不改已有行的含义。PostgreSQL 对应版本 8 升级到版本 9。
+V30 给 `worktrees` 追加可空的 `issue_id`（指向 `issues`，`ON DELETE SET NULL`）和部分索引 `worktrees_issue`；已有行取 NULL。PostgreSQL 对应版本 9 升级到版本 10。
 V24 给 `nodes` 与 `worktree_node_intents` 追加 `copied_from_node_id`，给 `node_link_sharing` 追加 `unverified_role` 与 `making_of_note`，新增 `nodes_copied_from` 部分索引，并重建 `operations` 使 `kind` CHECK 接受 `copy_node`。
 PostgreSQL 的 `db/postgres/initialize.ts` 在同一事务内把指纹相符的版本 3 升级到版本 4，结构与全新安装一致。
 V25 不改结构，用 V22 的同一修复入口再改写一次显示名与 Personal Space，收敛执行过早期 V22 规则的库；PostgreSQL 对应版本 4 升级到版本 5。
@@ -357,7 +358,7 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V29 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V30 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 

@@ -143,8 +143,8 @@ grant access or discard because it asks.
    with kind issues and assignee @me to find assigned work across Team Spaces.
 2. Use the Issue references' resource.id and nodeId to identify files. If a
    reference is unavailable, tell the user rather than guessing a replacement.
-3. Start a new Space-scoped Worktree titled #N followed by the Issue title.
-   The title ties the task to the Issue; no automatic Issue link is created.
+3. Start a new pull request with pr_create and issue N, so the Issue lists it.
+   A fork opens its own on the first write; link that one with pr_edit.
 4. Verify and hand off. Post the review URL and a concise account with
    `issue_comment`, identifying the comment as posted on the user's behalf.
 5. Leave the Issue open, and finish the pull request as the server instructions say.

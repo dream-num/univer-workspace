@@ -1,5 +1,6 @@
 import type { WriteSource, WriteSourceView } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
+import type { WorktreeState } from "../worktrees/worktrees.types.js";
 
 export type IssueState = "open" | "closed";
 export type IssueStateReason = "completed" | "not_planned";
@@ -78,6 +79,16 @@ export interface IssueView extends IssueSummaryView {
   readonly body: string;
   readonly references: readonly IssueReferenceView[];
   readonly capabilities: IssueCapabilitiesView;
+  readonly pullRequests: readonly IssuePullRequestView[];
+}
+
+export interface IssuePullRequestView {
+  readonly id: string;
+  readonly number: number | null;
+  readonly title: string;
+  readonly state: WorktreeState;
+  readonly author: PublicUser;
+  readonly mergedBy: PublicUser | null;
 }
 
 export interface IssueList {

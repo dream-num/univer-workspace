@@ -8,6 +8,7 @@ import type { PublishedPage } from "../html-view-drafts/drafts.types.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { WriteSource, WriteSourceView } from "../identity/index.js";
+import type { IssuePullRequestView, IssueState } from "../issues/issues.types.js";
 
 export type WorktreeKind = "user" | "team";
 export type WorktreeVisibility = "private" | "space";
@@ -46,6 +47,12 @@ export interface WorktreeSummary {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly capabilities: WorktreeCapabilities;
+  /** The Issue this pull request serves. Null when none is linked or the caller cannot read its Team Space. */
+  readonly issue: {
+    readonly number: number;
+    readonly title: string;
+    readonly state: IssueState;
+  } | null;
 }
 
 export type MergeResult =
@@ -234,6 +241,8 @@ export interface WorktreesModule {
     createdVia?: WriteSource | null,
     forkId?: string | null
   ): Promise<{ readonly status: 201; readonly body: WorktreeSummary }>;
+  /** The pull requests linked to an Issue that the User may see, newest first. */
+  pullRequestsForIssue(userId: string, issueId: string): Promise<readonly IssuePullRequestView[]>;
   get(
     userId: string,
     worktreeId: string

@@ -752,3 +752,19 @@ old instance, start one V29 instance, and wait for its backup, migration and hea
 Back up PostgreSQL before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or
 backup. V28 code refuses a V29 database, so a code rollback needs the backup taken before the upgrade: stop V29 and
 restore it, which loses what was written since. Never run V28 and V29 writers on the same SQLite file.
+
+### Issue links and product database V30
+
+A Team Worktree, a pull request, may name one Issue of its Team Space that it serves. Whoever may change its summary
+sets the link with `issueNumber` on `POST /api/worktrees` or `PATCH /api/worktrees/{worktreeId}`, `uvw pr create|edit
+--issue <N>`, or the MCP `pr_create` and `pr_edit` tools, and only while they can read the Team Space. A fork's pull
+request is linked after its first write opens it. The pull request page shows the Issue, and the Issue page, `uvw issue
+view` and the MCP `issue_view` tool list the linked pull requests the reader may see.
+
+V29→V30 adds the nullable column `worktrees.issue_id`, a foreign key to `issues` with `ON DELETE SET NULL`, a CHECK
+that only a Team Worktree has one, and the partial index `worktrees_issue`. Existing rows read null. On PostgreSQL the
+same step moves `workspace_product_schema` from version 9 to 10. Stop every old instance, start one V30 instance, and
+wait for its backup, migration and health checks before restoring service. Back up PostgreSQL before the upgrade.
+Failed migration rolls back; successful restarts do not repeat migration or backup. V29 code refuses a V30 database,
+so a code rollback needs the backup taken before the upgrade: stop V30 and restore it, which loses what was written
+since. Never run V29 and V30 writers on the same SQLite file.

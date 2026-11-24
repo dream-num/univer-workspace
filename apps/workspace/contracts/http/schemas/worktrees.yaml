@@ -60,6 +60,7 @@ WorktreeSummary:
     - createdAt
     - updatedAt
     - capabilities
+    - issue
   properties:
     createdVia:
       $ref: ./identity.yaml#/WriteSource
@@ -112,6 +113,26 @@ WorktreeSummary:
       format: date-time
     capabilities:
       $ref: "#/WorktreeCapabilities"
+    issue:
+      description: |
+        The Issue in the same Team Space that this pull request serves. Null when none is linked, and
+        for a caller who cannot read the Team Space.
+      oneOf:
+        - $ref: "#/WorktreeIssue"
+        - type: "null"
+
+WorktreeIssue:
+  type: object
+  additionalProperties: false
+  required: [number, title, state]
+  properties:
+    number:
+      type: integer
+      minimum: 1
+    title:
+      type: string
+    state:
+      $ref: ./issues.yaml#/IssueState
 
 WorktreeUnitTarget:
   type: object
@@ -290,6 +311,15 @@ CreateTeamWorktree:
     summary:
       type: [string, "null"]
       maxLength: 1000
+    issueNumber:
+      $ref: "#/IssueNumberLink"
+
+IssueNumberLink:
+  type: [integer, "null"]
+  minimum: 1
+  description: |
+    Links the Team Worktree to the Issue with this number in its Team Space; null removes the link.
+    The caller must be able to read the Team Space. A number with no Issue there is `INVALID_INPUT`.
 
 CreateWorktree:
   oneOf:
@@ -310,6 +340,8 @@ PatchWorktree:
       maxLength: 1000
     visibility:
       $ref: "#/WorktreeVisibility"
+    issueNumber:
+      $ref: "#/IssueNumberLink"
 
 AddTrunkUnit:
   type: object

@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  CircleDot,
   Database,
   FileDiff,
   FileText,
@@ -230,6 +231,19 @@ export function RepositoryPullRequestLayout({
                 date: formatRelativeDate(worktree.createdAt, language),
               })}
             </span>
+            {worktree.issue ? (
+              <Link
+                to="/spaces/$spaceId/issues/$number"
+                params={{ spaceId, number: String(worktree.issue.number) }}
+                data-pr-issue={worktree.issue.number}
+                className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground no-underline hover:text-foreground"
+              >
+                <CircleDot className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  {t("repositoryPrIssue", { number: worktree.issue.number, title: worktree.issue.title })}
+                </span>
+              </Link>
+            ) : null}
           </div>
         </header>
         <nav aria-label={t("repositoryPullRequests")} className="rd-detail-tabs">

@@ -23,6 +23,11 @@ export const pullNumberInput = z
       ),
   )
   .nonoptional();
+export const issueLinkInput = z
+  .number()
+  .int()
+  .positive()
+  .describe("Number of the Issue in the same repository that this pull request serves. Team Space repositories only.");
 export const visibilityInput = z
   .enum(["private", "space"])
   .describe("Team Space repositories only.");

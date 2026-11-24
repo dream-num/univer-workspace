@@ -4423,7 +4423,7 @@ paths:
       tags:
         - Worktrees
       operationId: updateWorktree
-      summary: Update Worktree metadata or Team Worktree Visibility.
+      summary: Update Worktree metadata, Team Worktree Visibility, or the Issue it serves.
       requestBody:
         required: true
         content:
@@ -5272,6 +5272,7 @@ components:
             - body
             - references
             - capabilities
+            - pullRequests
           properties:
             body:
               type: string
@@ -5282,6 +5283,14 @@ components:
                 $ref: '#/components/schemas/IssueReference'
             capabilities:
               $ref: '#/components/schemas/IssueCapabilities'
+            pullRequests:
+              type: array
+              maxItems: 100
+              description: |
+                The pull requests linked to this Issue that the caller may see, newest first: the 100 most
+                recently created links.
+              items:
+                $ref: '#/components/schemas/IssuePullRequest'
       unevaluatedProperties: false
     IssueSummary:
       type: object
@@ -5373,6 +5382,7 @@ components:
         - createdAt
         - updatedAt
         - capabilities
+        - issue
       properties:
         createdVia:
           $ref: '#/components/schemas/WriteSource'
@@ -5431,6 +5441,13 @@ components:
           format: date-time
         capabilities:
           $ref: '#/components/schemas/WorktreeCapabilities'
+        issue:
+          description: |
+            The Issue in the same Team Space that this pull request serves. Null when none is linked, and
+            for a caller who cannot read the Team Space.
+          oneOf:
+            - $ref: '#/components/schemas/WorktreeIssue'
+            - type: 'null'
     WorktreeDetail:
       allOf:
         - $ref: '#/components/schemas/WorktreeSummary'
@@ -7554,6 +7571,26 @@ components:
           type: boolean
         discard:
           type: boolean
+    IssueState:
+      type: string
+      enum:
+        - open
+        - closed
+    WorktreeIssue:
+      type: object
+      additionalProperties: false
+      required:
+        - number
+        - title
+        - state
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/IssueState'
     UnitType:
       type: string
       enum:
@@ -8676,11 +8713,6 @@ components:
           type: string
         name:
           type: string
-    IssueState:
-      type: string
-      enum:
-        - open
-        - closed
     IssueStateReason:
       type: string
       enum:
@@ -8838,6 +8870,34 @@ components:
           description: The caller may change labels, assignees and referenced files.
         comment:
           type: boolean
+    IssuePullRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - number
+        - title
+        - state
+        - author
+        - mergedBy
+      properties:
+        id:
+          type: string
+        number:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/WorktreeState'
+        author:
+          $ref: '#/components/schemas/PublicUser'
+        mergedBy:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: 'null'
     UpdateIssue:
       type: object
       additionalProperties: false
@@ -9100,6 +9160,14 @@ components:
             - string
             - 'null'
           maxLength: 1000
+    IssueNumberLink:
+      type:
+        - integer
+        - 'null'
+      minimum: 1
+      description: |
+        Links the Team Worktree to the Issue with this number in its Team Space; null removes the link.
+        The caller must be able to read the Team Space. A number with no Issue there is `INVALID_INPUT`.
     CreateTeamWorktree:
       type: object
       additionalProperties: false
@@ -9125,6 +9193,8 @@ components:
             - string
             - 'null'
           maxLength: 1000
+        issueNumber:
+          $ref: '#/components/schemas/IssueNumberLink'
     CreateWorktree:
       oneOf:
         - $ref: '#/components/schemas/CreateUserWorktree'
@@ -9145,6 +9215,8 @@ components:
           maxLength: 1000
         visibility:
           $ref: '#/components/schemas/WorktreeVisibility'
+        issueNumber:
+          $ref: '#/components/schemas/IssueNumberLink'
     WorktreeUnitEnvelope:
       type: object
       additionalProperties: false

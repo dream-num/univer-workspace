@@ -290,15 +290,15 @@ and the matching owner/slug candidates when available.
 | `fork_view` | Required `fork` (`<owner>/<name>` or fork ID) | Fork. Another user's fork is `NOT_FOUND` |
 | `fork_delete` | Required `fork` | `{ fork, worktree }`. Deletes only the fork. Its open pull request, `worktree`, stays an ordinary pull request of the upstream |
 | `issue_list` | Required `repo`; optional `state` (default `open`), `labels`, `assignee`, `author`, `search`, `limit` (default 30) | `{ issues: [...] }` |
-| `issue_view` | Required `repo`, `number` (`12`, `#12` or Issue URL); optional `comments` | Issue, plus `timeline` when `comments` is true |
+| `issue_view` | Required `repo`, `number` (`12`, `#12` or Issue URL); optional `comments` | Issue with `pullRequests`, the linked pull requests you may see, plus `timeline` when `comments` is true |
 | `issue_create` | Required `repo`, `title`; optional `body`, `labels`, `assignees`, `nodes` | Issue |
 | `issue_edit` | Required `repo`, `number`; optional `title`, `body`, `add_labels`, `remove_labels`, `add_assignees`, `remove_assignees`, `add_nodes`, `remove_nodes` | Issue |
 | `issue_comment` | Required `repo`, `number`, `body` | Comment |
 | `issue_set_state` | Required `repo`, `number`, `state` (`open` or `closed`); optional `reason` (`completed` or `not_planned`) and `comment`, only with `closed` | Issue |
 | `pr_list` | Required `repo`; optional `state` (`open` default, `merged`, `discarded`, `all`), `author`, `search`, `limit` (default 30) | `{ prs: [...] }`. A Personal Space lists its owner's: the signed-in user's own, or those of an agent the user claimed. `pr_create` opens a pull request only in the user's own Personal Space |
-| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) |
-| `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
-| `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
+| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request), with `issue`, the Issue it serves, or null |
+| `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `issue` (an Issue number in the same Team Space repository), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
+| `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility`, `issue` (an Issue number in the same Team Space repository, or null to remove the link) | Worktree |
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`) |
 | `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Needs edit access to every changed file: the author, the person who claimed the authoring agent, or the Owner, an Admin or an Editor of a Team pull request visible to its repository. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, or anyone who may merge it |
 | `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, for Issues `labels`, `assignee`, and for pull requests `reviewable` | `{ issues: [...] }` or `{ prs: [...] }` across every repository. `reviewable: true` keeps the ready Team pull requests that others wrote and the caller may merge. Each pull request carries `capabilities`, what the caller may do with it now, such as `merge` |

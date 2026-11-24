@@ -157,7 +157,7 @@
   patch:
     tags: [Worktrees]
     operationId: updateWorktree
-    summary: Update Worktree metadata or Team Worktree Visibility.
+    summary: Update Worktree metadata, Team Worktree Visibility, or the Issue it serves.
     requestBody:
       required: true
       content:

@@ -188,7 +188,7 @@ Issue:
   allOf:
     - $ref: "#/IssueSummary"
     - type: object
-      required: [body, references, capabilities]
+      required: [body, references, capabilities, pullRequests]
       properties:
         body:
           type: string
@@ -199,7 +199,36 @@ Issue:
             $ref: "#/IssueReference"
         capabilities:
           $ref: "#/IssueCapabilities"
+        pullRequests:
+          type: array
+          maxItems: 100
+          description: |
+            The pull requests linked to this Issue that the caller may see, newest first: the 100 most
+            recently created links.
+          items:
+            $ref: "#/IssuePullRequest"
   unevaluatedProperties: false
+
+IssuePullRequest:
+  type: object
+  additionalProperties: false
+  required: [id, number, title, state, author, mergedBy]
+  properties:
+    id:
+      type: string
+    number:
+      type: [integer, "null"]
+      minimum: 1
+    title:
+      type: string
+    state:
+      $ref: ./worktrees.yaml#/WorktreeState
+    author:
+      $ref: ./identity.yaml#/PublicUser
+    mergedBy:
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
 
 IssueList:
   type: object
