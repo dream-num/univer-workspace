@@ -118,9 +118,6 @@ export async function createWorkspaceUnitComparison(input: {
   if (view === "preview" && worktree.status !== "ready") {
     throw new ApplicationError("CONFLICT", 409, "A merge preview is only available for a ready Worktree.");
   }
-  if (input.change === "deleted" && input.source === "trunk" && worktree.status === "merged") {
-    throw new ApplicationError("CONFLICT", 409, "This pull request deleted the file and moved it to Trash, so there is nothing to compare.");
-  }
   if (baseMode === "base" && input.source === "trunk" && unit.baselineTrunkRevision === undefined) {
     throw new ApplicationError("CONFLICT", 409, "The Worktree base revision is unavailable.");
   }

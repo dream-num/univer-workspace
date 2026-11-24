@@ -606,8 +606,9 @@ function overlaid(
   const removed = new Set(worktree.units.filter((unit) => unit.change === "deleted").map((unit) => unit.nodeId));
   const path = directory.breadcrumbs.map((item) => item.name);
   const added = worktree.units.filter(
-    (unit): unit is WorkspaceUnit & { readonly target: NonNullable<WorkspaceUnit["target"]> } =>
+    (unit): unit is WorkspaceUnit & { readonly nodeId: string; readonly target: NonNullable<WorkspaceUnit["target"]> } =>
       unit.source === "worktree" &&
+      unit.nodeId !== null &&
       unit.change !== "deleted" &&
       unit.target?.spaceId === spaceId &&
       unit.target.parentNodeId === (parentNodeId ?? null),

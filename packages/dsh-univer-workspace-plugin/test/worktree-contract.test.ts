@@ -93,6 +93,10 @@ describe("Workspace Worktree contract", () => {
     expect(() => narrowWorktreeSummary({ ...summary, state: "removed" })).toThrow();
   });
 
+  it("reads a pull request that holds a PDF", () => {
+    expect(narrowWorktreeUnit({ ...unit, unitType: "pdf" }).unitType).toBe("pdf");
+  });
+
   it("retains the complete summary and capability fields", () => {
     expect(
       narrowWorktreeSummary({

@@ -175,6 +175,22 @@ describe("Issue tools and gateway infrastructure", () => {
       const capabilities = { review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge: false, discard: false };
       return Response.json({ worktree: rawWorktree("wt-4", { number: 4, state: "ready", capabilities, checks: { passed: 0, failed: 0, missing: 1 } }) });
     }
+    if (target.pathname === "/api/spaces/team-1/worktrees/6") {
+      const removed = {
+        unitType: "sheet", source: "trunk", target: null, draftHeadRevision: 2, change: "deleted",
+        mergeResult: "removed", activationState: "notApplicable", freshness: null,
+      };
+      return Response.json({
+        worktree: rawWorktree("wt-6", {
+          number: 6,
+          state: "merged",
+          units: [
+            { ...removed, unitId: "in-trash", resourceId: "r-1", nodeId: "n-1", name: "Archive" },
+            { ...removed, unitId: "purged", resourceId: "r-2", nodeId: null, name: "Removed resource" },
+          ],
+        }),
+      });
+    }
     if (target.pathname === "/api/worktrees/wt-4/checks") return Response.json({ checks: [rawCheck] });
     if (target.pathname === "/api/worktrees/wt-4/checks/totals-match") return Response.json({ check: rawCheck });
     if (target.pathname === "/api/spaces/team-1/issue-labels") {
@@ -634,6 +650,20 @@ describe("Issue tools and gateway infrastructure", () => {
       expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(events().map((event) => event["repo"])).toEqual([null, null, null, null, null]);
+  });
+
+  it("views a merged pull request that deleted a file, in Trash and after permanent deletion", async () => {
+    await start();
+    const viewed = await call("pr_view", { repo: "bob/team", number: "6" });
+    expect(viewed.isError, JSON.stringify(viewed.content)).toBeFalsy();
+    expect(viewed.structuredContent).toMatchObject({
+      id: "wt-6",
+      state: "merged",
+      units: [
+        { unitId: "in-trash", nodeId: "n-1", change: "deleted", mergeResult: "removed" },
+        { unitId: "purged", nodeId: null, change: "deleted", mergeResult: "removed" },
+      ],
+    });
   });
 
   it("reports a check with pr_check and lists the checks in pr_view for a reviewer", async () => {

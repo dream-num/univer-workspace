@@ -99,8 +99,9 @@ Recorded merge views use the SDK's stored merge revision; Units without that rev
 cannot claim an immutable merge result. The default remains current Trunk versus draft
 for existing Browser consumers. Agent requires these modes for historical Base review;
 new Worktree-local Units have an empty Base and remain reviewable after discard.
-A trunk Unit that a merged Worktree deleted has no comparison in any mode and gets `409`,
-because its file is in Trash, where no one opens it.
+A trunk Unit whose file the reader cannot open has no comparison in any mode and gets `409`.
+That covers a file a merged Worktree deleted, a file someone moved to Trash while a Worktree
+lists it as removed, and a file deleted permanently.
 
 Draft Worktrees can also mark individual Units for deletion and undo that intent.
 Ready Worktrees freeze the intent; reopen one before changing it. Merging excludes

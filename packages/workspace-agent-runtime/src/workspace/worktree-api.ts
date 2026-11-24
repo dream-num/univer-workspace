@@ -228,7 +228,7 @@ export interface WorktreeUnitDescriptor {
   readonly nodeId: string | null;
   readonly source: "trunk" | "worktree";
   readonly name: string;
-  readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+  readonly unitType: (typeof WORKTREE_UNIT_TYPES)[number];
   readonly target: { readonly spaceId: string; readonly parentNodeId: string | null } | null;
   readonly draftHeadRevision: number;
   readonly change: "modified" | "added" | "deleted" | "unchanged";
@@ -242,7 +242,7 @@ export interface WorktreeUnitDescriptor {
     | "discarded";
 }
 
-const WORKTREE_UNIT_TYPES = ["sheet", "doc", "slide", "board", "base"] as const;
+const WORKTREE_UNIT_TYPES = ["sheet", "doc", "slide", "board", "base", "pdf"] as const;
 const WORKTREE_UNIT_CHANGES = ["modified", "added", "deleted", "unchanged"] as const;
 const WORKTREE_MERGE_RESULTS = [
   "pending",

@@ -872,6 +872,62 @@ describe("collaboration gateway", () => {
     expect([cell(firstMerge.left), cell(firstMerge.right)]).toEqual([undefined, "before"]);
   }, 60_000);
 
+  it("answers 409, not 500, in every comparison mode once a removed file is in Trash or gone", async () => {
+    const { application, origin } = await startApplication();
+    const issued = await application.identity.registerWithPassword({
+      username: "trash-review", displayName: "Trash reviewer",
+      password: "correct horse battery staple",
+    });
+    const userId = issued.view.user.id;
+    const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    const space = (await application.spaces.list(userId)).spaces[0]!;
+    const file = async (name: string) => {
+      const created = await application.resources.create(userId, `trash-resource-${name}-0001`, {
+        kind: "univer", spaceId: space.id, parentNodeId: null, name, unitType: "sheet",
+      });
+      if (created.status === 202) throw new Error("Resource creation pending");
+      return created.body.node;
+    };
+    const removal = async (node: { readonly resource: { readonly id: string } | null }, state: "draft" | "ready" | "merged") => {
+      const worktree = await application.worktrees.create(userId, `trash-worktree-${state}-0001`, {
+        kind: "user", name: `Remove ${state}`, summary: null,
+      });
+      const id = worktree.body.id;
+      const added = await application.worktrees.addUnit(userId, id, `trash-unit-${state}-0001`, {
+        source: "trunk", resourceId: node.resource!.id,
+      });
+      await application.worktrees.setUnitRemoved(userId, id, added.body.unit.unitId, { removed: true });
+      if (state !== "draft") await application.worktrees.markReady(userId, id);
+      if (state === "merged") await application.worktrees.merge(userId, id, "trash-merge-0001");
+      return { id, endpoint: `${origin}/universer-api/worktrees/${id}/units/${added.body.unit.unitId}/comparison` };
+    };
+    const statuses = async (endpoint: string, modes: readonly string[]) =>
+      await Promise.all(modes.map(async (mode) => {
+        const response = await fetch(`${endpoint}${mode}`, { headers: { cookie } });
+        await response.text();
+        return [mode, response.status];
+      }));
+    const modes = ["", "?baseMode=base", "?view=preview", "?view=merged", "?baseMode=parent&view=merged"];
+
+    const direct = await file("Direct");
+    const draft = await removal(direct, "draft");
+    const ready = await removal(direct, "ready");
+    const merged = await removal(await file("Merged"), "merged");
+    expect(await statuses(draft.endpoint, ["", "?baseMode=base"])).toEqual([["", 200], ["?baseMode=base", 200]]);
+    expect(await statuses(ready.endpoint, ["?view=preview"])).toEqual([["?view=preview", 200]]);
+    expect(await statuses(merged.endpoint, modes)).toEqual(modes.map((mode) => [mode, 409]));
+
+    const batch = await application.trash.trashNode(userId, direct.id);
+    for (const { endpoint } of [draft, ready]) {
+      expect(await statuses(endpoint, modes)).toEqual(modes.map((mode) => [mode, 409]));
+    }
+
+    await application.worktrees.discard(userId, draft.id, "trash-discard-draft");
+    await application.worktrees.discard(userId, ready.id, "trash-discard-ready");
+    await application.trash.removePermanently(userId, batch.id);
+    expect(await statuses(draft.endpoint, modes)).toEqual(modes.map((mode) => [mode, 409]));
+  }, 60_000);
+
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {
     const { application, origin, collaborationDatabaseFilename } =
       await startApplication();

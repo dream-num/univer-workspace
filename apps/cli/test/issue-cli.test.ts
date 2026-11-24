@@ -51,6 +51,15 @@ describe("Workspace CLI Issue commands", () => {
           respond(200, { counts: { closed: 0, open: 0 }, items: [issue("open")], nextCursor: null });
         } else if (path === "/api/worktrees/wt-1") {
           respond(200, { worktree: { id: "wt-1", name: "Draft", state: "draft", createdVia: "agent" } });
+        } else if (path === "/api/worktrees/wt-2") {
+          const removed = {
+            unitType: "sheet", source: "trunk", target: null, draftHeadRevision: 2, change: "deleted",
+            mergeResult: "removed", activationState: "notApplicable", freshness: null,
+          };
+          respond(200, { worktree: { id: "wt-2", name: "Remove the archive", state: "merged", units: [
+            { ...removed, unitId: "in-trash", resourceId: "r-1", nodeId: "n-1", name: "Archive" },
+            { ...removed, unitId: "purged", resourceId: "r-2", nodeId: null, name: "Removed resource" },
+          ] } });
         } else {
           respond(200, issue(request.method === "PATCH" ? "closed" : "open"));
         }
@@ -107,6 +116,13 @@ describe("Workspace CLI Issue commands", () => {
         expect(result).toMatchObject({ code: 0, stderr: "" });
         expect(JSON.parse(result.stdout)).toEqual(expected);
       }
+      const merged = await runCli(["pr", "view", "wt-2", "--json", "units"], env);
+      expect(merged).toMatchObject({ code: 0, stderr: "" });
+      expect(JSON.parse(merged.stdout).units).toMatchObject([
+        { unitId: "in-trash", nodeId: "n-1", change: "deleted", mergeResult: "removed" },
+        { unitId: "purged", nodeId: null, change: "deleted", mergeResult: "removed" },
+      ]);
+      expect(await runCli(["pr", "view", "wt-2"], env)).toMatchObject({ code: 0, stderr: "", stdout: expect.stringContaining("Archive") });
       expect(rejected.code).not.toBe(0);
       expect(rejected.stderr).toContain("workspace-argument-invalid");
     } finally {
