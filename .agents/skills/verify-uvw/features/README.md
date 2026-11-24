@@ -7,8 +7,9 @@ as the recipe.
 ## Baseline preconditions
 
 - `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root.
-- `$V up`, `$V user`, and a `$V doctor` with no `FAIL` lines. The run serves web at
-  `http://127.0.0.1:5973` and the server at `:3920`, from a fresh `data/` directory.
+- `$V up --for <feature> [journey-id|mode...]`, `$V user`, and a `$V doctor` with no `FAIL` lines. The run serves
+  web at `http://127.0.0.1:5973` and the server at `:3920`, from a fresh `data/` directory, in the mode its
+  journeys declare.
 - The baseline user is `verify-<run-id>`, display name `Verify <run-id>`. Its password is
   in `/tmp/verify-uvw/<run-id>/user.pw`, and it owns `verify-<run-id>/personal` with no
   files. No Team Spaces, PRs or Issues exist. In MCP mode, `doctor` adds an `Executor doctor`
@@ -28,6 +29,17 @@ as in `MS5`, `SLC10` or `TR2-1`. No two journeys in `features/` share an ID. Tex
 journey is setup for all of them. A journey's text ends in its pass condition. A verifier records one
 verdict for each journey it runs (the Evidence section of [the skill](../SKILL.md#evidence)).
 `bin/journeys.mjs` is the only reader of this structure, and its test parses every file here.
+
+A journey runs on an instance in one mode: `default`, `mcp` with the MCP gateway, or `mcp-same-origin` with the
+gateway also at the web origin. It can also need something built before `up`: `web-build` is the server's own
+web build, for link previews. A recipe declares both in a one-line paragraph, such as `Mode: mcp.` or
+`Mode: mcp-same-origin. Needs: web-build.`. As the first paragraph under `Driving it with agent-browser and uvw`,
+the line covers every journey of the feature. As the first paragraph under a journey heading, it covers that
+journey: its mode replaces the feature's, and its needs add to them. A journey with no mode is `default`. A
+`Mode:` or `Needs:` line anywhere else, or an unknown value, fails the parser test. `$V up --for` starts the
+instance and checks the needs, so a recipe never starts, stops or restarts the instance for its mode. Only a
+journey that needs another instance shape, such as production MCP or a restart with other server settings, does
+that in its own text.
 
 An H1, or a journey heading, that ends in ` (host only)` cannot run in
 [the runner](../SKILL.md#run-journeys-in-the-runner). The runner refuses a marked feature, leaves a

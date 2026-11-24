@@ -51,7 +51,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 
 Preconditions:
 
-- Baseline run with `$V user`. The uvw path works without MCP; AH4's MCP card and AH7 need `VERIFY_UVW_MCP=1`.
+- Baseline run with `$V user`.
 - Workspace creates at most 5 agents per hour per source IP per instance. Each `uvw auth guest`,
   `$V mcp-oauth login --guest` and `$V principal` counts.
 - `$V uvw` holds the run user's session and `uvw auth guest` refuses while a session is stored
@@ -108,12 +108,16 @@ Another signed-in user opening the used claim URL sees `This agent has already b
 
 ### HO9. MCP guest and an agent-signed browser (AH4, AH7)
 
+Mode: mcp.
+
 `$V mcp-oauth login g1 --guest` saves
 `g1-guest-card.png` and leaves the run browser signed in as the guest. `$V mcp --auth oauth g1-whoami whoami`
 names it `verify-uvw g1 · <suffix>`. `$V mcp --auth oauth g1-claim claim '{}'` returns the link; opening it in
 the run browser shows `Sign out and continue`. Click it, sign in as the run user, and claim.
 
 ### MH1. Unclaimed agent
+
+Mode: mcp.
 
 Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per source IP.
 Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
@@ -135,11 +139,15 @@ its own repository. A person's default list has 47 and no `claim`. The instructi
 
 ### MH2. Claimed agent
 
+Mode: mcp.
+
 Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
 gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 51 tools (no `claim`),
 and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
 
 ### MH3. Claimer decisions
+
+Mode: mcp.
 
 bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
 `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
@@ -150,6 +158,8 @@ Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
 
 ### MH4. Public Spaces
 
+Mode: mcp.
+
 `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
 with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
 and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
@@ -157,6 +167,8 @@ the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":
 `AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
 
 ### MH5. Copy a shared file
+
+Mode: mcp.
 
 With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
 `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with

@@ -63,8 +63,9 @@ repository's `Trash` page.
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MI1 through MI11 use the Team Space, MP1 through MP10 the Personal Space, and MP14 an agent's Personal Space:
 

@@ -6,8 +6,10 @@ and their pass conditions start at [MCP gateway](../features/mcp.md), and each t
 
 ## Start
 
-Opt in with `VERIFY_UVW_MCP=1 $V up`. The gateway listens on loopback port 3930 (`VERIFY_UVW_MCP_PORT`).
-Without the opt-in, every command keeps its default-mode behavior. `VERIFY_UVW_MCP_FROM` chooses how `up`
+Journeys that declare `Mode: mcp.` or `Mode: mcp-same-origin.` ([the feature contract](../features/README.md#feature-entry-contract))
+get it from `$V up --for <feature> [journey-id|mode...]`, which sets `VERIFY_UVW_MCP` and
+`VERIFY_UVW_MCP_SAME_ORIGIN`. Without journeys, opt in with `VERIFY_UVW_MCP=1 $V up`. The gateway listens on
+loopback port 3930 (`VERIFY_UVW_MCP_PORT`). Without the opt-in, every command keeps its default-mode behavior. `VERIFY_UVW_MCP_FROM` chooses how `up`
 starts the gateway, executor and renderer:
 
 | Start mode | Where it runs | What `up` does |
@@ -31,7 +33,7 @@ These variables are read at `up` and saved in `run.env`:
 | `VERIFY_UVW_MCP_EXECUTORS=2` | Adds a second executor, for MX13. |
 | `VERIFY_UVW_MCP_RENDERER=0` | No renderer container and no `MCP_RENDERER_URL`. Doctor checks it is absent. `renderer-call` and `renderer-restart` refuse. |
 | `VERIFY_UVW_MCP_PRODUCTION=1` | `NODE_ENV=production` and no `MCP_DEV_SESSION_PASSTHROUGH`. Gateway and executor start with the placeholder allowlist `verify-uvw-pending-user`, which the first `user` replaces with the run user's ID. |
-| `VERIFY_UVW_MCP_SAME_ORIGIN=1` | Serves the gateway at `http://127.0.0.1:<web port>/mcp` through Vite, as production does. Use it when a browser page calls `/mcp`, such as the Agents module. The gateway's own port then answers 403 on `/mcp` and serves only `healthz`, `readyz`, `metrics` and the protected-resource metadata. |
+| `VERIFY_UVW_MCP_SAME_ORIGIN=1` | Serves the gateway at `http://127.0.0.1:<web port>/mcp` through Vite, as production does. The `mcp-same-origin` mode sets it, for journeys where a browser page calls `/mcp`, such as the Agents module. `run.env` records it as `MCP_SAME_ORIGIN`. The gateway's own port then answers 403 on `/mcp` and serves only `healthz`, `readyz`, `metrics` and the protected-resource metadata. |
 | `VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` | Builds the image from another checkout, such as a clean `git worktree` at `origin/main` that reuses the cached install layer. Its `apps/mcp`, `packages/client-core` and `apps/cli/skill-data` must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data` is empty). Doctor checks the image against that checkout's source digest. |
 | `VERIFY_UVW_AGENT_PORT=<port>` | Registers the Workspace Agent's OAuth client for `agent-up`. See [Workspace Agent](#workspace-agent). |
 | `EXECUTOR_MAX_WORKERS`, `EXECUTOR_IDLE_TTL_MS` | Size the executor pool (defaults 4 and 60000 ms), for both executors. They do not change product defaults. |
@@ -52,7 +54,8 @@ Which mode a journey needs:
   authentication.
 - M7, MR9 onward, screenshot checks and the renderer benchmark need the renderer.
 
-To restart the same run for MO3, run `down`, then `up --reuse` with the same run id and ports. Reuse
+To restart the same run for MO3 or MT2, run `down`, then `up --reuse --for <feature> <journey-id>` with the same run id
+and ports. Reuse
 requires that `down` already removed `data/` and `home/`. It creates fresh data and credentials, keeps evidence,
 and replaces logs, so save what you need from the logs first. Run `user` again after each restart.
 

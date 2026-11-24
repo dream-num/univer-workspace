@@ -30,18 +30,16 @@ run `uvw outline --unit <id> --trunk` (or `--worktree <id>`). `uvw outline --hel
 
 ## Driving it with agent-browser and uvw
 
-Use one persistent shell per instance. Pick free ports with `lsof -nP -iTCP:<port> -sTCP:LISTEN`
-and never reuse another session's run.
+Every instance, whatever its mode, starts with this seed. The `args` helper prints the JSON arguments of an MCP call
+without shell quoting ambiguities.
 
 ```bash
-export VERIFY_UVW_ROOT=/tmp/verify-uvw-slc VERIFY_UVW_RUN=slc
-export VERIFY_UVW_SERVER_PORT=3963 VERIFY_UVW_WEB_PORT=5963 VERIFY_UVW_MCP_PORT=3973
-V=.agents/skills/verify-uvw/bin/verify-uvw
-$V up && $V user && eval "$($V env)" && $V doctor
+eval "$($V env)"
 node .agents/skills/verify-uvw/bin/seed-sheets.mjs > "$EVIDENCE/slc-seed.json"
 test -s "$EVIDENCE/slc-seed.json"
 ids() { tail -n 1 "$EVIDENCE/slc-seed.json" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8'))['$1']"; }
 W=$(ids worktree) REPO=$(ids repo) SALES=$(ids sales) L30=$(ids ledger30k) L50=$(ids ledger50k) DOC=$(ids doc)
+args() { node -e 'console.log(JSON.stringify({unit:process.argv[1],worktree:process.argv[2],...JSON.parse(process.argv[3]||"{}")}))' "$1" "$W" "${2:-}"; }
 ```
 
 Seeding takes about two and a half minutes. Record every command with
@@ -50,17 +48,7 @@ Before you compare two outputs, check that both files are non-empty.
 
 Terminal screenshots: open `$EVIDENCE/<label>.out` with `agent-browser` and capture it.
 
-**MCP Sheet reading (SL2).** Start a separate instance with `VERIFY_UVW_MCP=1` and, for SLM8,
-`VERIFY_UVW_MCP_SAME_ORIGIN=1`. Use the free-port recipe above, then run `$V user`,
-`eval "$($V env)"` and `seed-sheets.mjs` as above. Keep `W`, `SALES`, `L50` and `DOC`
-from that seed. Each call saves its result and correlated `.event.json` in `$EVIDENCE`.
-The following helper prints JSON arguments without shell quoting ambiguities.
-
-```bash
-args() { node -e 'console.log(JSON.stringify({unit:process.argv[1],worktree:process.argv[2],...JSON.parse(process.argv[3]||"{}")}))' "$1" "$W" "${2:-}"; }
-$V mcp-tools slm-tools
-$V mcp slm-outline outline "$(args "$SALES")"
-```
+**MCP Sheet reading (SL2).** Each `$V mcp` call saves its result and correlated `.event.json` in `$EVIDENCE`.
 
 ### SLC1. Inspect and outline at the pull request head
 
@@ -168,6 +156,8 @@ the second user gets the same access error from all three commands.
 
 ### SLM1. Regression against the base (host only)
 
+Mode: mcp.
+
 In separate base and head instances, run
 `$V mcp-tools slm1-tools` and
 `$V mcp slm1-inspect inspect "$(args "$SALES" '{"target":"workbook"}')"`.
@@ -175,12 +165,16 @@ Pass when inspect results match and only `outline`, `read` and `find` are added.
 
 ### SLM2. Outline through MCP matches the CLI
 
+Mode: mcp.
+
 Run `$V mcp slm2 outline "$(args "$SALES" '{"at":"s2.t1"}')"` and
 `$V cli slm2-cli outline --unit "$SALES" --worktree "$W" --at s2.t1`.
 Pass when MCP `structuredContent.text` and the CLI text are byte-identical after
 removing their final continuation lines. Both first lines contain the same `rev=`.
 
 ### SLM3. Outline continuation through MCP
+
+Mode: mcp.
 
 Run `$V mcp slm3-page1 outline "$(args "$SALES" '{"at":"s2.t1","budget":300}')"`.
 Continue with the returned arguments.
@@ -195,10 +189,14 @@ scope survive each call, and the complete chain lists ten distinct column refs.
 
 ### SLM4. Typed read through MCP
 
+Mode: mcp.
+
 Run `$V mcp slm4 read "$(args "$SALES" '{"range":"Summary!A3:I8","json":true}')"`.
 Pass when formula cells in `structuredContent.json` have numeric `value` fields.
 
 ### SLM5. Find pages through MCP
+
+Mode: mcp.
 
 Run `$V mcp slm5-page1 find "$(args "$SALES" '{"terms":["returned"],"max":10}')"`.
 Feed each `structuredContent.next.arguments` into `$V mcp slm5-page2 find "$NEXT"`,
@@ -206,11 +204,15 @@ then increment the label until no next remains. Pass when there are 61 hits with
 
 ### SLM6. A Doc is refused
 
+Mode: mcp.
+
 Run `$V mcp slm6 outline "$(args "$DOC")"`.
 Pass when `$V mcp` exits 1 with `workspace-sheet-lens-unit-type-unsupported`, its
 message names `inspect`, and the event has `outcome: tool_error`.
 
 ### SLM7. Cache per user in a Team Space
+
+Mode: mcp.
 
 Use a Team Space with a space-visible Worktree. A public Personal Space
 does not grant another user Worktree access. Create and import a separate sales
@@ -275,13 +277,17 @@ and the second user's first has `cache: miss`. Never put either credential in ev
 
 ### SLM8. Outline card in the Agents module
 
-With the same-origin flag, start the mock provider from the skill's
+Mode: mcp-same-origin.
+
+Start the mock provider from the skill's
 Browser Agent recipe. Script a call to `outline` with the sales Unit and Worktree.
 Open a new Agents session and send two turns. Also run `$V mcp-tools slm8-before`
 and `$V mcp-tools slm8-after` around them. Pass when the outline card displays its
 revision-stamped output and the session's request tool lists are byte-identical.
 
 ### SLM9. Read-only PAT
+
+Mode: mcp.
 
 Run `$V mcp-token --scopes read`, then
 `$V mcp slm9-outline outline "$(args "$SALES")"`,
@@ -290,6 +296,8 @@ Run `$V mcp-token --scopes read`, then
 Pass when all three succeed with `outcome: ok` using the read-only PAT.
 
 ### SLM10. The 50,000-row ledger through MCP
+
+Mode: mcp.
 
 Run `$V mcp slm10 outline "$(args "$L50")"` twice. The 50,000-row ledger (500,010
 cells) is under the executor's 1,000,000-cell limit. Pass when `text` shows a `table` line with
@@ -305,8 +313,7 @@ $V mcp slm10-large outline "$(args "$L50")"
 
 Pass when `warnings` explains the large sheet and `text` contains a `note:` line.
 
-Run `$V down` after the journeys, including after failures. Keep only this run's
-results and redacted events. The `.event.json` cache and stage timing fields contain
+Keep only this run's results and redacted events. The `.event.json` cache and stage timing fields contain
 no document text or arguments.
 
 ## Gotchas

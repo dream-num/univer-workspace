@@ -26,8 +26,9 @@ An MCP client connected to `$MCP_URL` calls `execute` and `inspect` from the def
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MX4 signs the run browser in itself. MX13 needs `VERIFY_UVW_MCP_EXECUTORS=2` at `up`.
 
@@ -246,7 +247,7 @@ is no SVG retry key; an unknown write outcome requires inspection before another
 ### MT2. Typst job verification
 
 After the default-budget journeys, run `down` and start a fresh stack with
-`MCP_SYNC_BUDGET_MS=1 VERIFY_UVW_MCP=1 $V up`, then `user` and `doctor`.
+`MCP_SYNC_BUDGET_MS=1 $V up --reuse --for mcp-executor MT2`, then `user` and `doctor`.
 Keep those commands and the journey in the same long-lived shell.
 
 ```bash
@@ -257,7 +258,7 @@ node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst-jobs
 Pass when apply returns a running job, `job_get` returns the committed Doc,
 the same-key retry returns that job or its original result, and `unit_list`
 has exactly one new Unit. Inspect the native Doc to read back its text.
-Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.
+Evidence uses `mcp-typst-job-*`.
 
 ## Gotchas
 

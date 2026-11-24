@@ -25,8 +25,9 @@ owner reviews the draft at `/drafts/<id>` in the browser. A reviewer opens the p
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 

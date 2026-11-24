@@ -9,7 +9,8 @@ Everything goes through one helper. Run it from the repository root:
 
 ```bash
 V=.agents/skills/verify-uvw/bin/verify-uvw
-$V up        # start server :3920 + web :5973 on a fresh temp data dir
+$V up --for <feature> [journey-id|mode...]   # start server :3920 + web :5973 on a fresh temp data dir, in the journeys' mode
+$V up        # the same in the default mode, for behavior no journey covers
 $V user      # register a throwaway password user and sign uvw in as it
 $V doctor    # is this instance ours and worth driving?
 $V env       # print exports for agent-browser / uvw in the current shell
@@ -17,11 +18,11 @@ $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evid
 $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
-$V journeys <feature> [journey-id...]   # the journeys to verify; after up, which have a verdict
+$V journeys <feature> [journey-id|mode...]   # the journeys to verify, by mode; after up, which have a verdict
 $V verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note]   # record one journey's verdict in this run
-$V brief <feature> [journey-id...]   # print the brief for an agent that drives this run
-$V runner <feature[:ID,ID]>...       # run journeys in disposable Linux containers, no instance of yours
-$V runner --check [feature[:ID,ID]...]   # can these run in runner mode here? starts nothing
+$V brief <feature> [journey-id|mode...]   # print the brief for an agent that drives this run
+$V runner <feature[:ID|mode,...]>...      # run journeys in disposable Linux containers, no instance of yours
+$V runner --check [feature[:ID|mode,...]...]   # can these run in runner mode here? starts nothing
 $V down      # stop what this run started; delete data; keep evidence + logs
 ```
 
@@ -76,6 +77,14 @@ is different: tell the user and offer `host` rather than switching on your own.
 
 ## Launch
 
+A journey declares the mode of the instance it runs on: `default`, `mcp` with the MCP gateway, or
+`mcp-same-origin` with the gateway also at the web origin ([the feature contract](features/README.md#feature-entry-contract)).
+`$V journeys <feature>` lists a feature's journeys by mode, each mode with the command that starts its instance,
+such as `$V up --for sheet-lens mcp`. `up --for <feature> [journey-id|mode...]` sets the mode flags of
+[MCP mode](references/mcp-mode.md#start) from what those journeys declare, overriding your shell's, and refuses
+journeys that span modes. One instance runs one mode, so verify such a feature in one instance per mode. Plain `up`
+starts the default mode, or the mode your flags choose.
+
 `up` and `doctor` check the prerequisites and print the fix for each. `node_modules` must match
 `pnpm-lock.yaml` (`pnpm install --frozen-lockfile`), and `apps/cli/dist` and
 `packages/client-core/dist` must be newer than their `src` (`pnpm --filter 'univer-workspace-cli...' build`).
@@ -93,6 +102,8 @@ The server does not reload. After you change server or CLI code, rebuild the CLI
 `$V metrics` prints the server's Prometheus text. Vite serves `/nodes/<id>` itself, so share pages and
 link previews come from the server only after `pnpm --filter '@univerjs/univer-workspace^...' build`
 and `pnpm --filter @univerjs/univer-workspace build:web` before `up`. Open those links on the server port.
+A journey that needs them declares `Needs: web-build.`, and `up --for` refuses it until that build is newer
+than `apps/workspace/web`.
 
 ## Doctor
 
@@ -189,15 +200,16 @@ Every verdict but `PASS` needs a note with the values you read and the evidence 
 Following a journey in `features/` does not need your strongest model. When your harness can start a
 subagent, give it the journey and keep your own turns for choosing what to verify and for judging the result.
 
-1. Start the instance yourself with `$V up`, `$V user` and `$V doctor`.
-2. Run `$V journeys <feature>` to see the journeys, then `$V brief <feature> [journey-id...]`, for example
-   `$V brief link-sharing LS1 LS2 LS3`. The brief lists the journey IDs that each need a verdict. Give the subagent
-   that text unchanged, with no hint about the change under review.
-3. Run `$V journeys <feature> [journey-id...]` with the same IDs. Until it no longer says `INCOMPLETE`, some
-   journey is unverified, whatever the report says. Treat the verdicts and the report as claims. Before you repeat
-   a `PASS`, `FAIL` or `DRIFT`, open the evidence files it names. You decide whether a difference from the recipe
-   is a defect.
-4. Stop the instance yourself with `$V down`.
+1. Run `$V journeys <feature>` to see the journeys by mode. Take one mode, or some journeys of one mode, at a time.
+2. Start the instance yourself with `$V up --for <feature> [journey-id|mode...]`, `$V user` and `$V doctor`.
+3. Run `$V brief <feature> [journey-id|mode...]` with the same selection, for example `$V brief link-sharing LS1 LS2 LS3`.
+   It refuses a run whose mode differs from the journeys'. The brief lists the journey IDs that each need a verdict.
+   Give the subagent that text unchanged, with no hint about the change under review.
+4. Run `$V journeys <feature> [journey-id|mode...]` with the same selection. Until it no longer says `INCOMPLETE`,
+   some journey is unverified, whatever the report says. Treat the verdicts and the report as claims. Before you
+   repeat a `PASS`, `FAIL` or `DRIFT`, open the evidence files it names. You decide whether a difference from the
+   recipe is a defect.
+5. Stop the instance yourself with `$V down`, then repeat from step 2 for the feature's next mode.
 
 Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
 design checks. This section is `host` mode ([Choose runner or host](#choose-runner-or-host)), and it names no
@@ -208,13 +220,17 @@ macOS.
 
 ## Run journeys in the runner
 
-`$V runner` gives each task to Claude Code in a disposable Linux container. A task is a feature, or a
-feature with some of its journeys:
+`$V runner` gives each task to Claude Code in a disposable Linux container. A spec is a feature, or a feature
+with some of its journeys or modes, and each mode it selects becomes one task:
 
 ```bash
 $V runner link-sharing:LS1,LS2,LS3,LS4 auth   # two tasks
+$V runner sheet-lens pull-requests:mcp         # four tasks: sheet-lens, sheet-lens-mcp, sheet-lens-mcp-same-origin, pull-requests
 $V runner --jobs 3 --keep issues auth create-document
 ```
+
+A task's id is its feature. When a spec spans modes, each mode but `default` adds `-<mode>`, and a repeat adds `-2`
+and so on. The id is also the task's run id.
 
 - The runner image is the one exception to "names no model". It ships Claude Code pointed at DeepSeek's
   Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high, and opencode on
@@ -230,8 +246,11 @@ $V runner --jobs 3 --keep issues auth create-document
 - It tests your working tree as it is. Tracked changes and untracked files go into a snapshot commit that no
   ref points at, and your index, status and refs stay as they were.
 - It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
-  builds the CLI and the MCP gateway once, then takes tasks one at a time. Every task gets a new Claude Code session, which starts its
-  own instance from the brief that `$V brief --own <run-id> <feature> [journey-id...]` prints.
+  builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
+  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, then gives a new
+  Claude Code session the brief that `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief
+  says the instance is already running in the journeys' mode. When the prepare fails, no session starts, the task
+  is `infra-error`, and `summary.md` quotes the `FAIL` lines of its `prepare.log`.
 - A task expects a verdict for each journey it selects, from the journey headings of its feature file. A journey
   marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract) does not run here,
   and neither does a marked feature. The runner lists them in `summary.md` for a host run.
@@ -240,7 +259,7 @@ $V runner --jobs 3 --keep issues auth create-document
   `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
   journeys that call `docker` or `agent-up`, and the whole MCP security feature, are marked `(host only)`.
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
-  `summary.md`, and for each task `report.md` (its evidence paths open on the host), `transcript.jsonl`,
+  `summary.md`, and for each task `prepare.log`, `report.md` (its evidence paths open on the host), `transcript.jsonl`,
   `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
 - At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
   holds each expected journey's verdict and note, `MISSING` when it has none, and a result: `INCOMPLETE` when any

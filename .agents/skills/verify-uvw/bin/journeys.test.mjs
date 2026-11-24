@@ -19,10 +19,17 @@ test('every feature file parses into journeys whose ids are unique across featur
   const all = [...features.values()].flatMap((f) => f.journeys);
   assert.equal(new Set(ids(all)).size, all.length);
   for (const f of features.values()) assert.ok(f.journeys.length, `${f.name} has journeys`);
-  // The drill's silent skip: a runner task for sheet-lens expects its MCP half, all but the base comparison.
+  // The drill's silent skip: the runner gives sheet-lens's MCP half instances of their own, all but the base comparison.
   const sheet = plan(features.get('sheet-lens'), [], { where: 'runner' });
-  assert.deepEqual(ids(sheet.partitions[0].journeys), [...Array(10)].map((_, k) => `SLC${k + 1}`).concat([...Array(9)].map((_, k) => `SLM${k + 2}`)));
+  assert.deepEqual(sheet.partitions.map((p) => [p.mode, ids(p.journeys)]), [
+    ['default', [...Array(10)].map((_, k) => `SLC${k + 1}`)],
+    ['mcp', ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
+    ['mcp-same-origin', ['SLM8']]]);
   assert.deepEqual(ids(sheet.host), ['SLM1']);
+  const declared = (name) => Object.fromEntries(plan(features.get(name)).partitions.map((p) => [p.mode, [ids(p.journeys).join(' '), p.needs.join(' ')]]));
+  assert.deepEqual(declared('pull-requests'), { default: ['PR1 PR2 PR3', ''], mcp: ['PR4 PR5 PR6 PR7 PR8 PR9 PR10', ''] }, 'one mode holds the chain of shared state');
+  assert.deepEqual(declared('link-sharing').default[1], 'web-build');
+  assert.deepEqual(Object.keys(declared('agent-trajectory')), ['mcp-same-origin']);
 });
 
 test('only ### headings under Driving it are journeys, with their title and (host only) mark', () => {

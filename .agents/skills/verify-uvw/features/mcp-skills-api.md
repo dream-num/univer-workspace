@@ -25,8 +25,9 @@ An MCP client connected to `$MCP_URL` reads the initialize instructions, calls `
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
@@ -200,7 +201,7 @@ jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
 Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1, the reused cursor has a matching usage event, and the CLI also rejects the unknown Skill.
 ### MR13. custom Skills
 
-Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
+Seed one Skill in each layer.
 Run MR13 after MR1 or on a fresh run: MR1 expects only the twelve built-in Skills.
 The seeder creates missing folders and uploads files recursively. Re-runs skip existing
 Blob names and never delete or replace existing data. Use a new name to seed changed bytes.
@@ -265,7 +266,6 @@ Use a fresh run for the duplicate case because it intentionally leaves an ambigu
 
 ### MR14. Skill draft authoring
 
-Start a fresh MCP-enabled run, then run `user` and `doctor`.
 MR14 follows MR13's live custom Skill discovery path.
 
 ```bash
@@ -283,26 +283,20 @@ login HTTP endpoint to obtain the author's interactive Session. It publishes wit
 with source `user`, and `mr14-read.out` must return its exact `SKILL.md` text.
 The four draft call events must say `ok`, `executor: none`, and the destination
 Space ID, with no Skill content. `mr14-summary.json` records the asserted result.
-Run `$V down` afterward.
 
 ### MR15. Import a pinned external Skill and publish after review
 
-Use a fresh MCP-enabled same-origin run, with live GitHub network access. Build the
-MCP image from this checkout. Check the chosen ports with `lsof` first.
+Mode: mcp-same-origin.
+
+It needs live GitHub network access.
 
 ```bash
-export VERIFY_UVW_ROOT=/tmp/verify-uvw-sb5 VERIFY_UVW_RUN=mr15
-export VERIFY_UVW_SERVER_PORT=3932 VERIFY_UVW_WEB_PORT=5982 VERIFY_UVW_MCP_PORT=3942
-export VERIFY_UVW_MCP=1 VERIFY_UVW_MCP_SAME_ORIGIN=1
-V=.agents/skills/verify-uvw/bin/verify-uvw
-$V up
-$V user
 eval "$($V env)"
 $V doctor > "$EVIDENCE/mr15-doctor.txt"
 node .agents/skills/verify-uvw/bin/mcp-skill-import.mjs
 ```
 
-Keep the launching shell alive between commands. The script reads the real pinned
+The script reads the real pinned
 `anthropics/skills` PDF Skill, creates an as-is `from` draft with one verbatim review
 quote and one fabricated quote, signs into the browser, captures the review page,
 and presses Publish on that page. It then independently checks publication through
@@ -327,7 +321,6 @@ publication. Verify `pdf` is first in the Skills rail and its `from GitHub` link
 is derived from `metadata.source` and its pinned `source-commit`. Save `mr15-rail.png` and `mr15-rail.txt`, reload and save
 `mr15-rail-reloaded.png` to check persistence. Switch the UI to Chinese and save
 `mr15-rail-zh.png` showing `来自 GitHub`. No real model credentials are required.
-Run `$V down` afterward and retain its cleanup output.
 
 ## Gotchas
 

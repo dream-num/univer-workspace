@@ -21,7 +21,9 @@ Open Application settings: Account > `Application settings` in Repository mode, 
 
 ## Driving it with agent-browser and uvw
 
-Use the isolated run and browser session described in [the verification index](./README.md). Start that run in MCP mode with the gateway on the web origin, `VERIFY_UVW_MCP=1 VERIFY_UVW_MCP_SAME_ORIGIN=1 $V up`, then `$V user` and `$V doctor`, as in [Browser Agent skills](./agent-skills.md#driving-it-with-agent-browser-and-uvw). The browser Agent gets its token and tools from that gateway: after a plain `$V up`, every Agent message fails with `Could not obtain agent token (HTTP 503)`. Every journey below runs on that one run. Start the mock provider and add it as an OpenAI-compatible model as in AS1 of [Browser Agent skills](./agent-skills.md#driving-it-with-agent-browser-and-uvw). `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help` describes the script steps and the request log. Use a unique run and allowed ports. Do not attach to another run's server.
+Mode: mcp-same-origin.
+
+Use the isolated run and browser session described in [the verification index](./README.md). The browser Agent gets its token and tools from the MCP gateway on the web origin: in a run without it, every Agent message fails with `Could not obtain agent token (HTTP 503)`. Every journey below runs on that one run. Start the mock provider and add it as an OpenAI-compatible model as in AS1 of [Browser Agent skills](./agent-skills.md#driving-it-with-agent-browser-and-uvw). `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help` describes the script steps and the request log.
 
 After a session runs, dump the recorded requests from its Vite dev session page:
 

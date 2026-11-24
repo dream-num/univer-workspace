@@ -15,7 +15,9 @@ An operator deploys the gateway with `NODE_ENV=production` and an executor allow
 
 ## Driving it with agent-browser and uvw
 
-MB starts its own production run, as written below, so do not reuse a default MCP run. The other MCP-mode
+Mode: mcp.
+
+MB1 starts its own production run, as written below, so do not reuse a default MCP run. The other MCP-mode
 rules in [MCP gateway](mcp.md) still apply.
 
 ### MB1. Deployment and per-account tools (host only)

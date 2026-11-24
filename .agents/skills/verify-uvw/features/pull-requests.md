@@ -31,9 +31,6 @@ only read proposes a change the same way and leaves the merge to them.
 
 Preconditions:
 
-- Start the run in MCP mode, because **Propose through MCP** and the `space_node` refusals call `$V mcp`:
-  `VERIFY_UVW_MCP=1 $V up`, then `$V user` and `$V doctor`. Every other step runs the same in MCP mode. If the run
-  is already up without it, run `$V down`, `VERIFY_UVW_MCP=1 $V up --reuse`, `$V user` and `$V doctor`.
 - Baseline run with `$V user` done. `O=verify-$VERIFY_UVW_RUN`, `R=$O/personal`.
 - Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 
@@ -65,6 +62,8 @@ Run `$V cli pr-merge-again pr merge $P -R $R --json`. Exit `0`, `state: "merged"
 
 ### PR4. Propose as a reader of a Team Space
 
+Mode: mcp.
+
 Proposals and merge rights (`pr-propose-read-only`, `pr-merge-rights`, `pr-merge-states`) need a Team Space
 that someone else holds, where the run user can only read:
 
@@ -93,13 +92,17 @@ that someone else holds, where the run user can only read:
 
 ### PR5. Propose through MCP
 
-On the MCP-mode run from the preconditions ([MCP mode](../references/mcp-mode.md)), `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
+Mode: mcp.
+
+As the run user, `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
 then `unit_add` (`worktree`, `resource`), `unit_create` (`worktree`, `space`, `type`, `name`), `execute`
 (`worktree`, `unit`, `code`) and `pr_ready` (`repo`, `number`) succeed the same way, and `pr_ready` returns
 `visibility: "space"`. `$V mcp pp-mcp-merge pr_merge '{"repo":"<H>/team-pr","number":<n>}'` exits `1`
 with `code: "FORBIDDEN"` and the message below.
 
 ### PR6. Refusals
+
+Mode: mcp.
 
 The run user's `pr merge $P -R <H>/team-pr --json` exits `1` with
 `FORBIDDEN: You cannot merge this pull request without edit access to every file and folder it changes.`
@@ -111,6 +114,8 @@ same codes. `execute` has no Trunk form: it always takes a `worktree`.
 
 ### PR7. Editor merges
 
+Mode: mcp.
+
 `ue pr list -R <H>/team-pr --json number,state,visibility,creator` lists the proposal as
 `ready` and `space` with the run user as `creator`. `ue pr merge $P -R <H>/team-pr --json state` prints
 `{"state": "merged"}`. H's `inspect --trunk` now shows the proposed values, and `uh space browse <H>/team-pr --json`
@@ -120,6 +125,8 @@ lists `Proposed`, the file the proposal created. With H's cookie, `GET $ORIGIN/a
 
 ### PR8. Browser
 
+Mode: mcp.
+
 A second member with read access (register one and add it as `viewer`) opens
 `$ORIGIN/spaces/$T/pulls/$P` on a ready proposal: the review panel reads
 `Merging this pull request needs edit access to every file it changes.` and has no merge button. In E's
@@ -127,6 +134,8 @@ session the panel has `Confirm merge`; click it, confirm `Merge this task?`, and
 Screenshot both. The panel sits below the fold, so scroll it into view first.
 
 ### PR9. Private (`pr-merge-rights`)
+
+Mode: mcp.
 
 E opens a pull request, adds a file and runs `ue pr ready`: it prints
 `{"state": "ready", "visibility": "private"}`, because E can merge it. The run user's `pr view` exits `1` with
@@ -137,6 +146,8 @@ panel reads `Only the author, <E display name>, can merge this pull request.` be
 `uh pr merge` prints `{"state": "merged"}`.
 
 ### PR10. States
+
+Mode: mcp.
 
 The run user's `pr merge` on that merged pull request prints
 `workspace-lifecycle-invalid: Pull request #<n> is already merged.` A draft PR's merge prints

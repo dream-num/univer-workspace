@@ -27,16 +27,18 @@ test('both briefs name the run, the feature file and every expected journey id, 
     assert.match(some.stdout, /Run `\$V journeys link-sharing LS2 LS1`\. .*INCOMPLETE/);
     assert.match(some.stdout, /^Run test is already running in the `default` mode that these journeys declare, with its user signed in .*Do not run `up`, `down` or `user` unless a journey's own text restarts the instance/m);
 
-    const host = call('sheet-lens');
+    assert.equal(call('sheet-lens').status, 2, 'sheet-lens spans three modes, and a brief takes one');
+    writeFileSync(join(root, 'test/run.env'), 'RUN_ID=test\nWEB_PORT=1\nMCP_ENABLED=1\nMCP_SAME_ORIGIN=0\n');
+    const host = call('sheet-lens', 'mcp');
     assert.equal(host.status, 0, host.stderr);
-    assert.equal(listed(host.stdout).length, 20, 'the host brief expects host-only journeys too');
-    assert.ok(listed(host.stdout).includes('SLM1'));
-    assert.doesNotMatch(host.stdout, /Skip its other journeys|Do not run SLM1/);
+    assert.deepEqual(listed(host.stdout), ['SLM1', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10'], 'the host brief expects host-only journeys too');
+    assert.doesNotMatch(host.stdout, /Do not run SLM1/);
 
-    const own = call('--own', 'task-1', 'sheet-lens');
+    const own = call('--own', 'task-1', 'sheet-lens', 'mcp');
     assert.equal(own.status, 0, own.stderr);
-    assert.deepEqual(listed(own.stdout), [...Array(10)].map((_, k) => `SLC${k + 1}`).concat([...Array(9)].map((_, k) => `SLM${k + 2}`)));
+    assert.deepEqual(listed(own.stdout), ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']);
     assert.match(own.stdout, /Do not run SLM1\. Only the host runs it\./);
+    assert.match(own.stdout, /Skip its other journeys\./);
     assert.match(own.stdout, /This container is disposable and yours\.\n/);
     assert.ok(own.stdout.includes(`export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
     assert.match(own.stdout, /Leave run task-1 running when you reply/);

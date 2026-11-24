@@ -21,13 +21,15 @@ the opencode client and cleanup. Each tool family has its own `mcp-*.md` file in
 ## How to get to it (user POV)
 
 Use `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root on macOS
-Docker Desktop or OrbStack. Start with `VERIFY_UVW_MCP=1 $V up`, then `$V user`. The gateway
+Docker Desktop or OrbStack. Start with `$V up --for mcp`, then `$V user`. The gateway
 publishes `http://127.0.0.1:3930/mcp`. Parallel runs need their own root and all three
 ports. `eval "$($V env)"` provides the MCP URL and the isolated opencode directory.
 [MCP mode](../references/mcp-mode.md) lists the `up` variables, the `mcp` commands and their evidence
 and exit codes.
 
 ## Driving it with agent-browser and uvw
+
+Mode: mcp.
 
 Use Bash for these commands. Prerequisites are the baseline CLI build and dependencies,
 Docker Desktop or OrbStack, `jq`, and opencode for M11. Each MCP call
@@ -37,8 +39,6 @@ M4 creates the Team Space `verify-team` that the other MCP files reuse.
 ### M1. Environment
 
 ```bash
-VERIFY_UVW_MCP=1 $V up
-$V user
 eval "$($V env)"
 RUN="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN"
 $V doctor > "$EVIDENCE/mcp-doctor.txt"

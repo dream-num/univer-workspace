@@ -41,18 +41,13 @@ follow-up composer and a **Skills** section in the session rail.
 
 ## Driving it with agent-browser and uvw
 
-Use Bash in one persistent shell so the instance and mock processes survive. Run
-[MR1](mcp-skills-api.md#mr1-skills-list-and-get-fallback) before seeding custom skills. The commands below share one fresh run and
+Mode: mcp-same-origin.
+
+Use Bash in one persistent shell so the mock processes survive. Run
+[MR1](mcp-skills-api.md#mr1-skills-list-and-get-fallback) before seeding custom skills. The commands below share one run and
 use distinct names for each journey. A journey that continues another session says so.
-Install and build the prerequisites in [the skill](../SKILL.md#launch) first.
 
 ```bash
-export VERIFY_UVW_ROOT=/tmp/verify-uvw-as VERIFY_UVW_RUN=as
-export VERIFY_UVW_SERVER_PORT=3927 VERIFY_UVW_WEB_PORT=5980 VERIFY_UVW_MCP_PORT=3937
-export VERIFY_UVW_MCP=1 VERIFY_UVW_MCP_SAME_ORIGIN=1
-V=.agents/skills/verify-uvw/bin/verify-uvw
-$V up
-$V user
 eval "$($V env)"
 $V doctor > "$EVIDENCE/as-doctor.txt"
 $V cli as-repo repo create as-skills --json
@@ -510,23 +505,19 @@ succeed. Text queued while a step runs joins that run without a catalog refresh 
 expansion. Text queued after a run ends starts a new run, which refreshes the catalog and
 expands `/name`.
 
-Finish by stopping only this shell's mock and this run.
+Finish by stopping only this shell's mock.
 
 ```bash
 kill "$MODEL_PID"
 wait "$MODEL_PID" || true
-$V down
 ```
 
 ### AS16. Review evidence
 
-Run with MCP and the same-origin proxy enabled, as for AS1. Choose free ports with
-`lsof` and keep one persistent shell for the instance and mock provider. Use the
-Vite web URL. The built SPA fallback cannot serve nested routes from checkouts
+Use the Vite web URL. The built SPA fallback cannot serve nested routes from checkouts
 under dotted directories on this Mac.
 
-After `up`, `user`, `doctor` and browser sign-in, create the fixtures through the
-public HTTP API. The helper signs in with the disposable user's interactive
+After browser sign-in, create the fixtures through the public HTTP API. The helper signs in with the disposable user's interactive
 Session, checks the evidence and stores draft envelopes under `$EVIDENCE`.
 
 ```bash
@@ -589,13 +580,12 @@ files. Leave this draft pending.
 
 Open the path in `sb2-reject.json`, click **Reject**, wait for
 **Rejected**, reload and capture `sb2-rejected.png`. Read both decisions back
-through HTTP, then stop the mock and run `down`.
+through HTTP, then stop the mock.
 
 ```bash
 node "$B/skill-drafts.mjs" check | tee "$EVIDENCE/sb2-readback.txt"
 kill "$MODEL_PID"
 wait "$MODEL_PID" || true
-$V down
 ```
 
 The helper asserts the AS19 draft is `published` and AS20 draft is `rejected`.
@@ -603,9 +593,7 @@ Keep JSON readbacks, screenshots, mock JSONL and summary text with the run evide
 
 ### AS21. Built-in invocation and personal publication
 
-Use the AS1 provider and shell helpers with an MCP image built from this checkout.
-Use free ports and a disposable run, for example server 3933, Vite 5983 and MCP 3943
-under `VERIFY_UVW_ROOT=/tmp/verify-uvw-sb4`. The provider's responses are scripted;
+Use the AS1 provider and shell helpers. The provider's responses are scripted;
 draft creation, authorization, publication and discovery use the real services.
 
 ```bash
@@ -684,7 +672,7 @@ Pass when the `pr_create` row reads **Completed**, the rail's **Pull requests** 
 `#1 AS23 session PR · Review`, request 1 contains `Call pr_create before the first file edit`,
 and `as23-pr.out` lists a `draft` PR (its title is the `name` field). In Ask, the same script's
 tool result is the AS22 switch-to-Auto denial and no PR is created. The composer resets to Ask
-for each new session. Stop this run's mock and use `verify-uvw down` after collecting evidence.
+for each new session. Stop this run's mock after collecting evidence.
 
 ## Gotchas
 
