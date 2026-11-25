@@ -175,6 +175,31 @@ it("decides again just before Trunk moves, leaves a late refusal out of the budg
   expect((await f.application.access.budget(f.bot.id)).merges.used).toBe(1);
 }, 120_000);
 
+it("refuses to retry a merge whose pages changed after it began, even with checks passed on the new pages", async () => {
+  const f = await repository("checks");
+  const { worktrees, htmlViewDrafts, operations } = f.application;
+  const pull = await f.readyPull(f.bot.id);
+  await f.reportAll(f.bot.id, pull);
+  const key = randomUUID();
+  f.beforeSecondRead(() => f.commitToTrunk(f.owner.id, f.sheet.unitId));
+  await expect(worktrees.merge(f.bot.id, pull, key)).rejects.toMatchObject({ code: "CHECKS_REQUIRED" });
+
+  await worktrees.reopen(f.bot.id, pull);
+  await htmlViewDrafts.submit(f.bot.id, randomUUID(), {
+    kind: "create", name: "Totals", spaceId: f.team, parentNodeId: null, sourceWorktreeId: pull,
+    html: "<!doctype html><html><body><h1>Totals</h1></body></html>",
+  });
+  await worktrees.markReady(f.bot.id, pull);
+  await f.reportAll(f.bot.id, pull);
+  const trunkBefore = await f.trunkHead(f.sheet.unitId, f.owner.id);
+  await expect(operations.retry(f.bot.id, key), "the merge began with no page").rejects.toMatchObject({
+    code: "CHECKS_REQUIRED", message: expect.stringContaining("changed while its merge waited"),
+  });
+  expect((await worktrees.get(f.bot.id, pull)).worktree.state).toBe("ready");
+  expect(await f.trunkHead(f.sheet.unitId, f.owner.id)).toBe(trunkBefore);
+  expect(await f.merge(f.bot.id, pull), "a new merge takes the page").toMatchObject({ worktree: { state: "merged" } });
+}, 120_000);
+
 it("records on the merge the content its last check decided on", async () => {
   const f = await repository("checks");
   const { worktrees } = f.application;
