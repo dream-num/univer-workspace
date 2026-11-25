@@ -93,7 +93,7 @@ if (command === 'login') {
       browser('screenshot', `${evidence}-guest-card.png`);
       browser('find', 'role', 'button', 'click', '--name', 'Continue as a guest agent');
       browser('wait', '1500');
-      if (browser('get', 'text', 'body').includes('Too many guest agents')) throw new Error(process.env.VERIFY_UVW_AGENT_LIMIT_REASON);
+      if (browser('get', 'text', 'body').includes('hourly limit for guest agent requests')) throw new Error(process.env.VERIFY_UVW_AGENT_LIMIT_REASON);
     } else {
       browser('find', 'label', 'Username', 'fill', username);
       browser('find', 'label', 'Password', 'fill', readFileSync(join(run, 'user.pw'), 'utf8'));
