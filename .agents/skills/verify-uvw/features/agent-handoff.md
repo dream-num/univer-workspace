@@ -130,9 +130,9 @@ $V mcp-instructions --as bot1 mh-bot1-instructions
 $V mcp --as bot1 mh-bot1-claim claim '{}'
 ```
 
-`mh-bot1.out` lists 52 tools: the 47 `core` tools with `claim` right after `share`,
+`mh-bot1.out` lists 54 tools: the 49 `core` tools with `claim` right after `share`,
 then `repo_create`, `repo_edit`, `repo_member_list` and `repo_member_write`, which an agent gets in `core` to set up
-its own repository. A person's default list has 47 and no `claim`. The instructions say the agent
+its own repository. A person's default list has 49 and no `claim`. The instructions say the agent
 `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
 `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
 `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
@@ -142,7 +142,7 @@ its own repository. A person's default list has 47 and no `claim`. The instructi
 Mode: mcp.
 
 Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
-gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 51 tools (no `claim`),
+gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 53 tools (no `claim`),
 and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
 
 ### MH3. Claimer decisions
