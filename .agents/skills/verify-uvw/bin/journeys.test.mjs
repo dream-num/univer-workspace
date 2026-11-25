@@ -410,6 +410,29 @@ test('the helper refuses PASS over checks that broke or did not run, and fold re
   assert.equal(fold(expected.slice(3), [v('G1', 'PASS')]).checks, null, 'no helper journey, no checks');
 });
 
+test('fold expects a verdict for an earlier helper journey of the mode whose checks broke or were blocked when it ran first', () => {
+  const f = parseFeature('f', feature(...['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7'].flatMap((id) => [`### ${id}. ${id}`, '', 'Run: helper.', '']),
+    '### X1. Other mode', '', 'Mode: mcp. Run: helper.', ''));
+  const expected = plan(f, ['H1', 'H6']).partitions[0].journeys;
+  const v = (journey, verdict, note = '') => ({ kind: 'verdict', journey, verdict, note });
+  const failure = { line: 'features/f.md:13', exit: 1, command: "jq -e 'map(.name) == $want' tools.out", tail: 'false' };
+  const c = (journey, outcome, reason = null) => ({ kind: 'checks', journey, outcome, failures: outcome === 'broke' ? [failure] : [], reason });
+  const ran = [c('H1', 'held'), c('H2', 'held'), c('H3', 'broke'), c('H4', 'blocked', 'timed out after 600 s at features/f.md:17'), c('H6', 'held'),
+    c('H7', 'broke'), c('X1', 'broke'), v('H1', 'PASS'), v('H6', 'PASS')];
+
+  const folded = fold(expected, ran);
+  assert.deepEqual(folded.journeys.map((j) => [j.id, j.verdict, j.checks, j.failure]), [['H1', 'PASS', 'held', ''], ['H6', 'PASS', 'held', ''],
+    ['H3', 'MISSING', 'broke', "features/f.md:13 exit 1: jq -e 'map(.name) == $want' tools.out"], ['H4', 'MISSING', 'blocked', 'timed out after 600 s at features/f.md:17']],
+  'H2 held and H5 did not run, H7 comes after the selection and X1 is in another mode, so none of them joins');
+  assert.deepEqual([folded.result, folded.checks], ['INCOMPLETE', 'BROKE']);
+
+  const judged = fold(expected, [...ran, v('H3', 'DRIFT', 'the recipe lists 47 core tools, the product 49'), v('H4', 'BLOCKED', 'the renderer never answered')]);
+  assert.deepEqual([judged.journeys.map((j) => j.verdict), judged.result], [['PASS', 'PASS', 'DRIFT', 'BLOCKED'], 'ISSUES'], 'a recorded verdict covers it');
+  assert.equal(fold(expected, [...ran, v('H3', 'PASS'), v('H4', 'PASS')]).result, 'INCOMPLETE', 'a PASS over checks that did not hold is no verdict');
+  const rerun = fold(expected, [...ran, c('H3', 'held'), c('H4', 'held')]);
+  assert.deepEqual([ids(rerun.journeys), rerun.checks, rerun.result], [['H1', 'H6'], 'HELD', 'PASS'], 'checks that held when run again leave it out');
+});
+
 test('$V verdict refuses PASS for a helper journey whose checks broke or did not run, and $V journeys shows the checks', () => {
   const { v, done } = helperRepo({ f: semantics });
   try {
@@ -425,6 +448,24 @@ test('$V verdict refuses PASS for a helper journey whose checks broke or did not
     assert.match(listed.stdout, /^A3 {2}PASS$/m);
     assert.match(listed.stdout, /CHECKS: BROKE\nRESULT: ISSUES\n$/);
     assert.match(v('journeys', 'f').stdout, /RESULT: ISSUES/);
+  } finally { done(); }
+});
+
+test('run-journeys ends by naming an earlier journey that broke when it ran first, and $V journeys asks a verdict for it', () => {
+  const { v, done } = helperRepo({ f: semantics });
+  try {
+    const ran = v('run-journeys', 'f', 'A4');
+    assert.match(ran.stdout, /\nran first and did not hold: A2 broke; each needs a verdict too\n$/);
+    assert.equal(v('verdict', 'A4', 'PASS').status, 0);
+    const listed = v('journeys', 'f', 'A4');
+    assert.equal(listed.status, 1, 'INCOMPLETE exits 1');
+    assert.match(listed.stdout, /^f in run t: 1 of 2 journeys have a verdict\nA4 {2}PASS {5}checks held\nA2 {2}MISSING {2}ran first; checks broke: features\/f\.md:\d+ exit 1: jq -e /);
+    assert.doesNotMatch(listed.stdout, /^A1 /m, 'A1 ran first and held');
+    assert.match(listed.stdout, /CHECKS: BROKE\nRESULT: INCOMPLETE\n$/);
+
+    assert.equal(v('verdict', 'A2', 'DRIFT', 'a.json has a: 1').status, 0, 'a journey outside the selection takes a verdict');
+    assert.match(v('journeys', 'f', 'A4').stdout, /^A2 {2}DRIFT {4}a\.json has a: 1; ran first; checks broke: .*\nCHECKS: BROKE\nRESULT: ISSUES\n$/m);
+    assert.doesNotMatch(v('run-journeys', 'f', 'A1').stdout, /did not hold/, 'nothing ran before A1');
   } finally { done(); }
 });
 

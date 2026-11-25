@@ -305,6 +305,33 @@ test('a task with an expected journey that has no verdict is INCOMPLETE and exit
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a task also expects a verdict for an earlier helper journey whose checks broke when it ran first', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-ran-first-'));
+  const text = `# F\n\n## Driving it with agent-browser and uvw\n\nMode: mcp.\n\n### H1. One\n\nRun: helper.\n\n### H2. Two\n\nRun: helper.\n\n### H3. Three\n\nRun: helper.\n`;
+  const task = { id: 'f', mode: 'mcp', expected: plan(parseFeature('f', text), ['H1', 'H3']).partitions[0].journeys };
+  const out = join(dir, 'f');
+  const failure = { line: 'features/f.md:13', exit: 1, command: "jq -e 'map(.name) == $want' tools.out", tail: 'false' };
+  const ran = [{ kind: 'checks', journey: 'H1', outcome: 'held', failures: [] }, { kind: 'checks', journey: 'H2', outcome: 'broke', failures: [failure] },
+    { kind: 'checks', journey: 'H3', outcome: 'held', failures: [] }, { kind: 'verdict', journey: 'H1', verdict: 'PASS', note: '' }, { kind: 'verdict', journey: 'H3', verdict: 'PASS', note: '' }];
+  const journal = (...entries) => writeFileSync(join(out, 'runs/f/evidence/journeys.jsonl'), entries.map((e) => `${JSON.stringify({ at: '2026-11-24T10:00:00Z', run: 'f', feature: 'f', ...e })}\n`).join(''));
+  try {
+    mkdirSync(join(out, 'runs/f/evidence'), { recursive: true });
+    writeFileSync(join(out, 'claude.exit'), '0\n');
+    writeFileSync(join(out, 'transcript.jsonl'), `${JSON.stringify({ type: 'result', num_turns: 12, result: 'H1: PASS\nH3: PASS' })}\n`);
+    journal(...ran);
+    const missing = finish(task, dir, 60, 'the-key');
+    assert.deepEqual([missing.result, missing.checks, missing.journeys.map((j) => `${j.id} ${j.verdict}`)], ['INCOMPLETE', 'BROKE', ['H1 PASS', 'H3 PASS', 'H2 MISSING']]);
+    assert.equal(exitCode([missing]), 4);
+    assert.match(summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [missing], host: [], setup: [90], wallSeconds: 70 }),
+      /^- f H2 MISSING \(checks broke: features\/f\.md:13 exit 1: jq -e 'map\(\.name\) == \$want' tools\.out\)$/m);
+    assert.equal(exitCode([finish(task, dir, 60, null, { model: false })], { model: false }), 1, 'with no model, its broken check fails the batch');
+
+    journal(...ran, { kind: 'verdict', journey: 'H2', verdict: 'DRIFT', note: 'the recipe lists 47 core tools, the product 49' });
+    const judged = finish(task, dir, 60, 'the-key');
+    assert.deepEqual([judged.result, exitCode([judged])], ['ISSUES', 0]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a session that ends on an API error is an infra-error, and summary.md shows the error', () => {
   const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-finish-'));
   const task = (id, exit, record) => {

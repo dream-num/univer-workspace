@@ -185,6 +185,8 @@ Every verdict but `PASS` needs a note with the values you read and the evidence 
 when the product is wrong, `DRIFT` when the recipe is, or `BLOCKED`. Before you report, run
 `$V journeys <feature> [journey-id...]`. It lists each journey with its verdict, or `MISSING`, and ends with
 `RESULT: PASS`, `ISSUES` or `INCOMPLETE`, after `CHECKS: HELD` or `BROKE` when the helper ran some of them.
+It also lists, marked `ran first`, each earlier helper journey whose checks broke or were blocked when
+`run-journeys` ran it first, because the selected journeys ran on its state. Record a verdict for it too.
 `INCOMPLETE` means a journey has no verdict, and the command exits `1`.
 
 ## Hand the driving to another agent
