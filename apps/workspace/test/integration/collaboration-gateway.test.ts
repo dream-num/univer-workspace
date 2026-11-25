@@ -876,7 +876,7 @@ describe("collaboration gateway", () => {
     expect([cell(firstMerge.left), cell(firstMerge.right)]).toEqual([undefined, "before"]);
   }, 60_000);
 
-  it("answers 409, not 500, in every comparison mode once a removed file is in Trash or gone", async () => {
+  it("answers 409, not 500, in every comparison mode once a removed file is in Trash, and 403 once it is gone", async () => {
     const { application, origin } = await startApplication();
     const issued = await application.identity.registerWithPassword({
       username: "trash-review", displayName: "Trash reviewer",
@@ -925,11 +925,16 @@ describe("collaboration gateway", () => {
     for (const { endpoint } of [draft, ready]) {
       expect(await statuses(endpoint, modes)).toEqual(modes.map((mode) => [mode, 409]));
     }
+    expect((await application.worktrees.get(userId, draft.id)).worktree.units, "the owner of its Space sees it in Trash")
+      .toMatchObject([{ name: "Direct", fileState: "inTrash" }]);
 
     await application.worktrees.discard(userId, draft.id, "trash-discard-draft");
     await application.worktrees.discard(userId, ready.id, "trash-discard-ready");
     await application.trash.removePermanently(userId, batch.id);
-    expect(await statuses(draft.endpoint, modes)).toEqual(modes.map((mode) => [mode, 409]));
+    expect(
+      await statuses(draft.endpoint, modes),
+      "a deleted file has no Space left to tell its owner from a reader who lost access",
+    ).toEqual([["", 403], ["?baseMode=base", 403], ["?view=preview", 409], ["?view=merged", 409], ["?baseMode=parent&view=merged", 409]]);
   }, 60_000);
 
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {

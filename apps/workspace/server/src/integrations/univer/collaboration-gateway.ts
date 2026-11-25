@@ -47,7 +47,7 @@ import type {
 import { Router, type RequestHandler } from "express";
 import { assertCeiling, type AccessResolver, type ResourceContentAccess, type UnitType } from "../../modules/access/index.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
-import type { WorktreesModule } from "../../modules/worktrees/index.js";
+import type { WorktreesModule, WorktreeUnit } from "../../modules/worktrees/index.js";
 import {
   WORKTREE_CHANGE_FEED_PATH,
   type WorktreeChangeFeed,
@@ -469,7 +469,7 @@ export function createCollaborationGateway(options: {
           change: unit.change,
           baseMode,
           view,
-        }).catch((error: unknown) => comparisonRefused(error, access, unit.unitId))
+        }).catch((error: unknown) => comparisonRefused(error, unit.fileState))
       );
     }
   );
@@ -610,9 +610,10 @@ async function requireWorktreeProtocolAccess(
 }
 
 // Review does not require reading removed files, so a removed file's Trunk copy may be in Trash or gone.
-async function comparisonRefused(error: unknown, access: AccessResolver, unitId: string): Promise<never> {
+// A reader who cannot see the file's name reads a null fileState, so gets 403 whatever became of the file.
+function comparisonRefused(error: unknown, fileState: WorktreeUnit["fileState"]): never {
   if (!(error instanceof CollabError) || error.code !== "PERMISSION_DENIED") throw error;
-  if (!(await access.unitOutsideTrash(unitId))) {
+  if (fileState === "inTrash" || fileState === "deleted") {
     throw new ApplicationError("CONFLICT", 409, "This file is in Trash or deleted, so there is nothing to compare.");
   }
   throw new ApplicationError("FORBIDDEN", 403, "You cannot open this file.");

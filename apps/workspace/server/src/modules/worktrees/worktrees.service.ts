@@ -410,6 +410,8 @@ export function createWorktreesModule(options: {
         const base = {
           unitId: unit.unitID, nodeId: view.nodeId, resourceId: view.resourceId, name: view.name,
           unitType: view.unitType, univerType: unit.type,
+          // Every Unit listed here has a file, so a null fileState means the reader cannot see it.
+          hidden: view.fileState === null,
         };
         if (row.source === "worktree") {
           if (row.activated_at !== null && (result.status === "merged" || result.status === "unchanged")) {
@@ -1188,7 +1190,7 @@ export function createWorktreesModule(options: {
           const unit = requireMappedUnit(value, input.unitId);
           if (input.write && unit.change === "deleted") return false;
           if (
-            unit.fileState !== null &&
+            (unit.source === "trunk" || unit.activationState === "completed") &&
             !(await options.access.resolveResource(input.userId, unit.resourceId))?.capabilities.openContent
           )
             return false;
@@ -1488,6 +1490,11 @@ async function mapUnits(
   const byId = new Map(states.map((state) => [state.unitID, state]));
   return Promise.all(rows.map(async (row) => {
     const state = byId.get(row.unit_id);
+    // A reader who cannot see the name learns nothing else that tells a live file from one in Trash or deleted.
+    // The owner and Members of the Space that holds the file read it before it moved to Trash.
+    const hidden = (state?.removed && row.source === "trunk" || leftTrunk(row)) && !readsSpace &&
+      !(row.existing_space_id !== null && (await access.resolveSpace(userId, row.existing_space_id))?.member) &&
+      !(await access.resolveResource(userId, row.resource_id));
     const mergeResult =
       state?.mergeResult?.status === "merged" ||
       state?.mergeResult?.status === "unchanged" ||
@@ -1499,12 +1506,9 @@ async function mapUnits(
     return {
       unitId: row.unit_id,
       resourceId: row.resource_id,
-      nodeId: row.node_id,
+      nodeId: hidden ? null : row.node_id,
       source: row.source,
-      name:
-        (state?.removed && row.source === "trunk" || leftTrunk(row)) && !readsSpace && !(await access.resolveResource(userId, row.resource_id))
-          ? "Removed resource"
-          : (row.existing_name ?? row.new_name ?? "Removed resource"),
+      name: hidden ? "Removed resource" : (row.existing_name ?? row.new_name ?? "Removed resource"),
       unitType: requireUnitType(
         row.existing_unit_type ?? row.new_unit_type ?? unitTypeFromProtocol(state?.type),
       ),
@@ -1528,10 +1532,10 @@ async function mapUnits(
       mergeResult,
       activationState: activationState(row, mergeResult),
       freshness:
-        row.source === "trunk" && trunk && state?.baselineTrunkRevision !== undefined
+        !hidden && row.source === "trunk" && trunk && state?.baselineTrunkRevision !== undefined
           ? unitFreshness(state.baselineTrunkRevision, await trunk.revision(row.unit_id), row.added_at, trunk.now)
           : null,
-      fileState: fileState(row),
+      fileState: hidden ? null : fileState(row),
     };
   }));
 }

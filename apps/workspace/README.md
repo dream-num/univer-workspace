@@ -101,8 +101,9 @@ for existing Browser consumers. Agent requires these modes for historical Base r
 new Worktree-local Units have an empty Base and remain reviewable after discard.
 A Unit whose file is in Trash or deleted has no comparison in any mode and gets `409`.
 That covers a file a merged Worktree deleted, a file someone moved to Trash while a Worktree
-lists it as removed, and a file deleted permanently. A reader who can no longer open a file
-that is still in its Space, such as a former member reading a removal it proposed, gets `403`.
+lists it as removed, and a file deleted permanently. A reader who cannot open the file and so
+reads its name as `Removed resource`, such as a former member reading a pull request it authored,
+gets `403` whether the file is live, in Trash or deleted.
 
 Draft Worktrees can also mark individual Units for deletion and undo that intent.
 Ready Worktrees freeze the intent; reopen one before changing it. Merging excludes

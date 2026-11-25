@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { UniverType } from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
+import type { RevertPlan } from "../../server/src/modules/reverts/index.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
 const applications: ProductTestApplication[] = [];
@@ -162,6 +163,71 @@ describe("the Issue acceptance panel's data", () => {
     expect((await read(`/api/worktrees/${f.pull}/checks`)).status).toBe(403);
   }, 60_000);
 
+  it("tells a reader who cannot see a file's name nothing about whether it is live, in Trash or deleted", async () => {
+    const { application, register, team, owner } = await setup();
+    const author = await register("author");
+    await application.permissions.upsertTeamMember(owner.id, team, author.id, { role: "admin" });
+    const old = await application.resources.create(owner.id, randomUUID(), {
+      kind: "univer", spaceId: team, parentNodeId: null, name: "Old", unitType: "sheet",
+    });
+    if (old.status === 202) throw new Error("Resource creation pending");
+    const { id: pull } = (await application.worktrees.create(author.id, randomUUID(), {
+      kind: "team", teamSpaceId: team, visibility: "space", name: "Replace", summary: null,
+    })).body;
+    const removed = (await application.worktrees.addUnit(author.id, pull, randomUUID(), {
+      source: "trunk", resourceId: old.body.node.resource!.id,
+    })).body.unit;
+    await application.worktrees.setUnitRemoved(author.id, pull, removed.unitId, { removed: true });
+    const added = (await application.worktrees.addUnit(author.id, pull, randomUUID(), {
+      source: "worktree", name: "Added", unitType: "sheet", targetSpaceId: team, targetParentNodeId: null,
+    })).body.unit;
+    await application.worktrees.markReady(author.id, pull);
+    await application.worktrees.merge(author.id, pull, randomUUID());
+    const oldBatch = (await application.trash.list(owner.id, team, { cursor: undefined, limit: undefined }))
+      .items.find((batch) => batch.root.name === "Old")!;
+    await application.trash.restore(owner.id, oldBatch.id);
+    const addedBatch = await application.trash.trashNode(owner.id, added.nodeId!);
+    await application.permissions.removeTeamMember(owner.id, team, author.id);
+
+    const origin = await listen(application);
+    const observe = async (reader: { readonly cookie: string }) => {
+      const read = (path: string) => fetch(`${origin}${path}`, { headers: { cookie: reader.cookie } });
+      const { worktree } = (await (await read(`/api/worktrees/${pull}`)).json()) as { worktree: PullRequestView };
+      const compared: number[] = [];
+      for (const { unitId } of worktree.units) {
+        compared.push((await read(`/universer-api/worktrees/${pull}/units/${unitId}/comparison`)).status);
+      }
+      const plan = (await (await read(`/api/worktrees/${pull}/revert`)).json()) as RevertPlan;
+      return {
+        units: worktree.units.map(({ name, nodeId, freshness, fileState }) => ({ name, nodeId, freshness, fileState })),
+        compared,
+        plan: plan.items.map(({ action, state, name, nodeId, reason }) => ({ action, state, name, nodeId, reason })),
+        refusal: plan.refusal,
+      };
+    };
+    const hidden = { name: "Removed resource", nodeId: null, freshness: null, fileState: null };
+    const unseen = {
+      units: [hidden, hidden],
+      compared: [403, 403],
+      plan: [
+        { action: "recover", state: "unavailable", name: "Removed resource", nodeId: null, reason: "You cannot open this file." },
+        { action: "trash", state: "unavailable", name: "Removed resource", nodeId: null, reason: "This file is in Trash already, or you cannot see it." },
+      ],
+      refusal: "Only someone who may merge this pull request can revert it.",
+    };
+
+    expect(await observe(author), "Old is live and Added is in Trash").toEqual(unseen);
+    const ownerView = await observe(owner);
+    expect(ownerView.units.map(({ name, fileState }) => [name, fileState])).toEqual([["Old", "live"], ["Added", "inTrash"]]);
+    expect(ownerView.compared[1]).toBe(409);
+
+    await application.trash.trashNode(owner.id, old.body.node.id);
+    await application.trash.removePermanently(owner.id, addedBatch.id);
+    await application.spaces.update(owner.id, team, { publicRead: true });
+    expect(await observe(author), "Old is in Trash, Added is deleted, and the Space reads publicly").toEqual(unseen);
+    expect((await observe(owner)).units.map(({ name, fileState }) => [name, fileState])).toEqual([["Old", "inTrash"], ["Added", "deleted"]]);
+  }, 60_000);
+
   it("lists only the Team Space memberships an assignee granted after its assignment, as they stand now", async () => {
     const { application, register, team, owner } = await setup();
     const assignee = await register("assignee");
@@ -271,7 +337,13 @@ async function listen(application: ProductTestApplication): Promise<string> {
 type PullRequestView = {
   readonly id: string;
   readonly capabilities: { readonly review: boolean };
-  readonly units: readonly { readonly name: string; readonly fileState: string | null }[];
+  readonly units: readonly {
+    readonly unitId: string;
+    readonly name: string;
+    readonly nodeId: string | null;
+    readonly freshness: unknown;
+    readonly fileState: string | null;
+  }[];
 };
 type Task = Awaited<ReturnType<typeof mergedTask>>;
 

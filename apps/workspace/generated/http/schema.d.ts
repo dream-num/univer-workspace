@@ -3940,7 +3940,7 @@ export interface components {
         WorktreeUnit: {
             unitId: string;
             resourceId: string;
-            /** @description Null when the document no longer has a product Node, including after permanent deletion. */
+            /** @description Null when the document no longer has a product Node, including after permanent deletion, and for a reader who reads the name `Removed resource` because they cannot open the file. */
             nodeId: string | null;
             /** @enum {string} */
             source: "trunk" | "worktree";
@@ -3951,9 +3951,9 @@ export interface components {
             change: components["schemas"]["WorktreeUnitChange"];
             mergeResult: components["schemas"]["MergeResult"];
             activationState: components["schemas"]["ActivationState"];
-            /** @description Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, and once the Worktree leaves draft and ready. */
+            /** @description Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, for a reader who reads the name `Removed resource` because they cannot open the file, and once the Worktree leaves draft and ready. */
             freshness: components["schemas"]["WorktreeUnitFreshness"] | null;
-            /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet. No one opens or compares a file that is inTrash or deleted, and once the pull request is merged such a file no longer decides whether a reader may review the others. */
+            /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet, and for a reader who reads the name `Removed resource` because they cannot open the file, so that nothing tells them whether it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and once the pull request is merged such a file no longer decides whether a reader may review the others. */
             fileState: components["schemas"]["WorktreeUnitFileState"] | null;
         };
         /** @description How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result. */

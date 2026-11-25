@@ -308,7 +308,7 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 - 对文件在 Trash 里的 Worktree Unit，`openUnit` 返回草稿范围的描述。
 - Operation 重试不能推进一个什么都没撤回的撤回。
 - 撤回返回 `201` 而 Operation 是 `failed`，只看 HTTP 状态的客户端会被误导。
-- 已经不是成员的人请求对比，得到 403 或 409，泄漏一个比特。
+- 已经不是成员的人请求对比，得到 403 或 409，泄漏一个比特；`fileState` 泄漏同一个比特。之后已修：读者打不开文件、看到的名字是 `Removed resource` 时，对比一律返回 403，`fileState` 为 null。
 - 期限验收任务的饥饿只在期望上有界。
 - 合入进行中切换 `landing`，不会重新判断这次合入。
 - 不在根目录的 `.agents` 文件夹不受守卫。
