@@ -184,6 +184,17 @@ export interface IdentityRepository {
   ): Promise<void>;
   deleteEmailLoginCode(id: string): Promise<void>;
   deleteEmailLoginCodesBefore(cutoff: number): Promise<void>;
+  /**
+   * Deletes every source event at or before `since`, then records `event` unless `limit` events of its
+   * action and source are newer than `since`. The count and the insert are one atomic decision across replicas.
+   */
+  takeSourceEvent(event: {
+    readonly id: string;
+    readonly action: string;
+    readonly source: string;
+    readonly createdAt: number;
+  }, since: number, limit: number): Promise<boolean>;
+  countSourceEvents(action: string, source: string, since: number): Promise<number>;
   /** Updates supplied fields only. A provider may fill fields only while their observed values still match. */
   updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User>;
   renewSession(sessionId: string, expiresAt: number): Promise<void>;

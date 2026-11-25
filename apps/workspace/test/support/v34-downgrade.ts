@@ -1,8 +1,10 @@
+import { DROP_V35_SQL } from "./v35-downgrade.js";
+
 /**
  * Rebuilds Operations with the V33 kind CHECK (no revert_worktrees) so a schema.sql-built
  * fixture reads as V33. Operations rows are carried over; every other structure is untouched.
  */
-export const DROP_V34_SQL = `
+export const DROP_V34_SQL = `${DROP_V35_SQL}
   PRAGMA foreign_keys = OFF;
   CREATE TABLE operations_v33 (
     id TEXT PRIMARY KEY,

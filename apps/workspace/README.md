@@ -869,3 +869,18 @@ one V34 instance, and wait for its backup, migration and health checks before re
 before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or backup. V33 code refuses
 a V34 database, so a code rollback needs the backup taken before the upgrade: stop V34 and restore it, which loses what
 was written since. Never run V33 and V34 writers on the same SQLite file.
+
+### Per-source limits in the product database, and product database V35
+
+The per-source hourly limits on agent creation, email code requests and checks, anonymous client metadata fetches and
+Node reports count in the product database table `source_rate_events`, so every replica shares one count and a restart
+keeps it. Each accepted event stores its limit, its source bucket (the IPv4 address, the IPv6 `/64` prefix, or
+`unknown`) and its time. A refused request stores nothing. Each counted event deletes every event older than one hour.
+The limits, the buckets and the errors are unchanged.
+
+V34→V35 adds the empty `source_rate_events` table and its two indexes, and changes no other table. On PostgreSQL the
+same step moves `workspace_product_schema` from version 14 to 15. Stop every old instance, start one V35 instance, and
+wait for its backup, migration and health checks before restoring service. Back up PostgreSQL before the upgrade.
+Failed migration rolls back; successful restarts do not repeat migration or backup. V34 code refuses a V35 database, so
+a code rollback needs the backup taken before the upgrade: stop V35 and restore it, which loses what was written since.
+Never run V34 and V35 writers on the same SQLite file.

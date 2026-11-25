@@ -181,8 +181,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Product V21 adds `users.kind` (`human` or `agent`) and the `agents` and `node_reports` tables through a backed-up
   V20 → V21 startup migration that backfills nothing. `POST /api/agents` and `POST /api/auth/guest` need no
   credentials: each creates an agent User with its own Personal Space, and returns a personal access token or sets
-  a login session cookie. Creation is limited per source IP by bounded process-local state; the source IP is not
-  persisted. `POST /api/nodes/{nodeId}/reports` accepts abuse reports without credentials under its own per-source-IP
+  a login session cookie. Creation is limited per source IP; agent records do not store it (see Product V35).
+  `POST /api/nodes/{nodeId}/reports` accepts abuse reports without credentials under its own per-source-IP
   limit, and `db:ban-agent` bans an agent. Agents cannot create Team Spaces, make a Space public or become Team Space members, and an
   unclaimed agent keeps at most 20 files. `GET /api/nodes/{nodeId}` shows every reader of a Personal Space Node,
   signed in or not, its owner's display name, whether the owner is an agent, and whether a human claimed it; never
@@ -214,7 +214,13 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   runs the V22 display-name repair again over every User and Personal Space. A database whose V22 ran the earlier
   rule deployed from 47dc9277 converges to the current rule; after the current V22 the step changes nothing. Joiners
   that earlier rule removed from legitimate names come back only from that environment's backup taken before V22.
-- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
+- Product V35 (PostgreSQL product schema version 15) adds the `source_rate_events` table through a backed-up
+  V34 → V35 startup migration that backfills nothing. Every per-source hourly limit (agent creation, Email code
+  requests and checks, anonymous client metadata fetches, Node reports) counts there, so all replicas share one count
+  and a restart keeps it. Each accepted event stores the limit's name, the source bucket (an IPv4 address, an IPv6 `/64`
+  prefix, or `unknown`) and the time, and no request content or User. Each counted event deletes the events older than
+  one hour.
+- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, per-source rate limit events, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
 - The Browser Agents module keeps agent session records and model request records, which include document content returned by tools, and

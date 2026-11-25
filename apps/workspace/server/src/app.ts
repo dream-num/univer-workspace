@@ -264,6 +264,7 @@ export function createWorkspaceApplication(
   const nodes = createNodesModule({
     repository: repositories.nodes,
     access,
+    sourceRates: identityRepository,
   });
   const resources = createResourcesModule({
     repository: resourcesRepository,
@@ -456,6 +457,7 @@ export function createWorkspaceApplication(
   const resolveClientMetadata = createClientMetadataDocumentResolver({
     ...(dependencies.fetchClientMetadataDocument === undefined ? {} : { fetchDocument: dependencies.fetchClientMetadataDocument }),
     ...(mcpOAuth?.cimdExemptNetworks === undefined ? {} : { exemptions: mcpOAuth.cimdExemptNetworks }),
+    sourceRates: identityRepository,
   });
   // Draft JSON needs escaping headroom before the other routers apply their 1 MiB parser.
   app.use("/api", createSkillDraftsRouter({ identity, drafts: skillDrafts, sources: skillSources }));
@@ -473,6 +475,7 @@ export function createWorkspaceApplication(
         ? { discordBotApiKey: config.discordBotApiKey }
         : {}),
       emailSourceLimits: config.trustProxy !== undefined,
+      sourceRates: identityRepository,
       budget: access.budget,
     })
   );

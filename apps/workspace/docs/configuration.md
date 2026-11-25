@@ -91,7 +91,7 @@ EMAIL_SMTP_USER=your-smtp-username
 EMAIL_SMTP_PASSWORD=your-smtp-password
 ```
 
-Email codes expire after ten minutes and allow five incorrect attempts. Each address can request one code per minute and up to five per hour. Once `TRUST_PROXY` is set, each source IP can send 60 requests per hour to the code route and 120 to the login route, per server process. Every request counts, valid or not. The first successful verification creates the account.
+Email codes expire after ten minutes and allow five incorrect attempts. Each address can request one code per minute and up to five per hour. Once `TRUST_PROXY` is set, each source IP can send 60 requests per hour to the code route and 120 to the login route. Every request counts, valid or not, and every server replica shares the counts, which survive a restart. The first successful verification creates the account.
 
 For Amazon SES, use SMTP credentials issued for the endpoint's region. If SES returns `535`, check the SMTP username and its matching SMTP password. Sandbox accounts also need a verified recipient.
 
@@ -155,7 +155,7 @@ The MCP gateway uses a confidential client with `tokenExchange: true` to exchang
 | `HOST`, `PORT` | `127.0.0.1`, `3020` (Docker binds to `0.0.0.0`) | Server bind address and listening port. |
 | `NODE_ENV` | Unset (Docker: `production`) | Production mode enables secure cookies by default. |
 | `TRUST_PROXY` | Unset (use TCP peer) | Set the number of trusted reverse proxy hops or a comma-separated list of trusted proxy addresses/subnets so IP limits apply to the client. Email sign-in limits per source IP apply only when it is set. Use `0` when clients connect directly. |
-| `AGENT_CREATE_LIMIT_PER_HOUR` | `5` | Guest agent creations per source IP per hour, per server process. Set to `0` to disable guest creation. |
+| `AGENT_CREATE_LIMIT_PER_HOUR` | `5` | Guest agent creations per source IP per hour, shared by every server replica. Set to `0` to disable guest creation. |
 | `LOG_LEVEL` | `info` | Server log level, for example `debug` for troubleshooting. |
 | `METRICS_TOKEN` | Unset (`/metrics` returns 404) | Enable Prometheus scrapes using a random Bearer token of at least 32 characters. For example, generate one with `openssl rand -hex 32`. |
 | `TRIAL_DEPLOYMENT` | `false` | Show signed-in users a notice about trial data retention. |

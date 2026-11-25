@@ -5,7 +5,7 @@ import { Agent, request, type RequestOptions } from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 import { logger } from "../../logging/logger.js";
 import { MAX_CLIENT_NAME_LENGTH, MAX_REGISTERED_REDIRECT_URIS, registrableRedirectUri } from "./mcp-oauth.js";
-import { createSourceRateLimiter } from "./source-rate-limiter.js";
+import { createSourceRateLimiter, type SourceRateStore } from "./source-rate-limiter.js";
 
 export type CimdClientId = string & { readonly __brand: "CimdClientId" };
 export interface CimdClient {
@@ -205,14 +205,15 @@ export function createClientMetadataDocumentResolver(options: {
   readonly fetchDocument?: FetchClientMetadataDocument;
   readonly exemptions?: BlockList;
   readonly now?: () => number;
-} = {}) {
+  readonly sourceRates: SourceRateStore;
+}) {
   const fetchDocument = options.fetchDocument ?? ((id: CimdClientId) => fetchClientMetadataDocument(id, { ...(options.exemptions === undefined ? {} : { exemptions: options.exemptions }) }));
   const now = options.now ?? Date.now;
   const cache = new Map<CimdClientId, { client: CimdClient; fetchedAt: number }>();
   const pending = new Map<CimdClientId, Promise<CimdClient>>();
   const users = new Map<string, CimdClientId>();
   let anonymousPending = 0;
-  const anonymousStarts = createSourceRateLimiter(ANONYMOUS_FETCHES_PER_SOURCE_HOUR, now);
+  const anonymousStarts = createSourceRateLimiter(options.sourceRates, "client_metadata_fetch", ANONYMOUS_FETCHES_PER_SOURCE_HOUR, now);
 
   return async (clientId: CimdClientId, requester: string, kind: "signed-in" | "anonymous" = "signed-in"): Promise<CimdClient> => {
     if (now() - (cache.get(clientId)?.fetchedAt ?? now()) >= MAX_TTL) cache.delete(clientId);
@@ -222,16 +223,20 @@ export function createClientMetadataDocumentResolver(options: {
       if (error.temporary && entry !== undefined && now() - entry.fetchedAt < MAX_TTL) return entry.client;
       throw error;
     };
-    let work = pending.get(clientId);
     const anonymous = kind === "anonymous";
     // Anonymous requesters may start only 8 of the 32 fetches, so they cannot starve signed-in authorization.
-    if ((users.has(requester) && users.get(requester) !== clientId) || (work === undefined && (pending.size >= 32 || (anonymous && anonymousPending >= 8)))) {
-      return fallback(new ClientMetadataFetchRefusedError("busy", "Client metadata fetch capacity is busy. Try again."));
-    }
-    if (work === undefined) {
-      if (anonymous && !anonymousStarts.take(requester)) {
+    const busy = () => (users.has(requester) && users.get(requester) !== clientId) || (!pending.has(clientId) && (pending.size >= 32 || (anonymous && anonymousPending >= 8)));
+    const refuseBusy = () => fallback(new ClientMetadataFetchRefusedError("busy", "Client metadata fetch capacity is busy. Try again."));
+    if (busy()) return refuseBusy();
+    if (anonymous && !pending.has(clientId)) {
+      if (!(await anonymousStarts.take(requester))) {
         return fallback(new ClientMetadataFetchRefusedError("source_limit", "This source started too many client metadata fetches. Try again later."));
       }
+      // Other requests ran while the count was taken: one may have started this fetch or taken the last slot.
+      if (busy()) return refuseBusy();
+    }
+    let work = pending.get(clientId);
+    if (work === undefined) {
       if (anonymous) anonymousPending += 1;
       const fetchedAt = now();
       work = Promise.resolve().then(async () => {

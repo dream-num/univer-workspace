@@ -88,7 +88,7 @@ EMAIL_SMTP_USER=your-smtp-username
 EMAIL_SMTP_PASSWORD=your-smtp-password
 ```
 
-邮箱验证码十分钟内有效，最多允许输错五次。每个邮箱每分钟最多请求一次，每小时最多五次。设置 `TRUST_PROXY` 后，每个服务进程中，每个来源 IP 每小时最多向验证码接口发送 60 次请求、向登录接口发送 120 次请求，无论请求是否有效都计入。首次验证成功后创建账户。
+邮箱验证码十分钟内有效，最多允许输错五次。每个邮箱每分钟最多请求一次，每小时最多五次。设置 `TRUST_PROXY` 后，每个来源 IP 每小时最多向验证码接口发送 60 次请求、向登录接口发送 120 次请求，无论请求是否有效都计入；所有服务副本共用这份计数，重启不清零。首次验证成功后创建账户。
 
 使用 Amazon SES 时，选用与端点区域对应的 SMTP 凭据。若返回 `535`，核对 SMTP 用户名及其配套的 SMTP 密码。沙箱账户还需要验证收件地址。
 
@@ -152,7 +152,7 @@ MCP 网关使用启用了 `tokenExchange: true` 的机密客户端，将令牌�
 | `HOST`、`PORT` | `127.0.0.1`、`3020`（Docker 镜像监听 `0.0.0.0`） | 服务监听地址和端口。 |
 | `NODE_ENV` | 未设置（Docker 为 `production`） | 生产模式默认启用安全 Cookie。 |
 | `TRUST_PROXY` | 未设置（使用 TCP 对端地址） | 设置受信任的反向代理跳数，或用逗号分隔的代理地址、子网，以便按客户端 IP 限流。设置后才按来源 IP 限制邮箱登录，客户端直连时设为 `0`。 |
-| `AGENT_CREATE_LIMIT_PER_HOUR` | `5` | 每个服务进程中，每个来源 IP 每小时可创建的访客 Agent 数。设为 `0` 可关闭访客创建。 |
+| `AGENT_CREATE_LIMIT_PER_HOUR` | `5` | 每个来源 IP 每小时可创建的访客 Agent 数，所有服务副本共用。设为 `0` 可关闭访客创建。 |
 | `LOG_LEVEL` | `info` | 服务日志级别，排查问题时可设为 `debug`。 |
 | `METRICS_TOKEN` | 未设置（`/metrics` 返回 404） | 设置至少 32 个字符的随机 Bearer 令牌后，Prometheus 可使用该令牌抓取指标。可用 `openssl rand -hex 32` 生成。 |
 | `TRIAL_DEPLOYMENT` | `false` | 向已登录用户显示试用环境的数据保留提示。 |

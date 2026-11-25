@@ -30,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=15");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=16");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=14");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=15");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -110,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 14 }]);
+    expect(fresh.version).toMatchObject([{ version: 15 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -351,7 +351,7 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
     });
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 14 }]);
+    expect(fresh.version).toMatchObject([{ version: 15 }]);
     await downgrade(schema, 7);
     if (seeded) {
       await schema.pool.query(`
@@ -675,6 +675,39 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
     await expect(schema.pool.query("UPDATE operations SET kind = 'revert_everything' WHERE id = 'r'")).rejects.toThrow(/operations_kind_check/);
   });
 
+  it.each([false, true])("upgrades version 14 by adding the empty source rate event table without touching rows (seeded=%s)", async (seeded) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const start = async () => (await openProductDatabase({ provider: "postgres", connectionString: schema.connectionString })).close();
+    const structure = async () => ({
+      version: (await schema.pool.query("SELECT version, fingerprint FROM workspace_product_schema")).rows,
+      columns: (await schema.pool.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position")).rows,
+      constraints: (await schema.pool.query("SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE connamespace = current_schema()::regnamespace ORDER BY conname")).rows,
+      indexes: (await schema.pool.query("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = current_schema() ORDER BY indexname")).rows,
+    });
+    const rows = async () => ({
+      users: (await schema.pool.query("SELECT * FROM users ORDER BY id")).rows,
+      operations: (await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows,
+    });
+    await start();
+    const fresh = await structure();
+    await downgrade(schema, 14);
+    if (seeded) {
+      await schema.pool.query(`INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 2);
+        INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, next_attempt_at, created_at, updated_at)
+          VALUES ('r', 'revert_worktrees', 'u', 'reserved', 'pending', '{}', 7, 7, 7)`);
+    }
+    const before = await rows();
+
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(before);
+    expect((await schema.pool.query("SELECT COUNT(*)::int AS n FROM source_rate_events")).rows).toEqual([{ n: 0 }]);
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(before);
+  });
+
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
     const schema = await createPostgresTestSchema(url!);
     onTestFinished(schema.close);
@@ -685,10 +718,11 @@ VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 
 });
 
 /** Gives a fresh schema the structure a deployed database at an older version has. */
-async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13): Promise<void> {
+async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14): Promise<void> {
   const client = await schema.pool.connect();
   try {
-    await client.query(`
+    await client.query("DROP TABLE source_rate_events");
+    if (version < 14) await client.query(`
       ALTER TABLE operations DROP CONSTRAINT operations_kind_check;
       ALTER TABLE operations ADD CONSTRAINT operations_kind_check CHECK (
         kind IN (

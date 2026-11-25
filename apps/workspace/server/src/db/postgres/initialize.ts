@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks, addLanding, addRevertOperation];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks, addLanding, addRevertOperation, addSourceRateEvents];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -166,6 +166,19 @@ ALTER TABLE operations ADD CONSTRAINT operations_kind_check CHECK (
     'revert_worktrees'
   )
 );`);
+}
+
+async function addSourceRateEvents(client: PoolClient): Promise<void> {
+  await client.query(`CREATE TABLE source_rate_events (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at BIGINT NOT NULL
+);
+CREATE INDEX source_rate_events_source
+  ON source_rate_events(action, source, created_at);
+CREATE INDEX source_rate_events_expiry
+  ON source_rate_events(created_at);`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

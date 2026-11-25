@@ -26,7 +26,7 @@ export interface AgentCreation {
   readonly label: string | undefined;
   /** The OAuth client's self-chosen name, from its registration or metadata document. Names the agent when no label is given. */
   readonly clientName?: string | null;
-  /** Only the creation rate limit reads it; it is never stored. */
+  /** Only the creation rate limit reads it; `source_rate_events` keeps its source bucket for about an hour. */
   readonly originIp: string | undefined;
 }
 

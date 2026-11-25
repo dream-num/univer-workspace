@@ -809,7 +809,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 34;
+PRAGMA user_version = 35;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>
@@ -900,3 +900,14 @@ CREATE TABLE IF NOT EXISTS executor_access (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   granted_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS source_rate_events (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS source_rate_events_source
+  ON source_rate_events(action, source, created_at);
+CREATE INDEX IF NOT EXISTS source_rate_events_expiry
+  ON source_rate_events(created_at);

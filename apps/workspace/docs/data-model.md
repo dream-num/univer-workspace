@@ -1,8 +1,8 @@
 # Univer Workspace 数据模型
 
 产品库支持 SQLite 和 PostgreSQL，两个后端分别维护 schema 版本和外键约束。
-SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 34`。
-PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 14 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 35`。
+PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 15 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 `DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。Core 使用 `core-s3` V1：快照引用保存在 `snapshots.block_ids`，`sheet_blocks` 记录 Unit 与块 ID，块内容由协同适配器写入 S3。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
@@ -26,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-SQLite 启动入口先将产品数据库准备到 V34，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V35，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
@@ -34,7 +34,7 @@ Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V34，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V35，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -101,7 +101,7 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 每个 `kind = 'agent'` 的 User 对应一行，是该 agent 生命周期的唯一来源。`user_id` 是主键并随 User 删除。
 `owner_user_id` 与 `claimed_at` 同时为空（未认领）或同时非空（已认领），由表级 CHECK 保证；
 被引用为主人的 User 不能删除。`origin_label` 记录创建时提交的标签；访客入口未提交标签时，记录 OAuth 客户端名。V22 起写入前按 `users.display_name` 的显示名规则清理，客户端名按完整字素截断到 40 个码位；V22 之前写入的值保持原样，V22 修复不改写它。该列只作记录，任何接口都不返回或展示它。`last_active_at` 是最近活跃时间。
-`expires_at` 为空表示不过期，`banned_at` 非空表示已封禁。全部时间为毫秒时间戳。不保存来源 IP。
+`expires_at` 为空表示不过期，`banned_at` 非空表示已封禁。全部时间为毫秒时间戳。本行不保存来源 IP；创建限速的计数见 [`source_rate_events`](#source_rate_events)。
 
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
 不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
@@ -396,7 +396,7 @@ Space 所有者是暂停中的 agent 时，以上来源对所有者以外的人�
 
 对一个 Node 的举报：`node_id`、可空的 `reporter_user_id`（空表示匿名举报）、`reason` 与 `created_at`。
 举报随 Node 删除；举报人被删除时 `reporter_user_id` 置空，举报保留。`POST /api/nodes/:nodeId/reports`
-是唯一写入口，只接受请求者可读的 Node。不保存来源 IP，它只用作限速的键。
+是唯一写入口，只接受请求者可读的 Node。举报不保存来源 IP，来源只是限速的键，见 [`source_rate_events`](#source_rate_events)。
 
 已在 Trash 中的 Node/Resource 不可通过普通浏览或内容接口发现。Repository 不自行拼接
 权限；产品 HTTP 与 Collaboration Endpoint 共用同一 Access Resolver。
@@ -869,11 +869,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V34，不备份；
-2. 完整 V34：校验指纹后正常启动，不重复备份；
-3. 完整 V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V34；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V34；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V34；
+1. 不存在或空文件：创建 V35，不备份；
+2. 完整 V35：校验指纹后正常启动，不重复备份；
+3. 完整 V34/V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V35；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V35；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V35；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -1244,3 +1244,28 @@ SQLite V33→V34 重建 `operations`，`kind` CHECK 增加 `revert_worktrees`：
 服务器不替 PostgreSQL 创建备份。升级前停旧实例，SQLite 生成一致性 V33 备份，再启动单个 V34 实例执行迁移、指纹、外键和
 完整性检查。重启不重复迁移或备份。V33 的代码拒绝打开 V34 数据库，代码回退必须先停 V34，再恢复升级前的备份；备份之后
 写入的数据会丢失。禁止新旧进程同时写同一库。
+
+## 来源限速（V35）
+
+### `source_rate_events`
+
+按来源计数的限速事件。每次被接受的事件写一行：`id`（随机 UUID，主键）、`action`、`source` 与 `created_at`（毫秒时间戳）。
+`action` 区分五个限速：`agent_create`（`POST /api/agents` 与 `POST /api/auth/guest` 共用，`AGENT_CREATE_LIMIT_PER_HOUR`，默认 5）、
+`email_code_request`（60）与 `email_code_check`（120，这两项只在设置 `TRUST_PROXY` 时生效）、`client_metadata_fetch`
+（匿名请求开始的 client metadata 抓取，10）和 `node_report`（10），括号里是每小时的上限。`source` 是来源桶：IPv4 地址；
+IPv6 取 `/64` 前缀，写作 `2001:db8:1:2::/64`；IPv4 映射的 IPv6 记为 IPv4 地址；其它值，包括没有地址和伪造的转发头，共用 `unknown`。
+表里只有这个桶，不保存完整的 IPv6 地址、请求内容或 User。
+
+窗口随事件滑动：`created_at` 晚于当前时间减一小时的事件计入。`take` 在一个事务里数同一 `action` 与 `source` 的计入事件，
+少于上限才插入，所以多个副本并发时也只放行到上限。SQLite 用 `BEGIN IMMEDIATE`；PostgreSQL 用可串行化事务，冲突的一方重放后
+数到对方的行。`allows` 只读计数，不写入。上限为 0 时一律拒绝。计数不随重启清零，所有副本共用。
+
+每次 `take` 先删除一小时之前的全部事件，被拒绝的请求不写入。表里因此只有最近一小时被接受的事件，以及最后一次 `take` 之后才满
+一小时、等下一次 `take` 删除的行。`source_rate_events_source (action, source, created_at)` 支持计数，
+`source_rate_events_expiry (created_at)` 支持删除。
+
+SQLite V34→V35 与 PostgreSQL 版本 14→15 只新增这张空表和两个索引，不建外键、不重建任何表，其它行、对象身份及恢复状态保持原样。
+SQLite 沿用一致性备份、版本化迁移、指纹、外键和完整性校验，失败事务回滚至 V34，备份保留，启动失败。PostgreSQL 在启动的
+advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回滚，仍为版本 14；服务器不替 PostgreSQL 创建备份。升级前停旧实例，
+启动单个 V35 实例完成迁移，再恢复服务。重启不重复迁移或备份。V34 的代码拒绝打开 V35 数据库，代码回退必须先停 V35，再恢复
+升级前的备份；备份之后写入的数据会丢失。禁止新旧进程同时写同一库。离线 SQLite → PostgreSQL 迁移原样复制这张表。

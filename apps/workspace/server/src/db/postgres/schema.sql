@@ -957,3 +957,14 @@ CREATE TABLE executor_access (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   granted_at BIGINT NOT NULL
 );
+
+CREATE TABLE source_rate_events (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at BIGINT NOT NULL
+);
+CREATE INDEX source_rate_events_source
+  ON source_rate_events(action, source, created_at);
+CREATE INDEX source_rate_events_expiry
+  ON source_rate_events(created_at);

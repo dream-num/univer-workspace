@@ -688,6 +688,31 @@ export class PostgresIdentityRepository implements IdentityRepository {
       .run(cutoff);
   }
 
+  async takeSourceEvent(event: {
+    readonly id: string;
+    readonly action: string;
+    readonly source: string;
+    readonly createdAt: number;
+  }, since: number, limit: number): Promise<boolean> {
+    // Outside the transaction, so takes that prune the same rows wait on each other instead of failing serialization.
+    await this._database.prepare("DELETE FROM source_rate_events WHERE created_at <= ?").run(since);
+    // Serializable isolation commits only one of two concurrent takes that both saw room; the other replays and counts it.
+    return this._database.transaction(async (database) => (await database
+      .prepare(
+        `INSERT INTO source_rate_events (id, action, source, created_at)
+         SELECT ?::text, ?::text, ?::text, ?::bigint
+         WHERE (SELECT COUNT(*) FROM source_rate_events WHERE action = ?::text AND source = ?::text AND created_at > ?) < ?`
+      )
+      .run(event.id, event.action, event.source, event.createdAt, event.action, event.source, since, limit)).changes > 0);
+  }
+
+  async countSourceEvents(action: string, source: string, since: number): Promise<number> {
+    const row = await this._database
+      .prepare("SELECT COUNT(*) AS count FROM source_rate_events WHERE action = ?::text AND source = ?::text AND created_at > ?")
+      .get(action, source, since);
+    return Number(row?.count ?? 0);
+  }
+
   async updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User> {
     const fields = ["updated_at = ?"];
     const values: (string | number | null)[] = [updatedAt];

@@ -683,6 +683,30 @@ export class SqliteIdentityRepository implements IdentityRepository {
       .run(cutoff);
   }
 
+  async takeSourceEvent(event: {
+    readonly id: string;
+    readonly action: string;
+    readonly source: string;
+    readonly createdAt: number;
+  }, since: number, limit: number): Promise<boolean> {
+    return this._database.transaction((database) => {
+      database.prepare("DELETE FROM source_rate_events WHERE created_at <= ?").run(since);
+      return database
+        .prepare(
+          `INSERT INTO source_rate_events (id, action, source, created_at)
+           SELECT ?, ?, ?, ?
+           WHERE (SELECT COUNT(*) FROM source_rate_events WHERE action = ? AND source = ? AND created_at > ?) < ?`
+        )
+        .run(event.id, event.action, event.source, event.createdAt, event.action, event.source, since, limit).changes > 0;
+    });
+  }
+
+  async countSourceEvents(action: string, source: string, since: number): Promise<number> {
+    return (this._database.connection
+      .prepare("SELECT COUNT(*) AS count FROM source_rate_events WHERE action = ? AND source = ? AND created_at > ?")
+      .get(action, source, since) as { readonly count: number }).count;
+  }
+
   async updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User> {
     const fields = ["updated_at = ?"];
     const values: (string | number | null)[] = [updatedAt];

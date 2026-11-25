@@ -292,7 +292,7 @@ export async function verifyCollaborationMigration(
     try {
       await assert.rejects(
         prepare(needsProduct.filename, createProductFactsReader(v6)),
-        /Prepare the product database to V34/,
+        /Prepare the product database to V35/,
       );
     } finally {
       v6.close();
