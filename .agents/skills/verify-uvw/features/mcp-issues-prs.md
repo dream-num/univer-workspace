@@ -30,7 +30,8 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   shows the settings notice before a change that accepts overdue Issues, and turns the deadline off.
 - MI16 reverts an Issue's three merged pull requests from its acceptance panel: changed files go back, an added file
   goes to Trash and a deleted one comes back, a file someone edited after the merge stays blocked and names them until
-  a person overwrites it, and the Issue reopens as `reverted`. A claimed agent plans and applies `pr_revert`, cannot
+  a person overwrites it, and the Issue reopens as `reverted`. The checks the agent reported stay `Checks at merge`,
+  passed, on the pull request whose added file went to Trash. A claimed agent plans and applies `pr_revert`, cannot
   overwrite, and is refused while the repository requires checks.
 - MI17 has an agent claimed by another person share a file by link in its Personal Space after its assignment. The
   Space owner, who may accept but did not claim it, sees the share by name, kind and time in the acceptance panel with
@@ -77,7 +78,7 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent, MP19 calls `pr_edit` with `leave_out_trashed` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
-`unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, MI16 calls `pr_revert` and drives `uvw pr revert`, and MI17 calls `share` and `issue_verdict` as an agent another person claimed. MP17 also calls `space_node`, `claim`,
+`unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, MI16 calls `pr_check` and `pr_revert` and drives `uvw pr revert`, and MI17 calls `share` and `issue_verdict` as an agent another person claimed. MP17 also calls `space_node`, `claim`,
 `fork_create` and `fork_view` as an agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`,
 the last two as that agent. MP18 calls `space_node`, `file_upload_create`, `blob_upload`, `repo_edit` and
 `repo_member_write` as an agent on the default connection. A person judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses
@@ -1434,12 +1435,13 @@ declared and `passed`, the merge succeeds and Trunk reads Region, Total, North, 
 
 ### MI16. Revert an Issue's merged pull requests
 
-The run user O holds a Team Space with Sheets North, South and Old and a Doc Notes, and makes a claimed agent A and a
-person E Editors there. For an Issue assigned to A, A merges one pull request that changes North and South and one that
-changes Notes and adds a Doc, Summary, and O merges a third that deletes Old. A submits and O accepts. E then edits
+The run user O holds a Team Space with Sheets North, South and Old and a Doc Notes, declares two checks in
+`.agents/checks.md`, and makes a claimed agent A and a person E Editors there. For an Issue assigned to A, A merges one
+pull request that changes North and South and one that changes Notes and adds a Doc, Summary, each after reporting both
+checks passed, and O merges a third that deletes Old. A submits and O accepts. E then edits
 South on Trunk. In the Issue's `Acceptance` view, O reviews the revert: Old comes back, Notes and North go back, South
 is blocked and names E, and Summary goes to Trash. O reverts without overwriting, and the Issue reopens with the verdict
-`reverted`. O reviews again and overwrites South alone. Then A reverts its own second Issue with `pr_revert`: its change
+`reverted`. Both of A's pull requests still show their checks as passed at merge, though Summary is in Trash. O reviews again and overwrites South alone. Then A reverts its own second Issue with `pr_revert`: its change
 goes back, a file E edited after the merge stays blocked, and A cannot overwrite it. MI16 uses one `principal`, which
 counts toward the 5 agents per hour.
 
@@ -1451,6 +1453,9 @@ res() { jq -r .unit.resourceId "$EVIDENCE/mrv-$1.out"; }
 cell() { jq -r --arg r "$2" '.json.cells[] | select(.ref == $r) | .value' "$EVIDENCE/$1.out"; }
 $V cli mrv-repo repo create revert-story --name "Revert story" --json id,fullName
 T=$(jq -r .id "$EVIDENCE/mrv-repo.out")
+$V cli mrv-folder space node create "$R" --name .agents --json
+printf '# Checks\n\n## totals-match\nNorth and South B2 hold the new totals.\n\n## summary-written\nNotes and Summary say what changed.\n' > "$EVIDENCE/mrv-checks.md"
+$V cli mrv-checks blob upload --file "$EVIDENCE/mrv-checks.md" --space "$T" --parent "$(jq -r .node.nodeId "$EVIDENCE/mrv-folder.out")" --name checks.md --json
 $V mcp mrv-seed pr_create "{\"repo\":\"$R\",\"title\":\"Seed\"}"
 W0=$(jq -r .id "$EVIDENCE/mrv-seed.out"); N0=$(jq -r .number "$EVIDENCE/mrv-seed.out")
 for name in North South Old; do
@@ -1483,8 +1488,11 @@ pull() {
   jq -r .id "$EVIDENCE/mrv-pr-$1.out"
 }
 ready_merge() {
-  local n; n=$(jq -r .number "$EVIDENCE/mrv-pr-$1.out")
+  local n name; n=$(jq -r .number "$EVIDENCE/mrv-pr-$1.out")
   $V mcp --as reverter "mrv-ready-$1" pr_ready "{\"repo\":\"$R\",\"number\":\"$n\"}"
+  for name in totals-match summary-written; do
+    $V mcp --as reverter "mrv-check-$1-$name" pr_check "$(jq -nc --arg r "$R" --arg n "$n" --arg c "$name" '{repo:$r,number:$n,name:$c,state:"passed",summary:"Read back on the draft."}')"
+  done
   $V mcp --as reverter "mrv-merge-$1" pr_merge "{\"repo\":\"$R\",\"number\":\"$n\"}"
 }
 W1=$(pull totals "Raise the totals" "$N")
@@ -1544,24 +1552,31 @@ test "$(cell mrv-after-south A1)" = "E note" && test "$(cell mrv-after-south B2)
 $V cli mrv-after-notes inspect document --unit "$(unit Notes)" --trunk --json
 jq -e '[.paragraphs[].textPreview] == ["Draft notes"]' "$EVIDENCE/mrv-after-notes.out"
 $V cli mrv-after-tree space browse "$R" --json
-jq -e '[.. | objects | select(.name? != null and .nodeId? != null) | .name] | unique == ["North","Notes","Old","South"]' "$EVIDENCE/mrv-after-tree.out"
+jq -e '[.. | objects | select(.name? != null and .nodeId? != null) | .name] | unique == [".agents","North","Notes","Old","South"]' "$EVIDENCE/mrv-after-tree.out"
 $V cli mrv-after-issue issue view "$N" -R "$R" --json state,acceptance
 jq -e '.state == "open" and .acceptance.kind == "reverted"' "$EVIDENCE/mrv-after-issue.out"
 for pr in totals summary; do
-  $V cli "mrv-after-pr-$pr" pr view "$(jq -r .number "$EVIDENCE/mrv-pr-$pr.out")" -R "$R" --json capabilities,units
+  $V cli "mrv-after-pr-$pr" pr view "$(jq -r .number "$EVIDENCE/mrv-pr-$pr.out")" -R "$R" --json capabilities,units,checks
 done
-$V cli mrv-after-pr-old pr view "$N3" -R "$R" --json capabilities,units
+$V cli mrv-after-pr-old pr view "$N3" -R "$R" --json capabilities,units,checks
 jq -e '.capabilities.review and ([.units[] | [.name, .fileState]] == [["North","live"],["South","live"]])' "$EVIDENCE/mrv-after-pr-totals.out"
 jq -e '.capabilities.review and ([.units[] | [.name, .fileState]] == [["Notes","live"],["Summary","inTrash"]])' "$EVIDENCE/mrv-after-pr-summary.out"
 jq -e '.capabilities.review and ([.units[] | [.name, .fileState]] == [["Old","live"]])' "$EVIDENCE/mrv-after-pr-old.out"
+jq -e '.checks == {"passed":2,"failed":0,"missing":0,"atMerge":true}' "$EVIDENCE/mrv-after-pr-totals.out"
+jq -e '.checks == {"passed":2,"failed":0,"missing":0,"atMerge":true}' "$EVIDENCE/mrv-after-pr-summary.out"
+jq -e '.checks == {"passed":0,"failed":0,"missing":2,"atMerge":true}' "$EVIDENCE/mrv-after-pr-old.out"
+$V mcp mrv-after-view-summary pr_view "{\"repo\":\"$R\",\"number\":\"$(jq -r .number "$EVIDENCE/mrv-pr-summary.out")\"}"
+jq -e '[.checks[] | [.name, .state, .atMerge, ([.results[] | select(.counts)] | length)]] == [["totals-match","passed",true,1],["summary-written","passed",true,1]]' "$EVIDENCE/mrv-after-view-summary.out"
 ```
 
 Reload the Issue page on `Acceptance` at 1440 × 1500. Every pull request lists its files: `Raise the totals` North and
 South, `Finish the notes and write the summary` Notes and Summary, and `Remove Old` Old. No pull request reads `You may
 not see this pull request's files.` Summary reads `This file is now in Trash.` and has no `Compare`, and North, South
-and Notes each have `Compare`. Screenshot the pull requests (`find text "Pull requests"` scrolled into view) as
+and Notes each have `Compare`. After the files of each of A's pull requests, `Checks at merge` lists `totals-match` and
+`summary-written`, each `Passed`, with A's result counting; `Remove Old` lists both `Missing` under `Checks at merge`.
+Screenshot the pull requests (`find text "Pull requests"` scrolled into view) as
 `mrv-panel-after.png`. At 390 × 2300, reload, check that `document.documentElement.scrollWidth` is 390, and screenshot
-`mrv-panel-after-narrow.png` with the same files and note.
+`mrv-panel-after-narrow.png` with the same files, note and checks.
 
 Choose `Conversation`, scroll to the end and screenshot `mrv-timeline.png`: the sidebar reads `Acceptance` `Reverted`,
 and the timeline ends with `reopened this` and `reverted the merged changes`. Choose `Acceptance` and click `Review
@@ -1626,7 +1641,8 @@ screenshot `mrv-pr-page.png`: its `Revert` section lists North and South.
 Pass when every command exits as shown: the plan names Erin on South with a time today and lists each file once with its
 action, the narrow page has no horizontal scroll, the first revert brings Old back, Notes and North back to their
 content before the task and Summary into Trash while South keeps E's edit, the Issue reopens with `reverted`, every
-pull request still lists its files to O after the revert with Summary noted as in Trash at both widths, the
+pull request still lists its files to O after the revert with Summary noted as in Trash at both widths, A's pull
+requests show both checks passed at merge in uvw, MCP and the panel at both widths, the
 overwrite returns South to its content before the task, the agent's `pr_revert` has no force argument, restores North,
 leaves South blocked with E's edit and is told only a person can overwrite it, the agent's revert is refused while the
 repository requires checks, and the second Issue's verdict is `reverted` by A.

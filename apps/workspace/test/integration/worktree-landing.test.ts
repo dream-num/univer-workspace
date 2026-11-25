@@ -405,6 +405,133 @@ it("does not gate the agent that owns a checks repository, and gates an agent ad
   expect(await f.merge(owner.id, byOwner)).toMatchObject({ worktree: { state: "merged" } });
 }, 120_000);
 
+it("shows a merged pull request's checks as they stood at merge once the file it added is in Trash", async () => {
+  const f = await repository();
+  const { pull, addedNodeId } = await passedPull(f);
+  await f.merge(f.owner.id, pull);
+  await f.application.trash.trashNode(f.owner.id, addedNodeId);
+
+  for (const [who, reader] of [["owner", f.owner], ["viewer member", f.reader]] as const) {
+    const read = async (path: string) => (await fetch(`${f.origin}${path}`, { headers: { cookie: reader.cookie } })).json();
+    expect((await read(`/api/worktrees/${pull}/checks`)).checks, who).toMatchObject(passedAtMerge(f.alice.id));
+    expect((await read(`/api/worktrees/${pull}`)).worktree.checks, who).toEqual({ passed: 2, failed: 0, missing: 0, atMerge: true });
+  }
+}, 120_000);
+
+it("keeps the checks recorded at merge after their reporter leaves the repository", async () => {
+  const f = await repository();
+  const { pull } = await passedPull(f);
+  await f.merge(f.owner.id, pull);
+  await f.application.permissions.removeTeamMember(f.owner.id, f.team, f.alice.id);
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks).toMatchObject(passedAtMerge(f.alice.id));
+}, 120_000);
+
+it("labels the checks of a pull request merged before checks were recorded at merge as computed now", async () => {
+  const f = await repository();
+  const { pull } = await passedPull(f);
+  const key = randomUUID();
+  await f.application.worktrees.merge(f.owner.id, pull, key);
+  await f.sql(`UPDATE operations SET payload_json = replace(payload_json, '"checksAtMerge"', '"unrecorded"') WHERE id = ?`, key);
+  const now = async () => (await f.application.worktrees.checks(f.owner.id, pull)).checks.map(({ name, state, atMerge }) => [name, state, atMerge]);
+  expect(await now()).toEqual([["totals-match", "passed", false], ["header-unchanged", "passed", false]]);
+
+  await f.application.permissions.removeTeamMember(f.owner.id, f.team, f.alice.id);
+  expect(await now(), "today's permissions decide").toEqual([["totals-match", "missing", false], ["header-unchanged", "missing", false]]);
+  expect((await f.application.worktrees.get(f.owner.id, pull, true)).worktree.checks).toEqual({ passed: 0, failed: 0, missing: 2, atMerge: false });
+}, 120_000);
+
+it("keeps the checks recorded before Trunk moved when a merge that stopped after Trunk moved is retried", async () => {
+  const f = await repository();
+  const { pull } = await passedPull(f);
+  const key = randomUUID();
+  f.afterSdkMerge(async () => {
+    throw new Error("The server stopped.");
+  });
+  await expect(f.application.worktrees.merge(f.owner.id, pull, key)).rejects.toThrow("The server stopped.");
+  await f.application.permissions.removeTeamMember(f.owner.id, f.team, f.alice.id);
+
+  expect(await f.application.operations.retry(f.owner.id, key)).toMatchObject({ state: "completed" });
+  expect((await f.application.worktrees.get(f.owner.id, pull, true)).worktree)
+    .toMatchObject({ state: "merged", checks: { passed: 2, failed: 0, missing: 0, atMerge: true } });
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks).toMatchObject(passedAtMerge(f.alice.id));
+}, 120_000);
+
+it("keeps the checks of the merge that landed when an earlier merge that stopped before Trunk moved is retried", async () => {
+  const f = await repository();
+  const { pull } = await passedPull(f);
+  const stopped = randomUUID();
+  f.beforeSdkMerge(async () => {
+    throw new Error("The Collaboration Service is down.");
+  });
+  await expect(f.application.worktrees.merge(f.owner.id, pull, stopped)).rejects.toThrow("The Collaboration Service is down.");
+  await f.report(f.alice.id, pull, "totals-match", "failed");
+  await f.merge(f.owner.id, pull);
+
+  await expect(f.application.operations.retry(f.owner.id, stopped)).rejects.toMatchObject({ status: 403 });
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks.map(({ name, state, atMerge }) => [name, state, atMerge]))
+    .toEqual([["totals-match", "failed", true], ["header-unchanged", "passed", true]]);
+}, 120_000);
+
+it("keeps the checks of the merge that landed when a merge that read the pull request before it landed records after", async () => {
+  const f = await repository();
+  const { pull, addedNodeId } = await passedPull(f);
+  f.beforeReserve(async () => {
+    await f.merge(f.owner.id, pull);
+    await f.application.trash.trashNode(f.owner.id, addedNodeId);
+  });
+  expect(await f.merge(f.owner.id, pull)).toMatchObject({ worktree: { state: "merged" } });
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks).toMatchObject(passedAtMerge(f.alice.id));
+}, 120_000);
+
+it("names the person whose merge landed as its merger when another merge read the pull request before it landed", async () => {
+  const f = await repository();
+  const issue = await f.application.issues.create(f.owner.id, f.team, { title: "Fix totals" });
+  const { pull } = await passedPull(f);
+  await f.application.worktrees.update(f.alice.id, pull, { issueNumber: issue.number });
+  f.beforeReserve(async () => {
+    await f.merge(f.owner.id, pull);
+  });
+  expect(await f.merge(f.alice.id, pull)).toMatchObject({ worktree: { state: "merged" } });
+
+  const mergedBy = async () => [
+    (await f.application.worktrees.activity(f.owner.id, { kind: "team", teamSpaceId: f.team }, 0)).items.find(({ id }) => id === pull)?.mergedBy?.id,
+    (await f.application.issues.get(f.owner.id, f.team, issue.number)).pullRequests.find(({ id }) => id === pull)?.mergedBy?.id,
+  ];
+  expect(await mergedBy()).toEqual([f.owner.id, f.owner.id]);
+
+  await f.sql(`UPDATE operations SET payload_json = replace(payload_json, '"landed"', '"unclaimed"') WHERE payload_json LIKE ?`, `%${pull}%`);
+  expect(await mergedBy(), "merges from before the claim keep naming the last to complete").toEqual([f.alice.id, f.alice.id]);
+}, 120_000);
+
+it("merges in a review repository when its declared checks cannot be read, and shows the checks computed now", async () => {
+  const f = await repository();
+  const { pull } = await passedPull(f);
+  f.unreadable.add(f.declaration.objectKey);
+  expect(await f.merge(f.owner.id, pull)).toMatchObject({ worktree: { state: "merged" } });
+  f.unreadable.delete(f.declaration.objectKey);
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks.map(({ name, state, atMerge }) => [name, state, atMerge]))
+    .toEqual([["totals-match", "passed", false], ["header-unchanged", "passed", false]]);
+}, 120_000);
+
+/** alice's ready pull request that adds a sheet, with both declared checks passed by alice, who may merge it. */
+async function passedPull(f: Awaited<ReturnType<typeof repository>>) {
+  const { worktrees } = f.application;
+  const pull = await f.openPull(f.alice.id);
+  const { nodeId } = (await worktrees.addUnit(f.alice.id, pull, randomUUID(), {
+    source: "worktree", name: "Added", unitType: "sheet", targetSpaceId: f.team, targetParentNodeId: null,
+  })).body.unit;
+  await worktrees.markReady(f.alice.id, pull);
+  await f.reportAll(f.alice.id, pull);
+  return { pull, addedNodeId: nodeId! };
+}
+
+function passedAtMerge(reporterId: string) {
+  return ["totals-match", "header-unchanged"].map((name) => ({
+    name, declared: true, state: "passed", atMerge: true,
+    results: [{ reporter: { id: reporterId }, state: "passed", current: true, counts: true }],
+  }));
+}
+
 interface Actor {
   readonly id: string;
   readonly cookie: string;
@@ -415,7 +542,7 @@ interface Actor {
  * viewer agent, both claimed by the owner.
  */
 async function repository(landing: "review" | "checks" = "review") {
-  const { application, origin, trunk, trunkHead, unreadable, beforeSecondRead, beforeSdkMerge, sdk, sql } = await start();
+  const { application, origin, trunk, trunkHead, unreadable, beforeSecondRead, beforeReserve, beforeSdkMerge, afterSdkMerge, sdk, sql } = await start();
   const person = async (username: string): Promise<Actor> => {
     const issued = await application.identity.registerWithPassword({ username, displayName: username, password: "correct horse battery staple" });
     return { id: issued.view.user.id, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
@@ -490,7 +617,7 @@ async function repository(landing: "review" | "checks" = "review") {
 
   return {
     application, origin, team, folder, declaration, sheet, otherSheet, owner, alice, bot, reader, unreadable, beforeSecondRead,
-    beforeSdkMerge, sdk, sql, agent, principal, upload, objectKey, sheetNamed, editDraft, openPull, trunkHead,
+    beforeReserve, beforeSdkMerge, afterSdkMerge, sdk, sql, agent, principal, upload, objectKey, sheetNamed, editDraft, openPull, trunkHead,
     async readyPull(userId: string, resourceId: string = sheet.id, teamSpaceId: string = team, edit = false) {
       const id = await openPull(userId, teamSpaceId);
       await application.worktrees.addUnit(userId, id, randomUUID(), { source: "trunk", resourceId });
@@ -563,6 +690,16 @@ async function start() {
   const backend = createWorktreeBackend(runtime.worktreeService, runtime.service);
   let hook: { run: () => Promise<void>; reads: number } | undefined;
   let mergeHook: (() => Promise<void>) | undefined;
+  let mergedHook: (() => Promise<void>) | undefined;
+  let reserveHook: (() => Promise<void>) | undefined;
+  const worktrees = database.repositories.worktrees;
+  const reserve = worktrees.reserveOperation.bind(worktrees);
+  worktrees.reserveOperation = async (input) => {
+    const run = reserveHook;
+    reserveHook = undefined;
+    await run?.();
+    return reserve(input);
+  };
   const worktreeBackend: WorktreeBackend = {
     ...backend,
     async getWorktree(worktreeId, userId) {
@@ -577,7 +714,11 @@ async function start() {
       const run = mergeHook;
       mergeHook = undefined;
       await run?.();
-      return backend.merge(worktreeId, userId, checkedDraft);
+      const merged = await backend.merge(worktreeId, userId, checkedDraft);
+      const after = mergedHook;
+      mergedHook = undefined;
+      await after?.();
+      return merged;
     },
   };
   const application: WorkspaceApplication = createWorkspaceApplication(config, database.repositories, collaboration, {
@@ -620,9 +761,17 @@ async function start() {
     beforeSecondRead(run: () => Promise<void>) {
       hook = { run, reads: 0 };
     },
+    /** Runs once, when the next Operation is about to be reserved. */
+    beforeReserve(run: () => Promise<void>) {
+      reserveHook = run;
+    },
     /** Runs once the second gate decided, just before the product asks the Collaboration Service to merge. */
     beforeSdkMerge(run: () => Promise<void>) {
       mergeHook = run;
+    },
+    /** Runs once the Collaboration Service merged, before the product records the merge. */
+    afterSdkMerge(run: () => Promise<void>) {
+      mergedHook = run;
     },
     sdk: backend,
     sql,

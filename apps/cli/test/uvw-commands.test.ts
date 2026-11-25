@@ -394,7 +394,7 @@ describe("uvw pr and the worktree alias", () => {
     laterEdits: [{ user: { id: "u2", username: "eve", displayName: "Eve" }, revisions: 2, lastEditedAt: null }],
   };
 
-  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; env?: NodeJS.ProcessEnv; ownerId?: string; revertState?: "failed" } = {}) {
+  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; checks?: unknown; env?: NodeJS.ProcessEnv; ownerId?: string; revertState?: "failed" } = {}) {
     const { repoContext } = context(options.env);
     const calls: [string, ...unknown[]][] = [];
     const record = (name: string, result: unknown) =>
@@ -405,7 +405,7 @@ describe("uvw pr and the worktree alias", () => {
     const worktrees = {
       create: record("create", worktree()),
       get: record("get", worktree()),
-      getByNumber: record("getByNumber", worktree()),
+      getByNumber: record("getByNumber", worktree(options.checks === undefined ? {} : { state: "merged", checks: options.checks })),
       list: record("list", [worktree()]),
       transition: record("transition", worktree({ state: "ready" })),
       update: record("update", worktree({ name: "New" })),
@@ -493,6 +493,14 @@ describe("uvw pr and the worktree alias", () => {
       ["getByNumber", "space-1", 12],
       ["reportCheck", "wt-1", "totals-match", { state: "failed" }],
     ]);
+  });
+
+  it("labels a merged pull request's checks as at merge, or as computed now when its merge recorded none", async () => {
+    const view = (atMerge: boolean | null) =>
+      run(pullRequestCommands({ checks: { passed: 2, failed: 0, missing: 0, atMerge } }).pr, ["view", "12", "-R", "alice/docs"]);
+    expect(await view(true)).toContain("checks at merge: 2 passed, 0 failed, 0 missing");
+    expect(await view(false)).toContain("checks now (not recorded at merge): 2 passed");
+    expect(await view(null)).toContain("checks: 2 passed");
   });
 
   it("addresses by number, maps lifecycle verbs and treats owner/personal as User Worktrees", async () => {

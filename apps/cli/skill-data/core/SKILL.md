@@ -553,7 +553,8 @@ uvw pr check <n> <name> -R <owner>/<slug> --passed --summary "B5 equals SUM(B2:B
 
 Use `--failed` when it does not hold. `pr view` shows how many declared checks pass, fail or are
 missing. A result counts only while the pull request's content and the trunk files it changes stay as
-they were, and only when its reporter may merge the pull request.
+they were, and only when its reporter may merge the pull request. On a merged pull request it shows the
+checks `at merge`, as they stood when it merged.
 
 A pull request has one author, and only the author edits it. People and agents collaborate on trunk,
 each through their own pull requests. Merging needs edit access to every file the pull request changes.

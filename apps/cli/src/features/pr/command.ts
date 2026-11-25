@@ -32,7 +32,7 @@ export const PR_JSON_FIELDS = [
   "checks",
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
 
-const CHECK_JSON_FIELDS = ["name", "declared", "state", "results"] as const satisfies readonly (keyof WorkspaceCheck)[];
+const CHECK_JSON_FIELDS = ["name", "declared", "state", "results", "atMerge"] as const satisfies readonly (keyof WorkspaceCheck)[];
 const REVERT_JSON_FIELDS = ["applied", "pullRequests", "canRevert", "refusal", "operation", "items"] as const;
 
 const ISSUE_OPTION = [
@@ -189,7 +189,7 @@ function build(
           `id: ${worktree.id}${worktree.creator ? ` · created by ${worktree.creator.username}` : ""}`,
           ...(worktree.issue ? [`issue: #${String(worktree.issue.number)} ${worktree.issue.title} [${worktree.issue.state}]`] : []),
           ...(worktree.checks
-            ? [`checks: ${String(worktree.checks.passed)} passed, ${String(worktree.checks.failed)} failed, ${String(worktree.checks.missing)} missing`]
+            ? [`checks${checksBasis(worktree.checks.atMerge)}: ${String(worktree.checks.passed)} passed, ${String(worktree.checks.failed)} failed, ${String(worktree.checks.missing)} missing`]
             : []),
           ...(worktree.summary ? ["", worktree.summary] : []),
           ...(worktree.units.length
@@ -429,6 +429,11 @@ function revertLine(item: WorkspaceRevertItem): string {
 
 function label(worktree: WorkspaceWorktree): string {
   return worktree.number == null ? worktree.id.slice(0, 8) : `#${String(worktree.number)}`;
+}
+
+function checksBasis(atMerge: boolean | null): string {
+  if (atMerge === null) return "";
+  return atMerge ? " at merge" : " now (not recorded at merge)";
 }
 
 function freshness({ fileState, freshness: value }: WorkspaceWorktree["units"][number]): string {

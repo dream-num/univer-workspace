@@ -7,7 +7,7 @@ import { retryFailed } from "../operations/operations.repository.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
 import type { PublicUser } from "../../../modules/permissions/index.js";
-import type { WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
+import type { WorktreeChecksAtMerge, WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
 import type {
   WorktreeCheckRow,
   WorktreeCursor,
@@ -553,7 +553,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          JOIN users AS merger ON merger.id = operation.actor_user_id
          WHERE operation.kind = 'merge_worktree' AND operation.state = 'completed'
            AND json_extract(operation.payload_json, '$.worktreeId') IN (SELECT value FROM json_each(?))
-         ORDER BY operation.updated_at`
+         ORDER BY (json_extract(operation.payload_json, '$.landed') = 1), operation.updated_at`
       )
       .all(JSON.stringify(worktreeIds)) as unknown as Array<PublicUser & { readonly worktreeId: string }>;
     return new Map(rows.map(({ worktreeId, ...merger }) => [worktreeId, merger]));
@@ -592,7 +592,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          FROM operations
          WHERE kind = 'merge_worktree' AND json_extract(payload_json, '$.worktreeId') = ?
            AND json_extract(payload_json, '$.contentKey') IS NOT NULL
-         ORDER BY created_at DESC, id DESC
+         ORDER BY (json_extract(payload_json, '$.landed') = 1) DESC, created_at DESC, id DESC
          LIMIT 1`
       )
       .get(worktreeId) as { key: string } | undefined;
@@ -607,6 +607,43 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
       )
       .run(contentKey, heldAt + 60_000, heldAt, operationId);
+  }
+
+  async recordChecksAtMerge(operationId: string, record: WorktreeChecksAtMerge, recordedAt: number): Promise<void> {
+    this._database.connection
+      .prepare(
+        `UPDATE operations
+         SET payload_json = json_set(payload_json, '$.checksAtMerge', json(?)), updated_at = ?
+         WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
+      )
+      .run(JSON.stringify(record), recordedAt, operationId);
+  }
+
+  async claimLanding(operationId: string, worktreeId: string): Promise<void> {
+    this._database.connection
+      .prepare(
+        `UPDATE operations
+         SET payload_json = json_set(payload_json, '$.landed', json('true'))
+         WHERE id = ? AND kind = 'merge_worktree'
+           AND NOT EXISTS (
+             SELECT 1 FROM operations
+             WHERE kind = 'merge_worktree' AND json_extract(payload_json, '$.worktreeId') = ?
+               AND json_extract(payload_json, '$.landed') = 1
+           )`
+      )
+      .run(operationId, worktreeId);
+  }
+
+  async checksAtMerge(worktreeId: string): Promise<WorktreeChecksAtMerge | null> {
+    const row = this._database.connection
+      .prepare(
+        `SELECT json_extract(payload_json, '$.checksAtMerge') AS record
+         FROM operations
+         WHERE kind = 'merge_worktree' AND json_extract(payload_json, '$.worktreeId') = ?
+           AND json_extract(payload_json, '$.landed') = 1`
+      )
+      .get(worktreeId) as { record: string | null } | undefined;
+    return row?.record ? JSON.parse(row.record) as WorktreeChecksAtMerge : null;
   }
 
   async mergeRunning(worktreeId: string, now: number): Promise<boolean> {

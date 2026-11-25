@@ -558,9 +558,28 @@ Trunk 记录（`trunkRevision`），与读 pull request 详情相同；草稿 ID
 草稿增减或过期都会改变内容键，旧结论保留并显示，但不再 current。合入开始时，`merge_worktree` Operation 的 payload
 记下当时的 `contentKey`；受限 agent 的合入在第二次判断后改记那次判断读的内容键。合入后的 pull request 以它判断 current；discard 后没有 current。一个内容键下最多 40 个检查名。
 
+合入在调用 SDK 之前（受限 agent 的合入在第二次判断之后）把这一刻的检查写进这次 `merge_worktree` Operation 的
+payload，键是 `checksAtMerge`：合入落下的内容的 `contentKey`，以 Space owner 的权限读到的声明，每项检查的
+`state`，以及每条结论的报告人、`state`、`summary`、`reportedAt`、`current` 和 `counts`。必须在 Trunk 变化之前写，
+因为合入随后把删除的文件移入 Trash，而谁都不能编辑 Trash 里的文件，之后再算会让报告人不再算能合入的人。只在
+Worktree 还是 `ready`、Operation 还是 `pending` 时写；合入之后的重试读到 `merged`，不再写，替别人完成合入的
+Operation 也不写。不要求检查的仓库里，记录算不出来时（例如 BlobStore 读不到声明）合入照常进行，不写记录；
+`landing: checks` 的仓库里合入随之失败，和守卫一样。
+
+同一个 Worktree 可以有几个 Operation 写了记录：被拒绝或停在 Trunk 变化之前的合入，以及在别的合入落地之前读到
+`ready`、落地之后才写的合入，后者的记录是 Trunk 变化之后的样子。所以显示哪一份不按写入时间，而按哪个 Operation
+先看到合入落地：SDK 调用返回 `merging` 或 `merged` 之后（包括崩溃后的重试），Operation 在 payload 里写 `landed: true`，条件是
+这个 Worktree 还没有别的 merge Operation 写过 `landed`。SQLite 用一条带 `NOT EXISTS` 的 `UPDATE`，PostgreSQL 在
+serializable 事务里执行它，两个同时的认领只有一个成功。每个 Operation 都在激活和移入 Trash 之前认领，所以第一个
+认领发生在这次合入移入任何文件之前，认领者的记录又写在它某一次调用 SDK 之前：崩溃后重试的 Operation 带着它在更早
+一次尝试里写的记录认领。已合入的 pull request 读带 `landed` 的 Operation 的记录，合入者（`mergedBy`）也是这个
+Operation 的 actor，不比较任何副本的时钟；没有 `landed` 的旧 Operation 仍取最后完成的那个。报告人的名字和头像取现在的，返回 `atMerge: true`；之后文件进 Trash、
+报告人被移除或降级都不改变它。没有这样的记录时（这个字段出现之前合入的，或落地的 Operation 没有写记录）按现在的
+权限计算，返回 `atMerge: false`，不回填。没有合入的 pull request 返回 `atMerge: null`。
+
 声明的检查来自 Team Space Trunk 根目录 `.agents/checks.md`（恰好一个 `.agents` 文件夹和其中恰好一个 `checks.md`
 Blob），以读者自己的权限读取前 64 KiB。代码块外的 `## name` 标题里，名字合法的前 20 个按文件顺序成为声明的检查，
-其它标题只是给 agent 的说明。每次读取都重新读文件，不在进程内缓存。结论计入（`counts`）当且仅当它 current，且报告人此刻
+其它标题只是给 agent 的说明。每次读取都重新读文件，不在进程内缓存。没有合入记录时，结论计入（`counts`）当且仅当它 current，且报告人此刻
 可以合入这个 pull request；声明的检查在有计入的 `failed` 时为 `failed`，否则有计入的 `passed` 时为 `passed`，否则为
 `missing`。报告过但未声明的名字保留并显示，不要求。
 

@@ -223,7 +223,8 @@ _Avoid_: CI job, test, status check
 One reporter's passed or failed on one check, bound to the exact content a ready
 Worktree had: its Units' draft and Trunk revisions and its pending drafts. A later
 Trunk edit to one of its Units, or a reopen that changes it, leaves the result out of
-date. A result counts while current when its reporter may merge the Worktree.
+date. A result counts while current when its reporter may merge the Worktree. A merged
+Worktree keeps its Check Results as they stood when its merge began.
 _Avoid_: Approval, review, status
 
 **Landing**:

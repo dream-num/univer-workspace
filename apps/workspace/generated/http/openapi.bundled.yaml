@@ -5080,7 +5080,7 @@ paths:
         - Worktrees
       operationId: listWorktreeChecks
       summary: List the declared checks and every reported result on a pull request.
-      description: Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. Needs review access.
+      description: Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. A merged pull request lists the checks its merge recorded before trunk moved, with the declaration read as the Space owner then. Needs review access.
       responses:
         '200':
           description: Checks and their results.
@@ -8170,6 +8170,11 @@ components:
           oneOf:
             - $ref: '#/components/schemas/WorktreeUnitFileState'
             - type: 'null'
+    WorktreeChecksAtMerge:
+      description: true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk moved; later changes to files, members or permissions do not change it. false on a pull request whose merge recorded no checks, such as one merged before merges recorded them, whose check is computed now with today's permissions. null while the pull request is not merged.
+      oneOf:
+        - type: boolean
+        - type: 'null'
     WorktreeChecksSummary:
       type: object
       additionalProperties: false
@@ -8178,6 +8183,7 @@ components:
         - passed
         - failed
         - missing
+        - atMerge
       properties:
         passed:
           type: integer
@@ -8188,6 +8194,8 @@ components:
         missing:
           type: integer
           minimum: 0
+        atMerge:
+          $ref: '#/components/schemas/WorktreeChecksAtMerge'
     WorktreeEnvelope:
       type: object
       additionalProperties: false
@@ -10333,7 +10341,7 @@ components:
           description: Reported on the content the pull request has now, or merged with. The server names the content from every Unit's draft and Trunk head revisions and the pending page and file drafts. A Trunk edit to one of its Units, or a reopen that changes its content, leaves earlier results out of date.
         counts:
           type: boolean
-          description: Current, and reported by someone who may merge the pull request now.
+          description: Current, and reported by someone who may merge the pull request now, or, when the check is `atMerge`, who could merge it when its merge began.
     WorktreeCheck:
       type: object
       additionalProperties: false
@@ -10342,6 +10350,7 @@ components:
         - declared
         - state
         - results
+        - atMerge
       properties:
         name:
           $ref: '#/components/schemas/WorktreeCheckName'
@@ -10360,6 +10369,8 @@ components:
           description: Every result on this name, newest first, with out-of-date ones and those that do not count.
           items:
             $ref: '#/components/schemas/WorktreeCheckResult'
+        atMerge:
+          $ref: '#/components/schemas/WorktreeChecksAtMerge'
     WorktreeChecks:
       type: object
       additionalProperties: false

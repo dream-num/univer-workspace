@@ -275,7 +275,7 @@ WorktreeChecksSummary:
   type: object
   additionalProperties: false
   description: How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result.
-  required: [passed, failed, missing]
+  required: [passed, failed, missing, atMerge]
   properties:
     passed:
       type: integer
@@ -286,6 +286,8 @@ WorktreeChecksSummary:
     missing:
       type: integer
       minimum: 0
+    atMerge:
+      $ref: "#/WorktreeChecksAtMerge"
 
 WorktreeCheckName:
   type: string
@@ -314,12 +316,24 @@ WorktreeCheckResult:
         a reopen that changes its content, leaves earlier results out of date.
     counts:
       type: boolean
-      description: Current, and reported by someone who may merge the pull request now.
+      description: >-
+        Current, and reported by someone who may merge the pull request now, or, when the check is `atMerge`, who
+        could merge it when its merge began.
+
+WorktreeChecksAtMerge:
+  description: >-
+    true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk
+    moved; later changes to files, members or permissions do not change it. false on a pull request whose merge
+    recorded no checks, such as one merged before merges recorded them, whose check is computed now with today's
+    permissions. null while the pull request is not merged.
+  oneOf:
+    - type: boolean
+    - type: "null"
 
 WorktreeCheck:
   type: object
   additionalProperties: false
-  required: [name, declared, state, results]
+  required: [name, declared, state, results, atMerge]
   properties:
     name:
       $ref: "#/WorktreeCheckName"
@@ -335,6 +349,8 @@ WorktreeCheck:
       description: Every result on this name, newest first, with out-of-date ones and those that do not count.
       items:
         $ref: "#/WorktreeCheckResult"
+    atMerge:
+      $ref: "#/WorktreeChecksAtMerge"
 
 WorktreeChecks:
   type: object
