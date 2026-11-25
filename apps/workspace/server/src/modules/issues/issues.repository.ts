@@ -128,7 +128,6 @@ export interface IssueDetail {
 
 export interface DueIssue {
   readonly id: string;
-  readonly accept_at: number;
 }
 
 export interface RecordVerdict {
@@ -153,8 +152,8 @@ export interface IssuesRepository {
   createIssue(input: CreateIssue): Promise<IssueDetail>;
   updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
   recordVerdict(input: RecordVerdict): Promise<IssueDetail>;
-  /** Submitted Issues whose acceptance deadline passed by `now`, in deadline then ID order, after `after`. */
-  listDueIssues(now: number, after: DueIssue, limit: number): Promise<DueIssue[]>;
+  /** Up to `limit` submitted Issues whose acceptance deadline passed by `now`, in random order. */
+  listDueIssues(now: number, limit: number): Promise<DueIssue[]>;
   /** Accepts the Issue by deadline in one transaction if it is still due at `now`, and returns its Space ID. */
   acceptDueIssue(issueId: string, now: number): Promise<string | null>;
   findIssue(spaceId: string, number: number): Promise<IssueRow | null>;

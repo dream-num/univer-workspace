@@ -8,7 +8,6 @@ import type { AccessChanges, PublicUser } from "../permissions/index.js";
 import type {
   IssuesRepository,
   IssueDetail,
-  DueIssue,
   IssueSummaryData,
   LabelFields,
   CommentRow,
@@ -46,6 +45,8 @@ const MAX_LABEL_NAME = 50;
 const MAX_LABEL_DESCRIPTION = 200;
 const MAX_SEARCH = 200;
 const MAX_LABEL_FILTERS = 10;
+/** A deadline pass tries at most this many Issues per Issue it may accept. */
+const DUE_ATTEMPTS_PER_ACCEPT = 4;
 const TIMELINE_RANKS = { comment: 0, event: 1, verdict: 2 } as const;
 
 export function createIssuesModule(options: {
@@ -305,23 +306,18 @@ export function createIssuesModule(options: {
     async acceptDue(time, limit) {
       const spaceIds = new Set<string>();
       let accepted = 0;
-      let after: DueIssue = { id: "", accept_at: 0 };
-      // A failed Issue is passed over, not counted, so failures cannot fill the limit and stall the Issues behind them.
-      while (accepted < limit) {
-        const due = await repository.listDueIssues(time, after, limit - accepted);
-        if (!due.length) break;
-        for (const issue of due) {
-          try {
-            const spaceId = await repository.acceptDueIssue(issue.id, time);
-            if (spaceId) {
-              accepted++;
-              spaceIds.add(spaceId);
-            }
-          } catch (error) {
-            logger.error({ err: error, issueId: issue.id }, "Issue was not accepted by deadline");
+      // A failed Issue is passed over, not counted. The sample is random, so Issues that keep failing cannot fill every pass.
+      for (const issue of await repository.listDueIssues(time, limit * DUE_ATTEMPTS_PER_ACCEPT)) {
+        if (accepted === limit) break;
+        try {
+          const spaceId = await repository.acceptDueIssue(issue.id, time);
+          if (spaceId) {
+            accepted++;
+            spaceIds.add(spaceId);
           }
+        } catch (error) {
+          logger.error({ err: error, issueId: issue.id }, "Issue was not accepted by deadline");
         }
-        after = due.at(-1)!;
       }
       for (const spaceId of spaceIds) await notify(spaceId);
       return accepted;

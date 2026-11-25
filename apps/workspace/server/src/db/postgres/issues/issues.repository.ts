@@ -121,11 +121,10 @@ export class PostgresIssuesRepository implements IssuesRepository {
     });
   }
 
-  async listDueIssues(now: number, after: DueIssue, limit: number): Promise<DueIssue[]> {
+  async listDueIssues(now: number, limit: number): Promise<DueIssue[]> {
     return await this._all(
-      `SELECT id, accept_at FROM (${PENDING_SQL}) AS pending
-        WHERE accept_at <= ? AND (accept_at, id) > (?, ?) ORDER BY accept_at, id LIMIT ?`,
-      now, after.accept_at, after.id, limit,
+      `SELECT id FROM (${PENDING_SQL}) AS pending WHERE accept_at <= ? ORDER BY random() LIMIT ?`,
+      now, limit,
     ) as DueIssue[];
   }
 

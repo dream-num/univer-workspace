@@ -92,6 +92,30 @@ describe("the Issue acceptance panel's data", () => {
     ]);
   }, 60_000);
 
+  it("answers 403 to a comparison of a removed file its reader can no longer open", async () => {
+    const { application, register, team, owner } = await setup();
+    const admin = await register("admin");
+    await application.permissions.upsertTeamMember(owner.id, team, admin.id, { role: "admin" });
+    const sheet = await application.resources.create(owner.id, randomUUID(), {
+      kind: "univer", spaceId: team, parentNodeId: null, name: "Sales", unitType: "sheet",
+    });
+    if (sheet.status === 202) throw new Error("Resource creation pending");
+    const { id } = (await application.worktrees.create(admin.id, randomUUID(), {
+      kind: "team", teamSpaceId: team, visibility: "space", name: "Remove", summary: null,
+    })).body;
+    const { unitId } = (await application.worktrees.addUnit(admin.id, id, randomUUID(), {
+      source: "trunk", resourceId: sheet.body.node.resource!.id,
+    })).body.unit;
+    await application.worktrees.setUnitRemoved(admin.id, id, unitId, { removed: true });
+    await application.permissions.removeTeamMember(owner.id, team, admin.id);
+
+    const origin = await listen(application);
+    const comparison = await fetch(`${origin}/universer-api/worktrees/${id}/units/${unitId}/comparison`, {
+      headers: { cookie: admin.cookie },
+    });
+    expect([comparison.status, (await comparison.json()).error?.code]).toEqual([403, "FORBIDDEN"]);
+  }, 60_000);
+
   it("lists only the Team Space memberships an assignee granted after its assignment, as they stand now", async () => {
     const { application, register, team, owner } = await setup();
     const assignee = await register("assignee");

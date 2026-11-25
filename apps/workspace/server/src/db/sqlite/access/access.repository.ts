@@ -233,6 +233,17 @@ export class SqliteAccessRepository implements AccessRepository {
     );
   }
 
+  async unitOutsideTrash(unitId: string): Promise<boolean> {
+    return this._database.connection
+      .prepare(
+        `SELECT 1 FROM univer_resources AS univer
+           JOIN resources AS resource ON resource.id = univer.resource_id
+           JOIN nodes AS node ON node.id = resource.node_id
+           WHERE univer.unit_id = ? AND node.trash_batch_id IS NULL`,
+      )
+      .get(unitId) !== undefined;
+  }
+
   async findResource(resourceId: string): Promise<ResourceMappingRow | null> {
     return this.readResourceRow(resourceId);
   }
