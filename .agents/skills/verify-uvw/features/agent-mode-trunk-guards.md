@@ -196,5 +196,6 @@ and A's write to B2 is still refused.
   SDK's other event names.
 - A restore commits only at head. `trunk-changeset.mjs` reads head from the snapshot route, whose stored snapshot can
   lag; the changesets after it reach head.
-- A Viewer's Trash calls answer 404, because a Viewer cannot see the Space's Trash. The checks guard answers
+- A Viewer's Trash calls answer 404, because a Viewer cannot see the Space's Trash. That 404 would come without the
+  guard too, so TG1's Trash calls show only that a Viewer cannot see Trash. TG3 proves the guard: it answers
   `AGENT_NOT_ALLOWED` before it looks the Trash Batch up.

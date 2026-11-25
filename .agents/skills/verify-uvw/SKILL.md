@@ -160,7 +160,9 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   `<label>.node-status`, the status of `GET /api/nodes/<id>` without credentials.
 - Drive the real user path: browser controls or uvw commands against the HTTP API. Do not insert SQLite
   rows, call internal services, or use test-only endpoints. Registration in `$V user` is setup, not
-  proof of the auth feature. The [auth journey](features/auth.md) proves that.
+  proof of the auth feature. The [auth journey](features/auth.md) proves that. One write is allowed as
+  setup: moving back the one timestamp a time-based rule reads, so that days pass in a run. The journey
+  names the column and the rule, and proves the result through the real path, as MI15 and PR14 do.
 - Nothing is mocked except the browser Agent's model provider in the Agent journeys. Collaboration,
   Office exchange, and the CLI daemon are all real. External OAuth providers (GitHub, Google, Discord)
   need a real provider, so report them as skipped. MA8 in [PAT sign-in](features/mcp-auth.md#ma8-existing-sign-in-clients) drives
