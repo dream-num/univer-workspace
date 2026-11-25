@@ -65,6 +65,10 @@ export function proposalStaysShared(): ApplicationError {
   );
 }
 
+export function checksRequired(message: string): ApplicationError {
+  return new ApplicationError("CHECKS_REQUIRED", 403, message);
+}
+
 export function checkNeedsReady(state: string): ApplicationError {
   return new ApplicationError(
     "CONFLICT",

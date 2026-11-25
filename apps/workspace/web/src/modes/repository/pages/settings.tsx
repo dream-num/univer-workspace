@@ -347,6 +347,24 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
           </fieldset>
         </form>
       ) : null}
+      {space.type === "team" ? (
+        <label className="flex max-w-xl items-start gap-2 text-sm has-disabled:opacity-60">
+          <input
+            type="checkbox"
+            checked={space.landing === "checks"}
+            disabled={!canEdit || rename.isPending}
+            onChange={(event) => update({ landing: event.target.checked ? "checks" : "review" })}
+            aria-describedby="space-landing-description"
+            className="mt-0.5 size-4 shrink-0 accent-primary"
+          />
+          <span className="grid gap-0.5">
+            <span className="font-medium">{t("settingsLanding")}</span>
+            <span id="space-landing-description" className="text-xs text-muted-foreground">
+              {t("settingsLandingDescription")}
+            </span>
+          </span>
+        </label>
+      ) : null}
       <section className="rd-danger-zone" aria-labelledby="settings-danger-heading">
         <h3 id="settings-danger-heading" className="mb-2 text-2xl leading-9 font-normal">
           {t("settingsDangerZone")}

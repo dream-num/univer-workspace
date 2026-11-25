@@ -1,4 +1,4 @@
-import type { UnitType } from "../access/index.js";
+import type { SpaceLanding, UnitType } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { OperationState } from "../resources/resources.types.js";
@@ -32,6 +32,8 @@ export interface WorktreeRow {
   readonly claimer_display_name: string | null;
   readonly claimer_avatar_url: string | null;
   readonly team_space_name: string | null;
+  readonly team_owner_user_id: string | null;
+  readonly team_landing: SpaceLanding | null;
   readonly issue_id: string | null;
   /** Null when no Issue is linked or the actor cannot read the Team Space. */
   readonly issue_number: number | null;
@@ -207,8 +209,12 @@ export interface WorktreesRepository {
     readonly summary: string;
     readonly reportedAt: number;
   }): Promise<void>;
-  /** The content key the latest merge recorded when it left ready. */
+  /** The content key the latest merge recorded when it left ready, or when its checks gate last decided. */
   mergedContentKey(worktreeId: string): Promise<string | null>;
+  /** Records the content key a merge's checks gate decided on, and holds the merge's lease for another minute. */
+  holdForMerge(operationId: string, contentKey: string, heldAt: number): Promise<void>;
+  /** Whether a merge of the Worktree has started and still holds its lease. */
+  mergeRunning(worktreeId: string, now: number): Promise<boolean>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;
   reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
   completeOperation(

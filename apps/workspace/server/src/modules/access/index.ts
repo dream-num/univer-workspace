@@ -10,9 +10,10 @@ export {
   resolveStoredContentAccess,
   resolveStoredResourceAccess,
   requesterCategory,
+  trunkEditorMode,
 } from "./access.service.js";
 export type { AccessResolver } from "./access.service.js";
-export { AGENT_MERGE_WINDOW_MS, agentBudget, assertCeiling, assertCreateFilesCeiling } from "./ceilings.js";
+export { AGENT_MERGE_WINDOW_MS, agentBudget, assertCeiling, assertCreateFilesCeiling, landsByChecks } from "./ceilings.js";
 export type { BudgetUse } from "./ceilings.js";
 export type {
   AccessRole,
@@ -26,7 +27,9 @@ export type {
   ResourceCapabilities,
   SpaceAccess,
   SpaceCapabilities,
+  SpaceLanding,
   SpaceType,
   UnitType,
   UniverResourceAccess,
 } from "./access.types.js";
+export { SPACE_LANDINGS } from "./access.types.js";

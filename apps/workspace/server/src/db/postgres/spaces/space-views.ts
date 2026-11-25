@@ -47,7 +47,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
 
 const selectSpaceView = `
   SELECT spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId", ${owned} AS "owned",
-    spaces.public_read AS "publicRead", space_members.role AS "memberRole", ${proposesSql("spaces", "$1")} AS "proposes",
+    spaces.public_read AS "publicRead", space_members.role AS "memberRole", ${proposesSql("spaces", "$1")} AS "proposes", spaces.landing,
     users.username AS "ownerUsername", spaces.description, spaces.slug, spaces.proposals,
     spaces.accept_after_hours AS "acceptAfterHours"
   FROM spaces JOIN users ON users.id = spaces.owner_user_id

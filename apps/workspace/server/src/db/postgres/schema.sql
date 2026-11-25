@@ -59,6 +59,7 @@ CREATE TABLE spaces (
   slug TEXT,
   proposals TEXT NOT NULL DEFAULT 'members' CHECK (proposals IN ('members', 'accountable', 'anyone')),
   accept_after_hours INTEGER CHECK (accept_after_hours > 0),
+  landing TEXT NOT NULL DEFAULT 'review' CHECK (landing IN ('review', 'checks')),
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX spaces_personal_owner

@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks, addLanding];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -143,6 +143,10 @@ async function addWorktreeChecks(client: PoolClient): Promise<void> {
   reported_at BIGINT NOT NULL,
   PRIMARY KEY (worktree_id, content_key, name, reporter_user_id)
 )`);
+}
+
+async function addLanding(client: PoolClient): Promise<void> {
+  await client.query("ALTER TABLE spaces ADD COLUMN landing TEXT NOT NULL DEFAULT 'review' CHECK (landing IN ('review', 'checks'))");
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

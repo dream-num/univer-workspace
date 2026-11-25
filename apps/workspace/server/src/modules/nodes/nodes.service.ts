@@ -148,6 +148,7 @@ export function createNodesModule(options: {
 
     async create(userId, inputValue) {
       const input = validCreate(inputValue);
+      await options.access.assertChangesTrunk(userId, input.spaceId);
       const node = await options.repository.createNode({
         ...input,
         id: randomUUID(),
@@ -158,7 +159,10 @@ export function createNodesModule(options: {
     },
 
     async update(actor, nodeId, inputValue) {
-      const node = await options.repository.updateNode(actor, nodeId, validPatch(inputValue), now());
+      const patch = validPatch(inputValue);
+      const source = await options.access.resolveNode(actor.user.id, nodeId);
+      if (source) await options.access.assertChangesTrunk(actor.user.id, source.spaceId);
+      const node = await options.repository.updateNode(actor, nodeId, patch, now());
       return nodeSummary(node);
     },
 
@@ -249,6 +253,7 @@ function syntheticSpace(node: NodeAccess): SpaceAccess {
     name: node.spaceName,
     ownerUserId: "",
     publicRead: false,
+    landing: "review",
     member: false,
     role: node.role,
     capabilities: {

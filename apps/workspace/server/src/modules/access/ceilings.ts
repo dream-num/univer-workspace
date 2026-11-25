@@ -1,7 +1,7 @@
 import client from "prom-client";
 import { ApplicationError, type ApplicationErrorCode } from "../../middleware/errors.js";
 import type { AgentBudget, PrincipalCategory } from "../identity/index.js";
-import type { AccessRole } from "./access.types.js";
+import type { AccessRole, SpaceLanding } from "./access.types.js";
 
 const UNCLAIMED_AGENT_MAX_FILES = 20;
 const UNCLAIMED_AGENT_MAX_TEAM_SPACES = 3;
@@ -31,6 +31,9 @@ export interface CeilingContexts {
   readonly openWorktree: BudgetUse;
   readonly mergeWorktree: BudgetUse;
   readonly updateSpace: { readonly publicRead: boolean };
+  /** `landing` is the Space's setting; `owns` is whether the principal owns the Space. */
+  readonly changeTrunk: { readonly landing: SpaceLanding; readonly owns: boolean };
+  readonly changeLanding: { readonly owns: boolean };
   readonly addTeamMember: { readonly member: PrincipalCategory; readonly role: AccessRole; readonly owner: PrincipalCategory };
   readonly searchUsers: Readonly<Record<never, never>>;
   /** `held` counts the files the principal's Spaces already have or are about to get. */
@@ -51,6 +54,11 @@ interface Ceiling<A extends CeilingAction> {
 
 const isAgent = (category: PrincipalCategory): boolean =>
   category === "agent_unclaimed" || category === "agent_claimed";
+
+/** An agent that does not own a Space requiring checks lands its changes there only by such a merge. People are never gated. */
+export function landsByChecks(principal: PrincipalCategory, { landing, owns }: CeilingContexts["changeTrunk"]): boolean {
+  return isAgent(principal) && landing === "checks" && !owns;
+}
 
 // An agent identity costs nothing, so it gets no organisation-wide reach and, until a human claims
 // it, a small storage budget and no one else in its Spaces. A human's token session reads all of
@@ -88,6 +96,17 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     code: "AGENT_NOT_ALLOWED",
     message: "An unclaimed agent cannot make a Space public.",
     forbids: (principal, { publicRead }) => principal === "agent_unclaimed" && publicRead,
+  },
+  // Checks stand in for the person who reviews a merge, so the agents they gate get no other way onto Trunk.
+  changeTrunk: {
+    code: "AGENT_NOT_ALLOWED",
+    message: "This repository requires checks, so an agent that does not own it changes its files only by merging a pull request whose declared checks all passed.",
+    forbids: (principal, context) => landsByChecks(principal, context),
+  },
+  changeLanding: {
+    code: "AGENT_NOT_ALLOWED",
+    message: "Only a person or the agent that owns this repository can change whether it requires checks.",
+    forbids: (principal, { owns }) => isAgent(principal) && !owns,
   },
   // A Team Space an agent owns reaches only the agent and its claimer, so an agent may be its admin.
   addTeamMember: {

@@ -1,4 +1,4 @@
-import type { StoredSpaceAccess } from "../access/index.js";
+import type { SpaceLanding, StoredSpaceAccess } from "../access/index.js";
 import type { SpaceProposals, SpaceStar } from "./spaces.types.js";
 
 export interface SpaceListEntry extends StoredSpaceAccess {
@@ -30,6 +30,7 @@ export interface SpaceSettingsPatch {
   readonly publicRead?: boolean;
   readonly proposals?: SpaceProposals;
   readonly acceptAfterHours?: number | null;
+  readonly landing?: SpaceLanding;
 }
 
 export interface SpacesRepository {

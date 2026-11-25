@@ -46,6 +46,9 @@ ResourceResponse:
       $ref: ./nodes.yaml#/NodeSummary
 
 EditorMode:
+  description: |
+    `readOnly` when the requester may not edit the content here. On Trunk that includes an agent that does not own
+    a Team Space whose `landing` is `checks`.
   type: string
   enum: [edit, readOnly]
 

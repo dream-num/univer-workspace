@@ -110,6 +110,7 @@ export {
   type WorkspaceShareLink,
 } from "./share.js";
 export {
+  SPACE_LANDINGS,
   SPACE_PROPOSALS,
   TEAM_ROLES,
   type WorkspaceAccessRole,
@@ -119,6 +120,7 @@ export {
   type WorkspaceNodeSummary,
   type WorkspaceSpace,
   type WorkspaceSpaceCapabilities,
+  type WorkspaceSpaceLanding,
   type WorkspaceSpaceProposals,
   type WorkspaceTeamMember,
   type WorkspaceTeamMembers,

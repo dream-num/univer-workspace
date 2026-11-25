@@ -3,6 +3,7 @@ import {
   createRepo,
   repoEditPatch,
   selectRepos,
+  SPACE_LANDINGS,
   SPACE_PROPOSALS,
   TEAM_ROLES,
   type WorkspaceSpace,
@@ -23,7 +24,7 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 export const REPO_JSON_FIELDS = [
   "id", "name", "type", "accessRole", "affiliation", "description", "fullName", "owner", "publicRead", "slug",
-  "proposals", "acceptAfterHours", "capabilities",
+  "proposals", "acceptAfterHours", "landing", "capabilities",
 ] as const satisfies readonly (keyof WorkspaceSpace)[];
 
 const MEMBER_JSON_FIELDS = ["user", "role", "grantedBy", "createdAt", "updatedAt"] as const satisfies
@@ -40,6 +41,9 @@ const hoursOf = (value: string): number | null => {
   }
   return Number(value);
 };
+
+const LANDING_HELP =
+  "review, or checks: an agent that does not own it lands changes only by a merge whose declared checks all passed";
 
 export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
   const root = new Command("repo").description(
@@ -93,6 +97,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
           ...(space.type === "team" && space.acceptAfterHours !== undefined
             ? [`accept after: ${space.acceptAfterHours === null ? "off" : `${String(space.acceptAfterHours)} hours`}`]
             : []),
+          ...(space.type === "team" && space.landing !== undefined ? [`landing: ${space.landing}`] : []),
           `id: ${space.id}`,
           ...(space.description ? ["", space.description] : []),
         ].join("\n"),
@@ -130,7 +135,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     );
 
   const edit = new Command("edit")
-    .description("Change a repository's display name, description, visibility, proposals setting or acceptance deadline")
+    .description("Change a repository's display name, description, visibility, proposals setting, acceptance deadline or landing setting")
     .argument("[ref]", "owner/slug, unique bare slug from repo list, Space ID or URL (default: $UVW_REPO)")
     .option("--name <name>")
     .option("--description <text>", "plain text; an empty string clears it")
@@ -141,6 +146,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
       "accept a submitted Issue nobody sent back after n hours (1 to 720, 72 is typical), or off; turning it on or " +
         "lowering it accepts every submitted Issue already past the new deadline within a minute",
     )
+    .option("--landing <how>", LANDING_HELP)
     .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
@@ -148,6 +154,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
         options: JsonFieldsOption & {
           acceptAfterHours?: string;
           description?: string;
+          landing?: string;
           name?: string;
           proposals?: string;
           visibility?: string;
@@ -163,8 +170,9 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
                 : { visibility: oneOf(options.visibility, ["public", "private"], "--visibility") }),
               ...(options.proposals === undefined ? {} : { proposals: proposalsOf(options.proposals) }),
               ...(options.acceptAfterHours === undefined ? {} : { acceptAfterHours: hoursOf(options.acceptAfterHours) }),
+              ...(options.landing === undefined ? {} : { landing: oneOf(options.landing, SPACE_LANDINGS, "--landing") }),
             },
-            ["name", "description", "visibility", "proposals", "acceptAfterHours"],
+            ["name", "description", "visibility", "proposals", "acceptAfterHours", "landing"],
             flag,
           );
           const { spaceId } = await context.repo(ref);

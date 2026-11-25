@@ -265,6 +265,25 @@ describe("uvw repository and Issue commands", () => {
     expect(await run(command, ["view", "alice/docs"])).toContain("accept after: 72 hours");
   });
 
+  it("makes a repository require checks with edit, and shows the setting in view", async () => {
+    const { repoContext } = context();
+    const gated = { ...teamSpace, type: "team", landing: "checks" };
+    const update = vi.fn(async () => gated);
+    const spaces = {
+      get: vi.fn(async () => gated),
+      getStar: vi.fn(async () => ({ starCount: 0, starred: false })),
+      update,
+    } as unknown as WorkspaceSpaceFeature;
+    const command = createRepoCommand(spaces, repoContext);
+
+    expect(JSON.parse(await run(command, ["edit", "alice/docs", "--landing", "checks", "--json", "landing"])))
+      .toEqual({ landing: "checks" });
+    expect(update).toHaveBeenCalledWith("space-1", { landing: "checks" });
+    await expect(run(command, ["edit", "alice/docs", "--landing", "strict"])).rejects.toMatchObject({ exitCode: 1 });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(await run(command, ["view", "alice/docs"])).toContain("landing: checks");
+  });
+
   it("uses affiliation for @me, falls back on older servers, and exposes it in JSON", async () => {
     const { repoContext } = context();
     const spaces = {

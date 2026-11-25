@@ -23,6 +23,7 @@ import {
   type WorkspaceNodeDirectory,
   type WorkspaceNodeResource,
   type WorkspaceSpace,
+  type WorkspaceSpaceLanding,
   type WorkspaceSpaceProposals,
   type WorkspaceTrashBatch,
   type WorkspaceUnitType,
@@ -82,7 +83,7 @@ export function nodeMoveParent(
 }
 
 export const REPO_DESCRIPTION_MAX = 350;
-export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "proposals", "acceptAfterHours", "slug"] as const;
+export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "proposals", "acceptAfterHours", "landing", "slug"] as const;
 export type RepoEditField = (typeof REPO_EDIT_FIELDS)[number];
 
 /** Creates a Team Space repository: the name defaults to the slug and the description is a second call. */
@@ -130,6 +131,7 @@ export function repoEditPatch(
     readonly description?: string;
     readonly name?: string;
     readonly proposals?: WorkspaceSpaceProposals;
+    readonly landing?: WorkspaceSpaceLanding;
     readonly slug?: string;
     readonly visibility?: "public" | "private";
   },
@@ -138,6 +140,7 @@ export function repoEditPatch(
 ): {
   acceptAfterHours?: number | null;
   description?: string;
+  landing?: WorkspaceSpaceLanding;
   name?: string;
   proposals?: WorkspaceSpaceProposals;
   publicRead?: boolean;
@@ -155,6 +158,7 @@ export function repoEditPatch(
     ...(input.visibility === undefined ? {} : { publicRead: input.visibility === "public" }),
     ...(input.proposals === undefined ? {} : { proposals: input.proposals }),
     ...(input.acceptAfterHours === undefined ? {} : { acceptAfterHours: input.acceptAfterHours }),
+    ...(input.landing === undefined ? {} : { landing: input.landing }),
     ...(input.slug === undefined ? {} : { slug: input.slug }),
   };
 }
@@ -255,6 +259,7 @@ export class WorkspaceSpaceFeature {
     input: {
       readonly acceptAfterHours?: number | null;
       readonly description?: string;
+      readonly landing?: WorkspaceSpaceLanding;
       readonly name?: string;
       readonly proposals?: WorkspaceSpaceProposals;
       readonly publicRead?: boolean;

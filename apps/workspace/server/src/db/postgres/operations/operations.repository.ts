@@ -25,6 +25,8 @@ export async function retryFailed(db: PostgresDatabase, operationId: string, act
     );
   if (row?.kind === "create_worktree_unit") await assertFileQuota(db, actorUserId, 0);
   if (row?.kind === "create_worktree") await assertAgentBudget(db, actorUserId, "openWorktree", retriedAt, 0);
+  // A merge the checks gate refused left the budget, so running it again takes a place there again.
+  if (row?.kind === "merge_worktree") await assertAgentBudget(db, actorUserId, "mergeWorktree", retriedAt, 0);
   return Boolean(row);
 }
 

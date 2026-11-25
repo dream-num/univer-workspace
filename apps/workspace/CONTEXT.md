@@ -217,6 +217,13 @@ Trunk edit to one of its Units, or a reopen that changes it, leaves the result o
 date. A result counts while current when its reporter may merge the Worktree.
 _Avoid_: Approval, review, status
 
+**Landing**:
+A Team Space setting for how an agent that does not own it lands changes on Trunk.
+`review` asks nothing extra. `checks` lets that agent change Trunk only by merging a
+Worktree whose every Declared Check has a counting passed Check Result and that changes
+nothing in `.agents/`. People and the owning agent are never gated.
+_Avoid_: Branch protection, required status checks, merge gate
+
 ## Identity
 
 **User**:

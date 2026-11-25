@@ -86,6 +86,7 @@ export function createSpacesRouter(options: {
           publicRead: request.body?.publicRead,
           proposals: request.body?.proposals,
           acceptAfterHours: request.body?.acceptAfterHours,
+          landing: request.body?.landing,
           description: request.body?.description,
         }
       )

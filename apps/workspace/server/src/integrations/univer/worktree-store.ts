@@ -1,9 +1,10 @@
-import type { UniverCollabService } from "@univerjs-pro/collaboration-service";
+import { CollabError, type UniverCollabService } from "@univerjs-pro/collaboration-service";
 import type { UniverCollabWorktreeService } from "@univerjs-pro/collaboration-worktree-service";
 import {
   collaborationCallOptions,
   createUnitData,
 } from "./unit-store.js";
+import { draftKey } from "../../modules/worktrees/checks.js";
 import type {
   WorktreeBackend,
 } from "../../modules/worktrees/worktrees.types.js";
@@ -12,6 +13,18 @@ export function createWorktreeBackend(
   service: UniverCollabWorktreeService,
   trunk: UniverCollabService,
 ): WorktreeBackend {
+  // A merge that the checks gate decided on one draft starts only if the draft is still that one. The SDK moves the
+  // Worktree from ready to merging right after this, and a ready Worktree takes no draft write.
+  service.use("mergeWorktree", async (context, next) => {
+    const checked = context.customData.checkedDraft;
+    if (typeof checked === "string") {
+      const { worktree } = await service.getWorktree({ worktreeID: context.request.worktreeID }, collaborationCallOptions(context.userID));
+      if (worktree.status !== "ready" || draftKey(worktree.units) !== checked) {
+        throw new CollabError("PERMISSION_DENIED", "This pull request changed after its checks were decided, so nothing was merged. View it again, and merge once its checks pass on what it holds now.");
+      }
+    }
+    await next();
+  });
   return {
     async createWorktree(worktreeId, userId) {
       return (
@@ -96,11 +109,13 @@ export function createWorktreeBackend(
         )
       ).worktree;
     },
-    async merge(worktreeId, userId) {
+    async merge(worktreeId, userId, checkedDraft) {
+      const options = collaborationCallOptions(userId);
       return (
         await service.mergeWorktree(
           { worktreeID: worktreeId },
-          collaborationCallOptions(userId)
+          // The merge's Trunk changesets carry this server-side mark, the only Trunk write of an agent that lands by checks.
+          { ...options, customData: { ...options.customData, merge: true, ...(checkedDraft && { checkedDraft }) } }
         )
       ).worktree;
     },

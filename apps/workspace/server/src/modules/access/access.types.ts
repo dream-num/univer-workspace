@@ -1,4 +1,7 @@
 export type SpaceType = "personal" | "team";
+/** How a Team Space takes changes from agents: by review alone, or only by a merge whose declared checks all passed. */
+export const SPACE_LANDINGS = ["review", "checks"] as const;
+export type SpaceLanding = (typeof SPACE_LANDINGS)[number];
 export type AccessRole = "owner" | "admin" | "editor" | "viewer";
 export type UnitType = "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
 export type ResourceKind = "univer" | "blob";
@@ -37,6 +40,7 @@ export interface SpaceAccess {
   readonly name: string;
   readonly ownerUserId: string;
   readonly publicRead: boolean;
+  readonly landing: SpaceLanding;
   /** True for the owner and Space Members; false for public-read viewers. */
   readonly member: boolean;
   readonly role: AccessRole;
@@ -97,4 +101,6 @@ export interface ResourceContentAccess {
   readonly unitId: string | null;
   readonly unitType: UnitType | null;
   readonly capabilities: ResourceCapabilities;
+  /** The requester changes this content on Trunk only through a merge whose declared checks all passed. */
+  readonly landsByChecks: boolean;
 }

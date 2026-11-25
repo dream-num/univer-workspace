@@ -301,6 +301,7 @@ export function createSkillDraftsModule(options: {
         throw draftConflict("Draft is expired.");
       }
       await authorize(userId, row.space_id);
+      await access.assertChangesTrunk(userId, row.space_id);
       publishing.add(id);
       try {
         const files: ScanFile[] = [];

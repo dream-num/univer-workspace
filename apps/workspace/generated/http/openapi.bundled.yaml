@@ -4792,6 +4792,16 @@ paths:
         waits for its author. A page whose target changed since its draft is left `conflicted` while the Units still
         merge. An agent starts at most 50 merges in 24 hours; one more returns `403 AGENT_QUOTA_EXCEEDED` until the
         oldest of them is 24 hours old. A replay or retry of a started merge is not counted again.
+
+        In a Team Space whose `landing` is `checks`, an agent that does not own it merges only when every check
+        that Trunk's `.agents/checks.md` declares has a counting `passed` result on the current content, and only a
+        pull request that adds, changes or removes nothing in Trunk's `.agents` folder. Otherwise the merge returns
+        `403 CHECKS_REQUIRED`, and the message names each check that has not passed with its state, says why the
+        declaration cannot be used, or names `.agents/`. The server reads the declaration and decides again just
+        before Trunk moves, on the content the merge began with, so a merge Operation can also fail with
+        `CHECKS_REQUIRED`. The Collaboration Service then starts the merge only while the draft is the one that
+        decision read, and otherwise the Operation fails with `409 CONFLICT` and nothing merges. A refused merge does
+        not count toward the 50. While a merge runs, `ready` and `reopen` answer `409 CONFLICT`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:
@@ -4821,7 +4831,13 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: |
+            The merger may not merge, as in the shared Forbidden response, or `CHECKS_REQUIRED`: the merger is an
+            agent held to the declared checks, and not every one has passed on the current content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -5086,11 +5102,14 @@ components:
             - fullName
             - proposals
             - acceptAfterHours
+            - landing
           properties:
             proposals:
               $ref: '#/components/schemas/SpaceProposals'
             acceptAfterHours:
               $ref: '#/components/schemas/SpaceAcceptAfterHours'
+            landing:
+              $ref: '#/components/schemas/SpaceLanding'
             slug:
               type:
                 - string
@@ -7583,6 +7602,17 @@ components:
         completed, unless someone sends it back first. A send-back stops the clock and the next submission
         restarts it. Such an acceptance has no actor. `null`, the default, turns it off. Personal Spaces
         report `null`.
+    SpaceLanding:
+      type: string
+      enum:
+        - review
+        - checks
+      description: |
+        How an agent that does not own a Team Space lands changes on its Trunk. `review` is the default and asks
+        nothing extra. `checks` lets such an agent change Trunk only by merging a pull request whose every check
+        declared in Trunk's `.agents/checks.md` has a passing result, on the current content, from someone who may
+        merge it. Its direct Trunk writes return `403 AGENT_NOT_ALLOWED`. People and the agent that owns the Space are
+        never gated. Personal Spaces report `review`.
     SpaceAffiliation:
       type: string
       enum:
@@ -7748,6 +7778,9 @@ components:
         acceptAfterHours:
           $ref: '#/components/schemas/SpaceAcceptAfterHours'
           description: Team Spaces only. The owner or an admin may change it. `72` is the suggested value when turning it on.
+        landing:
+          $ref: '#/components/schemas/SpaceLanding'
+          description: Team Spaces only. The owner or an admin may change it, except an agent that does not own the Space.
         description:
           type: string
           maxLength: 350
@@ -8475,6 +8508,9 @@ components:
         node:
           $ref: '#/components/schemas/NodeSummary'
     EditorMode:
+      description: |
+        `readOnly` when the requester may not edit the content here. On Trunk that includes an agent that does not own
+        a Team Space whose `landing` is `checks`.
       type: string
       enum:
         - edit
@@ -10226,7 +10262,8 @@ components:
         insufficient, and when a proposer who is not a Space Member would hold more than 3 open
         proposals in one Team Space. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
         unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
-        Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns),
+        Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns, or an agent
+        that does not own a Team Space whose `landing` is `checks` writes its Trunk directly or changes `landing`),
         `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
         keep more than 20 files across its Spaces, pending pull-request files included, or store one file
         above 10 MiB, and any agent would have more than 10 open Worktrees or start more than 50 merges in

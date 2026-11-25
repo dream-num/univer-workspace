@@ -40,7 +40,7 @@ export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId",
   ${ownsSpaceSql("spaces.owner_user_id")} AS "owned",
   spaces.public_read AS "publicRead", space_members.role AS "memberRole",
-  ${proposesSql("spaces")} AS "proposes"`;
+  ${proposesSql("spaces")} AS "proposes", spaces.landing`;
 
 export const spaceMemberJoin = `
   LEFT JOIN space_members
@@ -157,7 +157,7 @@ export async function assertProposalQuota(database: PostgresDatabase, userId: st
 
 /**
  * Worktrees the User created and has not merged or discarded, creations whose Worktree row is not
- * written yet included, and the merges it started within the window.
+ * written yet included, and the merges it started within the window, except those the checks gate refused.
  */
 async function readBudget(database: PostgresDatabase, userId: string, now: number) {
   return await database.prepare(`SELECT
@@ -166,7 +166,8 @@ async function readBudget(database: PostgresDatabase, userId: string, now: numbe
        WHERE actor_user_id = $userId AND kind = 'create_worktree' AND state = 'pending'
          AND NOT EXISTS (SELECT 1 FROM worktrees WHERE id = operations.payload_json::jsonb ->> 'worktreeId')) AS open,
     (SELECT COUNT(*)::integer FROM operations
-     WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since) AS merged`)
+     WHERE actor_user_id = $userId AND kind = 'merge_worktree' AND created_at > $since
+       AND NOT (state = 'failed' AND last_error_code = 'CHECKS_REQUIRED')) AS merged`)
     .get({ userId, since: now - AGENT_MERGE_WINDOW_MS }) as
     { readonly open: number; readonly merged: number };
 }
@@ -327,7 +328,7 @@ export class PostgresAccessRepository implements AccessRepository {
     return await this._database
       .prepare(`
       SELECT ${nodeDisplayColumns()}
-        space.type AS space_type, space.name AS space_name,
+        space.type AS space_type, space.name AS space_name, space.landing AS space_landing,
         1 AS requester_owns, space.public_read::integer AS public_read,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
@@ -398,6 +399,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
            SELECT
              ${contentOnly ? "" : nodeDisplayColumns()}
              space.type AS space_type,
+             space.landing AS space_landing,
              ${contentOnly ? "" : "space.name AS space_name,"}
              ${ownsSpaceSql("space.owner_user_id")}::integer AS requester_owns,
              space.public_read::integer AS public_read,

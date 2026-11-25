@@ -818,8 +818,8 @@ checks. Anyone who may review a ready pull request reports a check with `PUT /ap
 edit to one of its files, or a reopen that changes its content, leaves earlier results visible but out of date. A result
 counts when its reporter may merge the pull request. `GET /api/worktrees/{id}/checks` and MCP `pr_view` list every
 declared check and every result. The pull request page shows them, and so does the Issue page's acceptance panel after
-each linked pull request the reader may review, saying so when the repository declares no checks. Nothing blocks a merge
-on checks yet.
+each linked pull request the reader may review, saying so when the repository declares no checks. Checks block a merge
+only where a repository requires them, as the next section describes.
 
 V31→V32 adds the empty table `worktree_checks`. On PostgreSQL the same step moves `workspace_product_schema` from
 version 11 to 12. Stop every old instance, start one V32 instance, and wait for its backup, migration and health checks
@@ -827,3 +827,23 @@ before restoring service. Back up PostgreSQL before the upgrade. Failed migratio
 repeat migration or backup. V31 code refuses a V32 database, so a code rollback needs the backup taken before the
 upgrade: stop V32 and restore it, which loses what was written since. Never run V31 and V32 writers on the same SQLite
 file.
+
+### Requiring checks before an agent lands a change, and product database V33
+
+A Team Space's `landing` setting is `review` by default. Its owner or an admin can set it to `checks` in the
+repository settings, with `PATCH /api/spaces/{id}`, `uvw repo edit --landing checks` or the MCP `repo_edit` tool. An
+agent that does not own the repository can then change its Trunk only by merging a pull request whose every check
+declared in `.agents/checks.md` has a counting `passed` result on the current content. Without that the merge answers
+`403 CHECKS_REQUIRED` and names each check that has not passed. A declaration the server cannot use, such as a missing
+or duplicate file, a heading that is not a check name or more than 20 checks, refuses the merge and says why. It cannot
+merge a pull request that adds, changes or removes anything in `.agents/`; a person or the owning agent merges that
+one. Its direct Trunk writes, edits in the editor, uploads, renames, moves, Trash and page or Skill publishing among
+them, answer `403 AGENT_NOT_ALLOWED`, and the editor opens Trunk files read-only for it. Comments still work. People, and the agent that owns the repository, are never gated.
+Such an agent cannot change `landing` either.
+
+V32→V33 adds `spaces.landing` with every existing Space set to `review`, so nothing changes until an owner turns it
+on. On PostgreSQL the same step moves `workspace_product_schema` from version 12 to 13. Stop every old instance, start
+one V33 instance, and wait for its backup, migration and health checks before restoring service. Back up PostgreSQL
+before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or backup. V32 code refuses
+a V33 database, so a code rollback needs the backup taken before the upgrade: stop V33 and restore it, which loses what
+was written since. Never run V32 and V33 writers on the same SQLite file.

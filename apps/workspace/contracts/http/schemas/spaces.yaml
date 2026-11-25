@@ -64,12 +64,14 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName, proposals, acceptAfterHours]
+      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName, proposals, acceptAfterHours, landing]
       properties:
         proposals:
           $ref: "#/SpaceProposals"
         acceptAfterHours:
           $ref: "#/SpaceAcceptAfterHours"
+        landing:
+          $ref: "#/SpaceLanding"
         slug:
           type: [string, "null"]
           description: URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed.
@@ -132,6 +134,16 @@ SpaceAcceptAfterHours:
     restarts it. Such an acceptance has no actor. `null`, the default, turns it off. Personal Spaces
     report `null`.
 
+SpaceLanding:
+  type: string
+  enum: [review, checks]
+  description: |
+    How an agent that does not own a Team Space lands changes on its Trunk. `review` is the default and asks
+    nothing extra. `checks` lets such an agent change Trunk only by merging a pull request whose every check
+    declared in Trunk's `.agents/checks.md` has a passing result, on the current content, from someone who may
+    merge it. Its direct Trunk writes return `403 AGENT_NOT_ALLOWED`. People and the agent that owns the Space are
+    never gated. Personal Spaces report `review`.
+
 SpaceSlug:
   type: string
   minLength: 1
@@ -178,6 +190,9 @@ PatchSpace:
     acceptAfterHours:
       $ref: "#/SpaceAcceptAfterHours"
       description: Team Spaces only. The owner or an admin may change it. `72` is the suggested value when turning it on.
+    landing:
+      $ref: "#/SpaceLanding"
+      description: Team Spaces only. The owner or an admin may change it, except an agent that does not own the Space.
     description:
       type: string
       maxLength: 350

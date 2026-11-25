@@ -5,6 +5,7 @@ import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
 import { createDefaultBaseTableSnapshot } from "@univerjs-pro/bases";
 import { RevertRevisionMutation } from "@univerjs-pro/collaboration";
 import { createServer, type Server } from "node:http";
+import { Readable } from "node:stream";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -2202,6 +2203,7 @@ describe("content permission integration", () => {
       async submitMutations(
         baseRev: number,
         mutations: readonly { readonly id: string; readonly params: object }[],
+        extra: { readonly request?: object; readonly changeset?: object } = {},
       ) {
         const reqId = ++requestId;
         const event = new Promise<string>((resolve, reject) => {
@@ -2241,6 +2243,7 @@ describe("content permission integration", () => {
               unitID: f.unitId,
               memberID: connection.memberId,
               type: f.protocolType,
+              ...extra.request,
               changeset: {
                 unitID: f.unitId,
                 type: f.protocolType,
@@ -2250,6 +2253,7 @@ describe("content permission integration", () => {
                 reqId,
                 userID: "untrusted-user",
                 memberID: connection.memberId,
+                ...extra.changeset,
                 mutations: mutations.map(({ id, params }) => ({
                   id,
                   data: JSON.stringify({ unitId: f.unitId, subUnitId: sheetId, ...params }),
@@ -2358,6 +2362,101 @@ describe("content permission integration", () => {
     }
     const snapshot = await fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${f.unitId}/rev/0`, { headers: { cookie: f.owner.cookie } });
     expect(((await snapshot.json()) as { error: { code: number } }).error.code).toBe(ErrorCode.OK);
+  });
+
+  describe("a repository that requires checks", () => {
+    async function checksRepository() {
+      const f = await fixture("sheet", undefined, true);
+      const { user } = await f.application.identity.createAgent({ label: "bot", originIp: "203.0.113.9" });
+      f.application.database.connection
+        .prepare("UPDATE agents SET owner_user_id = ?, claimed_at = 1 WHERE user_id = ?")
+        .run(f.owner.id, user.id);
+      const issued = await f.application.identity.issueSession(user, "agent");
+      const agent = { id: user.id, cookie: `${f.application.identity.cookieName}=${issued.cookieValue}` };
+      await f.application.permissions.upsertTeamMember(f.owner.id, f.space.id, agent.id, { role: "editor" });
+      const folder = await f.application.nodes.create(f.owner.id, { spaceId: f.space.id, parentNodeId: null, name: ".agents" });
+      const bytes = Buffer.from("## smoke\nOpen the sheet.\n");
+      const owner = interactivePrincipal(f.owner.id);
+      const { body } = await f.application.blobs.createUpload(owner, "checks-declaration-0001", {
+        spaceId: f.space.id, parentNodeId: folder.id, name: "checks.md", originalFilename: "checks.md", byteSize: bytes.length,
+      });
+      await f.application.blobs.upload(f.owner.id, body.upload.id, String(bytes.length), Readable.from([bytes]));
+      await f.application.blobs.complete(owner, body.upload.id);
+      await f.application.spaces.update(f.owner.id, f.space.id, { landing: "checks" });
+      const head = () => {
+        const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
+        try {
+          return (database.prepare("SELECT head_revision FROM collaboration_units WHERE unit_id = ?").get(f.unitId) as { head_revision: number }).head_revision;
+        } finally {
+          database.close();
+        }
+      };
+      return { ...f, agent, head };
+    }
+
+    it("refuses an agent's direct Trunk edit, whatever member it names, and keeps its comments and people's edits", async () => {
+      const f = await checksRepository();
+      const edit = { cellValue: { 0: { 0: { v: "direct" } } } };
+      const agent = await sheetSubmit(f, f.agent.cookie);
+      expect(await agent.submit(1, "sheet.mutation.set-range-values", edit)).toBe("permission_rej");
+      expect(await agent.submit(1, RevertRevisionMutation.id, { revision: 1 }), "a restore is a Trunk edit too").toBe("permission_rej");
+      expect(await agent.submit(1, "thread-comment.mutation.add-comment", commentAnchor(f, agent.sheetId, "agent-comment-1")))
+        .toBe("changeset_ack");
+
+      // The SDK's merge submits as this member. The endpoint refuses a client that names it, and a client that
+      // marks its changeset as the merge still edits as itself.
+      const spoofed = await fetch(`${f.origin}/universer-api/comb/${f.protocolType}/unit/${f.unitId}/new_changes`, {
+        method: "POST",
+        headers: { cookie: f.agent.cookie, "content-type": "application/json" },
+        body: JSON.stringify({
+          unitID: f.unitId, memberID: "worktree-merge", type: f.protocolType,
+          changeset: {
+            unitID: f.unitId, type: f.protocolType, baseRev: 2, revision: 3, sid: "spoofed", reqId: 9,
+            userID: f.agent.id, memberID: "worktree-merge",
+            mutations: [{ id: "sheet.mutation.set-range-values", data: JSON.stringify({ unitId: f.unitId, subUnitId: agent.sheetId, ...edit }) }],
+          },
+        }),
+      });
+      expect({ status: spoofed.status, body: await spoofed.json() }).toEqual({ status: 400, body: { error: { code: ErrorCode.INVALID_ARGUMENT, message: "Invalid memberID" } } });
+      const customData = { source: "product-api", merge: true };
+      expect(await agent.submitMutations(2, [{ id: "sheet.mutation.set-range-values", params: edit }], {
+        request: { customData }, changeset: { memberID: "worktree-merge", customData },
+      }))
+        .toBe("permission_rej");
+      const person = await sheetSubmit(f, f.editor.cookie);
+      expect(await person.submit(2, "sheet.mutation.set-range-values", { cellValue: { 1: { 1: { v: "person" } } } })).toBe("changeset_ack");
+      expect(f.head(), "only the comment and the person's edit reached Trunk").toBe(3);
+    });
+
+    it("lands an agent's change through a merge once its declared check passed", async () => {
+      const f = await checksRepository();
+      const { worktrees } = f.application;
+      const worktreeId = (await worktrees.create(f.agent.id, "checks-merge-create-0001", {
+        kind: "team", teamSpaceId: f.space.id, name: "Landing", summary: null, visibility: "space",
+      })).body.id;
+      const unitId = (await worktrees.addUnit(f.agent.id, worktreeId, "checks-merge-unit-0001", { source: "trunk", resourceId: f.node.resource!.id })).body.unit.unitId;
+      const endpoint = `${f.origin}/universer-api/worktrees/${worktreeId}/units/${unitId}/comparison`;
+      const draft = await (await fetch(endpoint, { headers: { cookie: f.agent.cookie } })).json();
+      await worktrees.submitChangeset(f.agent.id, worktreeId, unitId, {
+        changeset: {
+          unitID: unitId, type: UniverType.UNIVER_SHEET, baseRev: draft.right.revision, revision: draft.right.revision + 1,
+          sid: "checks-merge", reqId: 1, userID: "", memberID: "", createTime: 1,
+          mutations: [{
+            id: "sheet.mutation.set-range-values",
+            data: JSON.stringify({ unitId, subUnitId: draft.right.unitData.sheetOrder[0], cellValue: { 0: { 0: { v: "landed" } } } }),
+          }],
+        },
+      });
+      await worktrees.markReady(f.agent.id, worktreeId);
+      await expect(worktrees.merge(f.agent.id, worktreeId, "checks-merge-refused-0001")).rejects.toMatchObject({
+        code: "CHECKS_REQUIRED", message: expect.stringContaining("Not passed on the current content: smoke (missing)."),
+      });
+      await worktrees.reportCheck(f.agent.id, worktreeId, "smoke", { state: "passed" });
+      expect(await worktrees.merge(f.agent.id, worktreeId, "checks-merge-landed-0001")).toMatchObject({ worktree: { state: "merged" } });
+      const merged = await (await fetch(`${endpoint}?view=merged`, { headers: { cookie: f.owner.cookie } })).json();
+      expect(Object.values(merged.left.unitData.sheets as Record<string, { cellData: Record<number, Record<number, { v: unknown }>> }>)[0]?.cellData[0]?.[0]?.v)
+        .toBe("landed");
+    });
   });
 
   describe("Trunk restore", () => {

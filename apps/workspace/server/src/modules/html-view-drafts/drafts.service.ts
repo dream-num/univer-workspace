@@ -168,6 +168,7 @@ export function createHtmlViewDraftsModule(options: {
       if (worktree.state === "discarded") throw draftConflict("Draft is conflicted because its source pull request was discarded.");
       if (worktree.state !== "merged") throw draftConflict(`Waiting for pull request #${worktree.number ?? worktree.id} to merge.`);
     }
+    await access.assertChangesTrunk(userId, row.space_id);
     const decided = await repository.decide(row.id, userId, "publish", now());
     if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
     return view(decided, userId);
@@ -415,6 +416,10 @@ export function createHtmlViewDraftsModule(options: {
       const names: string[] = [];
       for (const row of await livePages(worktreeId, draftIds)) if (!(await mayWrite(row.author_user_id, row))) names.push(row.name);
       return names;
+    },
+    async targets(worktreeId: string, draftIds: readonly string[]) {
+      return (await livePages(worktreeId, draftIds)).map((row) =>
+        row.kind === "replace" ? { resourceId: row.target_resource_id! } : { parentNodeId: row.parent_node_id });
     },
     /** Publishes as the merger the drafts its merge fixed when it began; a draft pending later was never reviewed with it. */
     async publishForWorktree(worktreeId: string, mergerId: string, draftIds: readonly string[]): Promise<PublishedPage[]> {
