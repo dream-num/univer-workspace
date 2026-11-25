@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# One task inside a verify runner container, in the two phases runner.mjs runs through docker exec. prepare starts
-# the instance in the journeys' mode, then writes the brief; run runs the helper's journeys and the verifier's session
-# unless --no-model, then per run secret-check, down, copy.
+# One task inside a verify runner container, in the two phases runner.mjs runs through docker exec. prepare resets
+# the checkout to the snapshot, starts the instance in the journeys' mode, then writes the brief; run runs the helper's
+# journeys and the verifier's session unless --no-model, then per run secret-check, down, copy, and records what the
+# task changed in the checkout.
 # Usage: task.sh prepare|run [--no-model] <task-id> <feature> [journey-id|mode...]
 phase=$1 model=1
 shift
@@ -16,6 +17,11 @@ export VERIFY_UVW_EVIDENCE_ROOT=$out/runs
 
 if [[ "$phase" == prepare ]]; then
   mkdir -p "$out/runs"
+  # The instance runs from this checkout, so an earlier task's edits would change what this one tests. The reset is
+  # here, not at the end of a task, so a task that crashed still leaves the next one clean. Ignored files, such as
+  # node_modules and build output, stay, and the runner's setup leaves nothing else.
+  { git reset -q --hard "$RUNNER_SNAPSHOT" && git clean -qfd; } >"$out/prepare.log" 2>&1 \
+    || { echo "FAIL  could not reset ~/repo to snapshot $RUNNER_SNAPSHOT" >>"$out/prepare.log"; echo 1 >"$out/prepare.failed"; exit 0; }
   rm -rf /tmp/verify-uvw /tmp/verify-uvw-*
   # A failed prepare skips the verifier; runner.mjs reports the task as infra-error with the FAIL lines of prepare.log.
   # The first page load starts Chromium and makes Vite compile the app. Under host load that outran agent-browser's
@@ -24,7 +30,7 @@ if [[ "$phase" == prepare ]]; then
   VERIFY_UVW_RUN=$task timeout 900 bash -c '"$0" up --for "$@" && "$0" user && "$0" doctor && eval "$("$0" env)" || exit 1
     for try in 1 2 3 4 5; do agent-browser open "$ORIGIN/login" && exit 0; sleep 5; done
     echo "FAIL  the browser did not load $ORIGIN/login in 5 tries"; exit 1' \
-    "$V" "$feature" "$@" >"$out/prepare.log" 2>&1 || echo $? >"$out/prepare.failed"
+    "$V" "$feature" "$@" >>"$out/prepare.log" 2>&1 || echo $? >"$out/prepare.failed"
   # The host brief checks that the run is up in the journeys' mode, so it comes after a prepare that worked, followed by
   # the addendum runner.mjs wrote for this task.
   [[ -f "$out/prepare.failed" ]] || { VERIFY_UVW_RUN=$task $V brief "$feature" "$@" && cat "$out/addendum.txt"; } >"$out/brief.txt" 2>>"$out/prepare.log" \
@@ -56,3 +62,6 @@ for r in /tmp/verify-uvw*/*/run.env; do
 done
 # down closes only its run's browser session; the agent may have opened others, such as an anonymous visitor's.
 agent-browser close --all >/dev/null 2>&1
+# What this task changed in the checkout it tested, which runner.mjs flags; the next prepare resets it.
+changes=$(git status --porcelain; [[ "$(git rev-parse HEAD)" == "$RUNNER_SNAPSHOT" ]] || echo "HEAD is $(git rev-parse HEAD), not the snapshot")
+[[ -z "$changes" ]] || echo "$changes" >"$out/repo-changes.txt"

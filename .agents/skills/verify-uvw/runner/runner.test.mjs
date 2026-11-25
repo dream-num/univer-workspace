@@ -358,6 +358,28 @@ test('a task whose instance failed to start is an infra-error, and summary.md qu
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a task that left changes in the checkout it tested is flagged in result.json and summary.md, without a change of status', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-repo-changes-'));
+  const task = (id, changes) => {
+    mkdirSync(join(dir, id, 'runs'), { recursive: true });
+    if (changes) writeFileSync(join(dir, id, 'repo-changes.txt'), changes);
+    return finish({ id, mode: 'mcp', expected: [] }, dir, 30, null, { model: false });
+  };
+  try {
+    const edited = task('mcp-oauth', ' M README.md\n?? leak.txt\n');
+    const clean = task('mcp-oauth-2', null);
+    assert.deepEqual(edited.repoChanges, [' M README.md', '?? leak.txt']);
+    assert.equal(clean.repoChanges, null);
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'mcp-oauth/result.json'), 'utf8')).repoChanges, [' M README.md', '?? leak.txt']);
+    assert.deepEqual([edited.status, clean.status], ['finished', 'finished']);
+    assert.equal(exitCode([edited, clean], { model: false }), 0);
+    const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [edited, clean], host: [], setup: [1], wallSeconds: 60, model: false });
+    assert.ok(text.includes(['These tasks changed the repository they tested, so they may not have tested the snapshot alone. The runner resets the checkout before each task:', '',
+      `- mcp-oauth, from ${dir}/mcp-oauth/repo-changes.txt:`, '   M README.md', '  ?? leak.txt', ''].join('\n')));
+    assert.doesNotMatch(text, /- mcp-oauth-2, from/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('summary.md lists each host-only instance with its up --for and brief commands', () => {
   const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir: '/d', results: [], setup: [1], wallSeconds: 1,
     host: [{ feature: 'sheet-lens', selectors: ['SLM1'] }, { feature: 'mcp-security', selectors: [] }] });

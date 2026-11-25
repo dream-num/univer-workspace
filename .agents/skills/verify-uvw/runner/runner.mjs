@@ -208,12 +208,13 @@ export function finish(task, dir, wallSeconds, key, { model = true } = {}) {
   const transcript = readTranscript(read('transcript.jsonl') ?? '', join(out, 'runs'));
   if (transcript) writeFileSync(join(out, 'report.md'), transcript.report.endsWith('\n') ? transcript.report : `${transcript.report}\n`);
   const secretCheckFail = readdirSync(out).filter((name) => name.startsWith('secret-check-') && /^FAIL/m.test(read(name)));
+  const repoChanges = read('repo-changes.txt')?.trimEnd().split('\n') ?? null;
   const status = key && holds(out, key) ? 'secret-leak'
     : claudeExit === '124' ? 'timeout'
       : prepare || (model && (claudeExit === undefined || transcript?.error)) ? 'infra-error'
         : 'finished';
   const { journeys, result: verdict, checks } = fold(task.expected, readRuns(join(out, 'runs')));
-  const result = { task: task.id, mode: task.mode, status, result: model ? verdict : null, checks, journeys, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, prepare, secretCheckFail };
+  const result = { task: task.id, mode: task.mode, status, result: model ? verdict : null, checks, journeys, turns: transcript?.turns ?? null, wallSeconds, usage: transcript?.usage ?? null, error: transcript?.error ?? null, prepare, secretCheckFail, repoChanges };
   writeFileSync(join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
@@ -228,6 +229,7 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
   const unprepared = results.filter((r) => r.prepare).flatMap((r) => [`- ${r.task}, from ${dir}/${r.task}/prepare.log:`,
     ...(r.prepare.length ? r.prepare : ['(no FAIL line; read the log)']).map((line) => `  ${line}`)]);
   const flagged = results.flatMap((r) => (r.secretCheckFail ?? []).map((name) => `- ${dir}/${r.task}/${name}`));
+  const changed = results.filter((r) => r.repoChanges).flatMap((r) => [`- ${r.task}, from ${dir}/${r.task}/repo-changes.txt:`, ...r.repoChanges.map((line) => `  ${line}`)]);
   const count = (r, verdict) => (r.journeys ? r.journeys.filter((j) => j.verdict === verdict).length : '');
   const open = results.flatMap((r) => (r.journeys ?? []).filter((j) => j.verdict !== 'PASS')
     .map((j) => `- ${r.task} ${j.id} ${j.verdict}${j.note ? `: ${j.note.replace(/\s+/g, ' ')}` : ''}${j.failure ? ` (checks ${j.checks}: ${j.failure.replace(/\s+/g, ' ')})` : ''}`));
@@ -258,6 +260,7 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
       ...dropped.map((t) => `- ${t.id}`)] : []),
     ...(unprepared.length ? ['', 'These tasks could not start their instance, so no verifier ran:', '', ...unprepared] : []),
     ...(errors.length ? ['', 'These tasks stopped on an API error:', '', ...errors] : []),
+    ...(changed.length ? ['', 'These tasks changed the repository they tested, so they may not have tested the snapshot alone. The runner resets the checkout before each task:', '', ...changed] : []),
     // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
     ...(flagged.length ? ['', 'secret-check printed FAIL lines. Read them before you share these files:', '', ...flagged] : []),
     ...(hint ? ['', hint] : []),
@@ -386,7 +389,7 @@ async function main() {
       // task.sh appends it to the host brief; task.sh leaves VERIFY_UVW_ROOT unset, so runs live under /tmp/verify-uvw.
       writeFileSync(join(dir, task.id, 'addendum.txt'), addendum(task, '/tmp/verify-uvw'));
       // The skip list keeps run-journeys from running a journey left to the host, even as an earlier one a later journey needs.
-      const phase = (step, keys) => run(['exec', '-e', `VERIFY_UVW_SKIP_JOURNEYS=${task.skip.map((j) => j.id).join(' ')}`, ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
+      const phase = (step, keys) => run(['exec', '-e', `VERIFY_UVW_SKIP_JOURNEYS=${task.skip.map((j) => j.id).join(' ')}`, '-e', `RUNNER_SNAPSHOT=${sha}`, ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
         '/home/node/repo/.agents/skills/verify-uvw/runner/task.sh', step, ...(model ? [] : ['--no-model']), task.id, task.feature, ...task.selectors],
       { log: join(dir, task.id, 'task.log'), env });
       const prepared = await prepareOne(() => {

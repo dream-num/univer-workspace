@@ -61,16 +61,22 @@ and so on. The id is also the task's run id.
   ref points at, and your index, status and refs stay as they were.
 - It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
   builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
-  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, and loads
-  the login page in the run's browser. Runners take turns at this prepare, because instances that start at once
-  slow each other down. The prepare then writes `brief.txt`: the brief that `$V brief <feature> <journey-id...>`
-  prints on the host, followed by the addendum that `addendum()` in `runner.mjs` wrote to the task's
-  `addendum.txt`. The host brief says the instance is already running in the journeys' mode, and that the helper
-  already ran its journeys, whose checks the session reads and judges. The addendum says the container is the
-  session's, that the run stays up for the runner, which journeys only the host runs, and, in an MCP mode, what
-  [the dist start mode](#the-dist-start-mode) changes. Then the task runs `$V run-journeys` into
-  `run-journeys.log`, then gives a new Claude Code session `brief.txt`. When the prepare fails, no session starts,
-  the task is `infra-error`, and `summary.md` quotes the `FAIL` and `verify-uvw:` lines of its `prepare.log`.
+  task, `runner/task.sh` resets the checkout to the snapshot with `git reset --hard` and `git clean -fd`, which keep
+  ignored files such as `node_modules` and build output. Then it runs `$V up --for`, `$V user` and `$V doctor` into
+  the task's `prepare.log`, and loads the login page in the run's browser. Runners take turns at this prepare,
+  because instances that start at once slow each other down. The prepare then writes `brief.txt`: the brief that
+  `$V brief <feature> <journey-id...>` prints on the host, followed by the addendum that `addendum()` in
+  `runner.mjs` wrote to the task's `addendum.txt`. The host brief says the instance is already running in the
+  journeys' mode, and that the helper already ran its journeys, whose checks the session reads and judges. The
+  addendum says the container is the session's, that the run stays up for the runner, which journeys only the host
+  runs, and, in an MCP mode, what [the dist start mode](#the-dist-start-mode) changes. Then the task runs
+  `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code session `brief.txt`. When the prepare
+  fails, no session starts, the task is `infra-error`, and `summary.md` quotes the `FAIL` and `verify-uvw:` lines of
+  its `prepare.log`.
+- A task that ends with changes in the checkout, such as a file the verifier edited, may have tested them instead of
+  the snapshot. `task.sh` writes what `git status --porcelain` prints to the task's `repo-changes.txt`, and
+  `result.json` and `summary.md` flag the task without a change to its status. The reset runs when the next task
+  starts, so a task that crashed cannot pass on its changes either.
 - `--no-model` stops each task after `run-journeys`, so it needs no key, starts no session and judges nothing.
   The helper runs only `Run: helper.` journeys, so a task that selects none of them does not run, and `summary.md`
   lists it. When that leaves no task, the batch exits `2` before it builds or starts anything, and names the
@@ -87,8 +93,8 @@ and so on. The id is also the task's run id.
   `agent-up`, and the whole MCP security feature, are in host-only.mjs.
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
   `summary.md`, and for each task `prepare.log`, `addendum.txt`, `brief.txt`, `report.md` (its evidence paths
-  open on the host), `transcript.jsonl`, `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's
-  `evidence`, `logs` and `run.env`.
+  open on the host), `transcript.jsonl`, `result.json`, `secret-check-<run>.txt`, `repo-changes.txt` when the
+  checkout changed, and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
 - At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
   holds each expected journey's verdict and note, `MISSING` when it has none, and a result. The result is
   `INCOMPLETE` when any journey is `MISSING`, else `PASS` when every journey is `PASS`, else `ISSUES`. `summary.md`
