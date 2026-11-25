@@ -336,7 +336,7 @@ test('with no model the exit code is 4 for a failed task, then 1 for checks that
 
 test('a no-model task is finished without a session, and summary.md counts its checks and lists those that did not hold', () => {
   const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-no-model-'));
-  const text = `# F\n\n## Driving it with agent-browser and uvw\n\nMode: mcp. Run: helper.\n\n### H1. One\n\n### H2. Two\n\n### H3. Three\n\n### G1. Four\n\nRun: agent.\n`;
+  const text = `# F\n\n## Driving it with agent-browser and uvw\n\nMode: mcp.\n\n### H1. One\n\nRun: helper.\n\n### H2. Two\n\nRun: helper.\n\n### H3. Three\n\nRun: helper.\n\n### G1. Four\n`;
   const expected = parseFeature('f', text).journeys;
   const out = join(dir, 'f');
   try {

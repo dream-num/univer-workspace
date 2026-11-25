@@ -25,13 +25,15 @@ An MCP client connected to `$MCP_URL` reads the initialize instructions, calls `
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp. Run: helper.
+Mode: mcp.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
 ### MR1. Skills list and get fallback
+
+Run: helper.
 
 MCP serves its own `core`, `html-view-creator` and `skill-creator` and nine
 shared domain Skills.
@@ -67,6 +69,8 @@ every shared file.
 
 ### MR2. Skill resource and MCP core bindings
 
+Run: helper.
+
 ```bash
 $V mcp mcp-skills-read skills_read '{"name":"html-view","resource":"references/charts.md"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-read.out" > "$EVIDENCE/mcp-skills-read.md"
@@ -83,6 +87,8 @@ jq -e '.tool == "skills_read" and .outcome == "ok"' "$EVIDENCE/mcp-skills-read.e
 Pass when the reference equals the shared source, read instructions name MCP calls, and MCP core equals its own source and differs from CLI core.
 
 ### MR3. API find
+
+Run: helper.
 
 The CLI `api` commands print text and have no `--json`, so the reference library (the same package the CLI loads) is the structured oracle, and the CLI text is the cross-check.
 
@@ -101,6 +107,8 @@ Pass when the result equals the library output (wrapped in `results`), the CLI t
 
 ### MR4. API show
 
+Run: helper.
+
 ```bash
 $V mcp mcp-api-show api_show '{"symbols":["FRange.setValues","ICellData.v","NoSuchSymbolAnywhere"]}'
 node -e "$REF"'console.log(JSON.stringify({results:r.show(["FRange.setValues","ICellData.v","NoSuchSymbolAnywhere"])}))' > "$EVIDENCE/mcp-api-show-oracle.json"
@@ -117,6 +125,8 @@ grep -q 'Unknown symbol: NoSuchSymbolAnywhere' "$EVIDENCE/mcp-api-show-missing-c
 Pass when the result equals the library output, an unknown symbol is a `not-found` entry and not a tool error, the CLI text shows the same class and member, and the CLI exits 1 for the unknown symbol (the gateway reports it in the result instead).
 
 ### MR5. MCP Skills extension and file resources
+
+Run: helper.
 
 ```bash
 $V mcp-skills mcp-skills-extension
@@ -149,6 +159,8 @@ Pass when the extension declares twelve static Skills, the resource entry points
 
 ### MR6. Server instructions
 
+Run: helper.
+
 ```bash
 $V mcp-instructions mcp-instructions
 $V mcp-instructions --protocol 2025-11-25 mcp-instructions-legacy
@@ -159,6 +171,8 @@ jq -e '.instructions | contains("pull request") and contains("pr_create") and co
 Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, then merge, or hand over the review link when the user asked to review) and tell the agent to generate a new idempotency key for each new operation. The default PAT holds `worktree:merge`; MA7 checks the instructions of a PAT without it.
 
 ### MR7. Truncation with cursors
+
+Run: helper.
 
 `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` resource paging is covered by the gateway tests. MR1 covers `workspace-result-too-large` with `board` full.
 
@@ -186,6 +200,8 @@ Pass when the pages are each within 100,000 characters, all but the last carry `
 
 ### MR8. Cursor guard and unknown Skill
 
+Run: helper.
+
 ```bash
 $V mcp mcp-frange-wrong api_show "$(jq -nc --arg c "$(jq -r '.cursor' "$EVIDENCE/mcp-frange-0.out")" '{symbols:["FWorkbook"],cursor:$c}')"
 test $? -eq 1
@@ -200,6 +216,8 @@ jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
 
 Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1, the reused cursor has a matching usage event, and the CLI also rejects the unknown Skill.
 ### MR13. custom Skills
+
+Run: helper.
 
 Seed one Skill in each layer.
 Run MR13 after MR1 or on a fresh run: MR1 expects only the twelve built-in Skills.
@@ -266,6 +284,8 @@ Use a fresh run for the duplicate case because it intentionally leaves an ambigu
 
 ### MR14. Skill draft authoring
 
+Run: helper.
+
 MR14 follows MR13's live custom Skill discovery path.
 
 ```bash
@@ -286,7 +306,7 @@ Space ID, with no Skill content. `mr14-summary.json` records the asserted result
 
 ### MR15. Import a pinned external Skill and publish after review
 
-Mode: mcp-same-origin. Run: agent.
+Mode: mcp-same-origin.
 
 It needs live GitHub network access.
 

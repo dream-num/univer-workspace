@@ -63,7 +63,7 @@ repository's `Trash` page.
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp. Run: helper.
+Mode: mcp.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -77,6 +77,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 ```
 
 ### MI1. Issue create
+
+Run: helper.
 
 Uses the Team Space from the setup above.
 
@@ -96,6 +98,8 @@ Pass when every command exits 0, the CLI view equals the MCP result without `url
 
 ### MI2. Issue view
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-view issue_view "{\"repo\":\"$O/verify-team\",\"number\":\"#$N\"}"
 $V cli mcp-issue-view-cli issue view "#$N" -R "$O/verify-team" --json
@@ -108,6 +112,8 @@ Pass when both exit 0, the diff is empty, no `timeline` key is present, and the 
 carries the Team Space ID.
 
 ### MI3. Issue view with comments
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-timeline issue_view "{\"repo\":\"$O/verify-team\",\"number\":\"$ORIGIN/spaces/$T/issues/$N\",\"comments\":true}"
@@ -123,6 +129,8 @@ given as its Browser URL, which the tool accepts in place of a number.
 
 ### MI4. Issue list
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-list issue_list "{\"repo\":\"$O/verify-team\",\"state\":\"all\",\"labels\":[\"bug\"],\"assignee\":\"@me\",\"limit\":5}"
 $V cli mcp-issue-list-cli issue list -R "$O/verify-team" -s all -l bug -a @me -L 5 --json
@@ -135,6 +143,8 @@ Pass when both exit 0, the diff is empty, every listed Issue has a `url`, and th
 carries the Team Space ID.
 
 ### MI5. Issue edit
+
+Run: helper.
 
 ```bash
 $V cli mcp-label-create-docs label create docs --color blue -R "$O/verify-team" --json
@@ -150,6 +160,8 @@ the Team Space ID.
 
 ### MI6. Issue comment
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-comment issue_comment "{\"repo\":\"$O/verify-team\",\"number\":\"$N\",\"body\":\"Confirmed by agent\"}"
 $V cli mcp-issue-comment-cli issue view "$N" -R "$O/verify-team" -c --json
@@ -162,6 +174,8 @@ Pass when both exit 0, the comment equals the last comment of the CLI timeline, 
 event carries the Team Space ID.
 
 ### MI7. Issue close as not planned
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-close issue_set_state "{\"repo\":\"$O/verify-team\",\"number\":\"$N\",\"state\":\"closed\",\"reason\":\"not_planned\",\"comment\":\"Out of scope\"}"
@@ -176,6 +190,8 @@ Pass when both exit 0, the diff is empty, the Issue is closed as `not_planned`, 
 timeline holds the "Out of scope" comment, and the event carries the Team Space ID.
 
 ### MI8. Issue reopen
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-reopen issue_set_state "{\"repo\":\"$O/verify-team\",\"number\":\"$N\",\"state\":\"open\"}"
@@ -193,6 +209,8 @@ Team Space ID, and `reason` with `state: open` fails with `workspace-argument-in
 
 ### MI9. Issue tool failure
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-bad issue_view "{\"repo\":\"$O/verify-team\",\"number\":\"abc\"}"
 test $? -eq 1
@@ -207,6 +225,8 @@ Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr pr
 the event records `tool_error` with the same code.
 
 ### MI10. Nonexistent Issue
+
+Run: helper.
 
 A Workspace error translated end to end.
 
@@ -226,6 +246,8 @@ Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr pr
 
 ### MI11. Invalid argument
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-invalid issue_list "{\"repo\":\"$O/verify-team\",\"state\":\"reopened\"}"
 test $? -eq 1
@@ -237,8 +259,6 @@ Pass when the call exits 1 with a structured `workspace-argument-invalid` result
 SDK's plain validation text) and the event records `tool_error` with the same code.
 
 ### MI12. Submit an Issue, send it back, then accept it
-
-Run: agent.
 
 The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
 fork pull request linked to the Issue and submits it with `issue_verdict`. O sends it back in the browser with a
@@ -311,8 +331,6 @@ timeline, A finds the sent-back Issue with `acceptance`, resubmits, and O's brow
 completed with one `issue-closed` activity event.
 
 ### MI13. Judge the whole task in the acceptance panel
-
-Run: agent.
 
 The run user O claims an agent A, makes it an Editor of a Team Space with three Sheets on Trunk, and assigns it an
 Issue. A opens three pull requests linked to the Issue, two that change two Sheets and one that adds a Doc, and merges
@@ -435,8 +453,6 @@ claimed it can see this part.` while E's response has `personalSharing: null` an
 
 ### MI14. Check results in the acceptance panel
 
-Run: agent.
-
 The run user O holds a Team Space with a Sales Sheet on Trunk and declares two checks in `.agents/checks.md`. A claimed
 Editor agent A and a claimed Viewer agent V each open a pull request linked to one Issue, and each reports both checks
 on its own ready pull request. A merges its own, and O merges V's. O's acceptance panel shows the checks after each
@@ -513,8 +529,6 @@ V's as `Does not count` under the right pull request, the narrow page has no hor
 says the repository declares no checks.
 
 ### MI15. Accept an Issue by deadline
-
-Run: agent.
 
 The run user O turns on a 72-hour acceptance deadline with `repo_edit`, opens three Issues assigned to O, submits two
 with uvw and sends the second back. One step stands in for three days: it moves those Issues' verdicts 73 hours back in
@@ -618,6 +632,8 @@ deadline off, and the third Issue then stays submitted.
 
 ### MP1. Pull request create
 
+Run: helper.
+
 Personal Space, with an idempotency key.
 
 ```bash
@@ -645,6 +661,8 @@ title exits 1 with `CONFLICT` and creates nothing.
 
 ### MP2. Pull request view by number
 
+Run: helper.
+
 ```bash
 $V mcp mcp-pr-view pr_view "{\"repo\":\"$O/personal\",\"number\":\"#$PN\"}"
 $V cli mcp-pr-view-cli pr view "#$PN" -R "$O/personal" --json
@@ -655,6 +673,8 @@ jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-vi
 Pass when both exit 0, the diff is empty, and the event carries the Personal Space ID.
 
 ### MP3. Pull request view by URL
+
+Run: helper.
 
 ```bash
 URL=$(jq -r '.url' "$EVIDENCE/mcp-pr-create.out")
@@ -670,6 +690,8 @@ Pass when both exit 0, the URL result equals the number result, it equals the CL
 
 ### MP4. Pull request list
 
+Run: helper.
+
 ```bash
 $V mcp mcp-pr-list pr_list "{\"repo\":\"$O/personal\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
 $V cli mcp-pr-list-cli pr list -R "$O/personal" -s all -A @me -L 5 --json
@@ -682,6 +704,8 @@ Pass when both exit 0, the diff is empty, every listed pull request has a `url`,
 carries the Personal Space ID.
 
 ### MP5. Pull request edit
+
+Run: helper.
 
 ```bash
 $V mcp mcp-pr-edit pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"title\":\"Agent change v2\",\"body\":\"Edited\"}"
@@ -698,6 +722,8 @@ Pass when both exit 0, the diff is empty, title and body changed, the event carr
 Personal Space ID, and an edit without any change fails with `workspace-argument-invalid`.
 
 ### MP6. Pull request ready and undo
+
+Run: helper.
 
 ```bash
 $V mcp mcp-pr-ready pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
@@ -716,6 +742,8 @@ Pass when every command exits 0, both diffs are empty, the pull request is `read
 
 ### MP7. Search Issues
 
+Run: helper.
+
 ```bash
 $V mcp mcp-search-issues search "{\"kind\":\"issues\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
 $V cli mcp-search-issues-cli search issues -s all -A @me -L 5 --json
@@ -729,6 +757,8 @@ Pass when both exit 0, the diff is empty, every Issue has a `url`, and the event
 
 ### MP8. Search pull requests
 
+Run: helper.
+
 ```bash
 $V mcp mcp-search-prs search "{\"kind\":\"prs\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
 $V cli mcp-search-prs-cli search prs -s all -A @me -L 5 --json
@@ -741,6 +771,8 @@ Pass when both exit 0, the diff is empty, every pull request has a `url`, and th
 null `repo`.
 
 ### MP9. Browse
+
+Run: helper.
 
 ```bash
 $V mcp mcp-browse-repo browse "{\"repo\":\"$O/personal\"}"
@@ -763,6 +795,8 @@ the repository, pull request and Issue addresses, and each event carries its res
 
 ### MP10. Nonexistent pull request
 
+Run: helper.
+
 ```bash
 $V mcp mcp-pr-missing pr_view "{\"repo\":\"$O/personal\",\"number\":\"99999\"}"
 test $? -eq 1
@@ -777,8 +811,6 @@ Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr pr
 event records `tool_error` with the same code.
 
 ### MP11. Reviewable pull requests
-
-Run: agent.
 
 MP11 and MP12 share one setup. Two claimed agent principals count 2 of the 5 agents per hour. A3 owns a
 repository R with a Budget Sheet on Trunk, makes B3 a Viewer, and assigns B3 an Issue. The run user owns
@@ -840,8 +872,6 @@ in `private-x`, and the CLI diff is empty.
 
 ### MP12. Agents find their own work
 
-Run: agent.
-
 Continue from MP11's setup. Each prompt is the fixed sentence below and carries no task:
 
 ```bash
@@ -866,8 +896,6 @@ A3 and the pull request's author is B3, and no event or transcript result holds 
 a model reason, rerun with `--model console-deepseek/deepseek-flash#max` under an `-attempt2` label and report both.
 
 ### MP13. A fork's pull request serves an Issue
-
-Run: agent.
 
 The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
 fork, links the pull request its first write opens with `pr_edit`, and both sides show the link in MCP, uvw and the
@@ -914,6 +942,8 @@ Pass when every command exits as shown, the unknown Issue number is `INVALID_INP
 lists the pull request and its state, and the pull request header names `Serves #N Fix the totals`.
 
 ### MP14. An agent's budget
+
+Run: helper.
 
 An agent principal (see [the principals reference](../references/stories.md)) opens pull requests in its own Personal
 Space until its budget of 10 is used. Creating the principal counts toward the 5 agents an hour. One creation fails
@@ -967,8 +997,6 @@ denial counter for `openWorktree` reads 2, the replay with the tenth key returns
 leaves 9 open and 1 merge in `whoami`, the next creation succeeds, and the run user's `whoami` has no `budget`.
 
 ### MP15. Check results on a pull request
-
-Run: agent.
 
 The run user O holds a Team Space R and declares two checks in `.agents/checks.md` on its Trunk. A claimed agent A, a
 Viewer, proposes a change and reports both checks with `pr_check`. A person E sees them in the browser, marked as not
@@ -1062,8 +1090,6 @@ screenshot marks them out of date, B's results count and both checks read `passe
 report on the merged pull request exits 1 with `CONFLICT`.
 
 ### MP16. Pull requests that delete a file
-
-Run: agent.
 
 The run user O puts two Sheets, `Archive` and `Direct`, on the Trunk of its Personal Space. One pull request deletes
 `Archive` and merges, and uvw and MCP read it before and after O deletes the file permanently. Two open pull requests,

@@ -41,9 +41,12 @@ instance and checks the needs, so a recipe never starts, stops or restarts the i
 journey that needs another instance shape, such as production MCP or a restart with other server settings, does
 that in its own text.
 
-The same line can say who runs a journey: `Run: helper.` or `Run: agent.`, with the journey's own line winning, as
-for the mode. `agent` is the default: a verifier follows the journey's text. `$V run-journeys <feature>` runs the
-`bash` blocks of `helper` journeys itself, exactly as written, and records their checks in the run's journal.
+A journey's own line can also say that the helper runs it: `Run: helper.`, after its mode and needs. `Run:` has no
+other value and no feature scope, because a wrong runner fails silently: the helper would run only the blocks of a
+journey whose real check is in a browser or a model's reply. The parser test fails on `Run: agent.` and on a `Run:`
+line under `Driving it with agent-browser and uvw`, so every journey without the line, including one added to a
+feature later, is an `agent` journey: a verifier follows its text. `$V run-journeys <feature>` runs the `bash`
+blocks of `helper` journeys itself, exactly as written, and records their checks in the run's journal.
 Mark a journey `helper` only when its blocks hold every step a machine can check. Its text then keeps only what
 needs eyes or judgment, such as "open the PNG and look". A step that is only in prose, such as killing a process,
 keeps the journey `agent`. The helper runs blocks this way:

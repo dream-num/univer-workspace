@@ -44,8 +44,9 @@ export const NEEDS = {
   },
 };
 
-// Who runs a journey: the helper runs its bash blocks as written (`$V run-journeys`), or the agent follows its text.
-const RUN_BY = { helper: 'the helper runs its blocks', agent: 'the agent follows its text' };
+// Who runs a journey: the helper runs the bash blocks of a "Run: helper." journey as written (`$V run-journeys`), and
+// the agent follows the text of every other journey.
+const RUN_BY = { helper: 'the helper runs its blocks' };
 const KEYS = { Mode: [MODES, 'mode'], Needs: [NEEDS, 'need'], Run: [RUN_BY, 'runner'] };
 
 export const modeOf = (runEnv) => (runEnv.MCP_ENABLED !== '1' ? 'default' : runEnv.MCP_SAME_ORIGIN === '1' ? 'mcp-same-origin' : 'mcp');
@@ -55,9 +56,10 @@ function metadata(line) {
   const meta = {};
   for (const clause of line.split(/(?<=\.) /)) {
     const [, key, list] = /^(Mode|Needs|Run): ([a-z0-9-]+(?:, [a-z0-9-]+)*)\.$/.exec(clause) ?? [];
-    if (!key) return `write metadata as "Mode: <mode>.", "Needs: <need>, <need>." and "Run: helper|agent.": ${line}`;
+    if (!key) return `write metadata as "Mode: <mode>.", "Needs: <need>, <need>." and "Run: helper.": ${line}`;
     if (meta[key]) return `${key} appears twice: ${line}`;
     const [known, noun] = KEYS[key], values = list.split(', ');
+    if (key === 'Run' && values.includes('agent')) return `the agent runs every journey without a "Run:" line, so delete "Run: agent.": ${line}`;
     const unknown = values.filter((v) => !Object.hasOwn(known, v));
     if (unknown.length) return `unknown ${noun} ${unknown.join(', ')}; use ${Object.keys(known).join(', ')}`;
     if (key !== 'Needs' && values.length > 1) return `${key} takes one value: ${line}`;
@@ -86,6 +88,8 @@ export function parseFeature(name, markdown) {
       if (!first) fail(i, `a "Mode:", "Needs:" or "Run:" line is the first paragraph under "${DRIVE}" or under a journey heading`);
       const meta = metadata(line);
       if (typeof meta === 'string') fail(i, meta);
+      // A feature-scope runner would pass silently to every journey added later, including one that needs a browser or a model.
+      if (meta.Run && first === scope.feature) fail(i, `"Run:" goes under a journey heading, not under "${DRIVE}"; mark each journey the helper runs with "Run: helper."`);
       Object.assign(first, meta);
     } else if (line.startsWith('## ')) {
       section = line;
@@ -101,7 +105,7 @@ export function parseFeature(name, markdown) {
     const own = scope[j.id], feature = scope.feature;
     j.mode = (own.Mode ?? feature.Mode ?? ['default'])[0];
     j.needs = [...new Set([...(feature.Needs ?? []), ...(own.Needs ?? [])])];
-    j.runBy = (own.Run ?? feature.Run ?? ['agent'])[0];
+    j.runBy = (own.Run ?? ['agent'])[0];
   }
   const run = journeys.filter((j) => j.runBy === 'helper');
   for (const b of [...(run.length ? setup : []), ...run.flatMap((j) => j.blocks)]) {

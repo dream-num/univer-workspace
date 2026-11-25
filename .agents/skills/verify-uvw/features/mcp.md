@@ -29,7 +29,7 @@ and exit codes.
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp. Run: helper.
+Mode: mcp.
 
 Use Bash for these commands. Prerequisites are the baseline CLI build and dependencies,
 Docker Desktop or OrbStack, `jq`, and opencode for M11. Each MCP call
@@ -37,6 +37,8 @@ checks the usage event and credential leakage automatically. Exit 5 fails the jo
 M4 creates the Team Space `verify-team` that the other MCP files reuse.
 
 ### M1. Environment
+
+Run: helper.
 
 ```bash
 eval "$($V env)"
@@ -52,6 +54,8 @@ in [local verification section 6.2](../../../../docs/design/workspace-mcp/local-
 
 ### M2. Identity, new protocol
 
+Run: helper.
+
 ```bash
 $V mcp mcp-whoami whoami
 $V cli mcp-whoami-cli auth status --json
@@ -65,6 +69,8 @@ Pass when both commands exit 0, subjects match, identity origin equals `$ORIGIN`
 
 ### M3. Identity, old protocol
 
+Run: helper.
+
 ```bash
 $V mcp --protocol 2025-11-25 mcp-whoami-legacy whoami
 jq -e '.protocolVersion == "2025-11-25"' "$EVIDENCE/mcp-whoami-legacy.result.json"
@@ -76,6 +82,8 @@ Pass when the command exits 0, the result records 2025-11-25, identity matches M
 and the event has a null client name.
 
 ### M4. Repository list
+
+Run: helper.
 
 Create a Team Space as in [Issues](issues.md).
 
@@ -92,6 +100,8 @@ Pass when commands exit 0, the diff is empty, and the list includes Personal and
 
 ### M5. Repository details
 
+Run: helper.
+
 ```bash
 for slug in personal verify-team; do
   $V mcp "mcp-repo-$slug" repo_view "{\"repo\":\"$O/$slug\"}"
@@ -104,6 +114,8 @@ Pass when both tools and both CLI calls exit 0, and both diffs are empty. Put th
 repository before `--json`, which otherwise consumes it as a field list.
 
 ### M6. Tool failure
+
+Run: helper.
 
 ```bash
 $V mcp mcp-repo-missing repo_view "{\"repo\":\"$O/no-such-repo\"}"
@@ -119,6 +131,8 @@ Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr pr
 and the event records `tool_error` with the same code.
 
 ### M7. Tool lists
+
+Run: helper.
 
 Needs the renderer; MB1 checks the lists of a run without one.
 
@@ -165,6 +179,8 @@ exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file
 
 ### M8. Authentication
 
+Run: helper.
+
 ```bash
 for protocol in 2026-07-28 2025-11-25; do
   for auth in none invalid; do
@@ -181,6 +197,8 @@ No usage event is expected because authentication rejects the handshake.
 
 ### M9. Origin check
 
+Run: helper.
+
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' -H 'Origin: http://evil.example' \
   -H "Authorization: Bearer $(cat "$RUN/home/mcp-session")" -X POST "$MCP_URL" > "$EVIDENCE/mcp-origin.txt"
@@ -190,6 +208,8 @@ test "$(cat "$EVIDENCE/mcp-origin.txt")" = 403
 Pass when the response is 403.
 
 ### M10. Production refusal
+
+Run: helper.
 
 ```bash
 cid=$(docker run -d --network none --label "com.docker.compose.project=$MCP_PROJECT" \
@@ -213,8 +233,6 @@ variables in its log. The probe container is removed even when the assertion fai
 
 ### M11. opencode
 
-Run: agent.
-
 ```bash
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 (cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
@@ -231,8 +249,6 @@ event has outcome `ok` and null client name. Keep the JSONL. It contains the fou
 fragment types, not developer plugins, skills or credentials.
 
 ### M12. Cleanup
-
-Run: agent.
 
 ```bash
 for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-before.txt"

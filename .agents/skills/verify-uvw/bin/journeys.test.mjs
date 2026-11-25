@@ -80,10 +80,21 @@ test('a misplaced, malformed or unknown metadata line fails with file and line',
   assert.throws(() => parseFeature('bad', `# F\n\nMode: mcp.\n\n${drive}\n\n### A1. One\n`), /bad\.md:3: a "Mode:"/);
   assert.throws(() => parseFeature('bad', recipe('### A1. One').replace('### Not one either', '### Not one either\n\nMode: mcp.')), /bad\.md:23: a "Mode:"/);
   for (const [meta, why] of [['Mode: docker.', /unknown mode docker; use default, mcp, mcp-same-origin$/], ['Needs: opencode.', /unknown need opencode; use web-build$/],
-    ['Mode: mcp, default.', /Mode takes one value/], ['Mode: mcp. Mode: default.', /Mode appears twice/], ['Run: helper, agent.', /Run takes one value/],
-    ['Run: model.', /unknown runner model; use helper, agent$/],
-    ['Mode: mcp', /write metadata as "Mode: <mode>\.", "Needs: <need>, <need>\." and "Run: helper\|agent\."/], ['Mode: mcp. Runs: helper.', /write metadata as/]]) {
+    ['Mode: mcp, default.', /Mode takes one value/], ['Mode: mcp. Mode: default.', /Mode appears twice/], ['Run: helper, helper.', /Run takes one value/],
+    ['Run: model.', /unknown runner model; use helper$/],
+    ['Run: agent.', /the agent runs every journey without a "Run:" line, so delete "Run: agent\.": Run: agent\.$/],
+    ['Mode: mcp. Run: agent.', /so delete "Run: agent\."/],
+    ['Mode: mcp', /write metadata as "Mode: <mode>\.", "Needs: <need>, <need>\." and "Run: helper\.": Mode: mcp$/], ['Mode: mcp. Runs: helper.', /write metadata as/]]) {
     assert.throws(() => parseFeature('bad', recipe(`### A1. One\n\n${meta}`)), (e) => e.message.startsWith('features/bad.md:19: ') && why.test(e.message), meta);
+  }
+});
+
+test('only a journey\'s own "Run: helper." makes the helper run it, and a "Run:" line under Driving it fails with file and line', () => {
+  const feature = parseFeature('f', `# F\n\n${drive}\n\nMode: mcp.\n\n### A1. One\n\nRun: helper.\n\n### A2. Added later\n\n\`\`\`bash\ntrue\n\`\`\`\n\n### A3. Three\n\nMode: mcp-same-origin. Run: helper.\n`);
+  assert.deepEqual(feature.journeys.map((j) => [j.id, j.mode, j.runBy]), [['A1', 'mcp', 'helper'], ['A2', 'mcp', 'agent'], ['A3', 'mcp-same-origin', 'helper']]);
+  for (const meta of ['Mode: mcp. Run: helper.', 'Run: helper.']) {
+    assert.throws(() => parseFeature('bad', `# F\n\n${drive}\n\n${meta}\n\n### A1. One\n\nRun: helper.\n`),
+      /^Error: features\/bad\.md:5: "Run:" goes under a journey heading, not under "## Driving it with agent-browser and uvw"; mark each journey the helper runs with "Run: helper\."$/, meta);
   }
 });
 
@@ -254,9 +265,9 @@ const lineOf = (text, code, after) => {
   return `features/f.md:${lines.findIndex((l, i) => i > from && l === code) + 1}`;
 };
 
-const semantics = feature('Run: helper.', '',
+const semantics = feature(
   ...bash('SEED=seeded', 'ids() { echo "id-$1"; }'), '',
-  '### A1. What holds', '', ...bash(
+  '### A1. What holds', '', 'Run: helper.', '', ...bash(
     `printf '{"a":1}\\n' > "$EVIDENCE/a.json"`,
     `jq -e '.a == 1' "$EVIDENCE/a.json"`,
     `jq -e '.a == 2' "$EVIDENCE/a.json"`,
@@ -271,7 +282,7 @@ const semantics = feature('Run: helper.', '',
     'read -r line',
     'test $? -eq 1',
     'T=$(ids 7)'), '',
-  '### A2. What breaks', '', ...bash(
+  '### A2. What breaks', '', 'Run: helper.', '', ...bash(
     `jq -e '.a == 2' "$EVIDENCE/a.json"`,
     'diff <(echo one) <(echo two)',
     'check() {',
@@ -285,8 +296,8 @@ const semantics = feature('Run: helper.', '',
     'jq -e \\',
     `  '.a == 2' \\`,
     '  "$EVIDENCE/a.json"'), '',
-  '### A3. Driven by the agent', '', 'Run: agent.', '', ...bash('false'), '',
-  '### A4. Carried state', '', ...bash('test "$SEED $T" = "seeded id-7"'));
+  '### A3. Driven by the agent', '', ...bash('false'), '',
+  '### A4. Carried state', '', 'Run: helper.', '', ...bash('test "$SEED $T" = "seeded id-7"'));
 
 test('run-journeys: a failing command is a broken check unless a condition holds it or the next command reads $?', () => {
   const { run, v, checks, done } = helperRepo({ f: semantics });
@@ -335,11 +346,11 @@ test('run-journeys carries state, first runs the earlier journeys that have not 
 });
 
 test('a broken setup blocks every journey, a timeout blocks one, and a failure tail is redacted and short', () => {
-  const broken = helperRepo({ f: feature('Run: helper.', '', ...bash('false'), '', '### A1. One', '', ...bash('true')) });
+  const broken = helperRepo({ f: feature(...bash('false'), '', '### A1. One', '', 'Run: helper.', '', ...bash('true')) });
   try {
     assert.equal(broken.v('run-journeys', 'f').status, 1);
     const [setup, a1] = broken.checks();
-    assert.deepEqual([setup.outcome, a1.outcome, a1.reason], ['broke', 'blocked', 'the setup broke at features/f.md:10, so it did not run']);
+    assert.deepEqual([setup.outcome, a1.outcome, a1.reason], ['broke', 'blocked', 'the setup broke at features/f.md:8, so it did not run']);
   } finally { broken.done(); }
 
   const loud = helperRepo({ f: feature('### A1. Loud', '', 'Run: helper.', '', ...bash(
@@ -423,7 +434,7 @@ test('a helper journey cannot check with "!", "[[ ]]", "(( ))" or a subshell, wh
     assert.equal(parseFeature('ok', feature('### A1. One', '', ...bash(code))).journeys[0].runBy, 'agent', 'an agent journey may');
   }
   const blocks = parseFeature('f', semantics);
-  assert.deepEqual(blocks.setup, [{ line: 10, text: 'SEED=seeded\nids() { echo "id-$1"; }' }]);
+  assert.deepEqual(blocks.setup, [{ line: 8, text: 'SEED=seeded\nids() { echo "id-$1"; }' }]);
   assert.deepEqual(blocks.journeys.map((j) => [j.id, j.runBy, j.blocks.length]), [['A1', 'helper', 1], ['A2', 'helper', 1], ['A3', 'agent', 1], ['A4', 'helper', 1]]);
 });
 

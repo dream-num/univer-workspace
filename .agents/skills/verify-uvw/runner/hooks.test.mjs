@@ -33,8 +33,8 @@ test('run-journeys never runs a journey in VERIFY_UVW_SKIP_JOURNEYS, not even as
   mkdirSync(join(skill, 'features'));
   for (const file of ['verify-uvw', 'journeys.mjs', 'secrets.mjs', 'journey-prelude.sh']) copyFileSync(host(file), join(skill, 'bin', file));
   chmodSync(join(skill, 'bin/verify-uvw'), 0o755);
-  const ran = (id) => ['```bash', `touch "$EVIDENCE/${id}.ran"`, '```'];
-  writeFileSync(join(skill, 'features/f.md'), ['# F', '', '## Driving it with agent-browser and uvw', '', 'Run: helper.', '',
+  const ran = (id) => ['Run: helper.', '', '```bash', `touch "$EVIDENCE/${id}.ran"`, '```'];
+  writeFileSync(join(skill, 'features/f.md'), ['# F', '', '## Driving it with agent-browser and uvw', '',
     '### A1. One', '', ...ran('A1'), '', '### A2. Two', '', ...ran('A2'), '', '### A3. Three', '', ...ran('A3'), ''].join('\n'));
   const runs = join(repo, 'runs');
   const journeys = (run, skip) => {

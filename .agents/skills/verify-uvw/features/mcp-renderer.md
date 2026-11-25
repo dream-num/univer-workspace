@@ -20,7 +20,7 @@ equivalents are `uvw screenshot`, `uvw print-pdf`, `uvw lint` and `uvw compile-s
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp. Run: helper.
+Mode: mcp.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -28,8 +28,6 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 MR12 also needs opencode.
 
 ### MR9. renderer role
-
-Run: agent.
 
 The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. `screenshot`
 (MR10), `print_pdf` and `lint` (MR11) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
@@ -56,6 +54,8 @@ Pass when:
   on a new runtime (`mcp_renderer_runtime_discards_total` 1).
 
 ### MR10. screenshot tool
+
+Run: helper.
 
 The `screenshot` tool loads the Unit in the executor, which inlines every image Asset, and sends only the unit to the renderer. A
 Worktree Unit proves the Worktree Asset read and a trunk Unit proves the trunk Asset read. Run it after MR9's `doctor` passes and
@@ -137,6 +137,8 @@ Pass when:
 - Both rejections exit 1 with their message and a `tool_error` event.
 
 ### MR11. print_pdf and lint tools
+
+Run: helper.
 
 Both tools load the Unit in the executor, which inlines every image Asset, and send only the unit to the renderer. A Worktree Unit proves the
 Worktree reads and a trunk Unit proves the trunk reads. Run it after MR9's `doctor` passes and use a parallel run id when another run is active.
@@ -252,8 +254,6 @@ Pass when:
 
 ### MR12. opencode screenshot
 
-Run: agent.
-
 An agent reads a screenshot through `screenshot`, so the image must reach the model and the model must describe it correctly. The model is
 `$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). `screenshot` is a core tool, so opencode runs from
 `$MCP_OPENCODE_DIR` with the default MCP URL, as in M11. opencode wraps MCP tools in its `execute` tool, so the MCP call is
@@ -325,6 +325,8 @@ Pass when both opencode runs exit 0 and:
   gets no `screenshot` call.
 
 ### MV2. Real-font SVG measurement through the renderer
+
+Run: helper.
 
 Run it after `doctor` passes, with the
 `eval "$($V env)"` variables set. The renderer launches one browser at startup. If that warm-up

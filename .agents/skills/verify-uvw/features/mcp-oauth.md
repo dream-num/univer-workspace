@@ -18,7 +18,7 @@ opens the Workspace consent page in the browser; after `Allow` it calls the gate
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp. Run: helper.
+Mode: mcp.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -33,8 +33,6 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 ```
 
 ### MO1. OAuth sign-in from opencode
-
-Run: agent.
 
 Run after `up` with MCP enabled and `user`.
 The script uses the run's browser session and a separate opencode project with no Authorization
@@ -58,6 +56,8 @@ OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 removes its temporary project and credentials even if an assertion fails.
 
 ### MO2. Scripted OAuth: scope withheld, refresh and revocation
+
+Run: helper.
 
 Run with a full-scope default PAT, which `user` creates and each journey in
 [PAT sign-in](mcp-auth.md) restores. MO1 proves a real client; this drives the same endpoints from `verify-uvw mcp-oauth`, so it needs no model and can
@@ -183,8 +183,6 @@ redeemed without `resource` return 200 and the token works through the gateway; 
 
 ### MO3. HTTPS Client ID Metadata Documents
 
-Run: agent.
-
 Requires outbound HTTPS. Run before MO1/MO2 because step 5 starts fresh data.
 The helper detects fake-IP DNS at `up`; it never exempts loopback or link-local addresses.
 
@@ -270,6 +268,8 @@ Both teardown transcripts say `ok    MCP resources removed`; restored doctor has
 The optional real Claude Code `/mcp` login is supplementary and not required by MO3.
 
 ### MO4. Cursor's private-use callback
+
+Run: helper.
 
 Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
 next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only

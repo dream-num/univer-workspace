@@ -25,7 +25,7 @@ hands its `page_url` to a person who uploads in the browser. It then calls `impo
 
 ## Driving it with agent-browser and uvw
 
-Mode: mcp. Run: helper.
+Mode: mcp.
 
 Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
@@ -42,6 +42,8 @@ MX_SPACE=$(jq -r .id "$EVIDENCE/mx-repo.out")
 ```
 
 ### MF1. Stage and publish a Blob
+
+Run: helper.
 
 Uses the Team Space from the setup above.
 
@@ -68,6 +70,8 @@ Pass when upload and retry return the same Resource, CLI metadata matches, downl
 
 ### MF2. Replace a Blob with its ETag
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 printf 'replacement bytes\n' > "$EVIDENCE/mf-replacement.txt"
@@ -91,6 +95,8 @@ jq -e '.code | test("conflict|precondition|etag"; "i")' "$EVIDENCE/mf-stale-repl
 Pass when replacement retains identity, retries return the same result, the link returns new bytes and a new replacement with the old ETag fails.
 
 ### MF3. Capability and owner boundaries, browser upload
+
+Run: helper.
 
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
@@ -143,6 +149,8 @@ Pass when the wrong token is refused, the page has a strict CSP and no supplied 
 
 ### MF4. Download a Worktree image Asset
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-asset-pr pr_create "$(jq -nc --arg repo "$O/personal" --arg key "mf-asset-pr-$MF_KEY" '{repo:$repo,title:"Asset transfer",idempotency_key:$key}')"
@@ -172,6 +180,8 @@ Pass when MCP, public upload and CLI return identical image bytes, with the down
 
 ### MF5. Pending uploads and purpose validation
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-pending-reserve file_upload_create '{"purpose":"blob","file_name":"pending.txt","size":3,"media_type":"text/plain"}'
@@ -187,6 +197,8 @@ jq -e '.code == "workspace-upload-media-type-invalid"' "$EVIDENCE/mf-invalid-pur
 Pass when a reservation cannot be published before bytes arrive and Office-purpose validation refuses plain text.
 
 ### MF6. Upload upper limit, single PUT and download capability
+
+Run: helper.
 
 ```bash
 node --input-type=module - "$EVIDENCE" <<'JS'
@@ -212,6 +224,8 @@ JS
 Pass when over-limit files leave an upload retryable, smaller files are accepted, a second successful PUT cannot overwrite bytes, and an unsigned download is refused.
 
 ### MF7. Binary XLSX and PNG round trips
+
+Run: helper.
 
 Generates a valid 50,000-row OpenXML workbook larger than 4 MiB and a PNG. Python 3 is needed for standard-library fixture generation.
 
@@ -242,6 +256,8 @@ Pass when both hashes match after PUT, publication and download, default Blob na
 
 ### MF8. Normalized binary upload paths
 
+Run: helper.
+
 Needs the MF7 PNG and the Team Space from the setup above.
 
 ```bash
@@ -265,6 +281,8 @@ Pass when canonical and dot-segment PUTs survive publication and download with t
 
 ### MF9. Normalized MCP body cap
 
+Run: helper.
+
 Sends more than 4 MiB without client URL normalization.
 
 ```bash
@@ -285,8 +303,6 @@ done
 Pass when both oversized requests receive HTTP 413 through the normalized MCP route.
 
 ### MF10. A Viewer agent replaces a PDF and a PNG through a fork, and an Editor merges in the browser
-
-Run: agent.
 
 A holder H owns a public Team Space whose `proposals` setting is `accountable`, with a PDF, a PNG, a page and a
 Sheet on Trunk. A claimed agent A is a Viewer and works only through its fork, and E is an Editor. Register H and
@@ -411,8 +427,6 @@ files are A's bytes, the upstream `etag` equals the `etag` of `mff-published`, w
 
 ### MF11. Through a fork, a file someone replaced since its draft stays as it was, and the Sheet merges
 
-Run: agent.
-
 Continue from MF10. A's fork is clean, so its next write opens a new pull request. A changes B2 and replaces the PDF
 again, and then H replaces the PDF:
 
@@ -451,6 +465,8 @@ Before `$V down`, close E's browser session and run `uh daemon stop` and `ue dae
 
 ### MX7. Office xlsx round trip
 
+Run: helper.
+
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs xlsx
 ```
@@ -463,6 +479,8 @@ stop this journey. Do not bypass the upload route.
 
 ### MX8. Office docx round trip
 
+Run: helper.
+
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs docx
 ```
@@ -471,6 +489,8 @@ Pass with the same upload, import, inspection and export checks for a Doc contai
 using a reserved size upper bound larger than the actual file.
 
 ### MX9. Office import idempotent retry
+
+Run: helper.
 
 Repeat the same upload and key after a delay and verify the Worktree still has one imported Unit.
 
@@ -482,6 +502,8 @@ Pass when both calls directly return the same Unit ID and the Worktree Unit list
 
 ### MX10. Reused import key with a different upload
 
+Run: helper.
+
 Import one upload with a key, then a different upload with the same key. Run after MX7.
 
 ```bash
@@ -492,6 +514,8 @@ Pass when the second call fails with `workspace-idempotency-conflict`, the Workt
 and repeating the first arguments returns the original Unit ID.
 
 ### MM1. Markdown compile, native readback and block update
+
+Run: helper.
 
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-markdown-roundtrip.mjs
@@ -507,6 +531,8 @@ that random filename component. Replace one explicit block and inspect the chang
 and preserved list. Evidence uses the `mm-markdown-` prefix and includes a summary JSON.
 
 ### MM2. Markdown input errors and bounded ZIP paths
+
+Run: helper.
 
 Run after MM1.
 
