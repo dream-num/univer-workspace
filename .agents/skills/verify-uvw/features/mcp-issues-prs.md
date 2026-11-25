@@ -1207,7 +1207,7 @@ $V mcp --auth oauth mpl-g-claim claim '{}'
 
 The run browser is now signed in as G. In a second session (`AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-o`),
 sign in as O, open the `claimUrl` from `mpl-g-claim.out` and click `Claim agent`. Replace the code in `mpl-g-claim.*`
-as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says, and wait 35 s for the gateway's cache.
+as [MH1](agent-handoff.md#mh1-unclaimed-agent) says, and wait 35 s for the gateway's cache.
 Sign a second uvw home in as G with the Browser-approved login of
 [MA8](mcp-auth.md#ma8-existing-sign-in-clients), approved in the run browser:
 

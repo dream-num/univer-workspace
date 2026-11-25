@@ -1,6 +1,6 @@
 # verify-runner 实施计划
 
-> 状态：已在 #558 至 #587 中实施。实施推翻了本文的几项决定：由 runner 而不是 agent 启动实例；verdict 取自 journal，而不是 `RESULT:` 行；recipe 增加了 journey 标题和元数据。从 #591 起，runner 改为 opt-in，host mode 是默认方式。runner 的现状以 `.agents/skills/verify-uvw/runner/README.md` 为准。日期 2026-11-24。
+> 状态：已在 #558 至 #587 中实施。实施推翻了本文的几项决定：由 runner 而不是 agent 启动实例；verdict 取自 journal，而不是 `RESULT:` 行；recipe 增加了 journey 标题和元数据。从 #591 起，runner 改为 opt-in，host mode 是默认方式。从 #592 起，runner 的代码在 `.agents/skills/verify-uvw/runner/`，`$R` 子命令已删除，下文的 `$R` 指 `R="node .agents/skills/verify-uvw/runner/runner.mjs"`。runner 的现状以 `.agents/skills/verify-uvw/runner/README.md` 为准。日期 2026-11-24。
 > 设计依据、实测数据和决定的来由见 [README.zh-CN.md](README.zh-CN.md)。本文只写执行顺序、文件清单、关键细节和验收标准。
 > 两份文档不一致时，以本文为准，并在同一个 PR 里修正 README。
 
@@ -58,7 +58,7 @@ verify-uvw 的 journey 交给一个独立的 agent，在统一的 Linux 容器�
 
 ```text
 宿主
-  $V runner <task>...          bin/runner.mjs，一个进程持有全部状态
+  $R <task>...          runner/runner.mjs，一个进程持有全部状态
     1. 查找 key，找不到就 exit 5
     2. 检查 docker，不可用就 exit 3
     3. 预检每个 task 是否只能在宿主上跑
@@ -137,8 +137,8 @@ type TaskResult = {
 | --- | --- |
 | `.agents/skills/verify-uvw/runner/Dockerfile` | runner 镜像（4.2 节） |
 | `.agents/skills/verify-uvw/runner/task.sh` | 在容器内执行一个 task（4.4 节）。它从快照的 `~/repo` 里运行，所以修改它不需要重建镜像 |
-| `.agents/skills/verify-uvw/bin/runner.mjs` | 宿主一侧的编排（4.3 节） |
-| `.agents/skills/verify-uvw/bin/runner.test.mjs` | 单元测试（4.7 节） |
+| `.agents/skills/verify-uvw/runner/runner.mjs` | 宿主一侧的编排（4.3 节） |
+| `.agents/skills/verify-uvw/runner/runner.test.mjs` | 单元测试（4.7 节） |
 | `.agents/skills/verify-uvw/bin/verify-uvw` | 新增 `runner` 命令，直接 `exec node "$BIN/runner.mjs" "$@"`。新增 `brief --own`（4.5 节） |
 | `.agents/skills/verify-uvw/features/README.md` | `(host only)` 标记的规则（4.6 节） |
 | `.agents/skills/verify-uvw/features/*.md` | 给 MCP mode 的 feature 加上 H1 标记（4.6 节） |
@@ -184,7 +184,7 @@ WORKDIR /home/node
 用法：
 
 ```bash
-$V runner [--jobs N] [--keep] <feature[:ID,ID]>...
+$R [--jobs N] [--keep] <feature[:ID,ID]>...
 ```
 
 - `--jobs` 默认取 task 数和 3 中较小的那个，超过 3 时报错。
@@ -288,10 +288,10 @@ verify-uvw 的测试目前没有接入 CI，用 `node --test .agents/skills/veri
 
 以下每一项都要在 PR comment 中给出命令和结果：
 
-1. `$V runner link-sharing:LS1,LS2,LS3,LS4 auth` 以 exit 0 结束。两个 task 的 RESULT 都是 PASS。`report.md` 中的证据路径在宿主上能直接打开，`runs/*/evidence` 中有截图和 cli 记录，`secret-check-*.txt` 都是 ok。
-2. 效果检查：在一个临时分支上删掉 `apps/workspace/server/src/db/sqlite/access/access.repository.ts` 中 link sharing 的 `enabled = 1` 条件，不要提交到 PR，然后执行 `$V runner link-sharing`。LS3 应当报 FAIL。这一步证明 runner 能抓到真实缺陷，也证明快照带上了未提交的改动。
+1. `$R link-sharing:LS1,LS2,LS3,LS4 auth` 以 exit 0 结束。两个 task 的 RESULT 都是 PASS。`report.md` 中的证据路径在宿主上能直接打开，`runs/*/evidence` 中有截图和 cli 记录，`secret-check-*.txt` 都是 ok。
+2. 效果检查：在一个临时分支上删掉 `apps/workspace/server/src/db/sqlite/access/access.repository.ts` 中 link sharing 的 `enabled = 1` 条件，不要提交到 PR，然后执行 `$R link-sharing`。LS3 应当报 FAIL。这一步证明 runner 能抓到真实缺陷，也证明快照带上了未提交的改动。
 3. `--jobs 3` 跑 3 个 task，记录总耗时和每个容器的构建耗时。参考值：单个 runner 构建 33–56 秒，并发构建 80–133 秒，task 切换约 5 秒。
-4. `$V runner mcp` 以 exit 3 退出，没有启动容器。
+4. `$R mcp` 以 exit 3 退出，没有启动容器。
 5. 清空 `DEEPSEEK_API_KEY` 并临时移走 `.env` 后，以 exit 5 退出，`docker ps` 中没有新容器。
 6. 停掉 docker 后，以 exit 3 退出。
 7. 在执行过程中按 Ctrl-C，之后 `docker ps -a --filter label=uvw-verify.batch` 为空。
@@ -307,8 +307,8 @@ verify-uvw 的测试目前没有接入 CI，用 `node --test .agents/skills/veri
 
 | 文件 | 内容 |
 | --- | --- |
-| `.agents/skills/verify-uvw/bin/mcp-processes.mjs` | 角色表，以及 `start`、`stop`、`exec` 和 `logs` 四个子命令 |
-| `.agents/skills/verify-uvw/bin/mcp-processes.test.mjs` | 一致性测试和角色表的单元测试 |
+| `.agents/skills/verify-uvw/runner/mcp-processes.mjs` | 角色表，以及 `start`、`stop`、`exec` 和 `logs` 四个子命令 |
+| `.agents/skills/verify-uvw/runner/mcp-processes.test.mjs` | 一致性测试和角色表的单元测试 |
 | `.agents/skills/verify-uvw/bin/verify-uvw` | `VERIFY_UVW_MCP_FROM`。`up`、`doctor`、`down` 和 `mcp_compose` 按启动方式分派。`OPENCODE_MODEL` 可覆盖 |
 | `.agents/skills/verify-uvw/bin/executor-doctor.mjs`、`renderer-doctor.mjs` | 拆成容器形态检查和功能检查两部分（5.5 节） |
 | `.agents/skills/verify-uvw/bin/mcp-call.mjs` | 使用 `dist` 时从日志文件读取 gateway 和 executor 日志（第 131 行一带） |
@@ -418,7 +418,7 @@ PR 2 删掉 PR 1 加在 MCP feature H1 上的标记，改为标在具体的 jour
 1. **doctor 先单独验收。** 在 runner 容器里（`--keep` 保留一个容器，`docker exec` 进去），用 `VERIFY_UVW_MCP=1` 执行 `up`、`user` 和 `doctor`。功能检查全部 `ok`，`skip` 行只出现在容器形态检查上，`Executor doctor` PR 和 `Doctor` Sheet 存在。
 2. 在 runner 中以 exit 0 跑完以下 task，并逐项核对报告：
    ```bash
-   $V runner mcp-blobs-office mcp-executor:MX1,MX2,MX4,MT1 mcp-renderer:MR9,MR10,MR11,MR12,MV2 mcp:M1,M2,M11 mcp-oauth
+   $R mcp-blobs-office mcp-executor:MX1,MX2,MX4,MT1 mcp-renderer:MR9,MR10,MR11,MR12,MV2 mcp:M1,M2,M11 mcp-oauth
    ```
    预期结果：
    - MR11 会因为 #553 报 FAIL，这是已知问题。
@@ -426,7 +426,7 @@ PR 2 删掉 PR 1 加在 MCP feature H1 上的标记，改为标在具体的 jour
    - mcp-oauth 全部四条都跑，包括 MO3 的 `up --reuse` 和 MO4。MO3 需要访问外网 HTTPS，原型没有在 runner 里测过它，结果如实报告。
    - M11、MR12 和 MO1 这次由 agent 自己调用 opencode。原型里这三条是直接执行 recipe 片段，没有经过 agent。
    - 其余 journey 都应当 PASS。原型中的实测结果见 README 4.3 节和 7.4 节。
-3. `$V runner mcp-security` 以 exit 3 退出。`$V runner mcp-executor:MX3` 也以 exit 3 退出。
+3. `$R mcp-security` 以 exit 3 退出。`$R mcp-executor:MX3` 也以 exit 3 退出。
 4. 宿主上的 `image` 方式没有变化：在改动前后，分别在宿主上用 `VERIFY_UVW_MCP=1` 执行 `up`、`user` 和 `doctor`，doctor 输出的检查项和结果一致，pid 和 run id 除外。再跑一次 `mcp-blobs-office` 的 MF1 和 `mcp-executor` 的 MX3，结果应为 PASS。
 5. 在宿主上设置 `VERIFY_UVW_MCP_FROM=dist` 后执行 `up`，应当报错退出，并且没有启动任何进程。
 6. 完成 `local-verification.zh-CN.md` 第 1 节的修订：

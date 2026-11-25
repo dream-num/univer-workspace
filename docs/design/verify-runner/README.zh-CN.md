@@ -1,6 +1,6 @@
 # verify-runner：在容器里由独立 agent 执行 verify-uvw journey
 
-> 状态：已在 #558 至 #587 中实施。实施推翻了本文的几项决定：由 runner 而不是 agent 启动实例；verdict 取自 journal，而不是 `RESULT:` 行；recipe 增加了 journey 标题和元数据。从 #591 起，runner 改为 opt-in，host mode 是默认方式。runner 的现状以 `.agents/skills/verify-uvw/runner/README.md` 为准。日期 2026-11-24。
+> 状态：已在 #558 至 #587 中实施。实施推翻了本文的几项决定：由 runner 而不是 agent 启动实例；verdict 取自 journal，而不是 `RESULT:` 行；recipe 增加了 journey 标题和元数据。从 #591 起，runner 改为 opt-in，host mode 是默认方式。从 #592 起，runner 的代码在 `.agents/skills/verify-uvw/runner/`，`$R` 子命令已删除，下文的 `$R` 指 `R="node .agents/skills/verify-uvw/runner/runner.mjs"`。runner 的现状以 `.agents/skills/verify-uvw/runner/README.md` 为准。日期 2026-11-24。
 > 本文记录设计依据、实测数据和已拍板的决定。执行顺序、文件清单和验收标准见[实施计划](plan.zh-CN.md)。两者不一致时，以实施计划为准。要推翻第 3 节的任何一条，先改第 3 节，再改正文。
 > 标注“实测”的数字来自 2026-11-23 的一次性原型。原型运行在 Apple Silicon Mac 的 OrbStack 上，容器是 linux/arm64。原型代码没有提交，位置见附录 A。
 > verify-uvw 今天没有的命令、环境变量和文件名，本文提到时都是提议，不是现状。
@@ -182,7 +182,7 @@ review 之后，设计改为由 agent 自己执行 `up`（5.4 节）。这依赖
 ### 5.1 命令
 
 ```bash
-$V runner [--jobs N] [--keep] <feature[:ID,ID]>...
+$R [--jobs N] [--keep] <feature[:ID,ID]>...
 ```
 
 `N` 默认取 task 数和 3 中较小的一个（V3）。一次调用就是一个 batch。
@@ -193,7 +193,7 @@ $V runner [--jobs N] [--keep] <feature[:ID,ID]>...
 
 ### 5.3 宿主上只有一个编排进程
 
-宿主上由一个 `bin/runner.mjs` 进程持有全部状态，task 队列放在内存里。每个 runner 先构建一次环境（取代码、install、build），然后循环执行以下步骤：
+宿主上由一个 `runner/runner.mjs` 进程持有全部状态，task 队列放在内存里。每个 runner 先构建一次环境（取代码、install、build），然后循环执行以下步骤：
 
 1. 领取一个 task。
 2. 清空容器内的 `/tmp/verify-uvw`。
@@ -309,7 +309,7 @@ $V runner [--jobs N] [--keep] <feature[:ID,ID]>...
 
 ### 6.7 `dist` 的实现要点
 
-- 角色表放在一个 JS 模块中，例如 `bin/mcp-processes.mjs`。它管理每个角色的环境变量、端口、启动、停止、状态查询、pid 文件和日志 `logs/mcp-<role>.log`。gateway 用 `MCP_PORT`，其余角色在 `up` 时各选一个空闲端口并写入 `run.env`。固定偏移（+1、+2、+3）会与文档中的并行 run 冲突，例如 SKILL.md 用 3931，mcp-auth.md 用 3933。
+- 角色表放在一个 JS 模块中，例如 `runner/mcp-processes.mjs`。它管理每个角色的环境变量、端口、启动、停止、状态查询、pid 文件和日志 `logs/mcp-<role>.log`。gateway 用 `MCP_PORT`，其余角色在 `up` 时各选一个空闲端口并写入 `run.env`。固定偏移（+1、+2、+3）会与文档中的并行 run 冲突，例如 SKILL.md 用 3931，mcp-auth.md 用 3933。
 - 加一个一致性测试，从 `compose.verify.yml` 的文本中提取每个服务的环境变量名集合，与角色表比对。仓库根目录下解析不到 YAML 库，不为此新增依赖。
 - 用 `dist` 时，`mcp_compose` 的 `logs`、`ps`、`exec` 和 `up` 由这个模块实现。这样 `renderer-call`（实测可用）、`mcp-allow-users`、`mcp-gateway-restart` 和 `renderer-restart`（未实测）都不用改。
 - `mcp-call.mjs` 改为从文件读取 gateway 和 executor 的日志。

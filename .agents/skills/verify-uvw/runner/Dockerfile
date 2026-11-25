@@ -1,4 +1,4 @@
-# The verify runner: one disposable Linux container per runner. bin/runner.mjs tags it by this file's hash.
+# The verify runner: one disposable Linux container per runner. runner/runner.mjs tags it by this file's hash.
 # Same Debian release as apps/mcp/Dockerfile, so chromium and fonts match the MCP production image.
 FROM node:24-bookworm
 ENV DEBIAN_FRONTEND=noninteractive
