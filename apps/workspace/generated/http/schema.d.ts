@@ -2547,7 +2547,7 @@ export interface paths {
         put?: never;
         /**
          * Mark a draft Unit for deletion or undo its deletion intent.
-         * @description Existing documents remain available until merge; canceled local Units are never published. Only editable drafts accept changes to deletion intent.
+         * @description Existing documents remain available until merge; canceled local Units are never published. Only editable drafts accept changes to deletion intent. Marking a trunk Unit needs the right to trash its Node, except when its file is already in Trash or deleted: that leaves the file out of the merge, which then neither writes it nor moves it.
          */
         post: operations["setWorktreeUnitRemoved"];
         delete?: never;
@@ -3953,7 +3953,7 @@ export interface components {
             activationState: components["schemas"]["ActivationState"];
             /** @description Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, for a reader who reads the name `Removed resource` because they cannot open the file, and once the Worktree leaves draft and ready. */
             freshness: components["schemas"]["WorktreeUnitFreshness"] | null;
-            /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet, and for a reader who reads the name `Removed resource` because they cannot open the file, so that nothing tells them whether it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and once the pull request is merged such a file no longer decides whether a reader may review the others. */
+            /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet, and for a reader who reads the name `Removed resource` because they cannot open the file, so that nothing tells them whether it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and such a file no longer decides whether a reader may review the others. An open pull request that still changes one cannot merge until its author leaves it out. */
             fileState: components["schemas"]["WorktreeUnitFileState"] | null;
         };
         /** @description How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result. */
@@ -9669,7 +9669,10 @@ export interface operations {
              *     message names the pages and files and the pull request URL. `PAGES_CHANGED`: `pageDraftIds` differs from the drafts this
              *     merge would publish, so the merger must review the pages again. The message names the pull request URL.
              *     A request that could get both gets `PAGE_REVIEW_REQUIRED`, which a newer review cannot clear outside the
-             *     browser. Nothing changes.
+             *     browser. `FILES_IN_TRASH`: the pull request still changes a file that is in Trash or deleted, which no merge
+             *     writes. Every reader who may review it gets this, whatever else keeps them from merging. The message names those files,
+             *     counts those the reader cannot see without their names or states, and says that its author can leave each one out with
+             *     the Unit removal intent before anyone merges. Nothing changes.
              */
             409: {
                 headers: {

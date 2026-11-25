@@ -99,6 +99,7 @@ describe("Issue tools and gateway infrastructure", () => {
   let requests: { method: string; path: string; body: unknown }[];
   let failComments: boolean;
   let wt3State: string;
+  let wt3Units: Record<string, unknown>[];
   let idempotencyKeys: (string | null)[];
   let current7: Record<string, unknown>;
   const listPages = new Map<string, unknown>();
@@ -162,14 +163,18 @@ describe("Issue tools and gateway infrastructure", () => {
         worktree: rawWorktree("wt-3", {
           name: request.method === "PATCH" ? "Edited" : "PR wt-3",
           state: wt3State,
+          units: wt3Units,
         }),
       });
     }
-    if (target.pathname === "/api/worktrees/wt-3/ready") {
-      return Response.json({ worktree: rawWorktree("wt-3", { state: "ready" }) });
+    if (target.pathname === "/api/worktrees/wt-3/ready" || target.pathname === "/api/worktrees/wt-3/reopen") {
+      wt3State = target.pathname.endsWith("/ready") ? "ready" : "draft";
+      return Response.json({ worktree: rawWorktree("wt-3", { state: wt3State, units: wt3Units }) });
     }
-    if (target.pathname === "/api/worktrees/wt-3/reopen") {
-      return Response.json({ worktree: rawWorktree("wt-3", { state: "draft" }) });
+    const removal = /^\/api\/worktrees\/wt-3\/units\/([^/]+)\/removal$/.exec(target.pathname);
+    if (removal) {
+      wt3Units = wt3Units.map((unit) => (unit["unitId"] === removal[1] ? { ...unit, change: "deleted" } : unit));
+      return Response.json({ worktree: rawWorktree("wt-3", { state: wt3State, units: wt3Units }) });
     }
     if (target.pathname === "/api/spaces/team-1/worktrees/4") {
       const capabilities = { review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge: false, discard: false };
@@ -287,6 +292,7 @@ describe("Issue tools and gateway infrastructure", () => {
     requests = [];
     failComments = false;
     wt3State = "draft";
+    wt3Units = [];
     idempotencyKeys = [];
     current7 = rawIssue(7);
     listPages.clear();
@@ -616,6 +622,25 @@ describe("Issue tools and gateway infrastructure", () => {
       { kind: "team", name: "T", summary: null, issueNumber: 7, teamSpaceId: "team-1", visibility: "private" },
       { issueNumber: 7 },
       { issueNumber: null },
+    ]);
+  });
+
+  it("leaves out the files in Trash of a ready pull request and marks it ready again", async () => {
+    await start();
+    wt3State = "ready";
+    const unit = { unitType: "sheet", source: "trunk", target: null, draftHeadRevision: 2, change: "modified", mergeResult: "pending", activationState: "notApplicable", freshness: null };
+    wt3Units = [
+      { ...unit, unitId: "north", resourceId: "r-1", nodeId: "n-1", name: "North", fileState: "live" },
+      { ...unit, unitId: "summary", resourceId: "r-2", nodeId: "n-2", name: "Summary", fileState: "inTrash" },
+    ];
+    const result = await call("pr_edit", { repo: "bob/team", number: "3", leave_out_trashed: true });
+    expect(result.structuredContent).toMatchObject({
+      state: "ready", url: teamUrl, units: [{ name: "North", change: "modified" }, { name: "Summary", change: "deleted" }],
+    });
+    expect(writesOf()).toEqual([
+      { method: "POST", path: "/api/worktrees/wt-3/reopen", body: undefined },
+      { method: "POST", path: "/api/worktrees/wt-3/units/summary/removal", body: { removed: true } },
+      { method: "POST", path: "/api/worktrees/wt-3/ready", body: undefined },
     ]);
   });
 

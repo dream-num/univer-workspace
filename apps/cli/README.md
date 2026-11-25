@@ -209,6 +209,9 @@ the Space. A member with read access only can still `pr create` in a Team Space,
 it `pr ready`, which makes it visible to the Space. `pr create --issue <n>` and `pr edit <pr> --issue <n>` link a Team
 pull request to the Issue `#n` of its repository that it serves, if you may change its title and body and can read the
 repository. `pr view` shows that Issue, and `issue view` lists the linked pull requests.
+`pr merge` refuses a pull request that still changes a file in Trash or permanently deleted, with `FILES_IN_TRASH`.
+Its author runs `pr edit <pr> --leave-out-trashed`, which leaves those files as they are and keeps a ready pull request
+ready, then merges the other files. In a repository that requires checks, report them again first.
 The Owner and Admins get an error naming the author, and the
 person who claimed an agent author, when they try to merge someone else's private pull request. Anyone else who
 lacks edit access gets an error saying so. A merge that stopped partway leaves the

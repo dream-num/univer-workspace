@@ -249,7 +249,7 @@ function build(
     );
 
   const edit = new Command(names.edit)
-    .description("Change a pull request's title, body, visibility or the Issue it serves")
+    .description("Change a pull request's title, body, visibility or the Issue it serves, or leave out its files in Trash")
     .argument("<pr>")
     .option(...REPO_OPTION)
     .option("-t, --title <title>")
@@ -257,30 +257,38 @@ function build(
     .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
     .option("--visibility <visibility>", "private or space (Team Space repositories only)")
     .option(...ISSUE_OPTION)
+    .option(
+      "--leave-out-trashed",
+      "leave out every file in Trash or permanently deleted, which pr merge refuses, so the other files can merge. Those files stay as they are. In a repository that requires checks, report them again",
+    )
     .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
       async (
         argument: string,
         options: JsonFieldsOption &
-          RepoOption & { body?: string; bodyFile?: string; issue?: number; title?: string; visibility?: string },
+          RepoOption & { body?: string; bodyFile?: string; issue?: number; leaveOutTrashed?: boolean; title?: string; visibility?: string },
       ) => {
         const { worktree, url } = await executeCommand(edit, async () => {
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
-          if (options.title === undefined && body === undefined && options.visibility === undefined && options.issue === undefined) {
+          const edits = options.title !== undefined || body !== undefined || options.visibility !== undefined || options.issue !== undefined;
+          if (!edits && !options.leaveOutTrashed) {
             throw workspaceError(
               "workspace-argument-invalid",
-              "Nothing to change: pass --title, --body/--body-file, --visibility or --issue.",
+              "Nothing to change: pass --title, --body/--body-file, --visibility, --issue or --leave-out-trashed.",
             );
           }
           const target = await writeTarget(argument, options);
-          const worktree = await worktrees.update(target.id, {
-            ...(options.title === undefined ? {} : { name: options.title }),
-            ...(body === undefined ? {} : { summary: body }),
-            ...(options.visibility === undefined
-              ? {}
-              : { visibility: oneOf(options.visibility, ["private", "space"], "--visibility") }),
-            ...(options.issue === undefined ? {} : { issueNumber: options.issue }),
-          });
+          const updated = edits
+            ? await worktrees.update(target.id, {
+              ...(options.title === undefined ? {} : { name: options.title }),
+              ...(body === undefined ? {} : { summary: body }),
+              ...(options.visibility === undefined
+                ? {}
+                : { visibility: oneOf(options.visibility, ["private", "space"], "--visibility") }),
+              ...(options.issue === undefined ? {} : { issueNumber: options.issue }),
+            })
+            : undefined;
+          const worktree = options.leaveOutTrashed || updated === undefined ? await worktrees.leaveOutTrashed(target.id) : updated;
           return { worktree, url: target.url };
         });
         emit(edit, options, worktree, line(worktree, url));

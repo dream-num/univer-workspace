@@ -95,7 +95,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `pr_list` | `pr list` | `repo`、`state`、`author`、`search`、`limit` | 是 | 否 | `read` |
 | `pr_view` | `pr view` | `repo`、`number` | 是 | 否 | `read` |
 | `pr_create` | `pr create` | `repo`、`title`、`body`、`visibility`、`idempotency_key` | 否 | 否 | `write` |
-| `pr_edit` | `pr edit` | `repo`、`number`、`title`、`body`、`visibility` | 否 | 否 | `write` |
+| `pr_edit` | `pr edit` | `repo`、`number`、`title`、`body`、`visibility`、`issue`、`leave_out_trashed`（CLI 是 `--leave-out-trashed`） | 否 | 否 | `write` |
 | `pr_ready` | `pr ready [--undo]` | `repo`、`number`、`undo` | 否 | 否 | `write` |
 | `search` | `search issues`、`search prs` | `kind`（`issues`、`prs`），其余同对应命令 | 是 | 否 | `read` |
 | `browse` | `browse` | `repo`、`number`、`unit` | 是 | 否 | `read` |

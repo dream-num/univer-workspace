@@ -55,7 +55,7 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   in the browser, marks them out of date after a Trunk edit, and counts the results of a claimed Editor agent.
 - MP16 reads a merged pull request that deleted a file with uvw and MCP, before and after the file is deleted
   permanently, and answers 409 in every comparison mode for a file moved to Trash under an open pull request, whose
-  page shows the deletion note and no server error.
+  page shows the Trash note, no `Compare` and no server error.
 - MP17 turns on `Require checks before an agent merges` in a repository's settings. A claimed guest agent's
   `pr_merge` and `uvw pr merge` are refused with `CHECKS_REQUIRED` naming the declared checks, its pull request page
   says why, its Browser opens a Trunk Sheet `Read only`, and its Blob replacement, Trash and rename of
@@ -65,6 +65,10 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MP18 has a claimed agent declare two checks in its own repository and turn on `landing` `checks` on the default
   connection, with no `toolsets`. Its Editor agent's merge is refused with `CHECKS_REQUIRED` until both checks pass,
   and its `space_node` and `blob_upload` on that Trunk are refused with `AGENT_NOT_ALLOWED`.
+- MP19 moves one of the two files a claimed agent's ready pull request edits to Trash. Every reader still reviews the
+  other file, the pull request page and the acceptance panel note the file in Trash with no `Compare` at 1440 and 390
+  px, `pr_merge` and `uvw pr merge` are refused with `FILES_IN_TRASH` naming it, and the agent, on its default
+  connection, leaves it out with `pr_edit` and merges the other file.
 
 ## How to get to it (user POV)
 
@@ -72,7 +76,7 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `pr_check`,
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
-`whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
+`whoami` and `pr_merge` as an agent, MP19 calls `pr_edit` with `leave_out_trashed` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
 `unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, MI16 calls `pr_revert` and drives `uvw pr revert`, and MI17 calls `share` and `issue_verdict` as an agent another person claimed. MP17 also calls `space_node`, `claim`,
 `fork_create` and `fork_view` as an agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`,
 the last two as that agent. MP18 calls `space_node`, `file_upload_create`, `blob_upload`, `repo_edit` and
@@ -1170,12 +1174,13 @@ grep -c '"statusCode":500' "$EVIDENCE/../logs/server.log"
 A 409 body's `error.code` is `CONFLICT`. A 403 `FORBIDDEN` there means the server found the file outside Trash and the
 reader unable to open it.
 
-Open each open pull request's `Files changed`, click `Compare`, and screenshot `mp16-trashed-removal.png`. The file
-reads `Deleted`, and the panel says `This document is marked for deletion. Its content will not be published.`
+Open each open pull request's `Files changed`, where its only file is selected, and screenshot
+`mp16-trashed-removal.png`. The file reads `Deleted`, the panel says `This file is now in Trash.`, and there is no
+`Compare`.
 
 Pass when the draft's readable comparisons answer 200, both reads of the merged pull request exit 0 with
 `mergeResult: "removed"`, also after permanent deletion with `nodeId: null`, every comparison mode answers 409 for both
-open pull requests, the server log has no 500, and the screenshot shows the deletion note and no error.
+open pull requests, the server log has no 500, and the screenshot shows the Trash note, no `Compare` and no error.
 
 ### MP17. A repository that requires checks
 
@@ -1686,12 +1691,110 @@ Pass when every command exits as shown, O's panel names Regional notes with its 
 at both widths, the narrow page has no horizontal scroll, O's response holds the row without the Node ID, the Resource ID
 or any URL, and C's response holds the same row with the Node ID.
 
+### MP19. An open pull request whose file moves to Trash
+
+The run user O holds a Team Space with Sheets North and Summary on Trunk and makes a claimed agent A an Editor there.
+For an Issue assigned to A, A opens a pull request shared with the Space that edits both Sheets and marks it ready.
+O then moves Summary to Trash. Every reader still sees North, and Summary is noted as in Trash with no comparison. A's
+`pr_merge` is refused with `FILES_IN_TRASH` naming Summary. A, on its default connection, takes the way out the
+refusal names in two calls: it leaves Summary out with `pr_edit` and merges. North merges, and Summary stays in O's
+Trash Batch. MP19 uses one `principal`, which counts toward the 5 agents per hour.
+
+```bash
+R="$O/trashed-file"
+sheet() { jq -nc --arg w "$1" --arg u "$2" --arg c "const ws = univerAPI.getActiveWorkbook().getActiveSheet(); $3" '{worktree:$w,unit:$u,code:$c}'; }
+unit() { jq -r .unit.unitId "$EVIDENCE/mpt-$1.out"; }
+cell() { jq -r --arg r "$2" '.json.cells[] | select(.ref == $r) | .value' "$EVIDENCE/$1.out"; }
+$V cli mpt-repo repo create trashed-file --name "Trashed file" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mpt-repo.out")
+$V mcp mpt-seed pr_create "{\"repo\":\"$R\",\"title\":\"Seed\"}"
+W0=$(jq -r .id "$EVIDENCE/mpt-seed.out"); N0=$(jq -r .number "$EVIDENCE/mpt-seed.out")
+for name in North Summary; do
+  $V mcp "mpt-$name" unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"$name\"}"
+done
+$V mcp mpt-seed-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N0\"}"
+$V mcp mpt-seed-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N0\"}"
+$V principal trashed mpt-a
+A=$(jq -r .agent.username "$EVIDENCE/principal-trashed.json")
+$V mcp --as trashed mpt-claim claim '{}'
+```
+
+Open the `claimUrl` from `mpt-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+`mpt-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache. Then:
+
+```bash
+$V cli mpt-member repo member add "$A" --role editor -R "$R" --json
+$V cli mpt-issue issue create -R "$R" -t "Fill in North and Summary" -b "Put the North total in North and a title in Summary." -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mpt-issue.out")
+$V mcp --as trashed mpt-pr pr_create "$(jq -nc --arg r "$R" --argjson n "$N" '{repo:$r,title:"Fill in North and Summary",issue:$n,visibility:"space"}')"
+W=$(jq -r .id "$EVIDENCE/mpt-pr.out"); NP=$(jq -r .number "$EVIDENCE/mpt-pr.out")
+for name in North Summary; do
+  $V mcp --as trashed "mpt-add-$name" unit_add "{\"worktree\":\"$W\",\"resource\":\"$(jq -r .unit.resourceId "$EVIDENCE/mpt-$name.out")\"}"
+done
+$V mcp --as trashed mpt-edit-north execute "$(sheet "$W" "$(unit North)" 'ws.getRange("A1:B2").setValues([["Region","Total"],["North",40]]);')"
+$V mcp --as trashed mpt-edit-summary execute "$(sheet "$W" "$(unit Summary)" 'ws.getRange("A1").setValue("Q1 summary");')"
+$V mcp --as trashed mpt-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$NP\"}"
+$V cli mpt-trash space node trash "$(jq -r .unit.nodeId "$EVIDENCE/mpt-Summary.out")" --json
+$V mcp --as trashed mpt-view pr_view "{\"repo\":\"$R\",\"number\":\"$NP\"}"
+$V cli mpt-view-o pr view "$NP" -R "$R" --json capabilities,units
+for f in mpt-view mpt-view-o; do
+  jq -e '.capabilities.review and (.capabilities.merge | not) and ([.units[] | [.name, .change, .fileState]] == [["North","modified","live"],["Summary","modified","inTrash"]])' "$EVIDENCE/$f.out"
+done
+$V mcp --as trashed mpt-merge-refused pr_merge "{\"repo\":\"$R\",\"number\":\"$NP\"}"
+test $? -eq 1
+jq -e '.code == "FILES_IN_TRASH" and .detail.status == 409 and (.message | contains("Summary (in Trash)"))' "$EVIDENCE/mpt-merge-refused.out"
+$V cli mpt-merge-refused-o pr merge "$NP" -R "$R" --json state
+test $? -eq 1
+grep -q '^FILES_IN_TRASH: .*Summary (in Trash)' "$EVIDENCE/mpt-merge-refused-o.err"
+```
+
+In the run browser, signed in as O, at 1440 × 1500, open `$ORIGIN/spaces/$T/pulls/$NP` and screenshot
+`mp19-pr-overview.png`: there is no merge button, and the line under `Continue editing` reads `Some files it changes
+are in Trash or permanently deleted, so no one can merge those changes. Once its author leaves them out, the other
+files can merge.` Click `Files changed` and then Summary in the file list. The panel reads `This file is now in
+Trash.` and there is no `Compare`: screenshot `mp19-pr.png`. Click North: it offers `Compare`, and its comparison
+loads. At 390 × 1500, open Summary's URL again, check that `document.documentElement.scrollWidth` is 390, and
+screenshot `mp19-pr-narrow.png`, then the Overview as `mp19-pr-overview-narrow.png` with the same line. Then open
+`$ORIGIN/spaces/$T/issues/$N` at 1440 × 1500, choose `Acceptance`, and screenshot the pull request
+(`find text "Pull requests"` scrolled into view) as `mp19-panel.png`: it lists North with `Compare` and Summary with
+`This file is now in Trash.` and no `Compare`, and it does not read `You may not see this pull request's files.` At
+390 × 2300, reload, check the scroll width again, and screenshot `mp19-panel-narrow.png`.
+
+A leaves Summary out and merges on its default connection, whose tools include `pr_edit` and `pr_merge`:
+
+```bash
+$V mcp-tools --as trashed mpt-tools
+jq -e '[.[].name] | index("pr_edit") != null and index("pr_merge") != null' "$EVIDENCE/mpt-tools.out"
+$V mcp --as trashed mpt-leave-out pr_edit "{\"repo\":\"$R\",\"number\":\"$NP\",\"leave_out_trashed\":true}"
+jq -e '.state == "ready" and ([.units[] | [.name, .change]] == [["North","modified"],["Summary","deleted"]])' "$EVIDENCE/mpt-leave-out.out"
+$V mcp --as trashed mpt-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$NP\"}"
+jq -e '.state == "merged"' "$EVIDENCE/mpt-merge.out"
+$V cli mpt-after pr view "$NP" -R "$R" --json state,units
+jq -e '.state == "merged" and ([.units[] | [.name, .change, .mergeResult, .fileState]] == [["North","modified","merged","live"],["Summary","deleted","removed","inTrash"]])' "$EVIDENCE/mpt-after.out"
+$V cli mpt-north read A1:B2 --unit "$(unit North)" --trunk --json
+test "$(cell mpt-north B2)" = 40
+agent-browser eval "fetch('/api/spaces/$T/trash').then((r) => r.json()).then((j) => j.items.map((b) => b.id).join(' '))" | tee "$EVIDENCE/mpt-trash-after.txt"
+test "$(tr -d '"' < "$EVIDENCE/mpt-trash-after.txt")" = "$(jq -r .trashBatch.trashBatchId "$EVIDENCE/mpt-trash.out")"
+grep -c '"statusCode":500' "$EVIDENCE/../logs/server.log"
+test $? -eq 1
+```
+
+Reload the pull request page at 1440 × 1500, open Summary under `Files changed` and screenshot `mp19-merged.png`: it is
+merged, and Summary reads `This file is now in Trash.`
+
+Pass when every command exits as shown, both reads show A and O North and Summary with Summary `inTrash` and no merge,
+both refusals name `Summary (in Trash)`, the screenshots show the note, the merge line and no `Compare` for Summary at
+both widths with a scroll width of 390, A leaves Summary out and merges in two calls, North reads 40 on Trunk, Summary
+stays in Trash as the only batch, O's own, and the server log has no 500.
+
 ## Gotchas
 
 - The MCP-mode gotchas in [MCP gateway](mcp.md#gotchas) apply.
 - In MI16, a uvw daemon that already loaded a Doc can fail its first `inspect document --trunk` after a revert with
   `COLLABORATION_PROTOCOL_ERROR: Historical restore requires reloading the Unit and cannot be pulled in place`. The
   next call loads the Unit again and reads the restored content.
+- The `codex` story client cannot merge: its approval policy `never` refuses `pr_merge` before the call reaches the
+  gateway, and the model reads `MCP tool call requires approval`. MP19 therefore drives the agent with `$V mcp --as`.
 - MP12 measures the model as well as the product. Quote `transcript.jsonl` when it goes wrong, as
   [stories](../references/stories.md) says. A story's first `error` lines can be opencode's own `fetch` and
   `execute` wrapper, which never reach Workspace.

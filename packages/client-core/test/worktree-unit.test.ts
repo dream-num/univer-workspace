@@ -259,6 +259,77 @@ describe("Workspace Worktree model and workflow", () => {
     expect(paths).toEqual(["GET /api/worktrees/wt-1", "PATCH /api/worktrees/wt-1"]);
   });
 
+  it("leaves out only the files in Trash or deleted, and puts a ready pull request back to ready", async () => {
+    let state: WorkspaceWorktreeState = "ready";
+    const files = [
+      rawUnit({ unitId: "north", name: "North", change: "modified", fileState: "live" }),
+      rawUnit({ unitId: "summary", name: "Summary", change: "modified", fileState: "inTrash" }),
+      rawUnit({ unitId: "old", name: "Old", change: "modified", fileState: "deleted" }),
+      rawUnit({ unitId: "gone", name: "Gone", change: "deleted", fileState: "inTrash" }),
+    ];
+    const calls: string[] = [];
+    const feature = worktrees(async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "POST") {
+        calls.push(`${path} ${await request.text()}`);
+        if (path.endsWith("/reopen")) state = "draft";
+        if (path.endsWith("/ready")) state = "ready";
+        const removed = /\/units\/([^/]+)\/removal$/.exec(path)?.[1];
+        if (removed) files.find((file) => file.unitId === removed)!.change = "deleted";
+        // A lifecycle transition answers with the summary, which lists no files.
+        if (!removed) return Response.json({ worktree: rawWorktree("wt-1", state) });
+      }
+      return Response.json({ worktree: rawWorktree("wt-1", state, files) });
+    });
+
+    const result = await feature.leaveOutTrashed("wt-1");
+    expect(result.state).toBe("ready");
+    expect(result.units.map((unit) => [unit.name, unit.change])).toEqual([
+      ["North", "modified"], ["Summary", "deleted"], ["Old", "deleted"], ["Gone", "deleted"],
+    ]);
+    expect(calls).toEqual([
+      "/api/worktrees/wt-1/reopen ",
+      '/api/worktrees/wt-1/units/summary/removal {"removed":true}',
+      '/api/worktrees/wt-1/units/old/removal {"removed":true}',
+      "/api/worktrees/wt-1/ready ",
+    ]);
+
+    calls.length = 0;
+    await expect(feature.leaveOutTrashed("wt-1")).resolves.toMatchObject({ state: "ready" });
+    expect(calls, "nothing is left to leave out").toEqual([]);
+  });
+
+  it("puts a ready pull request back to ready when leaving a file out fails, and a retry finishes the rest", async () => {
+    let state: WorkspaceWorktreeState = "ready";
+    let failOld = true;
+    const files = [
+      rawUnit({ unitId: "summary", name: "Summary", change: "modified", fileState: "inTrash" }),
+      rawUnit({ unitId: "old", name: "Old", change: "modified", fileState: "deleted" }),
+    ];
+    const feature = worktrees(async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "POST") {
+        if (path.endsWith("/reopen")) state = "draft";
+        if (path.endsWith("/ready")) state = "ready";
+        const removed = /\/units\/([^/]+)\/removal$/.exec(path)?.[1];
+        if (removed === "old" && failOld) {
+          failOld = false;
+          return Response.json({ error: { code: "INTERNAL_ERROR", message: "Try again." } }, { status: 500 });
+        }
+        if (removed) files.find((file) => file.unitId === removed)!.change = "deleted";
+        if (!removed) return Response.json({ worktree: rawWorktree("wt-1", state) });
+      }
+      return Response.json({ worktree: rawWorktree("wt-1", state, files) });
+    });
+
+    await expect(feature.leaveOutTrashed("wt-1")).rejects.toThrow();
+    expect(state, "the failure leaves no stranded draft").toBe("ready");
+    const retried = await feature.leaveOutTrashed("wt-1");
+    expect([retried.state, ...retried.units.map((unit) => unit.change)]).toEqual(["ready", "deleted", "deleted"]);
+  });
+
   it.each([
     ["ready", "draft", "ready", false],
     ["reopen", "ready", "draft", false],

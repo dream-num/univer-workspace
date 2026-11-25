@@ -313,6 +313,7 @@ export function createWorkspaceApplication(
       : unavailableWorktreeBackend());
   const worktrees = createWorktreesModule({
     trash,
+    trashBatches: repositories.trash,
     repository: repositories.worktrees,
     access,
     backend: worktreeBackend,

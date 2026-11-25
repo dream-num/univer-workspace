@@ -1417,6 +1417,22 @@ describe("uvw pull request Issue links", () => {
     const view = createIssueCommand({ context: repoContext, feature: issues, origin: async () => ORIGIN });
     expect(await run(view, ["view", "3", "-R", "alice/docs"])).toContain("pull request: #12 Fix [draft]");
   });
+
+  it("leaves out a pull request's files in Trash with --leave-out-trashed, after any other change", async () => {
+    const { repoContext } = context();
+    const calls: string[] = [];
+    const worktrees = {
+      getByNumber: async () => worktree(),
+      update: async () => (calls.push("update"), worktree()),
+      leaveOutTrashed: async (id: string) => (calls.push(`leaveOutTrashed ${id}`), worktree({ state: "ready" })),
+    } as unknown as WorkspaceWorktreeFeature;
+    const spaces = { get: async () => teamSpace } as unknown as WorkspaceSpaceFeature;
+    const pr = createPullRequestCommands({ context: repoContext, origin: async () => ORIGIN, spaces, userId: async () => "u1", worktrees })[0]!;
+
+    expect(await run(pr, ["edit", "12", "-R", "alice/docs", "--leave-out-trashed"])).toContain("[ready]");
+    await run(pr, ["edit", "12", "-R", "alice/docs", "-t", "Fix", "--leave-out-trashed"]);
+    expect(calls).toEqual(["leaveOutTrashed wt-1", "update", "leaveOutTrashed wt-1"]);
+  });
 });
 
 describe("malformed Browser URL errors", () => {

@@ -20,6 +20,19 @@ export function onlyAuthorMerges(row: {
   );
 }
 
+/** A file with a null `fileState` is one its reader cannot see, so it is counted without its name or where it went. */
+export function filesInTrash(files: readonly { readonly name: string; readonly fileState: string | null }[]): ApplicationError {
+  const names = files.flatMap((file) =>
+    file.fileState === null ? [] : [`${file.name} (${file.fileState === "deleted" ? "permanently deleted" : "in Trash"})`]);
+  const unseen = files.length - names.length;
+  if (unseen) names.push(unseen === 1 ? "1 file you cannot open" : `${unseen} files you cannot open`);
+  return new ApplicationError(
+    "FILES_IN_TRASH",
+    409,
+    `No one can merge changes to files that are no longer in the repository: ${names.join(", ")}. Its author can leave them out of this pull request, where they stay as they are, and then merge the other files. A file in Trash can instead be restored from Trash first.`,
+  );
+}
+
 export function mergeNeedsEditAccess(): ApplicationError {
   return new ApplicationError(
     "FORBIDDEN",

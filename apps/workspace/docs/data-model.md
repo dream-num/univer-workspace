@@ -815,7 +815,7 @@ Unit 的 `mergeResult.trunkRevision`、Trunk 的 changeset 记录和修订、Wor
 | --- | --- | --- |
 | 改了 Trunk Unit | 提交一个只含 `RevertRevisionMutation` 的 Trunk changeset，恢复到这组第一次合入它之前的修订 | 那次合入之后有一个修订不是这组自己的合入：`blocked`，列出作者、次数和最后时间 |
 | 新增文件或页面 | 把 Node 移入 Trash | 已在 Trash，或撤回者不能移入 Trash |
-| 移除文件 | 恢复合入时的 Trash 批次 | 批次已被永久删除 |
+| 移除文件（合入前已在 Trash 里、只是被移出 pull request 的文件不算，合入没有移动它） | 恢复合入时的 Trash 批次 | 批次已被永久删除 |
 | 替换页面或文件 | 不做，列为 `unavailable` | 旧版本字节已删除 |
 
 能合入这个 pull request 的人（Issue 时是能验收它的人）可以撤回，还要能编辑每个要恢复的 Unit；恢复仍经过 Trunk 中间件，

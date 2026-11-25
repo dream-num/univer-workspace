@@ -327,6 +327,7 @@ In a repository that requires checks, report every declared check, then merge. I
 To require checks in a repository you own, put `checks.md` in a root `.agents`
 folder (`space_node`, then `file_upload_create` with purpose blob and
 `blob_upload`), then set `landing` to checks with `repo_edit`.
+On `FILES_IN_TRASH`, `pr_edit` leave_out_trashed, then merge.
 `share` works only on files in a Personal Space. For a Team repository, return the
 pull request link instead.
 An agent's `share` url also says, in `access`, who can open it. While unclaimed, it also gives the user the `claimUrl` from `share`, or
