@@ -651,7 +651,7 @@ Then open `$ORIGIN/nodes/$PN?view=immersive` in E's session, wait 6 s and save `
 Pass when `mrv-save` is a pending `replace` draft with `publishWhen: "merge"` and `mrv-e-review.png` lists
 `Budget.univer.html` by O as `Pending review`. `mrv-revise` is a new pending draft `D6`. In the kept tab the dialog
 still says `Merging will publish 1 page.`, and the merge ends with the toast
-`The pages in this task changed after you reviewed them. The list is refreshed. Review them again before you merge.`
+`The pages or files in this task changed after you reviewed them. The list is refreshed. Review them again before you merge.`
 and no published-page toast. The pull request is still `ready`, Trunk B2 and the page are as before, and `D6` is
 `pending`. After the refresh the `Pages` section lists one page, `Pending review`, and its preview shows
 `Budget changed after review` with the pull request's `North: 55`. The second merge says `Published 1 page`,
