@@ -514,6 +514,8 @@ says the repository declares no checks.
 
 ### MI15. Accept an Issue by deadline
 
+Run: agent.
+
 The run user O turns on a 72-hour acceptance deadline with `repo_edit`, opens three Issues assigned to O, submits two
 with uvw and sends the second back. One step stands in for three days: it moves those Issues' verdicts 73 hours back in
 the run's product SQLite, because the server takes the time only from its clock. It is setup, the only kind of database
@@ -627,7 +629,7 @@ PN=$(jq -r '.number' "$EVIDENCE/mcp-pr-create.out")
 W=$(jq -r '.id' "$EVIDENCE/mcp-pr-create.out")
 $V mcp mcp-pr-create-again pr_create "{\"repo\":\"$O/personal\",\"title\":\"Agent change\",\"body\":\"From MCP\",\"idempotency_key\":\"$KEY\"}"
 $V cli mcp-pr-create-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-create.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-create-cli.out")
 diff <(jq -S '.' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-again.out")
 jq -e --arg origin "$ORIGIN" --arg p "$P" '.url == "\($origin)/spaces/\($p)/pulls/\(.number)" and .state == "draft" and .kind == "user"' "$EVIDENCE/mcp-pr-create.out"
 jq -e --arg repo "$P" '.tool == "pr_create" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-create.event.json"
@@ -636,7 +638,7 @@ test $? -eq 1
 jq -e '.code == "CONFLICT" and (.message | contains("Idempotency-Key"))' "$EVIDENCE/mcp-pr-create-reused.out"
 ```
 
-Pass when every command exits 0 except the reused key, the CLI view equals the MCP result without `url`, the retry
+Pass when every command exits 0 except the reused key, the CLI view equals the MCP result without `url` and `checks`, whose MCP and uvw shapes differ by design (MP15), the retry
 with the same key returns an identical pull request (same `id` and `number`), the `url` is
 the Personal Space pull request address, and the event carries the resolved Space ID. Reusing the key with a different
 title exits 1 with `CONFLICT` and creates nothing.
@@ -646,7 +648,7 @@ title exits 1 with `CONFLICT` and creates nothing.
 ```bash
 $V mcp mcp-pr-view pr_view "{\"repo\":\"$O/personal\",\"number\":\"#$PN\"}"
 $V cli mcp-pr-view-cli pr view "#$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-view.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-view.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-view-cli.out")
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-view.event.json"
 ```
 
@@ -659,12 +661,12 @@ URL=$(jq -r '.url' "$EVIDENCE/mcp-pr-create.out")
 $V mcp mcp-pr-view-url pr_view "{\"repo\":\"$O/personal\",\"number\":\"$URL\"}"
 $V cli mcp-pr-view-url-cli pr view "$URL" --json
 diff <(jq -S '.' "$EVIDENCE/mcp-pr-view.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-url.out")
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-view-url.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-url-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-view-url.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-view-url-cli.out")
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-view-url.event.json"
 ```
 
 Pass when both exit 0, the URL result equals the number result, it equals the CLI view without
-`url`, and the event carries the Personal Space ID.
+`url` and `checks`, and the event carries the Personal Space ID.
 
 ### MP4. Pull request list
 
@@ -684,7 +686,7 @@ carries the Personal Space ID.
 ```bash
 $V mcp mcp-pr-edit pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"title\":\"Agent change v2\",\"body\":\"Edited\"}"
 $V cli mcp-pr-edit-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-edit.out") <(jq -S '.' "$EVIDENCE/mcp-pr-edit-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-edit.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-edit-cli.out")
 jq -e '.name == "Agent change v2" and .summary == "Edited"' "$EVIDENCE/mcp-pr-edit.out"
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-edit.event.json"
 $V mcp mcp-pr-edit-bad pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
@@ -700,11 +702,11 @@ Personal Space ID, and an edit without any change fails with `workspace-argument
 ```bash
 $V mcp mcp-pr-ready pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
 $V cli mcp-pr-ready-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-ready.out") <(jq -S '.' "$EVIDENCE/mcp-pr-ready-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-ready.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-ready-cli.out")
 jq -e '.state == "ready"' "$EVIDENCE/mcp-pr-ready.out"
 $V mcp mcp-pr-undo pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"undo\":true}"
 $V cli mcp-pr-undo-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-undo.out") <(jq -S '.' "$EVIDENCE/mcp-pr-undo-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-undo.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-undo-cli.out")
 jq -e '.state == "draft"' "$EVIDENCE/mcp-pr-undo.out"
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-undo.event.json"
 ```
