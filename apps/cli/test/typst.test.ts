@@ -156,6 +156,36 @@ describe("compile-typst command", () => {
     ).rejects.toThrow();
     await expect(readFile(diagnosticsPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it("prints the native diagnostic when the Typst compiler throws", async () => {
+    const diagnostics = [
+      {
+        sourcePath: "pages/cover.typ",
+        reason: "unclosed delimiter",
+        span: { line: 3, column: 7 },
+      },
+    ];
+    const execute = vi.fn(async () => {
+      throw Object.assign(new Error("DaC Typst semantic extraction failed."), {
+        name: "DaCTypstTranslationError",
+        code: "SAC_DAC_TRANSLATION_FAILED",
+        diagnostics,
+      });
+    });
+    const output: string[] = [];
+
+    await expect(
+      run(
+        createWorkspaceCompileTypstCommand({ execute }),
+        ["bundle", "--out", "unused.js", "--json"],
+        output,
+      ),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    expect(JSON.parse(output.join(""))).toMatchObject({
+      code: "SAC_DAC_TRANSLATION_FAILED",
+      detail: { diagnostics },
+    });
+  });
 });
 
 async function temporaryDirectory(): Promise<string> {

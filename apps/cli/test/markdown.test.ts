@@ -25,8 +25,11 @@ const compiled: WorkspaceCompileMarkdownResult = {
   sourceMap: [],
 };
 
-async function run(args: string[], execute = vi.fn(async () => compiled)): Promise<string> {
-  const output: string[] = [];
+async function run(
+  args: string[],
+  execute: () => Promise<WorkspaceCompileMarkdownResult> = vi.fn(async () => compiled),
+  output: string[] = [],
+): Promise<string> {
   const config = {
     writeOut: (value: string) => output.push(value),
     writeErr: (value: string) => output.push(value),
@@ -56,10 +59,10 @@ describe("compile-markdown command", () => {
   });
 
   it("reports a Traditional Doc created in a Worktree", async () => {
-    const execute = vi.fn(async (): Promise<WorkspaceCompileMarkdownResult> => ({
+    const execute = vi.fn(async () => ({
       ...compiled,
       committed: true,
-      flavor: "traditional",
+      flavor: "traditional" as const,
     }));
     const output = await run(
       ["report.md", "--apply", "--worktree", "wt", "--space", "reports"],
@@ -69,6 +72,32 @@ describe("compile-markdown command", () => {
     expect(execute).toHaveBeenCalledWith({
       file: "report.md",
       apply: { worktreeId: "wt", spaceId: "reports" },
+    });
+  });
+
+  it("prints structured diagnostics when the Markdown compiler throws", async () => {
+    const diagnostics = [
+      {
+        code: "MARKDOWN_SECTION_START",
+        message: "Unsupported section start.",
+        severity: "error",
+        source: { line: 4, column: 1 },
+      },
+    ];
+    const execute = vi.fn(async () => {
+      throw Object.assign(new Error("MARKDOWN_SECTION_START: Unsupported section start."), {
+        name: "DocMarkdownCompileError",
+        diagnostics,
+      });
+    });
+    const output: string[] = [];
+
+    await expect(
+      run(["report.md", "--out", "unused.js", "--json"], execute, output),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    expect(JSON.parse(output.join(""))).toMatchObject({
+      code: "workspace-markdown-invalid",
+      detail: { diagnostics },
     });
   });
 

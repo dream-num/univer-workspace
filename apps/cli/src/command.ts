@@ -36,20 +36,36 @@ export const EXIT_AUTHENTICATION_REQUIRED = 4;
 export async function executeCommand<Result>(
   command: Command,
   operation: () => Promise<Result>,
+  options?: JsonOption,
 ): Promise<Result> {
   try {
     return await operation();
   } catch (error) {
-    if (isCodedError(error)) {
+    if (!(error instanceof Error)) throw error;
+    const diagnostics =
+      options !== undefined && "diagnostics" in error && Array.isArray(error.diagnostics)
+        ? error.diagnostics
+        : undefined;
+    const code = isCodedError(error)
+      ? error.code
+      : diagnostics !== undefined && error.name === "DocMarkdownCompileError"
+        ? "workspace-markdown-invalid"
+        : undefined;
+    if (code !== undefined) {
       const detail =
-        error instanceof WorkspaceApplicationError && error.detail !== undefined
-          ? `\n${JSON.stringify(error.detail, null, 2)}`
-          : "";
-      const authenticationRequired = error.code === "workspace-authentication-required";
+        error instanceof WorkspaceApplicationError ? error.detail : diagnostics && { diagnostics };
+      const authenticationRequired = code === "workspace-authentication-required";
       const hint = authenticationRequired
-        ? "\nHint: run uvw auth login, or uvw auth guest to continue as a guest agent"
-        : "";
-      command.error(`${error.code}: ${error.message}${detail}${hint}`, {
+        ? "run uvw auth login, or uvw auth guest to continue as a guest agent"
+        : undefined;
+      let message = `${code}: ${error.message}`;
+      if (options?.json === true) {
+        message = JSON.stringify({ code, message: error.message, detail, hint });
+      } else {
+        if (detail !== undefined) message += `\n${JSON.stringify(detail, null, 2)}`;
+        if (hint !== undefined) message += `\nHint: ${hint}`;
+      }
+      command.error(message, {
         code: "workspace.command.failed",
         exitCode: authenticationRequired ? EXIT_AUTHENTICATION_REQUIRED : 1,
       });

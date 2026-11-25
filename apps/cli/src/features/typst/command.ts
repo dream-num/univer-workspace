@@ -32,7 +32,7 @@ export function createWorkspaceCompileTypstCommand(
     .option("--preview-dir <directory>")
     .option("--json")
     .action(async (bundle: string, options: CompileTypstOptions) => {
-      const result = await executeCommand(command, async () => {
+      const compile = async () => {
         validateOptions(options);
         return await feature.execute({
           bundlePath: bundle,
@@ -50,7 +50,8 @@ export function createWorkspaceCompileTypstCommand(
                 },
               }),
         });
-      });
+      };
+      const result = await executeCommand(command, compile, options);
       if (options.out !== undefined) await writeOutput(options.out, result.javascript);
       if (options.diagnosticsOut !== undefined) {
         await writeOutput(

@@ -46,7 +46,7 @@ export function createWorkspaceCompileMarkdownCommand(
     .option("--source-map-out <json>", "write the source map for subsequent block updates")
     .option("--json")
     .action(async (file: string, options: MarkdownOptions) => {
-      const result = await executeCommand(command, async () => {
+      const compile = async () => {
         const input: WorkspaceCompileMarkdownInput = {
           file,
           ...(options.title === undefined ? {} : { title: options.title }),
@@ -109,8 +109,11 @@ export function createWorkspaceCompileMarkdownCommand(
               : { idempotencyKey: options.idempotencyKey }),
           },
         });
-      });
+      };
+      const result = await executeCommand(command, compile, options);
       if (options.out !== undefined) await writeOutput(options.out, result.javascript);
+      const flavor =
+        "flavor" in result && result.flavor === "traditional" ? "traditional" : undefined;
       const sourceMap = result.materializedSourceMap ?? result.sourceMap;
       if (options.sourceMapOut !== undefined)
         await writeOutput(options.sourceMapOut, `${JSON.stringify(sourceMap, null, 2)}\n`);
@@ -120,7 +123,7 @@ export function createWorkspaceCompileMarkdownCommand(
         {
           committed: result.committed,
           targetUnitId: result.unit?.unitId ?? result.targetUnitId,
-          ...(result.flavor === undefined ? {} : { flavor: result.flavor }),
+          ...(flavor === undefined ? {} : { flavor }),
           diagnostics: result.diagnostics,
           sourceMap,
           ...(result.unit === undefined ? {} : { unit: result.unit }),
@@ -128,8 +131,8 @@ export function createWorkspaceCompileMarkdownCommand(
           ...(options.out === undefined ? {} : { out: options.out }),
         },
         result.committed
-          ? `Applied Markdown to ${result.flavor === "traditional" ? "Traditional" : "Modern"} Doc ${result.unit?.unitId ?? result.targetUnitId}${
-              options.sourceMapOut === undefined && result.flavor !== "traditional"
+          ? `Applied Markdown to ${flavor === "traditional" ? "Traditional" : "Modern"} Doc ${result.unit?.unitId ?? result.targetUnitId}${
+              options.sourceMapOut === undefined && flavor !== "traditional"
                 ? "; pass --source-map-out to keep the block map for later updates and exports"
                 : ""
             }`
