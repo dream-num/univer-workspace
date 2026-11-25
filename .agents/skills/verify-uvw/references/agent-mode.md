@@ -59,7 +59,7 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R9 A fork is the whole repository and one row | FK1 (same Nodes and IDs, nothing new upstream or in the agent's repositories; the row count is A4.1) |
 | R10 An unchanged file in a fork shows the upstream Trunk | MHV11, MHV14, FK2, FK3 |
 | R11 A Unit joins the fork's Worktree on its first write | FK3 (same Unit ID, baseline at the write), MHV11, MF10 |
-| R12 One open Worktree per fork | FK4 (two first writes at once), FK5 (a result per Unit) |
+| R12 One open Worktree per fork | FK4 (two first writes at once; the server test of A4.5 forces the race), FK5 (a result per Unit) |
 | R13 A fork stays usable after its Worktree ends | MHV11, MHV12, FK5, FK6 |
 | R14 A ready fork refuses writes | MHV11 (`FORK_WORKTREE_NOT_DRAFT`), FK5 (reopen, then write) |
 | R15 The way back is a Worktree Merge | MHV11, MF10 |
@@ -69,7 +69,7 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R19 The same for other Blobs | MF10, MF11 |
 | R20 Reading upstream content needs upstream read access | MH3, MP11, PR11 |
 | R21 Losing membership cuts the fork off | FK7 (a private upstream, then a public one with `proposals` `members`) |
-| R22 A fork stores no upstream data | FK1 (copies nothing), FK6 (deleting it changes nothing upstream) |
+| R22 A fork stores no upstream data | FK1 (copies nothing), FK6 (deleting it changes nothing upstream), both through what a user can see |
 | R23 An unclaimed agent's quota spans all its Spaces | CE2 |
 | R24 The server derives identity and state | No journey of its own |
 
@@ -116,7 +116,7 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 | A4.2 Browsing through a fork lists the whole repository | FK1 |
 | A4.3 A file someone changed on Trunk reads changed through the fork | FK2 |
 | A4.4 The first write adds one Unit with the Trunk revision of that moment | FK3 |
-| A4.5 Two first writes at once share one Worktree | FK4 |
+| A4.5 Two first writes at once share one Worktree | FK4 checks the end state. Only `apps/workspace/test/integration/forks.test.ts` forces the two writes to race |
 | A4.6 A ready fork refuses writes | MHV11, FK5 (reopen, then write) |
 | A4.7 After the merge the fork is clean and opens a new Worktree | MHV11, MHV12 |
 | A4.8 One Unit merges while another conflicts | MHV12 (a page), MF11 (a file); the discard and redo are not covered |
