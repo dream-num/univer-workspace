@@ -141,7 +141,7 @@ export function createCollaborationGateway(options: {
     await requireUnitAccess(access, context.userID, context.request.unitID);
     await next();
   });
-  // The SDK removes and recovers Units on these routes for whoever calls them; Trash does it through the product API.
+  // The SDK serves these routes to any signed-in caller; only the product removes Units, when it abandons a copy.
   service.use("deleteUnits", requireProductUnitLifecycle);
   service.use("recoverUnits", requireProductUnitLifecycle);
   service.use("submitChangeset", async (context, next) => {
