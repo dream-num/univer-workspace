@@ -22,8 +22,6 @@ import type {
 export interface AccessResolver {
   resolveResourceContent(userId: string, resourceId: string): Promise<ResourceContentAccess | null>;
   resolveUnitContent(userId: string, unitId: string): Promise<ResourceContentAccess | null>;
-  /** Whether the Unit's file exists outside Trash, whoever asks. */
-  unitOutsideTrash(unitId: string): Promise<boolean>;
   resolveOwnedResources(
     userId: string,
     resourceIds: readonly string[],
@@ -70,9 +68,6 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     },
     async resolveUnitContent(userId, unitId) {
       return contentAccess(userId, await repository.findResourceByUnitId(unitId));
-    },
-    unitOutsideTrash(unitId) {
-      return repository.unitOutsideTrash(unitId);
     },
     async resolveOwnedResources(userId, resourceIds) {
       const resources = new Map<string, ResourceAccess>();

@@ -78,7 +78,8 @@ keeps the journey `agent`. The helper runs blocks this way:
   editing, persistence after reload, trunk readback via uvw.
 - [Pull requests (Worktrees)](./pull-requests.md): uvw PR create, unit create, execute,
   ready, and merge, then the merged file seen from uvw and the browser; in a Team Space, a member with
-  read access proposes through uvw and MCP and an Editor merges.
+  read access proposes through uvw and MCP and an Editor merges. PR11 shows a former member nothing about where the
+  files they cannot open went.
 - [Page theme: Wiki and Repository modes](./page-theme-wiki-repository.md): Application settings
   entry in each mode, theme persistence, and the Repository directory, pull request, issue,
   recent and pages views.

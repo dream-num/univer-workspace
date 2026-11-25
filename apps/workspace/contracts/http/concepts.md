@@ -368,9 +368,12 @@ draft: an author without edit access to the Unit cannot change what a protection
 says whether its file is `live`, `inTrash` or `deleted`. No one opens or compares a file that is in Trash or deleted.
 Once a pull request is merged, such a file, whether its merge, a revert or a person moved it there, no longer decides
 whether a reader may Review: the reader needs to open only the files still live. A Unit whose file is in Trash keeps its
-`name` in the Team Worktree for the Space's Owner and Members, who could read it before, and anyone else who cannot open
-it reads `Removed resource`. After permanent deletion only a file the pull request created keeps its name for them, and
-every other one reads `Removed resource`. Visibility controls who may Review; Visibility never grants Resource Access.
+`name` for the Owner and Members of the Space that holds it, who could read it before, and anyone else who cannot open
+it reads `Removed resource`. A deleted file belongs to no Space: only a file a Team Worktree created keeps its name, for
+its Team Space's Owner and Members, and every other one reads `Removed resource`. A file the pull request removed reads `Removed resource` too for anyone else who
+cannot open it, wherever it is now. A reader who reads `Removed resource` because they cannot open the file gets a null
+`fileState`, `nodeId` and `freshness`, a `403` for its comparison and the same revert plan item whether the file is live,
+in Trash or deleted, so nothing tells them which. Visibility controls who may Review; Visibility never grants Resource Access.
 
 The Creator, and the human who claimed an agent creator, can discover, Review, mark
 ready, reopen and discard a private Team Worktree. The Team Space

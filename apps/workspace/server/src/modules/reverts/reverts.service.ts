@@ -27,6 +27,7 @@ const MAX_HEAD_RACES = 5;
 const MAX_FORCED = 200;
 
 const BLOCKED = "Edited on Trunk after this task's merge. Reverting would overwrite those edits.";
+const HIDDEN = "You cannot open this file.";
 
 /** A page published by one of the pull requests: a new page goes to Trash, a replaced one cannot come back. */
 export interface RevertedPage {
@@ -116,6 +117,7 @@ export function createRevertsModule(options: {
       univerType: unit.univerType, mergeRevisions: [...revisions].sort((a, b) => a - b),
       targetRevision: Math.min(...revisions) - 1,
     };
+    if (unit.hidden) return { ...item, state: "unavailable", reason: HIDDEN };
     const head = await backend.trunkRevision(unit.unitId, userId);
     if (head === null) return { ...item, state: "unavailable", reason: "This file no longer exists." };
     const content = await access.resolveResourceContent(userId, unit.resourceId);
@@ -141,6 +143,7 @@ export function createRevertsModule(options: {
 
   async function recoverItem(userId: string, unit: MergedUnit, batchId: string): Promise<RevertWork> {
     const item: RevertWork = { ...base(unit), action: "recover", state: "ready", reason: null, batchId };
+    if (unit.hidden) return { ...item, state: "unavailable", reason: HIDDEN };
     const batch = await options.trashBatches.findBatch(batchId);
     if (!batch) return { ...item, state: "unavailable", reason: "This file was deleted from Trash permanently." };
     if (batch.restored_at !== null) return { ...item, state: "done", reason: "This file is already back from Trash." };

@@ -162,7 +162,7 @@ export const unitSchema = z.object({
   fileState: z
     .enum(["live", "inTrash", "deleted"])
     .nullable()
-    .describe("Where the file is now. Null for a new file no merge has created yet. No one opens a file that is inTrash or deleted."),
+    .describe("Where the file is now. Null for a new file no merge has created yet, and for one you cannot open whose name reads Removed resource. No one opens a file that is inTrash or deleted."),
   freshness: z
     .object({
       addedAt: z.string(),

@@ -20,6 +20,8 @@ only read proposes a change the same way and leaves the merge to them.
   merge it once it is visible to the Space, in uvw and in the browser review panel.
 - `pr-merge-states` lets the merger rerun `pr merge` on a merged PR, and refuses a draft or an already merged PR
   for anyone else before calling the server.
+- `pr-name-hidden` tells a reader who cannot open a file of a merged pull request, and so reads its name as
+  `Removed resource`, nothing about whether that file is live, in Trash or deleted.
 
 ## How to get to it (user POV)
 
@@ -152,6 +154,84 @@ Mode: mcp.
 The run user's `pr merge` on that merged pull request prints
 `workspace-lifecycle-invalid: Pull request #<n> is already merged.` A draft PR's merge prints
 `workspace-lifecycle-invalid: Cannot merge pull request #<n> while it is draft.`
+
+### PR11. A former member learns nothing about the files they cannot see (`pr-name-hidden`)
+
+Run: helper.
+
+The run user O holds a Team Space with a Sheet Old on Trunk, and makes a person X its Admin. X opens a pull request
+that deletes Old and adds a Sheet Added, and merges it. O restores Old from Trash, moves Added to Trash and removes X.
+X still reads the merged pull request, as its author, and sees both names as `Removed resource`. Then O moves Old to
+Trash, deletes Added permanently and makes the Space public. X reads the same thing before and after, while O reads
+where each file is. X's password, cookie and uvw home stay in `$UNIVER_HOME/prh-*`, which `$V down` deletes:
+
+```bash
+RUN=${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN
+O=verify-$VERIFY_UVW_RUN; X=$O-former; R=$O/name-hidden
+OH=$UNIVER_HOME/prh-owner; XH=$UNIVER_HOME/prh-former
+mkdir -m 700 -p "$OH" "$XH"
+openssl rand -hex 16 > "$XH/pw"
+curl --fail-with-body -sS -c "$OH/cookies" -o /dev/null -X POST "$ORIGIN/api/auth/password/login" -H 'content-type: application/json' \
+  -d "{\"username\":\"$O\",\"password\":\"$(cat "$RUN/user.pw")\"}"
+curl --fail-with-body -sS -c "$XH/cookies" -o "$XH/register.json" -X POST "$ORIGIN/api/auth/password/register" -H 'content-type: application/json' \
+  -d "{\"username\":\"$X\",\"displayName\":\"Former member\",\"password\":\"$(cat "$XH/pw")\"}"
+ux(){ env UNIVER_HOME="$XH" node apps/cli/dist/main.js "$@"; }
+ux config set workspace.origin "$ORIGIN" > /dev/null
+ux auth login --username "$X" --password-stdin --json < "$XH/pw" > /dev/null
+$V cli prh-repo repo create name-hidden --name "Name hidden" --json id
+T=$(jq -r .id "$EVIDENCE/prh-repo.out")
+$V cli prh-seed pr create -R "$R" -t Seed --json id,number
+$V cli prh-old unit create --worktree "$(jq -r .id "$EVIDENCE/prh-seed.out")" --space "$R" --type sheet --name Old --json
+$V cli prh-seed-ready pr ready "$(jq -r .number "$EVIDENCE/prh-seed.out")" -R "$R" --json state
+$V cli prh-seed-merge pr merge "$(jq -r .number "$EVIDENCE/prh-seed.out")" -R "$R" --json state
+$V cli prh-member repo member add "$X" --role admin -R "$R" --json
+ux pr create -R "$R" -t "Replace Old" --json id,number > "$EVIDENCE/prh-pr.out"
+W=$(jq -r .id "$EVIDENCE/prh-pr.out"); N=$(jq -r .number "$EVIDENCE/prh-pr.out")
+ux unit add --worktree "$W" --resource "$(jq -r .unit.resourceId "$EVIDENCE/prh-old.out")" --json > "$EVIDENCE/prh-add-old.out"
+OLD=$(jq -r .unit.unitId "$EVIDENCE/prh-add-old.out")
+curl --fail-with-body -sS -b "$XH/cookies" -o /dev/null -X POST -H 'content-type: application/json' -d '{"removed":true}' \
+  "$ORIGIN/api/worktrees/$W/units/$OLD/removal"
+ux unit create --worktree "$W" --space "$R" --type sheet --name Added --json > "$EVIDENCE/prh-added.out"
+ADDED=$(jq -r .unit.unitId "$EVIDENCE/prh-added.out")
+ux pr ready "$N" -R "$R" --json state > /dev/null
+ux pr merge "$N" -R "$R" --json state > "$EVIDENCE/prh-merge.out"
+jq -e '.state == "merged"' "$EVIDENCE/prh-merge.out"
+batch() { curl --fail-with-body -sS -b "$OH/cookies" "$ORIGIN/api/spaces/$T/trash" | jq -r --arg n "$1" '.items[] | select(.root.name == $n) | .id'; }
+curl --fail-with-body -sS -b "$OH/cookies" -o /dev/null -X POST "$ORIGIN/api/trash-batches/$(batch Old)/restore"
+$V cli prh-trash-added space node trash "$(jq -r .unit.nodeId "$EVIDENCE/prh-added.out")" --json
+$V cli prh-remove repo member remove "$X" -R "$R" --json
+observe() {
+  curl -sS -b "$1/cookies" "$ORIGIN/api/worktrees/$W" > "$EVIDENCE/prh-$2-pr.json"
+  curl -sS -b "$1/cookies" "$ORIGIN/api/worktrees/$W/revert" > "$EVIDENCE/prh-$2-plan.json"
+  for u in "$OLD" "$ADDED"; do
+    curl -sS -b "$1/cookies" -o /dev/null -w '%{http_code} ' "$ORIGIN/universer-api/worktrees/$W/units/$u/comparison"
+  done > "$EVIDENCE/prh-$2-compare.txt"
+  jq -S '[.worktree.units[] | {name, nodeId, freshness, fileState}]' "$EVIDENCE/prh-$2-pr.json" > "$EVIDENCE/prh-$2-units.json"
+  jq -S '[.items[] | {action, state, name, nodeId, reason}]' "$EVIDENCE/prh-$2-plan.json" > "$EVIDENCE/prh-$2-items.json"
+}
+observe "$XH" former-1
+observe "$OH" owner-1
+ux pr view "$W" --json units > "$EVIDENCE/prh-former-1-cli.out"
+jq -e '.worktree.capabilities.review and ([.worktree.units[] | [.name, .nodeId, .freshness, .fileState]] == [["Removed resource", null, null, null], ["Removed resource", null, null, null]])' "$EVIDENCE/prh-former-1-pr.json"
+test "$(cat "$EVIDENCE/prh-former-1-compare.txt")" = "403 403 "
+jq -e '[.[] | [.state, .nodeId]] == [["unavailable", null], ["unavailable", null]]' "$EVIDENCE/prh-former-1-items.json"
+jq -e '[.units[] | [.name, .fileState]] == [["Removed resource", null], ["Removed resource", null]]' "$EVIDENCE/prh-former-1-cli.out"
+jq -e '[.worktree.units[] | [.name, .fileState]] == [["Old", "live"], ["Added", "inTrash"]]' "$EVIDENCE/prh-owner-1-pr.json"
+test "$(cut -d' ' -f2 "$EVIDENCE/prh-owner-1-compare.txt")" = 409
+$V cli prh-trash-old space node trash "$(jq -r .unit.nodeId "$EVIDENCE/prh-old.out")" --json
+curl --fail-with-body -sS -b "$OH/cookies" -o /dev/null -X DELETE "$ORIGIN/api/trash-batches/$(batch Added)"
+$V cli prh-public repo edit "$R" --visibility public --json publicRead
+observe "$XH" former-2
+observe "$OH" owner-2
+for f in units.json items.json compare.txt; do cmp "$EVIDENCE/prh-former-1-$f" "$EVIDENCE/prh-former-2-$f"; done
+jq -e '[.worktree.units[] | [.name, .fileState]] == [["Old", "inTrash"], ["Added", "deleted"]]' "$EVIDENCE/prh-owner-2-pr.json"
+test "$(cat "$EVIDENCE/prh-owner-2-compare.txt")" = "409 409 "
+```
+
+Pass when X reads both files as `Removed resource` with a null `nodeId`, `freshness` and `fileState` in HTTP and
+`uvw pr view`, gets `403` for both comparisons and two `unavailable` revert items, and reads byte-identical files,
+statuses and revert items once Old is in Trash, Added is deleted and the Space is public, while O reads Old `live`
+and Added `inTrash` with a `409` comparison, then Old `inTrash` and Added `deleted` with `409` for both.
 
 ## Gotchas
 

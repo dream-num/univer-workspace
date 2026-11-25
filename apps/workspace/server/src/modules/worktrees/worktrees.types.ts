@@ -249,6 +249,8 @@ export interface MergedUnit {
   readonly name: string;
   readonly unitType: UnitType;
   readonly univerType: UniverType;
+  /** The reader cannot see this file's name, nor whether it is live, in Trash or deleted. */
+  readonly hidden: boolean;
   /** modified: the merge wrote `trunkRevision`. added: the merge created the file. removed: it went to Trash in `removalBatchId`. */
   readonly change:
     | { readonly kind: "modified"; readonly trunkRevision: number }

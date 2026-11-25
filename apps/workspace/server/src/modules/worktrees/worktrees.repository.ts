@@ -57,6 +57,7 @@ export interface WorktreeUnitRow {
   readonly added_at: number;
   readonly existing_name: string | null;
   readonly existing_trash_batch_id: string | null;
+  readonly existing_space_id: string | null;
   readonly existing_unit_type: UnitType | null;
   readonly target_space_id: string | null;
   readonly target_parent_node_id: string | null;
