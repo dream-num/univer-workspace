@@ -4,6 +4,7 @@ import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univ
 import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
 import { createDefaultBaseTableSnapshot } from "@univerjs-pro/bases";
 import { RevertRevisionMutation } from "@univerjs-pro/collaboration";
+import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { Readable } from "node:stream";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -30,6 +31,8 @@ import {
 } from "../support/sqlite/test-application.js";
 
 import { httpRequestDurationSeconds } from "../../server/src/middleware/metrics.js";
+import { ApplicationError } from "../../server/src/middleware/errors.js";
+import type { CopyPayload } from "../../server/src/modules/copies/copies.types.js";
 
 const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
@@ -2457,6 +2460,32 @@ describe("content permission integration", () => {
       expect(Object.values(merged.left.unitData.sheets as Record<string, { cellData: Record<number, Record<number, { v: unknown }>> }>)[0]?.cellData[0]?.[0]?.v)
         .toBe("landed");
     });
+  });
+
+  it("removes the Unit of a copy it abandons through the product API, while a client still cannot", async () => {
+    const f = await fixture();
+    vi.spyOn(f.application.repositories.copies, "complete")
+      .mockRejectedValueOnce(new ApplicationError("CONFLICT", 409, "The copy cannot finish."));
+    const operationId = randomUUID();
+    expect(await f.application.copies.copy(interactivePrincipal(f.owner.id), f.node.id, operationId, { target: { kind: "personalSpace" } }))
+      .toMatchObject({ body: { operation: { state: "failed" } } });
+    const { content } = JSON.parse((await f.application.repositories.copies.find(operationId))!.payload_json) as CopyPayload;
+    if (content.kind !== "univer") throw new Error("Expected a Unit copy");
+    const deletion = (unitId: string) => {
+      const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
+      try {
+        return database.prepare("SELECT deleted_status FROM collaboration_units WHERE unit_id = ?").get(unitId)?.deleted_status;
+      } finally {
+        database.close();
+      }
+    };
+    expect(deletion(content.unitId)).toBe("hard");
+
+    const removed = await fetch(`${f.origin}/universer-api/snapshot/-/units?unitIds=${f.unitId}&hardDelete=true`, {
+      method: "DELETE", headers: { cookie: f.owner.cookie },
+    });
+    expect(((await removed.json()) as { error: { code: number } }).error.code).toBe(ErrorCode.PERMISSION_DENIED);
+    expect(deletion(f.unitId)).toBeNull();
   });
 
   describe("Trunk restore", () => {
