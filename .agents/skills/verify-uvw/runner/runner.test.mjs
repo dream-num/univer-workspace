@@ -8,10 +8,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
-import { loadFeatures, parseFeature, plan } from './journeys.mjs';
+import { loadFeatures, parseFeature, plan } from '../bin/journeys.mjs';
 import { exitCode, expand, findKey, finish, parseArgs, readTranscript, serial, summary } from './runner.mjs';
 
-const transcript = readFileSync(fileURLToPath(new URL('../fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
+const transcript = readFileSync(fileURLToPath(new URL('./fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
 const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.map((j) => `### ${j}\n`).join('\n')}`;
 
 test('a spec is a feature, or a feature with journey IDs or mode names', () => {
@@ -88,12 +88,12 @@ test('runner --check names the key source and fingerprint, proves the key with o
     mkdirSync(bin, { recursive: true });
     mkdirSync(join(skill, 'features'));
     mkdirSync(join(skill, 'runner'));
-    copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(bin, 'runner.mjs'));
-    for (const file of ['journeys.mjs', 'secrets.mjs']) copyFileSync(fileURLToPath(new URL(file, import.meta.url)), join(bin, file));
+    copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(skill, 'runner/runner.mjs'));
+    for (const file of ['journeys.mjs', 'secrets.mjs']) copyFileSync(fileURLToPath(new URL(`../bin/${file}`, import.meta.url)), join(bin, file));
     writeFileSync(join(skill, 'runner/Dockerfile'), `FROM scratch\nENV ANTHROPIC_BASE_URL=http://127.0.0.1:${endpoint.address().port} \\\n    ANTHROPIC_MODEL='stub-model[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=other-model\n`);
     writeFileSync(join(skill, 'features/whole.md'), recipe('Whole feature (host only)', 'W1. One'));
     writeFileSync(join(skill, 'features/plain.md'), recipe('Plain feature', 'P1. One', 'P2. Two (host only)', 'P3. Three (host only)'));
-    const node = (args, env) => promisify(execFile)(process.execPath, [join(bin, 'runner.mjs'), ...args],
+    const node = (args, env) => promisify(execFile)(process.execPath, [join(skill, 'runner/runner.mjs'), ...args],
       { env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } })
       .then((r) => ({ status: 0, ...r }), (e) => ({ status: e.code, stdout: e.stdout, stderr: e.stderr }));
     const check = (env, ...tasks) => node(['--check', ...tasks], env);
@@ -125,7 +125,7 @@ test('runner --check names the key source and fingerprint, proves the key with o
 
     const batch = await node(['plain:P1'], { DEEPSEEK_API_KEY: 'bad-key', VERIFY_UVW_ROOT: join(root, 'runs') });
     assert.equal(batch.status, 5, 'a batch probes the key before it asks Docker for anything');
-    assert.match(batch.stderr, /^verify-uvw runner: DEEPSEEK_API_KEY from environment \(sha256 [0-9a-f]{8}\): stub-model at \S+ answered HTTP 401/m);
+    assert.match(batch.stderr, /^verify runner: DEEPSEEK_API_KEY from environment \(sha256 [0-9a-f]{8}\): stub-model at \S+ answered HTTP 401/m);
 
     const tasks = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'whole', 'plain:P1');
     assert.match(tasks.stdout, /^host {2}whole is marked \(host only\); run it in host mode$/m);

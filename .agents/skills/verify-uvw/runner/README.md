@@ -1,6 +1,6 @@
 # Verify runner
 
-`$V runner` runs verify-uvw journeys in disposable Linux containers. Each task goes to a new Claude Code session
+The runner runs verify-uvw journeys in disposable Linux containers. Each task goes to a new Claude Code session
 in a container, and no instance of yours starts. The runner is opt-in. Host mode in [SKILL.md](../SKILL.md) is
 the default. Use the runner only when the user asks for it, for example with `mode:runner`, or when their own
 configuration outside this repository says so.
@@ -16,8 +16,9 @@ The runner costs more than a host run:
 ## Check before you start
 
 Pick the features and journeys from [the index](../features/README.md). Behavior no journey covers needs host
-mode, because the runner follows recipes and does not design checks. Then run
-`$V runner --check <feature[:ID,ID]>...` with the rest and act on what it prints:
+mode, because the runner follows recipes and does not design checks. From the repository root, set
+`R="node .agents/skills/verify-uvw/runner/runner.mjs"`, then run `$R --check <feature[:ID,ID]>...` with the rest
+and act on what it prints:
 
 - A `host` line means that feature or those journeys are marked `(host only)`. The runner skips them. Tell the
   user, then run them in host mode as [SKILL.md](../SKILL.md) describes.
@@ -32,10 +33,10 @@ mode, because the runner follows recipes and does not design checks. Then run
 A spec is a feature, or a feature with some of its journeys or modes. Each mode it selects becomes one task:
 
 ```bash
-$V runner link-sharing:LS1,LS2,LS3,LS4 auth   # two tasks
-$V runner sheet-lens pull-requests:mcp         # four tasks: sheet-lens, sheet-lens-mcp, sheet-lens-mcp-same-origin, pull-requests
-$V runner --jobs 3 --keep issues auth create-document
-$V runner --no-model mcp-space-files           # only the helper's journeys, no key
+$R link-sharing:LS1,LS2,LS3,LS4 auth   # two tasks
+$R sheet-lens pull-requests:mcp         # four tasks: sheet-lens, sheet-lens-mcp, sheet-lens-mcp-same-origin, pull-requests
+$R --jobs 3 --keep issues auth create-document
+$R --no-model mcp-space-files           # only the helper's journeys, no key
 ```
 
 A task's id is its feature. When a spec spans modes, each mode but `default` adds `-<mode>`, and a repeat adds `-2`

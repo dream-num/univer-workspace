@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Runs verify-uvw journeys in disposable Linux containers, each task driven by Claude Code on deepseek-flash, or with
 // --no-model only the journeys the helper runs.
-// Usage: verify-uvw runner [--no-model] [--jobs N] [--keep] <feature[:ID|mode,...]>... | verify-uvw runner --check [feature[:ID|mode,...]...]
+// Usage: runner.mjs [--no-model] [--jobs N] [--keep] <feature[:ID|mode,...]>... | runner.mjs --check [feature[:ID|mode,...]...]
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NEEDS, fold, loadFeatures, plan, readRuns } from './journeys.mjs';
+import { NEEDS, fold, loadFeatures, plan, readRuns } from '../bin/journeys.mjs';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
 const repo = join(skill, '../../..');
@@ -16,7 +16,7 @@ const MAX_JOBS = 3;
 const FAILED = new Set(['timeout', 'infra-error', 'secret-leak']);
 const VERDICTS = ['PASS', 'FAIL', 'DRIFT', 'BLOCKED', 'MISSING'];
 const OUTCOMES = ['held', 'broke', 'blocked', 'none'];
-const USAGE = 'usage: verify-uvw runner [--no-model] [--jobs 1|2|3] [--keep] <feature[:ID|mode,...]>... | verify-uvw runner --check [feature[:ID|mode,...]...]';
+const USAGE = 'usage: node .agents/skills/verify-uvw/runner/runner.mjs [--no-model] [--jobs 1|2|3] [--keep] <feature[:ID|mode,...]>... | node .agents/skills/verify-uvw/runner/runner.mjs --check [feature[:ID|mode,...]...]';
 
 export function parseArgs(argv) {
   let jobs, keep = false, check = false, model = true;
@@ -118,7 +118,7 @@ export function readTranscript(text, runsDir) {
   };
 }
 
-const fail = (code, message) => { console.error(`verify-uvw runner: ${message}`); process.exit(code); };
+const fail = (code, message) => { console.error(`verify runner: ${message}`); process.exit(code); };
 const capture = (cmd, args, options = {}) => spawnSync(cmd, args, { encoding: 'utf8', ...options });
 const git = (args, env) => {
   const r = capture('git', ['-C', repo, ...args], { env });
@@ -272,7 +272,7 @@ async function main() {
   if (info.status !== 0) fail(3, 'docker is not available; run the journeys in host mode (SKILL.md)');
 
   if (!queue.length) {
-    console.error(`verify-uvw runner: every task runs only on the host:\n${host.map((h) => `  $V up --for ${[h.feature, ...h.selectors].join(' ')}`).join('\n')}`);
+    console.error(`verify runner: every task runs only on the host:\n${host.map((h) => `  $V up --for ${[h.feature, ...h.selectors].join(' ')}`).join('\n')}`);
     process.exit(3);
   }
   const jobs = Math.min(options.jobs, queue.length);

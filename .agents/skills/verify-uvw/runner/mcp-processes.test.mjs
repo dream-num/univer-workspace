@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { freePorts } from './mcp-processes.mjs';
 
 const script = fileURLToPath(new URL('./mcp-processes.mjs', import.meta.url));
-const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
+const helper = fileURLToPath(new URL('../bin/verify-uvw', import.meta.url));
 const compose = readFileSync(new URL('../../../../apps/mcp/docker/compose.verify.yml', import.meta.url), 'utf8');
 const dockerfile = readFileSync(new URL('../../../../apps/mcp/Dockerfile', import.meta.url), 'utf8');
 const browser = { UNIVER_RENDER_BROWSER: '/usr/bin/chromium' };
@@ -143,9 +143,9 @@ if (process.env.MCP_ROLE === 'renderer') setTimeout(() => console.log('Renderer 
 
 test('verify-uvw starts, restarts and stops dist roles as whole process groups', async () => {
   const root = mkdtempSync(join(tmpdir(), 'verify-uvw-dist-'));
-  const bin = join(root, 'repo/.agents/skills/verify-uvw/bin'), tools = join(root, 'tools');
-  for (const dir of [bin, join(root, 'repo/apps/mcp/dist'), tools]) mkdirSync(dir, { recursive: true });
-  copyFileSync(script, join(bin, 'mcp-processes.mjs'));
+  const bin = join(root, 'repo/.agents/skills/verify-uvw/bin'), runner = join(root, 'repo/.agents/skills/verify-uvw/runner'), tools = join(root, 'tools');
+  for (const dir of [bin, runner, join(root, 'repo/apps/mcp/dist'), tools]) mkdirSync(dir, { recursive: true });
+  copyFileSync(script, join(runner, 'mcp-processes.mjs'));
   copyFileSync(helper, join(bin, 'verify-uvw'));
   writeFileSync(join(root, 'repo/apps/mcp/dist/main.js'), fakeRole);
   writeFileSync(join(tools, 'agent-browser'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
@@ -162,7 +162,7 @@ test('verify-uvw starts, restarts and stops dist roles as whole process groups',
     return Object.fromEntries(lines.map((line) => [line.role, line]));
   };
   try {
-    assert.equal(processes(['start', run], {}, join(bin, 'mcp-processes.mjs')).status, 0);
+    assert.equal(processes(['start', run], {}, join(runner, 'mcp-processes.mjs')).status, 0);
     const first = { gateway: pid('gateway'), executor: pid('executor'), renderer: pid('renderer') };
     assert(Object.values(first).every(alive), 'every role runs');
     assert.equal((await fetch(`http://127.0.0.1:${gatewayPort}/healthz`)).status, 200);
@@ -192,7 +192,7 @@ test('verify-uvw starts, restarts and stops dist roles as whole process groups',
     assert(live.every((leader) => !alive(-leader)), 'down stops every role');
     assert(['gateway', 'executor', 'renderer'].every((role) => pid(role) === undefined) && !existsSync(join(run, 'staging')));
   } finally {
-    processes(['stop', run], {}, join(bin, 'mcp-processes.mjs'));
+    processes(['stop', run], {}, join(runner, 'mcp-processes.mjs'));
     rmSync(root, { recursive: true, force: true });
   }
 });

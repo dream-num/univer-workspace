@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One task inside a verify runner container, in the two phases bin/runner.mjs runs through docker exec. prepare writes
+# One task inside a verify runner container, in the two phases runner.mjs runs through docker exec. prepare writes
 # the brief and starts the instance in the journeys' mode; run runs the helper's journeys and the verifier's session
 # unless --no-model, then per run secret-check, down, copy.
 # Usage: task.sh prepare|run [--no-model] <task-id> <feature> [journey-id|mode...]
@@ -18,7 +18,7 @@ if [[ "$phase" == prepare ]]; then
   mkdir -p "$out/runs"
   rm -rf /tmp/verify-uvw /tmp/verify-uvw-*
   $V brief --own "$task" "$feature" "$@" >"$out/brief.txt" || exit 3
-  # A failed prepare skips the verifier; bin/runner.mjs reports the task as infra-error with the FAIL lines of prepare.log.
+  # A failed prepare skips the verifier; runner.mjs reports the task as infra-error with the FAIL lines of prepare.log.
   # The first page load starts Chromium and makes Vite compile the app. Under host load that outran agent-browser's
   # fixed 25 s load timeout and broke the first browser check of a journey, so prepare loads it, retrying: Vite keeps
   # compiling after a timed-out load, and open is safe to repeat.

@@ -17,7 +17,7 @@ const docker = (args, input) => capture('docker', args, input);
 const compose = (args, input) => docker(['compose', '-p', project, '-f', join(repo, 'apps/mcp/docker/compose.verify.yml'), ...args], input);
 const node = (service, code, input) => from === 'image'
   ? compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input)
-  : capture(process.execPath, [join(repo, '.agents/skills/verify-uvw/bin/mcp-processes.mjs'), 'exec', run, service, '--', 'node', '--input-type=module', '-e', code], input);
+  : capture(process.execPath, [join(repo, '.agents/skills/verify-uvw/runner/mcp-processes.mjs'), 'exec', run, service, '--', 'node', '--input-type=module', '-e', code], input);
 // Under dist the role log files keep every process a role ran, so the scans cover restarted roles too.
 const logs = services => from === 'image'
   ? compose(['logs', '--no-color', '--no-log-prefix', ...services])

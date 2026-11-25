@@ -57,7 +57,7 @@ Pass when:
 - In the runner (`dist` start mode) there is no container boundary. The doctor prints the renderer's isolation and
   network checks as `skip`, and the `docker exec` reachability checks above do not apply; they run on the host.
   Kill only the renderer's Chromium, a child of the renderer process:
-  `pkill -P "$(node .agents/skills/verify-uvw/bin/mcp-processes.mjs pid "$RUN" renderer)" chromium`. A plain
+  `pkill -P "$(node .agents/skills/verify-uvw/runner/mcp-processes.mjs pid "$RUN" renderer)" chromium`. A plain
   `pkill chromium` also kills the run's agent-browser.
 
 ### MR10. screenshot tool

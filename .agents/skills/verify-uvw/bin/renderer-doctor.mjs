@@ -17,7 +17,7 @@ const docker = (args, input, timeout) => capture('docker', args, input, timeout)
 const compose = (args, input, timeout) => docker(['compose', '-p', project, '-f', join(repo, 'apps/mcp/docker/compose.verify.yml'), ...args], input, timeout);
 const node = (service, code, input, timeout) => from === 'image'
   ? compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input, timeout)
-  : capture(process.execPath, [join(repo, '.agents/skills/verify-uvw/bin/mcp-processes.mjs'), 'exec', run, service, '--', 'node', '--input-type=module', '-e', code], input, timeout);
+  : capture(process.execPath, [join(repo, '.agents/skills/verify-uvw/runner/mcp-processes.mjs'), 'exec', run, service, '--', 'node', '--input-type=module', '-e', code], input, timeout);
 const skip = check => console.log(`skip  ${check}: dist start mode has no container`);
 // Prints "reached <status>" or "blocked" so the host can assert on the outcome, whatever the container's fetch error looks like.
 const probe = (service, url) => node(service, `
