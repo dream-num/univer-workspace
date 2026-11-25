@@ -146,7 +146,7 @@ $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","fork_create","fork_list","fork_view","fork_delete","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","issue_verdict","pr_list","pr_view","pr_create","pr_edit","pr_ready","pr_check","pr_merge","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
-ADMIN='["repo_create","repo_edit","repo_member_list","repo_member_write","label_list","label_write","space_node","pr_discard","resources_registries","resources_find","resources_export"]'
+ADMIN='["repo_create","repo_edit","repo_member_list","repo_member_write","label_list","label_write","space_node","pr_discard","pr_revert","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
 jq -e --argjson want "$ADMIN" 'map(.name) == $want' "$EVIDENCE/mcp-tools-admin.out"
