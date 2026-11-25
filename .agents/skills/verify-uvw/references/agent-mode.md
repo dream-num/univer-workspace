@@ -16,7 +16,8 @@ journey covers yet.
 | [An agent's limits](../features/agent-mode-limits.md) | MP14, CE1, CE2, CE3 | mcp |
 | [Forks](../features/agent-mode-forks.md) | FK1-FK8 | mcp |
 | [Repositories an agent owns](../features/agent-mode-ownership.md) | AO1, AO2, AO3 | mcp |
-| [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10, then PR11 | mcp, then default |
+| [Trunk write guards](../features/agent-mode-trunk-guards.md) | TG1-TG4 | default |
+| [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10 and PR14, then PR11-PR13 | mcp, then default |
 | [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9 and MH1-MH5 | default, then mcp |
 | [HTML View drafts over MCP](../features/mcp-html-view.md) | MHV5-MHV16 | mcp |
 | [Files and Office exchange over MCP](../features/mcp-blobs-office.md) | MF10, MF11 | mcp |
@@ -50,11 +51,11 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R2c An unclaimed agent holds repositories but joins none | CE1, CE2 |
 | R2d The claimer owns what the agent holds | HO6 and MH3 in the agent's Personal Space, AO2 in its Team Spaces, AO3 when the agent stops. Expiry is not covered |
 | R3 The scope granted at the start counts | MA7 and MO2 without `worktree:merge`; MI13 and MP19 merge with the run user's PAT and no `toolsets` |
-| R4 Read access is enough to propose | PR4, PR5, PR6, MI12, MP13, MP15, MHV11, MF10 |
+| R4 Read access is enough to propose | PR4, PR5, PR6, MI12, MP13, MP15, MHV11, MF10. TG1: a Viewer agent has no other route onto Trunk |
 | R5 The upstream role alone decides the landing | PR7, PR8, PR9, PR10, MP12, MP15, MI13, MHV8, MHV10, MHV11, MF10 |
 | R6 `capabilities` tells an agent whether it may merge | MP11, MP17, MP19, MHV13 |
 | R7 Author and merger are recorded | PR7, MP12 |
-| R8 An owner or admin discards any Worktree | Not covered |
+| R8 An owner or admin discards any Worktree | PR13 (an Admin discards an agent's pull request) |
 | R9 A fork is the whole repository and one row | FK1 (same Nodes and IDs, nothing new upstream or in the agent's repositories; the row count is A4.1) |
 | R10 An unchanged file in a fork shows the upstream Trunk | MHV11, MHV14, FK2, FK3 |
 | R11 A Unit joins the fork's Worktree on its first write | FK3 (same Unit ID, baseline at the write), MHV11, MF10 |
@@ -62,7 +63,7 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R13 A fork stays usable after its Worktree ends | MHV11, MHV12, FK5, FK6 |
 | R14 A ready fork refuses writes | MHV11 (`FORK_WORKTREE_NOT_DRAFT`), FK5 (reopen, then write) |
 | R15 The way back is a Worktree Merge | MHV11, MF10 |
-| R16 `freshness` and `stale` | Not covered |
+| R16 `freshness` and `stale` | PR14 (`behind`, then `stale` past 100 revisions and past 7 days) |
 | R17 Verify on the merge preview | Not covered for agents |
 | R18 A page changed upstream since its draft is not overwritten | MHV9, MHV12 |
 | R19 The same for other Blobs | MF10, MF11 |
@@ -98,8 +99,10 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 | A2.4 An Editor merges it; author and merger | PR7, MP15 |
 | A2.5 A new file in a proposal lands | PR4, PR7 |
 | A2.6 An Editor agent merges alone | MHV10, MI13 (added as an Editor, not raised from Viewer) |
-| A2.7 A Viewer's direct Trunk writes are refused | PR6 (a person, over uvw and MCP) |
+| A2.7 A Viewer's direct Trunk writes are refused | PR6 (a person, over uvw and MCP), TG1 (an agent, on the realtime route and in Trash) |
 | A2.8 A non-member sees no Worktree | MH3, MP11 |
+| A2.9 An admin's discard unblocks a permanent delete | PR13 |
+| A2.10 Distance behind Trunk, and `stale` past the threshold | PR14 (by distance; by age, with the join time moved back as setup) |
 | A2.12 Who merges their own Worktree today still does | PR1, PR9, HO2 |
 | A3.1 An agent creates a repository and works in it alone | MP11, MP18 (the repository stays private) |
 | A3.2 Another agent as admin of an agent's repository, and a person as Editor | AO1 |
@@ -130,6 +133,10 @@ A0.x, A2.11, A4.1, A4.12, A6.7 and A6.8 are measurements, test suites or migrati
 
 | Change | Journeys |
 | --- | --- |
+| #570 A pull request its author merged alone is visible to the Space | PR12 |
+| #581 A restore from history needs Edit on every protected range | TG4 |
+| #589 An agent that lands by checks changes Trunk only by a merge | MP17, MP18; TG3 on the realtime route and in Trash |
+| #590 The SDK's Unit remove and recover routes answer only the product | TG2 |
 | #603 A merged pull request stays reviewable after a file moves to Trash | MP16, MI13, MI16 |
 | #608 An agent declares checks on the default connection | MP18, MP17 |
 | #609 An acceptor reads a summary of the agent's personal shares | MI17, MI13 |
@@ -139,12 +146,8 @@ A0.x, A2.11, A4.1, A4.12, A6.7 and A6.8 are measurements, test suites or migrati
 
 ## Not covered yet
 
-- The Trunk write guards of #581 and #590.
 - An unclaimed agent's expiry (A3.9, R2d): 30 days without use cannot pass in a run.
 - The agent budget's 50 merges in 24 hours: MP14 counts one merge.
-- #570, the visibility of a pull request its author merged.
-- R8, an admin's discard that unblocks a permanent delete (A2.9).
-- R16 `behind` and `stale` (A2.10).
 - R17, the merge preview for agents.
 - A1.3, a CLI session on day 8.
 - The real-model stories S1-S7 as recorded runs. They do not reproduce.

@@ -5,7 +5,9 @@ writes content with Facade code, marks it ready, and merges it. The file then ap
 Trunk for the CLI and in the browser. Merging needs edit access to every file the pull request
 changes: the author merges, the person who claimed an authoring agent does, and in a Team Space so
 does the Owner, an Admin or an Editor once the pull request is visible to the Space. A member who can
-only read proposes a change the same way and leaves the merge to them.
+only read proposes a change the same way and leaves the merge to them. Once merged, a Team pull request is visible to
+every member, and the Owner or an Admin can discard any open one. Each file that came from Trunk says how far Trunk
+moved since it joined.
 
 ## Sub-features
 
@@ -22,12 +24,20 @@ only read proposes a change the same way and leaves the merge to them.
   for anyone else before calling the server.
 - `pr-name-hidden` tells a reader who cannot open a file of a merged pull request, and so reads its name as
   `Removed resource`, nothing about whether that file is live, in Trash or deleted.
+- `pr-merged-visible` shows a pull request that an Editor agent kept private and merged alone to a Viewer once merged.
+- `pr-discard-unblocks` lets an Admin discard an agent's open pull request, after which a file it held can be deleted
+  permanently.
+- `pr-freshness` labels a file `behind` once another merge moves Trunk, and `stale` past 100 revisions or 7 days, in
+  uvw, MCP and the browser. Neither blocks the merge.
 
 ## How to get to it (user POV)
 
 - `uvw pr create|ready|merge -R <owner>/<slug>`, `uvw unit create`, `uvw execute`, `uvw inspect`.
 - `uvw browse <n> -R <repo>` prints the review URL. In the browser, the file appears in
   the sidebar under its Space after the merge.
+- `uvw pr discard`, and `Discard changes` in the browser. The Trash page deletes a Trash Batch permanently with
+  `DELETE /api/trash-batches/<id>`.
+- `uvw pr view`, MCP `pr_view` and the browser's file list show each file's freshness.
 
 ## Driving it with agent-browser and uvw
 
@@ -233,6 +243,220 @@ Pass when X reads both files as `Removed resource` with a null `nodeId`, `freshn
 `uvw pr view`, gets `403` for both comparisons and two `unavailable` revert items, and reads byte-identical files,
 statuses and revert items once Old is in Trash, Added is deleted and the Space is public, while O reads Old `live`
 and Added `inTrash` with a `409` comparison, then Old `inTrash` and Added `deleted` with `409` for both.
+
+### PR12. A pull request its agent merged alone is visible to the Space (`pr-merged-visible`)
+
+Run: helper.
+
+The run user O holds a Team Space with a claimed guest agent A as an Editor and a person M as a Viewer. A opens a pull
+request that adds a Sheet `Sales`, marks it ready and merges it, all with its own uvw. A can merge it, so ready leaves
+it `private`, and M cannot read it. Once merged, M reads it as `space` with its file, lists it, and finds its merge by A
+in the Space's activity. O claims A with the call the claim page makes. The homes, passwords, cookies and the claim
+link stay in `$UNIVER_HOME/prm-*`, which `$V down` deletes:
+
+```bash
+RUN=${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN
+O=verify-$VERIFY_UVW_RUN; M=$O-member; R=$O/merged-alone
+OH=$UNIVER_HOME/prm-owner; GH=$UNIVER_HOME/prm-agent; MH=$UNIVER_HOME/prm-member
+mkdir -m 700 -p "$OH" "$GH" "$MH"
+openssl rand -hex 16 > "$MH/pw"
+curl --fail-with-body -sS -c "$OH/cookies" -o /dev/null -X POST "$ORIGIN/api/auth/password/login" -H 'content-type: application/json' \
+  -d "{\"username\":\"$O\",\"password\":\"$(cat "$RUN/user.pw")\"}"
+curl --fail-with-body -sS -c "$MH/cookies" -o "$MH/register.json" -X POST "$ORIGIN/api/auth/password/register" -H 'content-type: application/json' \
+  -d "{\"username\":\"$M\",\"displayName\":\"Member\",\"password\":\"$(cat "$MH/pw")\"}"
+ga(){ env UNIVER_HOME="$GH" node apps/cli/dist/main.js "$@"; }
+um(){ env UNIVER_HOME="$MH" node apps/cli/dist/main.js "$@"; }
+ga config set workspace.origin "$ORIGIN" > /dev/null
+um config set workspace.origin "$ORIGIN" > /dev/null
+um auth login --username "$M" --password-stdin --json < "$MH/pw" > /dev/null
+ga auth guest --json > "$GH/guest.json"
+A=$(jq -r .agent.username "$GH/guest.json")
+ga claim --json > "$GH/claim.json"
+curl --fail-with-body -sS -b "$OH/cookies" -o /dev/null -X POST "$ORIGIN/api/agents/claim" -H 'content-type: application/json' \
+  -d "{\"code\":\"$(jq -r '.claimUrl | split("/") | last' "$GH/claim.json")\"}"
+$V cli prm-repo repo create merged-alone --name "Merged alone" --json id
+T=$(jq -r .id "$EVIDENCE/prm-repo.out")
+$V cli prm-agent repo member add "$A" --role editor -R "$R" --json role
+$V cli prm-member repo member add "$M" --role viewer -R "$R" --json role
+ga pr create -R "$R" -t "Sales by an agent" --json id,number > "$EVIDENCE/prm-pr.out"
+W=$(jq -r .id "$EVIDENCE/prm-pr.out"); N=$(jq -r .number "$EVIDENCE/prm-pr.out")
+ga unit create --worktree "$W" --space "$R" --type sheet --name Sales --json > "$EVIDENCE/prm-sales.out"
+ga execute --worktree "$W" --unit "$(jq -r .unit.unitId "$EVIDENCE/prm-sales.out")" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("A1:B2").setValues([["Region","Total"],["North",40]]);' > /dev/null
+ga pr ready "$N" -R "$R" --json state,visibility > "$EVIDENCE/prm-ready.out"
+jq -e '. == {state: "ready", visibility: "private"}' "$EVIDENCE/prm-ready.out"
+um pr view "$N" -R "$R" --json state > "$EVIDENCE/prm-member-before.out" 2> "$EVIDENCE/prm-member-before.err"
+test $? -eq 1
+grep -q '^NOT_FOUND: Worktree not found.' "$EVIDENCE/prm-member-before.err"
+um pr list -R "$R" -s all --json number > "$EVIDENCE/prm-member-list-before.out"
+jq -e '. == []' "$EVIDENCE/prm-member-list-before.out"
+ga pr merge "$N" -R "$R" --json state > "$EVIDENCE/prm-merge.out"
+jq -e '.state == "merged"' "$EVIDENCE/prm-merge.out"
+um pr view "$N" -R "$R" --json state,visibility,creator,units > "$EVIDENCE/prm-member-after.out"
+jq -e --arg a "$A" '.state == "merged" and .visibility == "space" and .creator.username == $a and ([.units[] | [.name, .change, .mergeResult]] == [["Sales", "added", "merged"]])' "$EVIDENCE/prm-member-after.out"
+um pr list -R "$R" -s merged --json number,visibility > "$EVIDENCE/prm-member-list.out"
+jq -e --argjson n "$N" '. == [{number: $n, visibility: "space"}]' "$EVIDENCE/prm-member-list.out"
+curl --fail-with-body -sS -b "$MH/cookies" -o "$EVIDENCE/prm-activity.json" "$ORIGIN/api/spaces/$T/activity?timeZone=UTC"
+jq -e --arg a "$A" --argjson n "$N" '[.events[] | select(.kind == "pull-merged" and .pull.number == $n) | .actor.username] == [$a]' "$EVIDENCE/prm-activity.json"
+```
+
+Pass when A's ready pull request reads `private`, M's `pr view` of it exits 1 with `NOT_FOUND` and M lists none, A's
+merge succeeds, and then M reads it `merged` and `space`, created by A, with `Sales` added and merged, lists it, and
+finds one `pull-merged` event for it by A in the activity that the Space's Recent page shows.
+
+### PR13. An Admin discards an agent's pull request, and its file can be deleted (`pr-discard-unblocks`)
+
+Run: helper.
+
+This continues PR12, with its Space, A, M and `Sales`. A opens a pull request that changes `Sales`, and O moves
+`Sales` to Trash. While that pull request is open, the Trash Batch cannot be deleted permanently. A may merge the pull
+request, so it stays private, and M, a Viewer, cannot even find it to discard it. O makes M an Admin, M discards it,
+and M then deletes the Trash Batch permanently:
+
+```bash
+ga pr create -R "$R" -t "Raise North" --json id,number > "$EVIDENCE/prd-pr.out"
+W2=$(jq -r .id "$EVIDENCE/prd-pr.out"); N2=$(jq -r .number "$EVIDENCE/prd-pr.out")
+ga unit add --worktree "$W2" --resource "$(jq -r .unit.resourceId "$EVIDENCE/prm-sales.out")" --json > /dev/null
+ga execute --worktree "$W2" --unit "$(jq -r .unit.unitId "$EVIDENCE/prm-sales.out")" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("B2").setValue(50);' > /dev/null
+$V cli prd-trash space node trash "$(jq -r .unit.nodeId "$EVIDENCE/prm-sales.out")" --json
+B=$(jq -r .trashBatch.trashBatchId "$EVIDENCE/prd-trash.out")
+jq -e '.trashBatch.removeBlockedBy.code == "ACTIVE_WORKTREE_RESOURCE_REFERENCE" and .trashBatch.capabilities.removePermanently == false' "$EVIDENCE/prd-trash.out"
+curl -sS -b "$OH/cookies" -o "$EVIDENCE/prd-delete-blocked.json" -w '%{http_code}' -X DELETE "$ORIGIN/api/trash-batches/$B" > "$EVIDENCE/prd-delete-blocked.status"
+test "$(cat "$EVIDENCE/prd-delete-blocked.status")" = 409
+jq -e '.error.code == "ACTIVE_WORKTREE_RESOURCE_REFERENCE"' "$EVIDENCE/prd-delete-blocked.json"
+um pr discard "$N2" -R "$R" --json state > "$EVIDENCE/prd-viewer-discard.out" 2> "$EVIDENCE/prd-viewer-discard.err"
+test $? -eq 1
+grep -q '^NOT_FOUND: Worktree not found.' "$EVIDENCE/prd-viewer-discard.err"
+$V cli prd-admin repo member edit "$M" --role admin -R "$R" --json role
+um pr discard "$N2" -R "$R" --json state > "$EVIDENCE/prd-discard.out"
+jq -e '.state == "discarded"' "$EVIDENCE/prd-discard.out"
+ga pr view "$N2" -R "$R" --json state > "$EVIDENCE/prd-agent-view.out"
+jq -e '.state == "discarded"' "$EVIDENCE/prd-agent-view.out"
+curl --fail-with-body -sS -b "$MH/cookies" -o "$EVIDENCE/prd-trash-after.json" "$ORIGIN/api/spaces/$T/trash"
+jq -e --arg b "$B" '[.items[] | select(.id == $b) | .removeBlockedBy] == [null]' "$EVIDENCE/prd-trash-after.json"
+curl -sS -b "$MH/cookies" -o /dev/null -w '%{http_code}' -X DELETE "$ORIGIN/api/trash-batches/$B" > "$EVIDENCE/prd-delete.status"
+test "$(cat "$EVIDENCE/prd-delete.status")" = 204
+curl --fail-with-body -sS -b "$OH/cookies" -o "$EVIDENCE/prd-trash-gone.json" "$ORIGIN/api/spaces/$T/trash"
+jq -e --arg b "$B" '[.items[] | select(.id == $b)] == []' "$EVIDENCE/prd-trash-gone.json"
+```
+
+Pass when the Trash Batch says `ACTIVE_WORKTREE_RESOURCE_REFERENCE` and O's permanent delete answers 409 with that code,
+M's discard as a Viewer exits 1 with `NOT_FOUND`, M's discard as an Admin leaves the pull request `discarded` for A too,
+the Trash Batch then has no blocker, and M's permanent delete answers 204 and removes it from Trash.
+
+### PR14. A file falls behind Trunk, then goes stale (`pr-freshness`)
+
+Mode: mcp. Run: helper.
+
+The run user O holds a Team Space with a Sheet `Sales` on Trunk and opens a pull request P that changes it. Another
+pull request that changes `Sales` merges first, and P's file reads `behind` by 1 in uvw, MCP and the browser. O then
+makes 100 edits to `Sales` on Trunk, as the Browser's editor sends them, and the file reads `stale`, behind by 101.
+P still merges. A file of another pull request turns `stale` once it joined more than 7 days ago. The browser uses its
+own session, `verify-uvw-<run>-prf`, and O's cookie stays in
+`$UNIVER_HOME/prf`:
+
+```bash
+RUN=${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN
+O=verify-$VERIFY_UVW_RUN; R=$O/freshness; FH=$UNIVER_HOME/prf
+TC=.agents/skills/verify-uvw/bin/trunk-changeset.mjs
+mkdir -m 700 -p "$FH"
+curl --fail-with-body -sS -c "$FH/cookies" -o /dev/null -X POST "$ORIGIN/api/auth/password/login" -H 'content-type: application/json' \
+  -d "{\"username\":\"$O\",\"password\":\"$(cat "$RUN/user.pw")\"}"
+ab(){ AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-prf agent-browser "$@"; }
+freshness() { jq -c '[.units[].freshness | {label, revisionsBehind}]' "$1"; }
+$V cli prf-repo repo create freshness --name Freshness --json id
+T=$(jq -r .id "$EVIDENCE/prf-repo.out")
+$V cli prf-seed pr create -R "$R" -t Seed --json id,number
+$V cli prf-sales unit create --worktree "$(jq -r .id "$EVIDENCE/prf-seed.out")" --space "$R" --type sheet --name Sales --json
+U=$(jq -r .unit.unitId "$EVIDENCE/prf-sales.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/prf-sales.out")
+$V cli prf-seed-exec execute --worktree "$(jq -r .id "$EVIDENCE/prf-seed.out")" --unit "$U" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("A1:B2").setValues([["Region","Total"],["North",40]]);'
+$V cli prf-seed-ready pr ready "$(jq -r .number "$EVIDENCE/prf-seed.out")" -R "$R" --json state
+$V cli prf-seed-merge pr merge "$(jq -r .number "$EVIDENCE/prf-seed.out")" -R "$R" --json state
+$V cli prf-pr pr create -R "$R" -t "Raise North" --json id,number
+W=$(jq -r .id "$EVIDENCE/prf-pr.out"); N=$(jq -r .number "$EVIDENCE/prf-pr.out")
+$V cli prf-add unit add --worktree "$W" --resource "$RES" --json
+jq -e '.unit.freshness.label == "current" and .unit.freshness.revisionsBehind == 0' "$EVIDENCE/prf-add.out"
+$V cli prf-exec execute --worktree "$W" --unit "$U" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("B2").setValue(50);'
+$V cli prf-other pr create -R "$R" -t "Add South" --json id,number
+$V cli prf-other-add unit add --worktree "$(jq -r .id "$EVIDENCE/prf-other.out")" --resource "$RES" --json
+$V cli prf-other-exec execute --worktree "$(jq -r .id "$EVIDENCE/prf-other.out")" --unit "$U" --json -e 'univerAPI.getActiveWorkbook().getActiveSheet().getRange("A3:B3").setValues([["South",30]]);'
+$V cli prf-other-ready pr ready "$(jq -r .number "$EVIDENCE/prf-other.out")" -R "$R" --json state
+$V cli prf-other-merge pr merge "$(jq -r .number "$EVIDENCE/prf-other.out")" -R "$R" --json state
+$V cli prf-behind pr view "$N" -R "$R" --json units
+test "$(freshness "$EVIDENCE/prf-behind.out")" = '[{"label":"behind","revisionsBehind":1}]'
+$V uvw pr view "$N" -R "$R" > "$EVIDENCE/prf-behind.txt"
+grep -q 'Sales .*behind by 1$' "$EVIDENCE/prf-behind.txt"
+$V mcp prf-behind-mcp pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+test "$(freshness "$EVIDENCE/prf-behind-mcp.out")" = '[{"label":"behind","revisionsBehind":1}]'
+ab set viewport 1440 1500
+ab open "$ORIGIN/login"
+ab storage local set univer-workspace-language en-US
+ab storage local set univer-workspace-view-onboarding-complete true
+ab storage local set univer-workspace-layout-theme repository
+ab reload
+ab wait --text Username
+ab find label Username fill "$O"
+ab find label Password fill "$(cat "$RUN/user.pw")"
+ab click 'form button[type=submit]'
+ab wait --url '**/home'
+ab open "$ORIGIN/spaces/$T/pulls/$N"
+ab wait --text '1 behind'
+ab snapshot -i -c > "$EVIDENCE/prf-behind-browser.txt"
+grep -q 'image "1 behind. The official version changed once since this file was added.' "$EVIDENCE/prf-behind-browser.txt"
+ab screenshot "$EVIDENCE/pr14-behind.png"
+for i in $(seq 1 100); do
+  node "$TC" "$FH/cookies" "$U" sheet.mutation.set-range-values "{\"cellValue\":{\"4\":{\"0\":{\"v\":$i}}}}"
+done > "$EVIDENCE/prf-edits.jsonl"
+jq -s -e 'length == 100 and all(.event == "changeset_ack")' "$EVIDENCE/prf-edits.jsonl"
+$V cli prf-stale pr view "$N" -R "$R" --json units
+test "$(freshness "$EVIDENCE/prf-stale.out")" = '[{"label":"stale","revisionsBehind":101}]'
+$V mcp prf-stale-mcp pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+test "$(freshness "$EVIDENCE/prf-stale-mcp.out")" = '[{"label":"stale","revisionsBehind":101}]'
+$V uvw pr view "$N" -R "$R" > "$EVIDENCE/prf-stale.txt"
+grep -q 'Sales .*stale, behind by 101$' "$EVIDENCE/prf-stale.txt"
+ab reload
+ab wait --text Stale
+ab snapshot -i -c > "$EVIDENCE/prf-stale-browser.txt"
+grep -q 'image "Stale. The official version changed more than 100 times' "$EVIDENCE/prf-stale-browser.txt"
+ab screenshot "$EVIDENCE/pr14-stale.png"
+$V cli prf-ready pr ready "$N" -R "$R" --json state
+$V cli prf-merge pr merge "$N" -R "$R" --json state
+jq -e '.state == "merged"' "$EVIDENCE/prf-merge.out"
+$V cli prf-trunk inspect range A1:B3 --trunk --unit "$U" --worksheet index:1 --json
+jq -e '[.. | objects | select(has("v")) | .v] == ["Region","Total","North",50,"South",30]' "$EVIDENCE/prf-trunk.out"
+```
+
+A file also goes stale 7 days after it joins, however far Trunk moved. The server takes the time only from its clock
+and the file's `added_at` in `worktree_units`, so one step stands in for 8 days: it moves that timestamp of a new pull
+request Q 8 days back in the run's product SQLite. It is setup, the only database write in this file, and proves
+nothing by itself. Q's file joined at head, so it is stale while 0 behind:
+
+```bash
+DB=$RUN/data/univer-workspace.sqlite
+$V cli prf-aged pr create -R "$R" -t "Count rows" --json id,number
+WQ=$(jq -r .id "$EVIDENCE/prf-aged.out"); NQ=$(jq -r .number "$EVIDENCE/prf-aged.out")
+$V cli prf-aged-add unit add --worktree "$WQ" --resource "$RES" --json
+jq -e '.unit.freshness.label == "current"' "$EVIDENCE/prf-aged-add.out"
+sqlite3 -cmd ".timeout 5000" "$DB" "UPDATE worktree_units SET added_at = added_at - 8 * 86400000 WHERE worktree_id = '$WQ'"
+$V cli prf-aged-view pr view "$NQ" -R "$R" --json units
+test "$(freshness "$EVIDENCE/prf-aged-view.out")" = '[{"label":"stale","revisionsBehind":0}]'
+$V mcp prf-aged-mcp pr_view "{\"repo\":\"$R\",\"number\":\"$NQ\"}"
+test "$(freshness "$EVIDENCE/prf-aged-mcp.out")" = '[{"label":"stale","revisionsBehind":0}]'
+$V uvw pr view "$NQ" -R "$R" > "$EVIDENCE/prf-aged.txt"
+grep -q 'Sales .*stale$' "$EVIDENCE/prf-aged.txt"
+ab open "$ORIGIN/spaces/$T/pulls/$NQ"
+ab wait --text Stale
+ab snapshot -i -c > "$EVIDENCE/prf-aged-browser.txt"
+grep -q 'image "Stale. The official version changed more than 100 times since this file was added, or it was added more than 7 days ago.' "$EVIDENCE/prf-aged-browser.txt"
+ab screenshot "$EVIDENCE/pr14-stale-by-age.png"
+```
+
+Open the three screenshots. In `pr14-behind.png` the file list beside the summary shows `Sales` with a `1 behind` badge,
+and in `pr14-stale.png` and `pr14-stale-by-age.png` with a `Stale` badge.
+
+Pass when P's file reads `current` when it joins; after the other merge `uvw pr view --json`, its text form and MCP
+`pr_view` read `behind` by 1 and the browser shows `1 behind`; after the 100 Trunk edits all three read `stale`,
+behind by 101, and the browser shows `Stale`; P merges, leaving North at 50 beside South; and Q's file, joined at head
+and moved 8 days back, reads `stale` and 0 behind in all three and `Stale` in the browser.
 
 ## Gotchas
 
