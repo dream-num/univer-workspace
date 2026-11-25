@@ -28,6 +28,7 @@ import { ToolJobs } from "./jobs/store.js";
 import { LocalStagingStore } from "./staging/local.js";
 import { UsageAccumulator } from "../shared/usage.js";
 import { ExecutorCapabilities } from "./executor/capabilities.js";
+import { createEpochStore } from "./executor/epochs.js";
 import type { OpName } from "../shared/executor-protocol.js";
 import { createExecutorLinks } from "./tools/executor-tool.js";
 import { allowsExecutor, type GatewayConfig } from "../shared/config.js";
@@ -147,8 +148,23 @@ export function createGateway(
   const expectedMetricsToken = config.METRICS_TOKEN
     ? createBearerCheck(config.METRICS_TOKEN)
     : null;
-  const capabilities = new ExecutorCapabilities(config.executor, logger);
-  const executorLink = createExecutorLinks(config.executor, capabilities.router);
+  const epochs = config.executor ? createEpochStore(config.executor.epochs) : null;
+  if (epochs !== null)
+    void epochs.ready.catch((error: unknown) => {
+      // Do not block startup: only calls to executors that advertise affinity need the store, and
+      // the next call retries the connection instead of failing fast on a transient outage.
+      logger.warn(
+        { ...safeErrorFields(error) },
+        "Executor epoch store is unavailable; affinity executor calls fail until it recovers",
+      );
+    });
+  const capabilities = new ExecutorCapabilities(config.executor, logger, epochs?.store);
+  const executorLink = createExecutorLinks(
+    config.executor,
+    capabilities.router,
+    epochs?.store,
+    logger,
+  );
   const upstream = (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
     (options.fetcher ?? fetch)(input, init);
   const authenticator = createAuthenticator(config, logger, upstream);
@@ -640,6 +656,7 @@ export function createGateway(
     registry,
     close: async () => {
       capabilities.close();
+      await epochs?.close();
       await staging.close();
       await mcp.close();
     },

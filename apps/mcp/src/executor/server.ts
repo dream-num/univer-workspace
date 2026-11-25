@@ -4,6 +4,7 @@ import { pino, type Logger } from "pino";
 import { createBearerCheck } from "../shared/bearer.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
 import {
+  AFFINITY_HEADER,
   PROTOCOL_VERSION,
   isOpName,
   opSpecs,
@@ -45,6 +46,10 @@ export function createExecutor(
         .writeHead(status, { "content-type": "application/json" })
         .end(JSON.stringify({ error: { code, message: code, detail: null } }));
     };
+    // Logged under the literal header name: pino redacts any field called `session`, and the
+    // value is a routing hash, not a credential. Absent for gateways talking to a resident executor.
+    const affinityHeader = request.headers[AFFINITY_HEADER];
+    const affinity = Array.isArray(affinityHeader) ? affinityHeader[0] : affinityHeader;
     void (async () => {
       if (request.method === "GET" && request.url === "/healthz") {
         response.end("ok");
@@ -75,6 +80,7 @@ export function createExecutor(
               const operation = renderOperations.get(name);
               return operation === undefined || capabilities.operations.has(operation);
             }),
+            ...(config.EXECUTOR_AFFINITY === undefined ? {} : { affinity: config.EXECUTOR_AFFINITY }),
           }),
         );
         return;
@@ -159,7 +165,10 @@ export function createExecutor(
         );
       }
       response.writeHead(200, { "content-type": FRAME_CONTENT_TYPE }).end(frame);
-      logger.info({ request_id: header.requestId, op: name }, "Executor request completed");
+      logger.info(
+        { request_id: header.requestId, op: name, [AFFINITY_HEADER]: affinity },
+        "Executor request completed",
+      );
     })().catch(() => {
       if (!response.headersSent) reject(500, "workspace-internal-error");
       else response.destroy();

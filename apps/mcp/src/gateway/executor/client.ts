@@ -10,6 +10,7 @@ import {
 } from "../../shared/executor-protocol.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../../shared/frame.js";
 import type { z } from "zod";
+import type { AffinityTransport } from "./affinity/transport.js";
 import { classifyFetchFailure, ExecutorRouter } from "./router.js";
 
 export interface ExecutorConnection {
@@ -18,6 +19,8 @@ export interface ExecutorConnection {
   readonly grant: ExecutorGrant;
   readonly requestId: string;
   readonly deadlineAt: number;
+  /** Sends attempts to executors that advertised `affinity: "header"`, such as one on FC. */
+  readonly transport: AffinityTransport;
 }
 
 function unavailable(): ExecutorCallError {
@@ -45,6 +48,9 @@ export async function callExecutor<
   const key = [connection.grant.userId, route.scope, route.unitId ?? connection.requestId].join(
     "\0",
   );
+  // A platform Session must stay stable for Unit-less calls too: a per-request value would open a
+  // new Session, and so a new instance, on every call.
+  const sessionKey = [connection.grant.userId, route.scope, route.unitId ?? ""].join("\0");
   let lastError = unavailable();
   for (const url of connection.router.candidates(key)) {
     const timeoutMs = Math.floor(
@@ -65,7 +71,8 @@ export async function callExecutor<
     if (body.length > spec.limits.requestBytes) throw requestError("workspace-request-too-large");
     let response: Response;
     try {
-      response = await fetch(new URL(`/rpc/v1/${spec.name}`, url), {
+      const path = `/rpc/v1/${spec.name}`;
+      const init: RequestInit = {
         method: "POST",
         headers: {
           authorization: `Bearer ${connection.executorToken}`,
@@ -75,8 +82,13 @@ export async function callExecutor<
         body,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
-      });
+      };
+      response = connection.router.usesAffinity(url)
+        ? await connection.transport.request({ url, key: sessionKey, path, init })
+        : await fetch(new URL(path, url), init);
     } catch (error) {
+      // The affinity transport already classified a failure that provably sent nothing.
+      if (error instanceof ExecutorCallError) throw error;
       if (classifyFetchFailure(error) === "not-delivered") {
         connection.router.notDelivered(url);
         continue;

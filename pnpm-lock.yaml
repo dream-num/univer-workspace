@@ -591,6 +591,9 @@ importers:
       fflate:
         specifier: 0.8.3
         version: 0.8.3
+      ioredis:
+        specifier: 5.11.1
+        version: 5.11.1(supports-color@10.2.2)
       pino:
         specifier: 10.3.1
         version: 10.3.1
@@ -4116,6 +4119,9 @@ packages:
     peerDependencies:
       hono: ^4 || ^5.0.0-0
 
+  '@ioredis/commands@1.10.0':
+    resolution: {integrity: sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q==}
+
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
@@ -6354,41 +6360,41 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-arm64@1.3.0':
-    resolution: {integrity: sha512-0OB8IOJ7xWrAbM5NKetZGkwJ22wdKz6HnN9YuZCXjFpnbPMrN/B64oxmWb1aBssSCNjIXGmqZ3qGrt/mDudeNA==}
+    resolution: {integrity: sha512-0OB8IOJ7xWrAbM5NKetZGkwJ22wdKz6HnN9YuZCXjFpnbPMrN/B64oxmWb1aBssSCNjIXGmqZ3qGrt/mDudeNA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-arm64/-/engine-formula-rust-binding-darwin-arm64-1.3.0.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-x64@1.3.0':
-    resolution: {integrity: sha512-lyA2Tus6jGLl5RK3tQywWhvpNNY3FVnmASkR9+YiAlWB+fYcqhDBPpHZFVxFlMSPslvnAAx0ebvX+703MqYx8g==}
+    resolution: {integrity: sha512-lyA2Tus6jGLl5RK3tQywWhvpNNY3FVnmASkR9+YiAlWB+fYcqhDBPpHZFVxFlMSPslvnAAx0ebvX+703MqYx8g==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-x64/-/engine-formula-rust-binding-darwin-x64-1.3.0.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu@1.3.0':
-    resolution: {integrity: sha512-0NuLxgB8aNbv/kBc8PhTef7OQ/fXhcD7kTcFohB8yFeTfaLTiZpHYiZpcLJY594HgF+Lc6MwezjxpSUfPoF25Q==}
+    resolution: {integrity: sha512-0NuLxgB8aNbv/kBc8PhTef7OQ/fXhcD7kTcFohB8yFeTfaLTiZpHYiZpcLJY594HgF+Lc6MwezjxpSUfPoF25Q==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu/-/engine-formula-rust-binding-linux-arm64-gnu-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-musl@1.3.0':
-    resolution: {integrity: sha512-HMvXAqjYvIjvEScSe7JYskBixomtmGg5Mdj6BT3ZJcBANlDqvEahTf+UC0yj0OjgvVvoi3Yhp0ZvRkRl6w8cCA==}
+    resolution: {integrity: sha512-HMvXAqjYvIjvEScSe7JYskBixomtmGg5Mdj6BT3ZJcBANlDqvEahTf+UC0yj0OjgvVvoi3Yhp0ZvRkRl6w8cCA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-musl/-/engine-formula-rust-binding-linux-arm64-musl-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu@1.3.0':
-    resolution: {integrity: sha512-27M+DbrcqTohgFpFS05UrxFRyrPx4cYGU5r4o1CxLilSuxQ2z51QjhK2tiEiwOjtVeKAY8Ws2l3F1dblifC3GA==}
+    resolution: {integrity: sha512-27M+DbrcqTohgFpFS05UrxFRyrPx4cYGU5r4o1CxLilSuxQ2z51QjhK2tiEiwOjtVeKAY8Ws2l3F1dblifC3GA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu/-/engine-formula-rust-binding-linux-x64-gnu-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-musl@1.3.0':
-    resolution: {integrity: sha512-Lf8rFQGB5O4gABBFt7LSnD/84h978bnV9y5Ucnz4rd8YXjrRvRx53v08DlfjqlYfbA673hxyHXOdQuBEKg0IEA==}
+    resolution: {integrity: sha512-Lf8rFQGB5O4gABBFt7LSnD/84h978bnV9y5Ucnz4rd8YXjrRvRx53v08DlfjqlYfbA673hxyHXOdQuBEKg0IEA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-musl/-/engine-formula-rust-binding-linux-x64-musl-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc@1.3.0':
-    resolution: {integrity: sha512-iYd09HEa//LogxzxhQOYN6W9mg9g2qGUY93kCQBp9tF31Ve/NpHeByZ1Kej/c+B08hgHzwDx0aacwgZCNJugeA==}
+    resolution: {integrity: sha512-iYd09HEa//LogxzxhQOYN6W9mg9g2qGUY93kCQBp9tF31Ve/NpHeByZ1Kej/c+B08hgHzwDx0aacwgZCNJugeA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/-/engine-formula-rust-binding-win32-x64-msvc-1.3.0.tgz}
     cpu: [x64]
     os: [win32]
 
@@ -6396,7 +6402,7 @@ packages:
     resolution: {integrity: sha512-kanuZITcHyXpy/luTSyhA6zBUiyZ6ZdI0hWwyzkAxRho67vP3R3T/DZaTxJdUm/0tBDeHGaKt02rxRtZJqLtWw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding/-/engine-formula-rust-binding-1.3.0.tgz}
 
   '@univerjs-pro/engine-formula-rust@1.6.1':
-    resolution: {integrity: sha512-7x9PYKJbvOXvj3jSEhodIhi+VEDiwgObkOOM7AR+7+V3gqj4LBZ1HFo7UYBtUA9ItevLNRUwjVlzGQvXSaL0+w==}
+    resolution: {integrity: sha512-7x9PYKJbvOXvj3jSEhodIhi+VEDiwgObkOOM7AR+7+V3gqj4LBZ1HFo7UYBtUA9ItevLNRUwjVlzGQvXSaL0+w==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust/-/engine-formula-rust-1.6.1.tgz}
     peerDependencies:
       rxjs: '>=7.0.0'
 
@@ -6416,41 +6422,41 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/exchange-node-binding-darwin-arm64@1.3.0':
-    resolution: {integrity: sha512-FCGbZz5SGzcE9xBR8AOmvkDbHfyLitQBFO71HXgO0L9GVzwCOgBqU5tJmBSEYQUa/CITbHRyIZEr9HiuBNHTAw==}
+    resolution: {integrity: sha512-FCGbZz5SGzcE9xBR8AOmvkDbHfyLitQBFO71HXgO0L9GVzwCOgBqU5tJmBSEYQUa/CITbHRyIZEr9HiuBNHTAw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-arm64/-/exchange-node-binding-darwin-arm64-1.3.0.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-darwin-x64@1.3.0':
-    resolution: {integrity: sha512-2uSbpNoobayyLYhb3Bkz57qb+1aH7B8jPzTp/xNtIQL2H3JbUxqow+ZhwHCALjzS9vTQReoEN84+UXWh5v6tAQ==}
+    resolution: {integrity: sha512-2uSbpNoobayyLYhb3Bkz57qb+1aH7B8jPzTp/xNtIQL2H3JbUxqow+ZhwHCALjzS9vTQReoEN84+UXWh5v6tAQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-x64/-/exchange-node-binding-darwin-x64-1.3.0.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-gnu@1.3.0':
-    resolution: {integrity: sha512-G50psHcJigRGDlFvlOtDL+9Yt1x7Gur7XfMZiPo8gZcd5tqSzZ38zYGyuPp6SaYgDoTwCz7SUtLlXdE8b5NSlw==}
+    resolution: {integrity: sha512-G50psHcJigRGDlFvlOtDL+9Yt1x7Gur7XfMZiPo8gZcd5tqSzZ38zYGyuPp6SaYgDoTwCz7SUtLlXdE8b5NSlw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-gnu/-/exchange-node-binding-linux-arm64-gnu-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-musl@1.3.0':
-    resolution: {integrity: sha512-M6NN+RiRXd0dhlLCfIGRfvdW4R4u5lTn8zAS5GalS0BtcJ2P/p4UrazJMnm/viPnu7/vt5wb1vLL6UVZoEI6zA==}
+    resolution: {integrity: sha512-M6NN+RiRXd0dhlLCfIGRfvdW4R4u5lTn8zAS5GalS0BtcJ2P/p4UrazJMnm/viPnu7/vt5wb1vLL6UVZoEI6zA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-musl/-/exchange-node-binding-linux-arm64-musl-1.3.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-gnu@1.3.0':
-    resolution: {integrity: sha512-dXlOI795mSEQBvlhuEMNtid7vNYcSakJlE4/3Qo0lKqUrCKm0i1UiSweIKy6tnTFqhwFgGYWui+8h5ZYTClYbA==}
+    resolution: {integrity: sha512-dXlOI795mSEQBvlhuEMNtid7vNYcSakJlE4/3Qo0lKqUrCKm0i1UiSweIKy6tnTFqhwFgGYWui+8h5ZYTClYbA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-gnu/-/exchange-node-binding-linux-x64-gnu-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-musl@1.3.0':
-    resolution: {integrity: sha512-TPZKHT4JSbNKBWJPGcEa+txHoL512UWj2BVKZYFs70YwE600lNDYuvRNi+7nb0iEj81ZnSQZ8nbjicAum39g+g==}
+    resolution: {integrity: sha512-TPZKHT4JSbNKBWJPGcEa+txHoL512UWj2BVKZYFs70YwE600lNDYuvRNi+7nb0iEj81ZnSQZ8nbjicAum39g+g==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-musl/-/exchange-node-binding-linux-x64-musl-1.3.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/exchange-node-binding-win32-x64-msvc@1.3.0':
-    resolution: {integrity: sha512-uacRt4rMoDv8OBVSIcy4fwF/tOUPb1RKOvUtgQiQbBb68sOuPO9lF9Y/LFUhKGJcvWyopI3ZqX9XBCHRKSVL8A==}
+    resolution: {integrity: sha512-uacRt4rMoDv8OBVSIcy4fwF/tOUPb1RKOvUtgQiQbBb68sOuPO9lF9Y/LFUhKGJcvWyopI3ZqX9XBCHRKSVL8A==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-win32-x64-msvc/-/exchange-node-binding-win32-x64-msvc-1.3.0.tgz}
     cpu: [x64]
     os: [win32]
 
@@ -6458,7 +6464,7 @@ packages:
     resolution: {integrity: sha512-/nqg7Lw8rxalckgFGyna3qwwljEmll+Cl7klMxIdvE+F+b1iBXQPc6PsEnHZRNx1HHdwmqnQM+ayRPRw0jOPUw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding/-/exchange-node-binding-1.3.0.tgz}
 
   '@univerjs-pro/exchange-node@1.6.1':
-    resolution: {integrity: sha512-gCAGPYvgFKn5mjt6Be/EBDdC4neo/6MKZ0/6UzSsdDHjM/uenoRnFd7805TyOqkz9f2FjKjeISWxI3IQChgr/w==}
+    resolution: {integrity: sha512-gCAGPYvgFKn5mjt6Be/EBDdC4neo/6MKZ0/6UzSsdDHjM/uenoRnFd7805TyOqkz9f2FjKjeISWxI3IQChgr/w==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node/-/exchange-node-1.6.1.tgz}
     peerDependencies:
       '@univerjs-pro/exchange-pdf-node-binding': ~1.2.0
     peerDependenciesMeta:
@@ -7533,6 +7539,10 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
+  cluster-key-slot@1.1.1:
+    resolution: {integrity: sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw==}
+    engines: {node: '>=0.10.0'}
+
   cmdk@1.1.1:
     resolution: {integrity: sha512-Vsv7kFaXm+ptHDMZ7izaRsP70GgrW9NBNGswt9OZaVBLlE0SNpDq8eu/VGXyF9r7M0azK3Wy7OlYXsuyYLFzHg==}
     peerDependencies:
@@ -7683,6 +7693,10 @@ packages:
   delayed-stream@1.0.0:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
+
+  denque@2.1.0:
+    resolution: {integrity: sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==}
+    engines: {node: '>=0.10'}
 
   depd@2.0.0:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
@@ -8135,6 +8149,10 @@ packages:
 
   inline-style-parser@0.2.7:
     resolution: {integrity: sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA==}
+
+  ioredis@5.11.1:
+    resolution: {integrity: sha512-ehuGcf94bQXhfagULNXrJdfnWO38v070jxSx/qE87Kjzmu2fU7ro5EFAb+OPituLqgfyuQaym5DlrNydW2sJ9A==}
+    engines: {node: '>=12.22.0'}
 
   ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
@@ -9205,6 +9223,14 @@ packages:
   real-require@1.0.0:
     resolution: {integrity: sha512-P4nbQYQfePJxRSmY+v/KINxVucm4NF3p3s7pJveMTtom52FR4YGltUQLB8idDXwDDWW+eYrWDFbuzUnjoWHF7g==}
 
+  redis-errors@1.2.0:
+    resolution: {integrity: sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==}
+    engines: {node: '>=4'}
+
+  redis-parser@3.0.0:
+    resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
+    engines: {node: '>=4'}
+
   remark-directive@4.0.0:
     resolution: {integrity: sha512-7sxn4RfF1o3izevPV1DheyGDD6X4c9hrGpfdUpm7uC++dqrnJxIZVkk7CoKqcLm0VUMAuOol7Mno3m6g8cfMuA==}
 
@@ -9428,6 +9454,9 @@ packages:
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
+
+  standard-as-callback@2.1.0:
+    resolution: {integrity: sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A==}
 
   stat-mode@1.0.0:
     resolution: {integrity: sha512-jH9EhtKIjuXZ2cWxmXS8ZP80XyC3iasQxMDV8jzhNJpfDb7VbQLVW4Wvsxz9QZvzV+G4YoSfBUVKDOyxLzi/sg==}
@@ -11395,6 +11424,8 @@ snapshots:
   '@hono/node-server@2.1.6(hono@4.13.16)':
     dependencies:
       hono: 4.13.16
+
+  '@ioredis/commands@1.10.0': {}
 
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
@@ -24778,6 +24809,8 @@ snapshots:
 
   clsx@2.1.1: {}
 
+  cluster-key-slot@1.1.1: {}
+
   cmdk@1.1.1(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@radix-ui/react-compose-refs': 1.1.5(@types/react@18.3.18)(react@18.3.1)
@@ -24975,6 +25008,8 @@ snapshots:
     optional: true
 
   delayed-stream@1.0.0: {}
+
+  denque@2.1.0: {}
 
   depd@2.0.0: {}
 
@@ -25560,6 +25595,18 @@ snapshots:
   inherits@2.0.4: {}
 
   inline-style-parser@0.2.7: {}
+
+  ioredis@5.11.1(supports-color@10.2.2):
+    dependencies:
+      '@ioredis/commands': 1.10.0
+      cluster-key-slot: 1.1.1
+      debug: 4.4.3(supports-color@10.2.2)
+      denque: 2.1.0
+      redis-errors: 1.2.0
+      redis-parser: 3.0.0
+      standard-as-callback: 2.1.0
+    transitivePeerDependencies:
+      - supports-color
 
   ipaddr.js@1.9.1: {}
 
@@ -26903,6 +26950,12 @@ snapshots:
 
   real-require@1.0.0: {}
 
+  redis-errors@1.2.0: {}
+
+  redis-parser@3.0.0:
+    dependencies:
+      redis-errors: 1.2.0
+
   remark-directive@4.0.0(supports-color@10.2.2):
     dependencies:
       '@types/mdast': 4.0.4
@@ -27218,6 +27271,8 @@ snapshots:
     optional: true
 
   stackback@0.0.2: {}
+
+  standard-as-callback@2.1.0: {}
 
   stat-mode@1.0.0: {}
 

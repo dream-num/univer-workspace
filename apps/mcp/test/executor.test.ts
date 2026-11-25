@@ -14,6 +14,7 @@ import { parseGatewayConfig } from "../src/shared/config.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../src/shared/frame.js";
 import {
   PROTOCOL_VERSION,
+  executorCapabilitiesSchema,
   opSpecs,
   requestHeaderSchema,
   type ExecutorGrant,
@@ -32,17 +33,25 @@ import {
   rendezvous,
 } from "../src/gateway/executor/router.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
+import { MemoryEpochStore } from "../src/gateway/executor/affinity/epoch-store.js";
+import { createAffinityTransport } from "../src/gateway/executor/affinity/transport.js";
 
 const token = "executor-token-".repeat(4);
 const rendererToken = "renderer-token-".repeat(4);
+// One memory-backed transport per connection, as the gateway builds them.
+const affinity = () => createAffinityTransport({ epochs: new MemoryEpochStore() });
 const grant: ExecutorGrant = {
   kind: "session",
   userId: "user-1",
   session: "secret-session",
   expiresAt: Date.now() + 600_000,
 };
-const config = () =>
-  parseExecutorConfig({ WORKSPACE_ORIGIN: "https://workspace.test", MCP_EXECUTOR_TOKEN: token });
+const config = (env: Record<string, string> = {}) =>
+  parseExecutorConfig({
+    WORKSPACE_ORIGIN: "https://workspace.test",
+    MCP_EXECUTOR_TOKEN: token,
+    ...env,
+  });
 
 describe("executor protocol boundaries", () => {
   it("round trips JSON and binary payloads and refuses truncated frames", () => {
@@ -202,6 +211,35 @@ describe("executor protocol boundaries", () => {
     ).rejects.toMatchObject({ wire: { code: "workspace-executor-unavailable" } });
   });
 
+  it("advertises header affinity only when the deployment configures it", async () => {
+    const advertised = async (env: Record<string, string>) => {
+      const executor = createExecutor(config(env), {
+        runtime: {
+          executeRead: vi.fn(),
+          executeAndCommit: vi.fn(),
+          exportUnitData: vi.fn(),
+          close: async () => {},
+        },
+        logger: pino({ level: "silent" }),
+      });
+      executor.server.listen(0, "127.0.0.1");
+      await once(executor.server, "listening");
+      const address = executor.server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP address");
+      try {
+        const response = await fetch(`http://127.0.0.1:${address.port}/rpc/v1/capabilities`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        return executorCapabilitiesSchema.parse(await response.json()).affinity;
+      } finally {
+        await executor.close();
+      }
+    };
+    expect(await advertised({})).toBeUndefined();
+    expect(await advertised({ EXECUTOR_AFFINITY: "header" })).toBe("header");
+    expect(() => config({ EXECUTOR_AFFINITY: "cookie" })).toThrow();
+  });
+
   it("routes stably and fails over only before delivery", async () => {
     const urls = ["http://one.test", "http://two.test", "http://three.test"];
     const ordered = rendezvous(urls, "user\0worktree:wt\0unit");
@@ -225,6 +263,7 @@ describe("executor protocol boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = () => ({
       router: new ExecutorRouter(urls),
+      transport: affinity(),
       executorToken: token,
       grant,
       requestId: "routing",
@@ -562,6 +601,7 @@ describe("executor regression boundaries", () => {
           callExecutor(
             {
               router,
+              transport: affinity(),
               executorToken: token,
               grant,
               requestId: "request",
@@ -593,6 +633,7 @@ describe("executor regression boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = {
       router: new ExecutorRouter(["http://one.test"]),
+      transport: affinity(),
       executorToken: token,
       grant,
       requestId: "request",
@@ -803,6 +844,7 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
       callExecutor(
         {
           router: new ExecutorRouter(["http://one.test"]),
+          transport: affinity(),
           executorToken: token,
           grant,
           requestId: "large-wire",

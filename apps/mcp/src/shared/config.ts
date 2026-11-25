@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { EpochStoreSettings, RedisEndpoint } from "../gateway/executor/affinity/epoch-store.js";
 import { defaultLimits, type UploadLimits } from "../gateway/staging/model.js";
 
 export const origin = z.url().transform((value, ctx) => {
@@ -68,6 +69,48 @@ export function allowsExecutor(
   if (policy === undefined) return true;
   return policy === "workspace" ? user.executorAccess : policy.has(user.id);
 }
+const redisUrl = z.string().refine((value) => {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "redis:" || url.protocol === "rediss:") && url.hostname !== "";
+  } catch {
+    return false;
+  }
+}, "A Redis URL must be a redis:// or rediss:// URL with a host");
+// The epoch store is gateway-local shared state; the executor never opens this Redis. Deployments
+// that predate the MCP_GATEWAY_* names keep working through the aliases declared below.
+const epochStoreName = z.enum(["memory", "redis"]);
+const redisModeName = z.enum(["single", "sentinel", "cluster"]);
+const redisSecret = z.string().min(1);
+const redisDbIndex = z.string().regex(/^\d+$/).transform(Number).pipe(z.int().min(0));
+const redisTlsFlag = z
+  .enum(["1", "0", "true", "false"])
+  .transform((value) => value === "1" || value === "true");
+const redisKeyPrefix = z.string().min(1).max(128);
+// A sentinel list and a cluster seed list share one shape: comma-separated host:port pairs.
+const redisEndpoint = z.string().transform((value, ctx): RedisEndpoint => {
+  const trimmed = value.trim();
+  const match = /^\[(.+)\]:(\d+)$/u.exec(trimmed) ?? /^([^:\s]+):(\d+)$/u.exec(trimmed);
+  const host = match?.[1];
+  const port = Number(match?.[2]);
+  if (match === null || host === undefined || !Number.isInteger(port) || port < 1 || port > 65535) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Expected host:port, for example cache.internal:6379 or [::1]:26379",
+    });
+    return z.NEVER;
+  }
+  return { host, port };
+});
+const redisEndpoints = z
+  .string()
+  .transform((value) =>
+    value
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item !== ""),
+  )
+  .pipe(z.array(redisEndpoint).min(1));
 const environment = z.object({
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   PORT: z.string().regex(/^\d+$/).transform(Number).pipe(z.int().min(1).max(65535)).default(3000),
@@ -90,16 +133,56 @@ const environment = z.object({
     .optional(),
   MCP_EXECUTOR_TOKEN: z.string().min(32).optional(),
   MCP_EXECUTOR_ALLOWED_USER_IDS: executorAllowedUserIds.optional(),
+  // Epoch store for executors that advertise header affinity; gateway-local shared state.
+  MCP_GATEWAY_EPOCH_STORE: epochStoreName.optional(),
+  MCP_GATEWAY_REDIS_MODE: redisModeName.optional(),
+  MCP_GATEWAY_REDIS_URL: redisUrl.optional(),
+  MCP_GATEWAY_REDIS_NODES: redisEndpoints.optional(),
+  MCP_GATEWAY_REDIS_SENTINEL_NAME: z.string().min(1).optional(),
+  MCP_GATEWAY_REDIS_USERNAME: redisSecret.optional(),
+  MCP_GATEWAY_REDIS_PASSWORD: redisSecret.optional(),
+  MCP_GATEWAY_REDIS_SENTINEL_PASSWORD: redisSecret.optional(),
+  MCP_GATEWAY_REDIS_DB: redisDbIndex.optional(),
+  MCP_GATEWAY_REDIS_TLS: redisTlsFlag.optional(),
+  MCP_GATEWAY_REDIS_KEY_PREFIX: redisKeyPrefix.optional(),
+  // 0 disables the periodic capability refresh; startup, cold-start retries and /readyz keep it.
+  MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .max(86_400_000)
+    .default(60_000),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
 export type GatewayConfig = Readonly<
   Omit<
     z.output<typeof environment>,
-    "MCP_OAUTH_CLIENT_SECRET" | "MCP_EXECUTOR_TOKEN" | "MCP_EXECUTOR_URLS"
+    | "MCP_OAUTH_CLIENT_SECRET"
+    | "MCP_EXECUTOR_TOKEN"
+    | "MCP_EXECUTOR_URLS"
+    | "MCP_GATEWAY_EPOCH_STORE"
+    | "MCP_GATEWAY_REDIS_MODE"
+    | "MCP_GATEWAY_REDIS_URL"
+    | "MCP_GATEWAY_REDIS_NODES"
+    | "MCP_GATEWAY_REDIS_SENTINEL_NAME"
+    | "MCP_GATEWAY_REDIS_USERNAME"
+    | "MCP_GATEWAY_REDIS_PASSWORD"
+    | "MCP_GATEWAY_REDIS_SENTINEL_PASSWORD"
+    | "MCP_GATEWAY_REDIS_DB"
+    | "MCP_GATEWAY_REDIS_TLS"
+    | "MCP_GATEWAY_REDIS_KEY_PREFIX"
+    | "MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS"
   > & {
     readonly uploadLimits: UploadLimits;
-    readonly executor: { readonly urls: readonly string[]; readonly executorToken: string } | null;
+    readonly executor: {
+      readonly urls: readonly string[];
+      readonly executorToken: string;
+      /** Absent only in tests that build a partial executor config; the gateway uses memory. */
+      readonly epochs?: EpochStoreSettings;
+      /** Periodic capability refresh; 0 disables it. Absent in partial test configs. */
+      readonly capabilitiesIntervalMs?: number;
+    } | null;
     readonly WORKSPACE_TRANSPORT_URL: string;
     readonly auth: {
       readonly exchange: { readonly clientId: string; readonly clientSecret: string } | null;
@@ -107,6 +190,104 @@ export type GatewayConfig = Readonly<
     };
   }
 >;
+
+interface RedisSelection {
+  readonly mode: "single" | "sentinel" | "cluster";
+  readonly url?: string;
+  readonly nodes?: readonly RedisEndpoint[];
+  readonly sentinelName?: string;
+  readonly username?: string;
+  readonly password?: string;
+  readonly sentinelPassword?: string;
+  readonly db?: number;
+  readonly tls?: boolean;
+  readonly keyPrefix: string;
+}
+
+/**
+ * Resolves the Redis epoch store from the environment. Contradictory options are refused instead
+ * of ignored: a topology variable the gateway never reads would otherwise surface only as a
+ * failed tool call against whatever server the remaining variable points at.
+ */
+function epochStoreSettings(
+  store: "memory" | "redis",
+  selection: RedisSelection,
+  executorConfigured: boolean,
+): EpochStoreSettings {
+  const topologyVars = [
+    selection.nodes === undefined ? undefined : "MCP_GATEWAY_REDIS_NODES",
+    selection.sentinelName === undefined ? undefined : "MCP_GATEWAY_REDIS_SENTINEL_NAME",
+    selection.username === undefined ? undefined : "MCP_GATEWAY_REDIS_USERNAME",
+    selection.password === undefined ? undefined : "MCP_GATEWAY_REDIS_PASSWORD",
+    selection.sentinelPassword === undefined ? undefined : "MCP_GATEWAY_REDIS_SENTINEL_PASSWORD",
+    selection.db === undefined ? undefined : "MCP_GATEWAY_REDIS_DB",
+    selection.tls === undefined ? undefined : "MCP_GATEWAY_REDIS_TLS",
+  ].filter((name): name is string => name !== undefined);
+  if (store !== "redis") {
+    const configured =
+      selection.url !== undefined
+        ? "MCP_GATEWAY_REDIS_URL"
+        : selection.mode !== "single"
+          ? "MCP_GATEWAY_REDIS_MODE"
+          : topologyVars[0];
+    if (configured === undefined) return { store: "memory", keyPrefix: selection.keyPrefix };
+    throw new Error(`${configured} requires MCP_GATEWAY_EPOCH_STORE=redis`);
+  }
+  if (!executorConfigured) throw new Error("The executor epoch store requires MCP_EXECUTOR_URLS");
+  const credentials = {
+    ...(selection.username === undefined ? {} : { redisUsername: selection.username }),
+    ...(selection.password === undefined ? {} : { redisPassword: selection.password }),
+    ...(selection.db === undefined ? {} : { redisDb: selection.db }),
+    ...(selection.tls === undefined ? {} : { redisTls: selection.tls }),
+    keyPrefix: selection.keyPrefix,
+  };
+  if (selection.mode === "single") {
+    if (selection.url === undefined)
+      throw new Error(
+        "MCP_GATEWAY_EPOCH_STORE=redis requires MCP_GATEWAY_REDIS_URL, or MCP_GATEWAY_REDIS_NODES with sentinel or cluster mode",
+      );
+    if (topologyVars.length > 0)
+      throw new Error(
+        `MCP_GATEWAY_REDIS_MODE=single reads MCP_GATEWAY_REDIS_URL only; ${topologyVars[0]} requires sentinel or cluster`,
+      );
+    return { store: "redis", redisUrl: selection.url, ...credentials };
+  }
+  if (selection.url !== undefined)
+    throw new Error(
+      `MCP_GATEWAY_REDIS_MODE=${selection.mode} forbids MCP_GATEWAY_REDIS_URL; list the servers in MCP_GATEWAY_REDIS_NODES`,
+    );
+  if (selection.nodes === undefined)
+    throw new Error(`MCP_GATEWAY_REDIS_MODE=${selection.mode} requires MCP_GATEWAY_REDIS_NODES`);
+  if (selection.mode === "sentinel") {
+    if (selection.sentinelName === undefined)
+      throw new Error("MCP_GATEWAY_REDIS_MODE=sentinel requires MCP_GATEWAY_REDIS_SENTINEL_NAME");
+    return {
+      store: "redis",
+      redisTopology: {
+        mode: "sentinel",
+        sentinels: selection.nodes,
+        masterName: selection.sentinelName,
+        ...(selection.sentinelPassword === undefined
+          ? {}
+          : { sentinelPassword: selection.sentinelPassword }),
+      },
+      ...credentials,
+    };
+  }
+  if (selection.sentinelName !== undefined || selection.sentinelPassword !== undefined)
+    throw new Error(
+      "MCP_GATEWAY_REDIS_SENTINEL_NAME and MCP_GATEWAY_REDIS_SENTINEL_PASSWORD require MCP_GATEWAY_REDIS_MODE=sentinel",
+    );
+  if (selection.db !== undefined && selection.db !== 0)
+    throw new Error(
+      "MCP_GATEWAY_REDIS_DB must be 0 with MCP_GATEWAY_REDIS_MODE=cluster; cluster nodes serve database 0 only",
+    );
+  return {
+    store: "redis",
+    redisTopology: { mode: "cluster", nodes: selection.nodes },
+    ...credentials,
+  };
+}
 
 export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
   if (env["NODE_ENV"] === "production" && env["MCP_DEV_SESSION_PASSTHROUGH"]) {
@@ -121,10 +302,40 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     MCP_OAUTH_CLIENT_SECRET: clientSecret,
     MCP_EXECUTOR_URLS: urls,
     MCP_EXECUTOR_TOKEN: executorToken,
+    MCP_GATEWAY_EPOCH_STORE: epochStoreNameValue,
+    MCP_GATEWAY_REDIS_MODE: redisModeValue,
+    MCP_GATEWAY_REDIS_URL: redisUrlValue,
+    MCP_GATEWAY_REDIS_NODES: redisNodesValue,
+    MCP_GATEWAY_REDIS_SENTINEL_NAME: redisSentinelNameValue,
+    MCP_GATEWAY_REDIS_USERNAME: redisUsernameValue,
+    MCP_GATEWAY_REDIS_PASSWORD: redisPasswordValue,
+    MCP_GATEWAY_REDIS_SENTINEL_PASSWORD: redisSentinelPasswordValue,
+    MCP_GATEWAY_REDIS_DB: redisDbValue,
+    MCP_GATEWAY_REDIS_TLS: redisTlsValue,
+    MCP_GATEWAY_REDIS_KEY_PREFIX: redisKeyPrefixValue,
+    MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS: capabilitiesIntervalMs,
     ...configWithoutSecret
   } = config;
   if ((urls === undefined) !== (executorToken === undefined))
     throw new Error("MCP_EXECUTOR_URLS and MCP_EXECUTOR_TOKEN must be set together");
+  const epochs = epochStoreSettings(
+    epochStoreNameValue ?? "memory",
+    {
+      mode: redisModeValue ?? "single",
+      ...(redisUrlValue === undefined ? {} : { url: redisUrlValue }),
+      ...(redisNodesValue === undefined ? {} : { nodes: redisNodesValue }),
+      ...(redisSentinelNameValue === undefined ? {} : { sentinelName: redisSentinelNameValue }),
+      ...(redisUsernameValue === undefined ? {} : { username: redisUsernameValue }),
+      ...(redisPasswordValue === undefined ? {} : { password: redisPasswordValue }),
+      ...(redisSentinelPasswordValue === undefined
+        ? {}
+        : { sentinelPassword: redisSentinelPasswordValue }),
+      ...(redisDbValue === undefined ? {} : { db: redisDbValue }),
+      ...(redisTlsValue === undefined ? {} : { tls: redisTlsValue }),
+      keyPrefix: redisKeyPrefixValue ?? "mcp:executor-epoch:",
+    },
+    urls !== undefined,
+  );
   if (
     env["NODE_ENV"] === "production" &&
     urls !== undefined &&
@@ -157,7 +368,12 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     executor:
       urls === undefined || executorToken === undefined
         ? null
-        : { urls: [...new Set(urls)], executorToken },
+        : {
+            urls: [...new Set(urls)],
+            executorToken,
+            epochs: Object.freeze(epochs),
+            capabilitiesIntervalMs,
+          },
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,
     auth: Object.freeze({
       exchange:

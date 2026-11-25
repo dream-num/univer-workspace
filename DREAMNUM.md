@@ -70,7 +70,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   pull request over instead when asked to or when a person must decide; without that scope it leaves merging to the user.
   An agent shares its merged Personal Space work, and an unclaimed agent also gets `claim` and a claim link in its `share` result. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
-  environments until Stage G.
+  environments until Stage G. Its executor runs resident or, from the same image, on Alibaba Cloud Function Compute
+  with HeaderField session affinity; the gateway finds the form through capability discovery.
   Contract: [MCP README](apps/mcp/README.md).
 
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
@@ -127,6 +128,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **CLI user and distribution contract:** [CLI README](apps/cli/README.md)
 
 ## Deployment and data classification
+
+- Several MCP gateway replicas share executor session epochs in a Redis that only the gateway opens
+  (`MCP_GATEWAY_EPOCH_STORE=redis`). It holds a counter per sha256-hashed routing key and no user, Unit, or
+  document data; losing it only forces Session renewals after platform 401s and never causes a wrong write.
 
 - Workspace product metadata and authentication state are stored in the configured SQLite or PostgreSQL product database. Univer snapshot,
   changeset, revision, and Thread Comment data are stored separately in component-owned tables in the Collaboration
