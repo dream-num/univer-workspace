@@ -8,8 +8,8 @@ your own agent to run inside a herdr pane (`HERDR_ENV=1`).
 
 ## Set up
 
-Set a verifier up with the developer, once per machine, when they ask to delegate and `$V verifier` prints
-`verifier: none`.
+Set a verifier up with the developer when they ask to delegate and `$V verifier` prints `verifier: none`, and
+when they ask to set one up, change it, or test it again, such as after they upgrade herdr or the agent.
 
 1. Check `herdr --version` and `HERDR_ENV`. Without herdr, or outside a herdr pane, ask the developer to install it
    or to restart their agent in a pane, and stop.
