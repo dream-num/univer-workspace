@@ -909,7 +909,7 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
   [[ "${HERDR_ENV:-}" == 1 ]] || die "delegate opens a herdr tab; run your agent inside a herdr pane, or hand \$V brief to a subagent"
   load_verifier || die "no verifier; set one up with \$V verifier '<spec>', see .agents/skills/verify-uvw/references/delegate.md#set-up"
   load_run
-  local brief held status lock="$RUN/delegate.agent" since transcript reason label="vu:$RUN_ID"
+  local brief held status lock="$RUN/delegate.agent" since transcript reason label="vu:$RUN_ID" procs stories
   # Command substitution drops trailing newlines, and the x keeps the brief byte for byte.
   brief="$(cmd_brief "$@" && echo x)" || exit $?
   brief="${brief%x}"
@@ -927,6 +927,13 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
   status="$(prompt_verifier "$brief" 3600000)"
   case "$status" in
     idle|done)
+      # A verifier can stop while a story it put in the background still runs, and closing its tab kills the story.
+      # Matching the story's own arguments finds it wherever the agent runs its shells.
+      procs="$(ps -Aww -o pid=,command=)"
+      if stories="$(grep -F -- "$BIN/story.mjs $REPO $RUN " <<<"$procs")"; then
+        echo "$stories" >&2
+        die "verifier $AGENT in tab \"$label\" stopped while the stories above still run; the tab stays open so they finish. When the verifier stops after them, run \$V journeys $* and herdr pane close $PANE"
+      fi
       transcript="$RUN/evidence/$AGENT.transcript.md"
       if ! reason="$(verifier_transcript "$since" "$brief" --run "$RUN" 2>&1 >"$transcript")"; then
         rm -f "$transcript"

@@ -35,6 +35,8 @@ test('a brief names the run, the feature file and every expected journey id, and
     assert.equal(host.status, 0, host.stderr);
     assert.deepEqual(listed(host.stdout), plan(loadFeatures().get('sheet-lens'), ['mcp']).partitions[0].journeys.map((j) => j.id), 'a mode selects every journey of that mode');
 
+    assert.match(some.stdout, /^Run every command in the foreground and wait until it exits\. Never start one in the background, and never end your reply while a command you started still runs/m);
+    assert.match(some.stdout, /give a story 2400000 ms \(40 minutes\)/);
     assert.match(some.stdout, /Never run `set -x`, and never print a cookie, token, password or environment variable, for example with `agent-browser cookies get` or `env`: your transcript is kept\. /);
     assert.doesNotMatch(host.stdout, /RESULT: PASS/);
 

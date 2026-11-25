@@ -332,6 +332,8 @@ Work from ${repo}. Start every shell command with this line. It selects the inst
 
 export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=${runId}; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env)"
 
+Run every command in the foreground and wait until it exits. Never start one in the background, and never end your reply while a command you started still runs: your session can close as soon as you stop, and the command dies with it. A story (\`$V story\`) can take 30 minutes. When your shell tool takes a timeout, give a story 2400000 ms (40 minutes), because some tools move a command to the background when its timeout passes, as opencode's does after 2 minutes by default.
+
 Your journeys are the \`### <ID>. <Title>\` sections of ${file} with these IDs: ${expected.join(', ')}. Each needs a verdict.
 
 ${steps.map((step, k) => `${k + 1}. ${step}`).join('\n')}
