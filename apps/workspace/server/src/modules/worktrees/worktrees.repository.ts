@@ -3,7 +3,7 @@ import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type { IssueState } from "../issues/issues.types.js";
-import type { WorktreeKind, WorktreeVisibility } from "./worktrees.types.js";
+import type { WorktreeChecksAtMerge, WorktreeKind, WorktreeVisibility } from "./worktrees.types.js";
 
 export interface WorktreeCursor {
   readonly timestamp: number;
@@ -215,6 +215,10 @@ export interface WorktreesRepository {
   mergedContentKey(worktreeId: string): Promise<string | null>;
   /** Records the content key a merge's checks gate decided on, and holds the merge's lease for another minute. */
   holdForMerge(operationId: string, contentKey: string, heldAt: number): Promise<void>;
+  /** Records the checks on a merge Operation that has not finished, before it moves Trunk. */
+  recordChecksAtMerge(operationId: string, record: WorktreeChecksAtMerge, recordedAt: number): Promise<void>;
+  /** The checks the Worktree's merge recorded, or null for one merged before merges recorded them. */
+  checksAtMerge(worktreeId: string): Promise<WorktreeChecksAtMerge | null>;
   /** Whether a merge of the Worktree has started and still holds its lease. */
   mergeRunning(worktreeId: string, now: number): Promise<boolean>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;

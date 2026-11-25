@@ -558,9 +558,19 @@ Trunk 记录（`trunkRevision`），与读 pull request 详情相同；草稿 ID
 草稿增减或过期都会改变内容键，旧结论保留并显示，但不再 current。合入开始时，`merge_worktree` Operation 的 payload
 记下当时的 `contentKey`；受限 agent 的合入在第二次判断后改记那次判断读的内容键。合入后的 pull request 以它判断 current；discard 后没有 current。一个内容键下最多 40 个检查名。
 
+合入在调用 SDK 之前（受限 agent 的合入在第二次判断之后）把这一刻的检查写进这次 `merge_worktree` Operation 的
+payload，键是 `checksAtMerge`：合入落下的内容的 `contentKey`，以 Space owner 的权限读到的声明，每项检查的
+`state`，以及每条结论的报告人、`state`、`summary`、`reportedAt`、`current` 和 `counts`。必须在 Trunk 变化之前写，
+因为合入随后把删除的文件移入 Trash，而谁都不能编辑 Trash 里的文件，之后再算会让报告人不再算能合入的人。只在
+Worktree 还是 `ready`、Operation 还是 `pending` 时写；合入之后的重试读到 `merged`，不再写，替别人完成合入的
+Operation 也不写。写入时同时记下 `checksRecordedAt`。已合入的 pull request 读 `checksRecordedAt` 最大的那份记录，不按
+`updated_at`，因为重试一个失败的 Operation 即使被拒绝也会改它的 `updated_at`。报告人的名字和头像取现在的，
+返回 `atMerge: true`；之后文件进 Trash、报告人被移除或降级都不改变它。没有记录的 pull request（这个
+字段出现之前合入的）按现在的权限计算，返回 `atMerge: false`，不回填。没有合入的 pull request 返回 `atMerge: null`。
+
 声明的检查来自 Team Space Trunk 根目录 `.agents/checks.md`（恰好一个 `.agents` 文件夹和其中恰好一个 `checks.md`
 Blob），以读者自己的权限读取前 64 KiB。代码块外的 `## name` 标题里，名字合法的前 20 个按文件顺序成为声明的检查，
-其它标题只是给 agent 的说明。每次读取都重新读文件，不在进程内缓存。结论计入（`counts`）当且仅当它 current，且报告人此刻
+其它标题只是给 agent 的说明。每次读取都重新读文件，不在进程内缓存。没有合入记录时，结论计入（`counts`）当且仅当它 current，且报告人此刻
 可以合入这个 pull request；声明的检查在有计入的 `failed` 时为 `failed`，否则有计入的 `passed` 时为 `passed`，否则为
 `missing`。报告过但未声明的名字保留并显示，不要求。
 

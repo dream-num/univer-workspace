@@ -503,7 +503,10 @@
     tags: [Worktrees]
     operationId: listWorktreeChecks
     summary: List the declared checks and every reported result on a pull request.
-    description: Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. Needs review access.
+    description: >-
+      Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. A merged pull
+      request lists the checks its merge recorded before trunk moved, with the declaration read as the Space owner then.
+      Needs review access.
     responses:
       "200":
         description: Checks and their results.

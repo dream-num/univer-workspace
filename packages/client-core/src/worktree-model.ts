@@ -78,6 +78,8 @@ export interface WorkspaceChecksSummary {
   readonly passed: number;
   readonly failed: number;
   readonly missing: number;
+  /** See `WorkspaceCheck.atMerge`. */
+  readonly atMerge: boolean | null;
 }
 
 export interface WorkspaceCheckResult {
@@ -97,6 +99,11 @@ export interface WorkspaceCheck {
   readonly declared: boolean;
   readonly state: "passed" | "failed" | "missing";
   readonly results: readonly WorkspaceCheckResult[];
+  /**
+   * true: as it stood when the pull request merged. false: merged before merges recorded their checks, so computed
+   * now. null: not merged, or a server that does not say.
+   */
+  readonly atMerge: boolean | null;
 }
 
 export interface WorkspaceRevertItem {
@@ -222,6 +229,7 @@ export function parseCheck(value: unknown): WorkspaceCheck {
     name: value["name"],
     declared: value["declared"],
     state: value["state"],
+    atMerge: parseAtMerge(value["atMerge"]),
     results: results.map((result: unknown) => {
       const reporter = isWorkspaceRecord(result) ? result["reporter"] : undefined;
       if (
@@ -310,8 +318,12 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
 function parseChecksSummary(value: unknown): Pick<WorkspaceWorktree, "checks"> {
   if (value === null) return { checks: null };
   return isWorkspaceRecord(value) && isRevision(value["passed"]) && isRevision(value["failed"]) && isRevision(value["missing"])
-    ? { checks: { passed: value["passed"], failed: value["failed"], missing: value["missing"] } }
+    ? { checks: { passed: value["passed"], failed: value["failed"], missing: value["missing"], atMerge: parseAtMerge(value["atMerge"]) } }
     : {};
+}
+
+function parseAtMerge(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 function parseIssueLink(value: unknown): Pick<WorkspaceWorktree, "issue"> {

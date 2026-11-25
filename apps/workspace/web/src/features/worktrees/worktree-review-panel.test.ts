@@ -376,3 +376,13 @@ it("says plainly when the repository declares no checks, where the reader asks f
   state.checks = undefined;
   expect(checks(true), "nothing while the checks load").toBe("");
 });
+
+it("labels a merged pull request's checks as at merge, or as computed now when its merge recorded none", () => {
+  const checks = (atMerge: boolean | null) => {
+    state.checks = [{ name: "totals-match", declared: true, state: "passed", results: [], atMerge }];
+    return renderToStaticMarkup(createElement(PullRequestChecks, { worktreeId: "worktree-1" }));
+  };
+  expect(checks(true)).toContain(">checksAtMerge</h2>");
+  expect(checks(false)).toMatch(/>checksNow<\/h2>.*checksNotRecordedAtMerge/su);
+  expect(checks(null), "an open pull request").toContain(">checks</h2>");
+});

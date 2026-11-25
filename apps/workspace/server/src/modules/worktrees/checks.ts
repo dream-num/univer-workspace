@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import type { AccessResolver, BlobResourceAccess } from "../access/index.js";
 import type { NodeCursor, NodesRepository } from "../nodes/nodes.repository.js";
+import type { PublicUser } from "../permissions/index.js";
 import type { WorktreeCheckRow } from "./worktrees.repository.js";
-import type { WorktreeCheck, WorktreeChecksSummary, WorktreeUnit } from "./worktrees.types.js";
+import type { ComputedCheck, WorktreeChecksAtMerge, WorktreeChecksSummary, WorktreeUnit } from "./worktrees.types.js";
 
 export const CHECK_NAME = /^[a-z0-9-]{1,40}$/;
 const MAX_DECLARED = 20;
@@ -51,18 +52,13 @@ export function checkViews(
   rows: readonly WorktreeCheckRow[],
   currentKey: string | null,
   reporterMerges: ReadonlyMap<string, boolean>,
-): WorktreeCheck[] {
+): ComputedCheck[] {
   const undeclared = [...new Set(rows.map((row) => row.name))].filter((name) => !declared.includes(name)).sort();
   return [...declared, ...undeclared].map((name) => {
     const results = rows.filter((row) => row.name === name).map((row) => {
       const current = row.content_key === currentKey;
       return {
-        reporter: {
-          id: row.reporter_user_id,
-          username: row.reporter_username,
-          displayName: row.reporter_display_name,
-          avatarUrl: row.reporter_avatar_url,
-        },
+        reporter: reporterOf(row),
         state: row.state,
         summary: row.summary,
         reportedAt: new Date(row.reported_at).toISOString(),
@@ -82,10 +78,28 @@ export function checkViews(
   });
 }
 
-export function checksSummary(checks: readonly WorktreeCheck[]): WorktreeChecksSummary {
+/** The recorded checks, with each reporter's name and avatar as they are now. */
+export function recordedChecks(record: WorktreeChecksAtMerge, rows: readonly WorktreeCheckRow[]): ComputedCheck[] {
+  const reporters = new Map(rows.map((row) => [row.reporter_user_id, reporterOf(row)]));
+  return record.checks.map((check) => ({
+    ...check,
+    results: check.results.map((result) => ({ ...result, reporter: reporters.get(result.reporter.id) ?? result.reporter })),
+  }));
+}
+
+function reporterOf(row: WorktreeCheckRow): PublicUser {
+  return {
+    id: row.reporter_user_id,
+    username: row.reporter_username,
+    displayName: row.reporter_display_name,
+    avatarUrl: row.reporter_avatar_url,
+  };
+}
+
+export function checksSummary(checks: readonly ComputedCheck[], atMerge: boolean | null): WorktreeChecksSummary {
   const declared = checks.filter((check) => check.declared);
-  const count = (state: WorktreeCheck["state"]) => declared.filter((check) => check.state === state).length;
-  return { passed: count("passed"), failed: count("failed"), missing: count("missing") };
+  const count = (state: ComputedCheck["state"]) => declared.filter((check) => check.state === state).length;
+  return { passed: count("passed"), failed: count("failed"), missing: count("missing"), atMerge };
 }
 
 

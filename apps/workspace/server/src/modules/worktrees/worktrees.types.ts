@@ -125,12 +125,27 @@ export interface WorktreeCheck {
   readonly declared: boolean;
   readonly state: WorktreeCheckReportState | "missing";
   readonly results: readonly WorktreeCheckResult[];
+  /**
+   * True when this is the check as it stood when the pull request merged. False on a pull request merged before merges
+   * recorded their checks, which is computed now. Null while the pull request is not merged.
+   */
+  readonly atMerge: boolean | null;
+}
+
+export type ComputedCheck = Omit<WorktreeCheck, "atMerge">;
+
+/** What a merge records before Trunk moves: the content key it judged and every check as it stood then. */
+export interface WorktreeChecksAtMerge {
+  readonly contentKey: string;
+  readonly checks: readonly ComputedCheck[];
 }
 
 export interface WorktreeChecksSummary {
   readonly passed: number;
   readonly failed: number;
   readonly missing: number;
+  /** Whether the counts are as at merge; see `WorktreeCheck.atMerge`. */
+  readonly atMerge: boolean | null;
 }
 
 export type WorktreeOperationKind =

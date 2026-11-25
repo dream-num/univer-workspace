@@ -245,7 +245,9 @@ ahead of the file or it joined more than 7 days ago. The label is advice and nev
 repository declares its checks as `## name` headings in `.agents/checks.md` on trunk. The server binds the result to
 the pull request's current content, so a later trunk edit to one of its files, or a reopen that changes it, leaves the
 result out of date. Reporting again on the same content replaces your result. A result counts only when its reporter
-may merge the pull request. `pr view` shows how many declared checks pass, fail or are missing (`--json checks`).
+may merge the pull request. `pr view` shows how many declared checks pass, fail or are missing (`--json checks`). On
+a merged pull request it shows them `at merge`, as the merge recorded them before trunk moved, or `now` for a pull
+request merged before merges recorded checks (`atMerge` in `--json checks`).
 
 `uvw pr revert <pr>`, or `uvw pr revert --issue <n>` for every merged pull request linked to an Issue, prints what a
 revert would do to each file and changes nothing; `--yes` reverts. A file the merges changed goes back to its content

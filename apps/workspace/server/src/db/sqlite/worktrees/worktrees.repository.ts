@@ -7,7 +7,7 @@ import { retryFailed } from "../operations/operations.repository.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
 import type { PublicUser } from "../../../modules/permissions/index.js";
-import type { WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
+import type { WorktreeChecksAtMerge, WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
 import type {
   WorktreeCheckRow,
   WorktreeCursor,
@@ -607,6 +607,31 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
       )
       .run(contentKey, heldAt + 60_000, heldAt, operationId);
+  }
+
+  async recordChecksAtMerge(operationId: string, record: WorktreeChecksAtMerge, recordedAt: number): Promise<void> {
+    this._database.connection
+      .prepare(
+        `UPDATE operations
+         SET payload_json = json_set(payload_json, '$.checksAtMerge', json(?), '$.checksRecordedAt', ?), updated_at = ?
+         WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
+      )
+      .run(JSON.stringify(record), recordedAt, recordedAt, operationId);
+  }
+
+  async checksAtMerge(worktreeId: string): Promise<WorktreeChecksAtMerge | null> {
+    // The merge that landed recorded last, since nothing records after Trunk moves. A retry touches updated_at even when refused.
+    const row = this._database.connection
+      .prepare(
+        `SELECT json_extract(payload_json, '$.checksAtMerge') AS record
+         FROM operations
+         WHERE kind = 'merge_worktree' AND json_extract(payload_json, '$.worktreeId') = ?
+           AND json_extract(payload_json, '$.checksAtMerge') IS NOT NULL
+         ORDER BY json_extract(payload_json, '$.checksRecordedAt') DESC, id DESC
+         LIMIT 1`
+      )
+      .get(worktreeId) as { record: string } | undefined;
+    return row ? JSON.parse(row.record) as WorktreeChecksAtMerge : null;
   }
 
   async mergeRunning(worktreeId: string, now: number): Promise<boolean> {

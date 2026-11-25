@@ -71,8 +71,8 @@ it("records check results on the ready content, counts only those of someone who
     message: "Check results are reported on a ready pull request, and this one is draft. Mark it ready first.",
   });
   expect(await checks(), "a draft lists the declared checks with nothing reported").toEqual([
-    { name: "totals-match", declared: true, state: "missing", results: [] },
-    { name: "header-unchanged", declared: true, state: "missing", results: [] },
+    { name: "totals-match", declared: true, state: "missing", results: [], atMerge: null },
+    { name: "header-unchanged", declared: true, state: "missing", results: [], atMerge: null },
   ]);
   await worktrees.markReady(viewer, pull);
 
@@ -85,7 +85,7 @@ it("records check results on the ready content, counts only those of someone who
     results: [{ reporter: { id: viewer }, state: "passed", summary: "B5 = 60", current: true, counts: false }],
   });
   expect((await report(viewer, "smoke", { state: "failed" })).check).toMatchObject({ name: "smoke", declared: false, state: "missing" });
-  expect(await summary(), "an undeclared check is not required").toEqual({ passed: 0, failed: 0, missing: 2 });
+  expect(await summary(), "an undeclared check is not required").toEqual({ passed: 0, failed: 0, missing: 2, atMerge: null });
 
   // The body names no content; a key the client sends is ignored.
   const counted = await report(editor, "totals-match", { state: "passed", contentKey: "forged" });
@@ -93,7 +93,7 @@ it("records check results on the ready content, counts only those of someone who
   const failed = await report(editor, "header-unchanged", { state: "failed", summary: "A1 renamed" });
   expect((await report(editor, "header-unchanged", { state: "failed", summary: "A1 renamed" })).check, "a repeated report changes nothing")
     .toEqual(failed.check);
-  expect(await summary()).toEqual({ passed: 1, failed: 1, missing: 0 });
+  expect(await summary()).toEqual({ passed: 1, failed: 1, missing: 0, atMerge: null });
   expect((await checks(viewer)).map((check) => [check.name, check.state])).toEqual([
     ["totals-match", "passed"], ["header-unchanged", "failed"], ["smoke", "missing"],
   ]);
@@ -106,14 +106,14 @@ it("records check results on the ready content, counts only those of someone who
   expect(stale.map((check) => [check.name, check.state, check.results.length])).toEqual([
     ["totals-match", "missing", 2], ["header-unchanged", "missing", 1], ["smoke", "missing", 1],
   ]);
-  expect(await summary()).toEqual({ passed: 0, failed: 0, missing: 2 });
+  expect(await summary()).toEqual({ passed: 0, failed: 0, missing: 2, atMerge: null });
 
   await report(editor, "totals-match", { state: "passed" });
   await report(editor, "header-unchanged", { state: "passed" });
   await worktrees.merge(editor, pull, randomUUID());
   const merged = await checks();
-  expect(merged.map((check) => [check.name, check.state, check.results.filter((result) => result.current).length])).toEqual([
-    ["totals-match", "passed", 1], ["header-unchanged", "passed", 1], ["smoke", "missing", 0],
+  expect(merged.map((check) => [check.name, check.state, check.results.filter((result) => result.current).length, check.atMerge])).toEqual([
+    ["totals-match", "passed", 1, true], ["header-unchanged", "passed", 1, true], ["smoke", "missing", 0, true],
   ]);
   await application.trash.trashNode(owner, created.body.node.id);
   expect((await checks()).map((check) => [check.name, check.state]), "its file moving to Trash does not undo what counted")

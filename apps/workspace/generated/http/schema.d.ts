@@ -2734,7 +2734,7 @@ export interface paths {
         };
         /**
          * List the declared checks and every reported result on a pull request.
-         * @description Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. Needs review access.
+         * @description Declared checks are the `## name` headings in Trunk's `.agents/checks.md`, read as the caller. A merged pull request lists the checks its merge recorded before trunk moved, with the declaration read as the Space owner then. Needs review access.
          */
         get: operations["listWorktreeChecks"];
         put?: never;
@@ -3956,11 +3956,14 @@ export interface components {
             /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet, and for a reader who reads the name `Removed resource` because they cannot open the file, so that nothing tells them whether it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and such a file no longer decides whether a reader may review the others. An open pull request that still changes one cannot merge until its author leaves it out. */
             fileState: components["schemas"]["WorktreeUnitFileState"] | null;
         };
+        /** @description true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk moved; later changes to files, members or permissions do not change it. false on a pull request merged before merges recorded their checks, whose check is computed now with today's permissions. null while the pull request is not merged. */
+        WorktreeChecksAtMerge: boolean | null;
         /** @description How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result. */
         WorktreeChecksSummary: {
             passed: number;
             failed: number;
             missing: number;
+            atMerge: components["schemas"]["WorktreeChecksAtMerge"];
         };
         WorktreeEnvelope: {
             worktree: components["schemas"]["WorktreeDetail"];
@@ -4777,7 +4780,7 @@ export interface components {
             reportedAt: string;
             /** @description Reported on the content the pull request has now, or merged with. The server names the content from every Unit's draft and Trunk head revisions and the pending page and file drafts. A Trunk edit to one of its Units, or a reopen that changes its content, leaves earlier results out of date. */
             current: boolean;
-            /** @description Current, and reported by someone who may merge the pull request now. */
+            /** @description Current, and reported by someone who may merge the pull request now, or, when the check is `atMerge`, who could merge it when its merge began. */
             counts: boolean;
         };
         WorktreeCheck: {
@@ -4791,6 +4794,7 @@ export interface components {
             state: "passed" | "failed" | "missing";
             /** @description Every result on this name, newest first, with out-of-date ones and those that do not count. */
             results: components["schemas"]["WorktreeCheckResult"][];
+            atMerge: components["schemas"]["WorktreeChecksAtMerge"];
         };
         WorktreeChecks: {
             /** @description Declared checks in file order, then reported names that are not declared. */

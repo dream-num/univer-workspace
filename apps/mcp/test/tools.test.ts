@@ -73,6 +73,7 @@ const rawCheck = {
   name: "totals-match",
   declared: true,
   state: "missing",
+  atMerge: null,
   results: [{
     reporter: user("user-1"), state: "passed", summary: "B5 = 60", reportedAt: "2026-11-24T00:00:00.000Z", current: true, counts: false,
   }],
@@ -694,10 +695,10 @@ describe("Issue tools and gateway infrastructure", () => {
   it("reports a check with pr_check and lists the checks in pr_view for a reviewer", async () => {
     await start();
     const reported = await call("pr_check", { repo: "bob/team", number: "4", name: "totals-match", state: "passed", summary: "B5 = 60" });
-    expect(reported.structuredContent).toMatchObject({ name: "totals-match", state: "missing", results: [{ current: true, counts: false }] });
+    expect(reported.structuredContent).toMatchObject({ name: "totals-match", state: "missing", atMerge: null, results: [{ current: true, counts: false }] });
     expect(writesOf()).toEqual([{ method: "PUT", path: "/api/worktrees/wt-4/checks/totals-match", body: { state: "passed", summary: "B5 = 60" } }]);
     const viewed = await call("pr_view", { repo: "bob/team", number: "4" });
-    expect(viewed.structuredContent).toMatchObject({ id: "wt-4", checks: [{ name: "totals-match", declared: true }] });
+    expect(viewed.structuredContent).toMatchObject({ id: "wt-4", checks: [{ name: "totals-match", declared: true, atMerge: null }] });
     const unreviewed = await call("pr_view", { repo: "bob/team", number: "3" });
     expect(unreviewed.structuredContent).not.toHaveProperty("checks");
   });

@@ -24,10 +24,12 @@ import type {
 } from "./worktrees.repository.js";
 import type {
   ActivationState,
+  ComputedCheck,
   MergedUnit,
   WorktreeBackend,
   WorktreeCapabilities,
   WorktreeCheck,
+  WorktreeChecksAtMerge,
   WorktreeCheckReportState,
   WorktreeDetail,
   WorktreeOperationKind,
@@ -42,7 +44,7 @@ import type {
   WorktreeVisibility,
 } from "./worktrees.types.js";
 import { checkNeedsReady, checksRequired, filesInTrash, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
-import { CHECK_NAME, checksSummary, checkViews, contentKey, draftKey, type DeclaredChecksReader } from "./checks.js";
+import { CHECK_NAME, checksSummary, checkViews, contentKey, draftKey, recordedChecks, type DeclaredChecksReader } from "./checks.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -221,15 +223,33 @@ export function createWorktreesModule(options: {
     return value.state === "discarded" ? null : options.repository.mergedContentKey(value.row.id);
   }
 
-  async function checkList(userId: string, value: WorktreeContext): Promise<WorktreeCheck[]> {
+  async function checkList(userId: string, value: WorktreeContext): Promise<{ readonly checks: WorktreeCheck[]; readonly atMerge: boolean | null }> {
     if (!value.capabilities.review) throw forbidden();
     const { row } = value;
-    const declared = row.kind === "team" && row.team_space_id ? await options.declaredChecks.names(userId, row.team_space_id) : [];
-    return checkResults(value, declared, await currentContentKey(value));
+    const recorded = value.state === "merged" ? await options.repository.checksAtMerge(row.id) : null;
+    const atMerge = recorded ? true : value.state === "merged" ? false : null;
+    const checks = recorded
+      ? recordedChecks(recorded, await options.repository.checks(row.id))
+      : await checkResults(
+          value,
+          row.kind === "team" && row.team_space_id ? await options.declaredChecks.names(userId, row.team_space_id) : [],
+          await currentContentKey(value),
+        );
+    return { checks: checks.map((check) => ({ ...check, atMerge })), atMerge };
+  }
+
+  /** The checks as they stand when a merge begins, declared on Trunk as the Space owner reads it, on the content it lands. */
+  async function checksAtMerge(value: WorktreeContext, pageDraftIds: readonly string[]): Promise<WorktreeChecksAtMerge> {
+    const { row } = value;
+    const declared = row.kind === "team" && row.team_space_id && row.team_owner_user_id
+      ? await options.declaredChecks.names(row.team_owner_user_id, row.team_space_id)
+      : [];
+    const key = contentKey(value.units, pageDraftIds);
+    return { contentKey: key, checks: await checkResults(value, declared, key) };
   }
 
   /** The declared checks and every reported one, each passed only by a result on `key` of someone who may merge. */
-  async function checkResults(value: WorktreeContext, declared: readonly string[], key: string | null): Promise<WorktreeCheck[]> {
+  async function checkResults(value: WorktreeContext, declared: readonly string[], key: string | null): Promise<ComputedCheck[]> {
     const rows = await options.repository.checks(value.row.id);
     const merges = new Map<string, boolean>();
     for (const result of rows) {
@@ -274,7 +294,9 @@ export function createWorktreesModule(options: {
   }
 
   async function detailWithChecks(userId: string, value: WorktreeContext): Promise<WorktreeDetail> {
-    return { ...detailView(value), checks: value.capabilities.review ? checksSummary(await checkList(userId, value)) : null };
+    if (!value.capabilities.review) return { ...detailView(value), checks: null };
+    const { checks, atMerge } = await checkList(userId, value);
+    return { ...detailView(value), checks: checksSummary(checks, atMerge) };
   }
 
   /** A merge decides on the ready content, so nobody moves the Worktree out of ready and back while one runs, on any replica. */
@@ -635,7 +657,7 @@ export function createWorktreesModule(options: {
     },
 
     async checks(userId, worktreeId) {
-      return { checks: await checkList(userId, await context(userId, worktreeId)) };
+      return { checks: (await checkList(userId, await context(userId, worktreeId))).checks };
     },
 
     async reportCheck(userId, worktreeId, nameValue, input) {
@@ -658,7 +680,7 @@ export function createWorktreesModule(options: {
         reportedAt: now(),
       });
       await notifyChanged("updated", worktreeId);
-      const check = (await checkList(userId, value)).find((candidate) => candidate.name === name)!;
+      const check = (await checkList(userId, value)).checks.find((candidate) => candidate.name === name)!;
       return { check };
     },
 
@@ -1074,8 +1096,10 @@ export function createWorktreesModule(options: {
           }
           // Checks and permissions may change while the merge waits, so the gate decides again just before Trunk moves.
           let checkedDraft: string | undefined;
+          let decided = value;
           if (!resumeMerged && value.checksGate) {
             const fresh = await context(userId, worktreeId);
+            decided = fresh;
             const gate = fresh.checksGate;
             if (gate?.blocked) throw checksRequired(gate.blocked);
             // The pages the merge publishes were fixed when it began, so the checked content must still be them.
@@ -1088,6 +1112,10 @@ export function createWorktreesModule(options: {
                 unitID: unit.unitId, draftHeadRevision: unit.draftHeadRevision, removed: unit.change === "deleted",
               })));
             }
+          }
+          // Recorded before Trunk moves: the merge then trashes removed files, and nobody may merge a file in Trash.
+          if (decided.state === "ready") {
+            await options.repository.recordChecksAtMerge(operationId, await checksAtMerge(decided, pageDraftIds), now());
           }
           const data = await backendCall(() =>
             resumeMerged
@@ -1242,7 +1270,7 @@ export function createWorktreesModule(options: {
   }
 }
 
-function unmetChecks(checks: readonly WorktreeCheck[]): string | null {
+function unmetChecks(checks: readonly ComputedCheck[]): string | null {
   const unmet = checks.filter((check) => check.declared && check.state !== "passed");
   if (!unmet.length) return null;
   return `This repository requires every declared check to pass before an agent merges. Not passed on the current content: ${

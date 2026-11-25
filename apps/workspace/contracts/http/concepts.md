@@ -301,6 +301,14 @@ when a counting result failed, `passed` when one passed and none failed, and `mi
 otherwise. `GET /api/worktrees/{id}` and the `#N` read carry `checks`, how many declared
 checks pass, fail or are missing, or `null` for a caller without `review`.
 
+A merge records every check as it stands just before trunk moves: the checks declared on
+trunk as the Space owner reads them, each check's state and every result with its `current`
+and `counts`, on the content the merge lands. A merged Worktree lists that record with
+`atMerge: true`, and later changes to its files, members or permissions do not change it.
+A Worktree merged before merges recorded their checks has no record; it lists them computed
+now with `atMerge: false`. `atMerge` is `null` while the Worktree is not merged. The summary
+carries the same `atMerge`.
+
 Checks block a merge only in a Team Space whose `landing` is `checks`, and only for an agent
 that does not own it. Such an agent merges once every declared check has a counting `passed`
 result, and otherwise gets `403 CHECKS_REQUIRED` naming each check that has not passed. The

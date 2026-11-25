@@ -187,6 +187,12 @@ export const unitSchema = z.object({
   worktreeId: z.string(),
 });
 export const unitWithUrlSchema = unitSchema.extend({ url: z.url() });
+const atMergeSchema = z
+  .boolean()
+  .nullable()
+  .describe(
+    "true: as it stood when the pull request merged; later file, member or permission changes do not change it. false: merged before merges recorded their checks, so computed now. null: not merged.",
+  );
 export const worktreeSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -220,7 +226,7 @@ export const worktreeSchema = z.object({
     .optional()
     .describe("The Issue this pull request serves; null when none is linked."),
   checks: z
-    .object({ passed: z.number(), failed: z.number(), missing: z.number() })
+    .object({ passed: z.number(), failed: z.number(), missing: z.number(), atMerge: atMergeSchema })
     .nullable()
     .optional()
     .describe("How many declared checks pass, fail, or lack a result that counts. pr_view lists them."),
@@ -277,6 +283,7 @@ export const checkSchema = z.object({
       }),
     )
     .describe("Newest first."),
+  atMerge: atMergeSchema,
 });
 
 export const forkPullSchema = worktreeSchema
