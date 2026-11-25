@@ -26,7 +26,8 @@ test('a brief names the run, the feature file and every expected journey id, and
     assert.match(some.stdout, /features\/link-sharing\.md\. Do its setup, the text before its first journey, then run your journeys in file order, each command as written\. Skip its other journeys\./);
     assert.match(some.stdout, /`\$V verdict <ID> PASS\|FAIL\|DRIFT\|BLOCKED "<note>"`/);
     assert.match(some.stdout, /Run `\$V journeys link-sharing LS2 LS1`\. .*INCOMPLETE/);
-    assert.match(some.stdout, /^Run test is already running in the `default` mode that these journeys declare, with its user signed in .*Do not run `up`, `down` or `user` unless a journey's own text restarts the instance/m);
+    assert.match(some.stdout, /^Run test is already running in the `default` mode that these journeys declare, with uvw signed in as its user .*Do not run `up`, `down` or `user` unless a journey's own text restarts the instance/m);
+    assert.match(some.stdout, /The run's browser starts signed out\. When a journey expects it signed in as that user, sign it in first with the block under \*\*Browser\*\* in the Drive section of \.agents\/skills\/verify-uvw\/SKILL\.md\./);
 
     assert.equal(call('sheet-lens').status, 2, 'sheet-lens spans three modes, and a brief takes one');
     writeFileSync(join(root, 'test/run.env'), 'RUN_ID=test\nWEB_PORT=1\nMCP_ENABLED=1\nMCP_SAME_ORIGIN=0\n');

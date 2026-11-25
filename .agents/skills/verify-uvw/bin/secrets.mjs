@@ -16,6 +16,11 @@ const PATTERNS = [
   ['OAuth token parameter', /([?&](?:access_token|refresh_token|id_token|client_secret|code_verifier)=)(?![[<])[^\s"'<>\\&#]+/gi],
 ];
 
+// A claim link's code: 16 random bytes in base64url (agent-claims.ts in the server). `redact` keeps it, because a
+// recipe opens the link from the evidence that holds it; `check` flags it and prints CLAIM_FIX for after the claim.
+const CLAIM = /\/claim\/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])/;
+const CLAIM_FIX = `perl -pi -e 's{${CLAIM.source}}{/claim/${MARK}}g'`;
+
 export function redact(text, literals = []) {
   for (const literal of literals) if (literal) text = text.split(literal).join(MARK);
   for (const [, pattern] of PATTERNS) text = text.replace(pattern, (_, keep) => (typeof keep === 'string' ? keep : '') + MARK);
@@ -42,6 +47,7 @@ export function findSecrets(text, literals = []) {
   return [
     ...(literals.some(literal => literal && text.includes(literal)) ? ['a secret of this run'] : []),
     ...PATTERNS.filter(([, pattern]) => new RegExp(pattern.source, pattern.flags.replace('g', '')).test(text)).map(([name]) => name),
+    ...(CLAIM.test(text) ? ['claim code'] : []),
   ];
 }
 
@@ -80,8 +86,10 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   } else if (command === 'check' && directory && existsSync(directory)) {
     const literals = runSecrets(run);
     const paths = readdirSync(directory, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name));
-    const found = paths.flatMap(path => findSecrets(readFileSync(path, 'latin1'), literals).map(name => `FAIL  ${relative(directory, path)}: ${name}`));
-    console.log(found.length ? found.join('\n') : `ok    no token, session cookie or run secret in ${paths.length} files under ${directory}`);
+    const found = paths.flatMap(path => findSecrets(readFileSync(path, 'latin1'), literals).map(name => ({ path, line: `FAIL  ${relative(directory, path)}: ${name}` })));
+    const claims = found.filter(({ line }) => line.endsWith(': claim code')).map(({ path }) => `'${path.replaceAll("'", "'\\''")}'`);
+    console.log(found.length ? found.map(({ line }) => line).join('\n') : `ok    no token, session cookie or run secret in ${paths.length} files under ${directory}`);
+    if (claims.length) console.log(`Once the claim link has been used, redact its code with:\n  ${CLAIM_FIX} ${claims.join(' ')}`);
     process.exitCode = found.length ? 1 : 0;
   } else {
     console.error('Usage: secrets.mjs redact|redact-sign-in <run> < text\n       secrets.mjs check <run> <directory>');
