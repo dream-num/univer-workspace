@@ -13,8 +13,9 @@ journey covers yet.
 | [Judge and undo an agent's task](../features/agent-mode-acceptance.md) | MI13, MI14, MI17, MI16 | mcp |
 | [Declared checks and the landing guard](../features/agent-mode-checks.md) | MP15, MP17, MP18 | mcp |
 | [Files that move to Trash around a pull request](../features/agent-mode-trash.md) | MP16, MP19 | mcp |
-| [An agent's limits](../features/agent-mode-limits.md) | MP14 | mcp |
+| [An agent's limits](../features/agent-mode-limits.md) | MP14, CE1, CE2, CE3 | mcp |
 | [Forks](../features/agent-mode-forks.md) | FK1-FK8 | mcp |
+| [Repositories an agent owns](../features/agent-mode-ownership.md) | AO1, AO2, AO3 | mcp |
 | [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10, then PR11 | mcp, then default |
 | [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9 and MH1-MH5 | default, then mcp |
 | [HTML View drafts over MCP](../features/mcp-html-view.md) | MHV5-MHV16 | mcp |
@@ -44,10 +45,10 @@ Run several features at once only with an id and ports of their own each ([Paral
 | --- | --- |
 | R1 An agent creates, edits, merges and shares in its own Space | HO2, MH3, MH5, MP14, MI13, MI17. MH4: an unclaimed agent cannot make it public |
 | R2 An agent creates a repository and owns it | MH1 (the tools), MP11, MP18 |
-| R2a The owning agent manages members and merges others' proposals | MP11 and MP12 (adds a Viewer, merges its pull request), MP18 (adds an Editor, sets `landing`) |
-| R2b A claimed agent as a member | Viewer: MI12, MP11, MP15, MHV11. Editor: MI13, MP15, MP18, MHV10 |
-| R2c An unclaimed agent holds repositories but joins none | Not covered |
-| R2d The claimer owns what the agent holds | HO6 and MH3, in the agent's Personal Space only |
+| R2a The owning agent manages members and merges others' proposals | MP11 and MP12 (adds a Viewer, merges its pull request), MP18 (adds an Editor, sets `landing`), AO1 (adds an admin, edits labels, reopens and discards another agent's pull request) |
+| R2b A claimed agent as a member | Viewer: MI12, MP11, MP15, MHV11. Editor: MI13, MP15, MP18, MHV10. Admin of an agent's repository: AO1. Not admin of a person's: CE1 |
+| R2c An unclaimed agent holds repositories but joins none | CE1, CE2 |
+| R2d The claimer owns what the agent holds | HO6 and MH3 in the agent's Personal Space, AO2 in its Team Spaces, AO3 when the agent stops. Expiry is not covered |
 | R3 The scope granted at the start counts | MA7 and MO2 without `worktree:merge`; MI13 and MP19 merge with the run user's PAT and no `toolsets` |
 | R4 Read access is enough to propose | PR4, PR5, PR6, MI12, MP13, MP15, MHV11, MF10 |
 | R5 The upstream role alone decides the landing | PR7, PR8, PR9, PR10, MP12, MP15, MI13, MHV8, MHV10, MHV11, MF10 |
@@ -68,7 +69,7 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R20 Reading upstream content needs upstream read access | MH3, MP11, PR11 |
 | R21 Losing membership cuts the fork off | FK7 (a private upstream, then a public one with `proposals` `members`) |
 | R22 A fork stores no upstream data | FK1 (copies nothing), FK6 (deleting it changes nothing upstream) |
-| R23 An unclaimed agent's quota spans all its Spaces | Not covered |
+| R23 An unclaimed agent's quota spans all its Spaces | CE2 |
 | R24 The server derives identity and state | No journey of its own |
 
 ## Stories
@@ -91,6 +92,7 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 | --- | --- |
 | A1.1 A PAT with `worktree:merge` merges with no browser | The seed pull requests of MI13 and MP19 |
 | A1.2 A PAT without it is refused | MA7, MO2 |
+| A2.1 A claimed agent joins as a Viewer; an unclaimed agent, or an agent as admin, is refused | CE1 |
 | A2.2 A Viewer agent proposes; Trunk is unchanged | PR4, PR5 (a person), MP15 |
 | A2.3 The proposal is shared and its author cannot merge | PR4, PR5, MHV11 |
 | A2.4 An Editor merges it; author and merger | PR7, MP15 |
@@ -100,7 +102,14 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 | A2.8 A non-member sees no Worktree | MH3, MP11 |
 | A2.12 Who merges their own Worktree today still does | PR1, PR9, HO2 |
 | A3.1 An agent creates a repository and works in it alone | MP11, MP18 (the repository stays private) |
-| A3.9 An unclaimed agent cannot make a Space public | MH4 (expiry is not covered) |
+| A3.2 Another agent as admin of an agent's repository, and a person as Editor | AO1 |
+| A3.3 No agent is admin of a person's Team Space | CE1 |
+| A3.4 An unclaimed agent neither joins nor adds members | CE1 |
+| A3.5 The claimer owns the agent's repositories, created before or after the claim | AO2 |
+| A3.6 A stopped agent's repositories are suspended | AO3 |
+| A3.7 An unclaimed agent's Team Spaces stop at the limit | CE2 |
+| A3.8 An unclaimed agent's files stop at 20 across its Spaces | CE2 |
+| A3.9 An unclaimed agent cannot make a Space public | MH4, CE2 (a new Team Space). Expiry is not covered |
 | A4.2 Browsing through a fork lists the whole repository | FK1 |
 | A4.3 A file someone changed on Trunk reads changed through the fork | FK2 |
 | A4.4 The first write adds one Unit with the Trunk revision of that moment | FK3 |
@@ -131,9 +140,8 @@ A0.x, A2.11, A4.1, A4.12, A6.7 and A6.8 are measurements, test suites or migrati
 ## Not covered yet
 
 - The Trunk write guards of #581 and #590.
-- Agent ceilings: R2c, R23, A2.1, A3.3, A3.4, A3.7 and A3.8.
-- Ownership of an agent's repository: R2a labels and other people's Worktrees, R2b as admin, R2d, A3.2, A3.5 and
-  A3.6.
+- An unclaimed agent's expiry (A3.9, R2d): 30 days without use cannot pass in a run.
+- The agent budget's 50 merges in 24 hours: MP14 counts one merge.
 - #570, the visibility of a pull request its author merged.
 - R8, an admin's discard that unblocks a permanent delete (A2.9).
 - R16 `behind` and `stale` (A2.10).
