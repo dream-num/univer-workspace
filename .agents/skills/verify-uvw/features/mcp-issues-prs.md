@@ -441,7 +441,10 @@ The run user O holds a Team Space with a Sales Sheet on Trunk and declares two c
 Editor agent A and a claimed Viewer agent V each open a pull request linked to one Issue, and each reports both checks
 on its own ready pull request. A merges its own, and O merges V's. O's acceptance panel shows the checks after each
 pull request's files: A's count, V's do not. Then O moves `.agents/checks.md` to Trash, and the panel says the
-repository declares no checks. MI14 uses two `principal`s, which count toward the 5 agents per hour.
+repository declares no checks. MI14 uses two `principal`s, which count toward the 5 agents per hour. Its bash blocks
+run in one shell: the second uses `O`, `R`, `U` and `RES` from the first, and the browser steps use `T` and `N`. In a new
+shell, set them again first:
+`R="$O/acceptance-checks"; T=$(jq -r .id "$EVIDENCE/mic-repo.out"); U=$(jq -r .unit.unitId "$EVIDENCE/mic-seed-unit.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mic-seed-unit.out"); N=$(jq -r .number "$EVIDENCE/mic-issue.out")`.
 
 ```bash
 R="$O/acceptance-checks"
@@ -494,12 +497,12 @@ jq -e '.state == "merged" and ([.checks[] | .state] == ["missing", "missing"]) a
 ```
 
 A merges before V adds Sales, so A's merge does not leave V's results out of date. In the run browser, signed in as O
-at 1440 × 900, open `$ORIGIN/spaces/$T/issues/$N`, choose `Acceptance`, and screenshot the page as `mic-panel.png` and
-the `Pull requests` section (`section[aria-label="Pull requests"].grid`) as `mic-checks.png`. Each card lists Sales with
+at 1440 × 900, open `$ORIGIN/spaces/$T/issues/$N`, choose `Acceptance`, and screenshot the page as `mic-panel.png`. At
+1440 × 1500, screenshot the `Pull requests` section (`section[aria-label="Pull requests"].grid`) as `mic-checks.png`. Each card lists Sales with
 `Compare`, then `Checks`. `Add South` shows `totals-match` and `header-unchanged` each `Missing`, with
 `mic-v · Passed · Does not count ·` and V's summary. `Raise North` shows both `Passed`, with `mic-a · Passed ·` and A's
-summary and no label. At 390 × 844, check that `document.documentElement.scrollWidth` is 390 and screenshot the section
-as `mic-checks-narrow.png`. Back at 1440 × 900:
+summary and no label. At 390 × 844, check that `document.documentElement.scrollWidth` is 390. At 390 × 2300, screenshot
+the section as `mic-checks-narrow.png`. Back at 1440 × 1500:
 
 ```bash
 $V cli mic-trash-checks space node trash "$(jq -r .upload.nodeId "$EVIDENCE/mic-checks.out")" --json
@@ -1106,6 +1109,9 @@ for k in draft ready; do
 done
 grep -c '"statusCode":500' "$EVIDENCE/../logs/server.log"
 ```
+
+A 409 body's `error.code` is `CONFLICT`. A 403 `FORBIDDEN` there means the server found the file outside Trash and the
+reader unable to open it.
 
 Open each open pull request's `Files changed`, click `Compare`, and screenshot `mp16-trashed-removal.png`. The file
 reads `Deleted`, and the panel says `This document is marked for deletion. Its content will not be published.`

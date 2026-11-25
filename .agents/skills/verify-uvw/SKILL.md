@@ -118,6 +118,10 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
 - CLI proof: `$V cli <label> …` writes `<label>.cmd`, `.out`, `.err`, `.exit`.
 - UI proof: a screenshot after the action, plus a reload or a second route showing the persisted state.
   Name files `<feature>-<step>.png`.
+- The app scrolls an inner container, not the page, so `screenshot --full` and an element screenshot both stop at the
+  viewport's bottom edge. Before you screenshot a tall section, make the viewport tall enough with
+  `agent-browser set viewport <width> <height>`. An Issue's `Acceptance` view with two pull requests fits at 1440 × 1500
+  and 390 × 2300. Judge layout and horizontal scroll at the journey's own size first, then raise only the height.
 - A mutation needs a second, read-only view. Examples: a browser edit read back with
   `uvw inspect --trunk`, or a uvw write seen in the browser after reload. A success toast or exit code 0
   alone proves nothing.
