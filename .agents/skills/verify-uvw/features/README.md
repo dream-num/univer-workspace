@@ -105,8 +105,8 @@ them, and lists what no journey covers yet.
 - [Agent Mode: judge and undo an agent's task](./agent-mode-acceptance.md): MI13 judges four merged pull requests, one
   of which deletes a file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its
   claimer and not to a member who may not accept. MI14 shows each linked pull request's check results there as they
-  stood at merge, counting or not, and says on an open pull request when the repository declares none. MI17 shows that sharing to an acceptor who did not claim the
-  agent by name only. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every pull
+  stood at merge, counting or not, and says on an open pull request when the repository declares none. MI17 shows
+  that sharing to an acceptor who did not claim the agent by name only. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every pull
   request's files in the panel with the file the revert moved to Trash noted and its checks as they stood at merge,
   leaves a file someone edited after the merge blocked until a person overwrites it, and has an agent revert with
   `pr_revert`.

@@ -68,8 +68,8 @@ Preconditions:
 
 As the guest: `gu pr create -R $A/personal -t Handoff --json`, then
 `gu unit create --worktree <id> --space $A/personal --type sheet --name "Handoff sheet" --json` (Node ID `AN`),
-`gu pr ready` and `gu pr merge`. `gu share $AN --link viewer` prints an expiry date and a `Claim link`, with
-`It works once, within 10 minutes.` Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
+`gu pr ready 1 -R $A/personal` and `gu pr merge 1 -R $A/personal`. `gu share $AN --link viewer` prints an expiry
+date and a `Claim link`, with `It works once, within 10 minutes.` Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
 
 ### HO3. Visitor view (AH1-AH3)
 

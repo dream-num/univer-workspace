@@ -14,7 +14,7 @@ journey covers yet.
 | [Declared checks and the landing guard](../features/agent-mode-checks.md) | MP15, MP17, MP18 | mcp |
 | [Files that move to Trash around a pull request](../features/agent-mode-trash.md) | MP16, MP19 | mcp |
 | [An agent's limits](../features/agent-mode-limits.md) | MP14 | mcp |
-| [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR11 | mcp |
+| [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10, then PR11 | mcp, then default |
 | [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9 and MH1-MH5 | default, then mcp |
 | [HTML View drafts over MCP](../features/mcp-html-view.md) | MHV5-MHV16 | mcp |
 | [Files and Office exchange over MCP](../features/mcp-blobs-office.md) | MF10, MF11 | mcp |
