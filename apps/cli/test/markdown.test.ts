@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceCompileMarkdownCommand } from "../src/features/markdown/command.js";
+import { createWorkspaceExportMarkdownCommand } from "../src/features/markdown/export-command.js";
 import type { WorkspaceCompileMarkdownResult } from "@univerjs/univer-workspace-client-core";
 
 const map = [
@@ -46,6 +47,47 @@ async function run(
 }
 
 describe("compile-markdown command", () => {
+  it.each(["update", "export"])("reports malformed source map JSON before %s", async (mode) => {
+    const directory = await mkdtemp(join(tmpdir(), "uvw-markdown-"));
+    try {
+      const path = join(directory, "map.json");
+      await writeFile(path, "{");
+      const execute = vi.fn();
+      const command =
+        mode === "update"
+          ? createWorkspaceCompileMarkdownCommand({ execute })
+          : createWorkspaceExportMarkdownCommand({ execute });
+      const errors: string[] = [];
+      command.exitOverride().configureOutput({ writeErr: (text) => errors.push(text) });
+      const args =
+        mode === "update" ? ["report.md", "--apply"] : ["--out", join(directory, "edit.md")];
+      await expect(
+        command.parseAsync(
+          [
+            ...args,
+            "--worktree",
+            "wt",
+            "--unit",
+            "doc",
+            "--blocks",
+            "intro",
+            "--source-map",
+            path,
+            "--json",
+          ],
+          { from: "user" },
+        ),
+      ).rejects.toMatchObject({ exitCode: 1 });
+      expect(JSON.parse(errors.join(""))).toMatchObject({
+        code: "workspace-argument-invalid",
+        message: expect.stringContaining("--source-map"),
+      });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("writes the generated program in compile-only mode", async () => {
     const directory = await mkdtemp(join(tmpdir(), "uvw-markdown-"));
     try {

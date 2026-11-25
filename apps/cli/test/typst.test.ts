@@ -9,6 +9,7 @@ import type { OutputConfiguration } from "commander";
 import { Command } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceCompileTypstCommand } from "../src/features/typst/command.js";
+import { workspaceError } from "../src/errors.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -117,6 +118,10 @@ describe("compile-typst command", () => {
 
   it.each([
     {
+      args: ["bundle", "--out", "./report.js", "--diagnostics-out", "report.js"],
+      message: "--out and --diagnostics-out require different files.",
+    },
+    {
       args: ["bundle", "--apply", "--space", "space-1"],
       message: "--apply requires --worktree and --space.",
     },
@@ -157,35 +162,64 @@ describe("compile-typst command", () => {
     await expect(readFile(diagnosticsPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("prints the native diagnostic when the Typst compiler throws", async () => {
-    const diagnostics = [
-      {
-        sourcePath: "pages/cover.typ",
-        reason: "unclosed delimiter",
-        span: { line: 3, column: 7 },
-      },
-    ];
-    const execute = vi.fn(async () => {
-      throw Object.assign(new Error("DaC Typst semantic extraction failed."), {
-        name: "DaCTypstTranslationError",
-        code: "SAC_DAC_TRANSLATION_FAILED",
-        diagnostics,
+  it.each(["stderr", "sdk", "apply", "unwritable"])(
+    "preserves Typst failure diagnostics for %s",
+    async (scenario) => {
+      const directory = await temporaryDirectory();
+      const report = scenario === "unwritable" ? directory : join(directory, "diagnostic.json");
+      const program = join(directory, "program.js");
+      const diagnostics = [
+        {
+          sourcePath: "pages/cover.typ",
+          reason: "unclosed delimiter",
+          span: { line: 3, column: 7 },
+        },
+      ];
+      const execute = vi.fn(async () => {
+        if (scenario === "apply") {
+          throw workspaceError("workspace-typst-diagnostics", "No Unit was created.", {
+            diagnostics,
+          });
+        }
+        throw Object.assign(new Error("DaC Typst semantic extraction failed."), {
+          name: "DaCTypstTranslationError",
+          code: "SAC_DAC_TRANSLATION_FAILED",
+          diagnostics,
+        });
       });
-    });
-    const output: string[] = [];
+      const output: string[] = [];
 
-    await expect(
-      run(
-        createWorkspaceCompileTypstCommand({ execute }),
-        ["bundle", "--out", "unused.js", "--json"],
-        output,
-      ),
-    ).rejects.toMatchObject({ exitCode: 1 });
-    expect(JSON.parse(output.join(""))).toMatchObject({
-      code: "SAC_DAC_TRANSLATION_FAILED",
-      detail: { diagnostics },
-    });
-  });
+      await expect(
+        run(
+          createWorkspaceCompileTypstCommand({ execute }),
+          [
+            "bundle",
+            ...(scenario === "apply" ? ["--apply", "--space", "space", "--worktree", "wt"] : []),
+            "--out",
+            program,
+            ...(scenario === "stderr" ? [] : ["--diagnostics-out", report]),
+            "--json",
+          ],
+          output,
+        ),
+      ).rejects.toMatchObject({ exitCode: 1 });
+      expect(JSON.parse(output.join(""))).toMatchObject({
+        code: scenario === "apply" ? "workspace-typst-diagnostics" : "SAC_DAC_TRANSLATION_FAILED",
+        detail: { diagnostics },
+      });
+      if (scenario === "unwritable") {
+        expect(JSON.parse(output.join("")).detail.diagnosticsWriteError).toEqual(
+          expect.any(String),
+        );
+      } else if (scenario !== "stderr") {
+        expect(JSON.parse(await readFile(report, "utf8"))).toEqual({
+          schemaVersion: 1,
+          diagnostics,
+        });
+      }
+      await expect(readFile(program)).rejects.toMatchObject({ code: "ENOENT" });
+    },
+  );
 });
 
 async function temporaryDirectory(): Promise<string> {

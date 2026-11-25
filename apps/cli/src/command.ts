@@ -37,6 +37,7 @@ export async function executeCommand<Result>(
   command: Command,
   operation: () => Promise<Result>,
   options?: JsonOption,
+  writeFailureDiagnostics?: (diagnostics: readonly unknown[]) => Promise<void>,
 ): Promise<Result> {
   try {
     return await operation();
@@ -52,8 +53,25 @@ export async function executeCommand<Result>(
         ? "workspace-markdown-invalid"
         : undefined;
     if (code !== undefined) {
-      const detail =
+      let detail =
         error instanceof WorkspaceApplicationError ? error.detail : diagnostics && { diagnostics };
+      if (
+        writeFailureDiagnostics &&
+        typeof detail === "object" &&
+        detail !== null &&
+        "diagnostics" in detail &&
+        Array.isArray(detail.diagnostics)
+      ) {
+        try {
+          await writeFailureDiagnostics(detail.diagnostics);
+        } catch (writeError) {
+          detail = {
+            ...detail,
+            diagnosticsWriteError:
+              writeError instanceof Error ? writeError.message : String(writeError),
+          };
+        }
+      }
       const authenticationRequired = code === "workspace-authentication-required";
       const hint = authenticationRequired
         ? "run uvw auth login, or uvw auth guest to continue as a guest agent"

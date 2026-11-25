@@ -388,7 +388,11 @@ Local resource paths resolve relative to the Markdown file and must remain insid
 
 When `compile-markdown`, `export-markdown`, or `compile-typst` fails with diagnostics, `--json`
 writes a single error object to stderr and exits nonzero. Read `detail.diagnostics` for the
-specific reason and any source location.
+specific reason and any source location. Typst also writes these diagnostics to the file requested
+with `--diagnostics-out`. Use separate paths for the program and diagnostic outputs.
+If writing the diagnostic file fails while handling a compiler error, stderr retains that error and includes
+`detail.diagnosticsWriteError`. For Markdown updates and exports, malformed `--source-map` JSON
+reports `workspace-argument-invalid` with the parser message before the command accesses the Doc.
 
 ```bash
 uvw compile-markdown report.md --out review/doc.js --json
