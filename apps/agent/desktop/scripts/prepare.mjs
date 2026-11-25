@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import policy from "../src/policy.cjs";
@@ -113,18 +113,23 @@ if (!expected || createHash("sha256").update(bytes).digest("hex") !== expected)
 const archivePath = join(root, archive);
 await writeFile(archivePath, bytes);
 if (platform === "win32") {
-  // Paths are passed through environment variables, never interpolated as code.
+  // Use the same PowerShell 7 host as the Windows builder. A legacy
+  // powershell.exe process can inherit PowerShell 7's incompatible Archive module.
+  // Pass the paths through the environment and stop on extraction errors.
   run(
-    "powershell.exe",
+    "pwsh.exe",
     [
       "-NoProfile",
       "-Command",
-      "Expand-Archive -LiteralPath $env:UWA_ARCHIVE -DestinationPath $env:UWA_EXTRACT",
+      "Expand-Archive -LiteralPath $env:UWA_ARCHIVE -DestinationPath $env:UWA_EXTRACT -ErrorAction Stop",
     ],
     { env: { ...process.env, UWA_ARCHIVE: archivePath, UWA_EXTRACT: root } },
   );
+  const nodeExe = join(root, stem, "node.exe");
+  if (!(await stat(nodeExe).catch(() => null))?.isFile())
+    throw new Error(`Node archive extraction did not produce ${stem}/node.exe`);
   await mkdir(join(runtime, "node", "bin"), { recursive: true });
-  await cp(join(root, stem, "node.exe"), join(runtime, "node", "bin", "node.exe"));
+  await cp(nodeExe, join(runtime, "node", "bin", "node.exe"));
 } else {
   run("tar", ["-xzf", archivePath, "-C", root]);
   await mkdir(join(runtime, "node", "bin"), { recursive: true });
@@ -173,8 +178,10 @@ const env = {
 };
 const profile = join(runtime, "home", "profiles", "univer-workspace-harness");
 await mkdir(profile, { recursive: true });
-const { writeProfileWorkspace } = await import('./portable-profile.mjs');
-await writeProfileWorkspace(profile);
+const { readBootstrapDshVersions, writeProfileWorkspace } = await import('./portable-profile.mjs');
+// Both graphs become part of host.asar. Pin before installing the profile:
+// rewriting only its lockfile at finalization cannot change the modules packed.
+await writeProfileWorkspace(profile, await readBootstrapDshVersions(bootstrap));
 const dsh = join(bootstrap, "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
 run(
   node,
