@@ -83,7 +83,8 @@ and so on. The id is also the task's run id.
   features that have such journeys. `summary.md` counts each task's checks that held, broke, were blocked or did
   not run, and the journeys the agent drives, and lists every check that did not hold. It exits `1` when one did
   not hold, `4` when a task failed in the runner or leaked, `3` when a task is host only, else `0`.
-- A task expects a verdict for each journey it selects, from the journey headings of its feature file. The
+- A task expects a verdict for each journey it selects, from the journey headings of its feature file, and for each
+  earlier `Run: helper.` journey whose checks broke or were blocked when `run-journeys` ran it first. The
   features and journeys in [host-only.mjs](host-only.mjs) do not run in the runner. Those still run on the host.
   The runner lists them in `summary.md` with the `$V up --for` command for each. Each task passes its journeys to
   `up --for`, `run-journeys` and `brief` by ID, and sets `VERIFY_UVW_SKIP_JOURNEYS` to the journeys of its feature

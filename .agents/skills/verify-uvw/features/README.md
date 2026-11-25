@@ -59,7 +59,8 @@ keeps the journey `agent`. The helper runs blocks this way:
 - `!`, `[[ ]]`, `(( ))` and `( )` fail the parser test in a `helper` journey, because bash does not trap their
   failure everywhere. Write `command; test $? -eq 1`, `test` and `{ ...; }`.
 - Variables and functions carry from setup and earlier `helper` journeys of the same mode, so running one journey
-  first runs those that have not run. A `helper` journey never needs an `agent` journey's state.
+  first runs those that have not run. When one of those breaks or is blocked, the last line of `run-journeys` names
+  it, and `$V journeys` asks a verdict for it. A `helper` journey never needs an `agent` journey's state.
 - Each journey's output goes to `evidence/<ID>.run.log`, and each broken check records its markdown line, exit
   code and the redacted end of that output. A journey stops after 600 s.
 

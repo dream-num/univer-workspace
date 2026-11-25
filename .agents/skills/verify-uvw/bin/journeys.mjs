@@ -108,6 +108,8 @@ export function parseFeature(name, markdown) {
     j.runBy = (own.Run ?? ['agent'])[0];
   }
   const run = journeys.filter((j) => j.runBy === 'helper');
+  // run-journeys runs these first, so a helper journey runs on their shell state.
+  for (const j of run) j.before = run.filter((k) => k.mode === j.mode && k.line < j.line).map((k) => k.id);
   for (const b of [...(run.length ? setup : []), ...run.flatMap((j) => j.blocks)]) {
     b.text.split('\n').forEach((code, k) => {
       if (UNTRAPPED.test(code)) fail(b.line + k - 1, `the helper cannot check with "!", "[[ ]]", "(( ))" or "( )", because bash does not trap their failure everywhere; write "command; test $? -eq 1", "test" or "{ ...; }": ${code.trim()}`);
@@ -184,7 +186,11 @@ function told(c) {
 
 export function fold(expected, entries) {
   const last = (kind, id) => entries.findLast((e) => e?.kind === kind && e.journey === id);
-  const journeys = expected.map((j) => {
+  // The expected journeys ran on the state of those before them, so one of those whose checks did not hold needs a verdict too.
+  const selected = new Set(expected.map((j) => j.id));
+  const first = [...new Set(expected.flatMap((j) => j.before ?? []))]
+    .filter((id) => !selected.has(id) && ['broke', 'blocked'].includes(last('checks', id)?.outcome)).map((id) => ({ id, runBy: 'helper' }));
+  const journeys = [...expected, ...first].map((j) => {
     const c = j.runBy === 'helper' ? last('checks', j.id) : undefined;
     const checks = j.runBy === 'helper' ? c?.outcome ?? 'none' : null;
     const v = last('verdict', j.id);
@@ -290,6 +296,8 @@ export async function runJourneys({ run, feature, mode, ids, again = false, skip
     if (step.id === 'setup' && entry.outcome !== 'held') broken = entry;
   }
   const last = (id) => [...done, ...entries].findLast((e) => e.journey === id);
+  const first = chain.filter((s) => s.id !== 'setup' && !ids.includes(s.id) && last(s.id).outcome !== 'held');
+  if (first.length) print(`ran first and did not hold: ${first.map((s) => `${s.id} ${last(s.id).outcome}`).join(', ')}; each needs a verdict too`);
   return { ok: ids.every((id) => !chain.some((s) => s.id === id) || last(id)?.outcome === 'held'), entries };
 }
 
@@ -376,7 +384,8 @@ async function main(argv) {
     if (!name) die('usage: verify-uvw journeys <feature> [journey-id|mode...]', 2);
     const { partitions } = planned(named(name), selectors);
     const expected = partitions.flatMap((p) => p.journeys);
-    const width = Math.max(...expected.map((j) => j.id.length));
+    // fold may add a journey that ran first.
+    const width = Math.max(...expected.flatMap((j) => [j.id, ...(j.before ?? [])]).map((id) => id.length));
     const row = (id, text) => `${id.padEnd(width)}  ${text}`.trimEnd();
     if (!opts.run) {
       console.log([`${name}: ${expected.length} journeys in .agents/skills/verify-uvw/features/${name}.md`,
@@ -386,7 +395,7 @@ async function main(argv) {
     }
     const { journeys, result, checks } = fold(expected, entriesOf(opts.run));
     const done = journeys.filter((j) => j.verdict !== 'MISSING').length;
-    const said = (j) => [j.note.replace(/\s+/g, ' '), j.checks && `checks ${j.checks}${j.failure ? `: ${j.failure.replace(/\s+/g, ' ')}` : ''}`].filter(Boolean).join('; ');
+    const said = (j) => [j.note.replace(/\s+/g, ' '), !expected.some((e) => e.id === j.id) && 'ran first', j.checks && `checks ${j.checks}${j.failure ? `: ${j.failure.replace(/\s+/g, ' ')}` : ''}`].filter(Boolean).join('; ');
     console.log([`${name} in run ${basename(opts.run)}: ${done} of ${journeys.length} journeys have a verdict`,
       ...journeys.map((j) => row(j.id, `${j.verdict.padEnd(7)}  ${said(j)}`)), ...(checks ? [`CHECKS: ${checks}`] : []), `RESULT: ${result}`].join('\n'));
     if (result === 'INCOMPLETE') process.exitCode = 1;
