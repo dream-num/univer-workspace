@@ -384,16 +384,17 @@ test('a broken setup blocks every journey, a timeout blocks one, and a failure t
 
 test('a timed-out journey is blocked at the line where it stopped', async () => {
   const { runJourneys, parseFeature: parse } = await import('./journeys.mjs');
+  // 5 s, not 1: under load the shell prelude alone can take a second, and the timeout must land on the sleep.
   const text = feature('### A1. Slow', '', 'Run: helper.', '', ...bash('echo start', 'sleep 30', 'echo never'));
   const { repo, run, done } = helperRepo({ f: text });
   const saved = { ...process.env };
   Object.assign(process.env, { VERIFY_UVW_ROOT: join(repo, 'runs'), VERIFY_UVW_RUN: 't' });
   try {
     const lines = [];
-    const { ok, entries } = await runJourneys({ run, feature: parse('f', text), mode: 'default', ids: ['A1'], timeoutSeconds: 1, repo, print: (l) => lines.push(l) });
+    const { ok, entries } = await runJourneys({ run, feature: parse('f', text), mode: 'default', ids: ['A1'], timeoutSeconds: 5, repo, print: (l) => lines.push(l) });
     assert.equal(ok, false);
-    assert.deepEqual([entries[0].outcome, entries[0].reason], ['blocked', `timed out after 1 s at ${lineOf(text, 'sleep 30', '### A1. Slow')}`]);
-    assert.match(lines.join('\n'), /^A1 +blocked +\d+ s\n {2}timed out after 1 s/);
+    assert.deepEqual([entries[0].outcome, entries[0].reason], ['blocked', `timed out after 5 s at ${lineOf(text, 'sleep 30', '### A1. Slow')}`]);
+    assert.match(lines.join('\n'), /^A1 +blocked +\d+ s\n {2}timed out after 5 s/);
   } finally {
     process.env = saved;
     done();
