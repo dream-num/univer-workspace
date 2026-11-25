@@ -207,10 +207,11 @@ macOS.
 
 ## Cleanup
 
-`$V down` closes the run's browser session and uvw daemons, stops only the server and Vite PIDs it
-recorded, and deletes `data/`, `home/` and `user.pw`. Run it after every failed attempt too. Never kill
-by process name or port, and never touch `apps/workspace/.data/`. Delete an old run's evidence with
-`rm -rf /tmp/verify-uvw/<run-id>` only when you no longer need the proof.
+`$V down` closes the run's browser sessions, `verify-uvw-<run-id>` and every `verify-uvw-<run-id>-<suffix>` a recipe
+opened, and its uvw daemons. It stops only the server and Vite PIDs it recorded, and deletes `data/`, `home/` and
+`user.pw`. Run it after every failed attempt too. Never kill by process name or port, and never touch
+`apps/workspace/.data/`. Delete an old run's evidence with `rm -rf /tmp/verify-uvw/<run-id>` only when you no
+longer need the proof.
 
 ## Parallel runs
 

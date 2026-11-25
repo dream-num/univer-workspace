@@ -826,6 +826,14 @@ cmd_down() {
   cmd_agent_down
   [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_down
   agent-browser close >/dev/null 2>&1 || true
+  # Recipes open more sessions named verify-uvw-<run>-<suffix>; the hyphen keeps run v6 off run v68's sessions.
+  # shortcut: a run whose id is this id plus "-<suffix>" would lose its browser too; record session names in the run if ids ever nest.
+  local session
+  for session in $(agent-browser session list --json 2>/dev/null | node -e 'let names = [];
+    try { names = JSON.parse(require("node:fs").readFileSync(0, "utf8")).data.sessions; } catch {}
+    for (const name of names) if (name.startsWith(process.argv[1] + "-")) console.log(name);' "$AGENT_BROWSER_SESSION" || true); do
+    AGENT_BROWSER_SESSION="$session" agent-browser close >/dev/null 2>&1 || true
+  done
   uvw_raw daemon stop >/dev/null 2>&1 || true
   local story_home
   for story_home in "$RUN"/home/stories/uvw-*/.univer-workspace-cli; do
