@@ -38,7 +38,7 @@ export function createWorkspaceExportMarkdownCommand(
     )
     .option("--json")
     .action(async (options: ExportMarkdownOptions) => {
-      const result = await executeCommand(command, async () => {
+      const exportMarkdown = async () => {
         const blockIds = options.blocks
           .split(",")
           .map((id) => id.trim())
@@ -65,7 +65,8 @@ export function createWorkspaceExportMarkdownCommand(
         });
         await writeWorkspaceMarkdownExport(exported, options.out, options.sourceMapOut);
         return exported;
-      });
+      };
+      const result = await executeCommand(command, exportMarkdown, options);
       present(
         command,
         options,

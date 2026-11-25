@@ -386,9 +386,9 @@ Review the launch checklist before publishing.
 
 Local resource paths resolve relative to the Markdown file and must remain inside its source directory.
 
-When `compile-markdown` or `compile-typst` fails with compiler diagnostics, `--json` writes a
-single error object to stderr and exits nonzero. Read `detail.diagnostics` for the source
-location and specific reason when the compiler supplies them.
+When `compile-markdown`, `export-markdown`, or `compile-typst` fails with diagnostics, `--json`
+writes a single error object to stderr and exits nonzero. Read `detail.diagnostics` for the
+specific reason and any source location.
 
 ```bash
 uvw compile-markdown report.md --out review/doc.js --json
