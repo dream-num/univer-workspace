@@ -251,7 +251,7 @@ $V mcp --as acceptor mia-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mia-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+`mia-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
 cache. Then:
 
 ```bash
@@ -337,7 +337,7 @@ $V mcp --as panel mip-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mip-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mip-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+`mip-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
 cache. Create member E in a second browser session: with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e`, pin the
 language and view as [the skill](../SKILL.md#drive) does, open `/login`, click the `Create account` mode button, fill
 `Username` with `mip-e-$VERIFY_UVW_RUN`, `Display name` and `Password`, and submit. Then:
@@ -457,7 +457,7 @@ $V mcp --as checks-v mic-claim-v claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
-[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache. Then:
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache. Then:
 
 ```bash
 A=$(jq -r .agent.username "$EVIDENCE/principal-checks-a.json"); VA=$(jq -r .agent.username "$EVIDENCE/principal-checks-v.json")
@@ -781,7 +781,7 @@ $V mcp --as b3 mp12-claim-b3 claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as the run user, click `Claim agent`, and replace the codes as
-[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache.
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache.
 
 ```bash
 A3U=$(jq -r .agent.username "$EVIDENCE/principal-a3.json"); B3U=$(jq -r .agent.username "$EVIDENCE/principal-b3.json")
@@ -867,7 +867,7 @@ $V mcp --as linker mpl-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mpl-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Then:
+`mpl-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
 $V cli mpl-member repo member add "$A" --role viewer -R "$O/issue-link" --json
@@ -978,7 +978,7 @@ $V mcp --as checker-b mpc-claim-b claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
-[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache. Register a
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache. Register a
 person E with `POST $ORIGIN/api/auth/password/register` and keep the password outside `$EVIDENCE`. Then:
 
 ```bash

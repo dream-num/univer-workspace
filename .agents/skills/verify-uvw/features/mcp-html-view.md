@@ -361,7 +361,7 @@ $V mcp --as pagebot mpa-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mpa-claim.out` in the run browser and click `Claim agent`, then replace the code in
-`mpa-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. The agent then works alone:
+`mpa-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. The agent then works alone:
 
 ```bash
 curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PUT -H 'content-type: application/json' -d '{"role":"editor"}' "$ORIGIN/api/team-spaces/$T/members/$BOT"
@@ -402,7 +402,7 @@ $V mcp --as pagefork mfp-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mfp-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
-code in `mfp-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Then H adds A
+code in `mfp-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then H adds A
 as a Viewer and E as an Editor, and puts a Sheet with North `42` in B2 on Trunk and a page bound to it, with the
 commands of MHV8 on `$H/fork-pages`, from `uh pr create` to `PN` and `PR`:
 
