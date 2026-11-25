@@ -318,7 +318,7 @@ export function brief({ repo, root, runId, feature, selectors, partition }) {
   ];
   return `Follow a written recipe against a Univer Workspace instance, and record a verdict for each of its journeys.
 
-Run ${runId} is already running in the \`${partition.mode}\` mode that these journeys declare, with its user signed in and a doctor check that found no FAIL line. Do not run \`up\`, \`down\` or \`user\` unless a journey's own text restarts the instance; then run what that text says.
+Run ${runId} is already running in the \`${partition.mode}\` mode that these journeys declare, with uvw signed in as its user and a doctor check that found no FAIL line. The run's browser starts signed out. When a journey expects it signed in as that user, sign it in first with the block under **Browser** in the Drive section of .agents/skills/verify-uvw/SKILL.md. Do not run \`up\`, \`down\` or \`user\` unless a journey's own text restarts the instance; then run what that text says.
 
 Work from ${repo}. Start every shell command with this line. It selects the instance:
 

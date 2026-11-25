@@ -90,7 +90,8 @@ Run `$V doctor` first, and again whenever anything looks off. It exits non-zero 
 ## Drive
 
 **Browser (agent-browser).** `$V env` exports `AGENT_BROWSER_SESSION=verify-uvw-<run-id>`, so this run
-gets its own headless browser. Each Bash tool call is a new shell, so start every call that uses
+gets its own headless browser. `$V user` signs in only uvw, so the browser starts signed out, and the block
+below signs it in as the run's user. Each Bash tool call is a new shell, so start every call that uses
 agent-browser or uvw with `eval "$($V env)"`. It also sets `$ORIGIN`, `$EVIDENCE` and `$RUN`, the run
 directory. Always use
 `127.0.0.1`, never `localhost` or another host, because the bundled Univer license is bound to the
@@ -101,7 +102,7 @@ eval "$($V env)"
 agent-browser open "$ORIGIN/login" && agent-browser wait 1500
 agent-browser storage local set univer-workspace-language en-US && agent-browser reload && agent-browser wait 1500
 agent-browser find label "Username" fill "verify-$VERIFY_UVW_RUN"
-agent-browser find label "Password" fill "$(cat /tmp/verify-uvw/$VERIFY_UVW_RUN/user.pw)"
+agent-browser find label "Password" fill "$(cat "$RUN/user.pw")"
 agent-browser click 'form button[type=submit]'
 agent-browser wait --url '**/home'
 agent-browser snapshot -i -c                      # find stable names before acting
