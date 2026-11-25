@@ -3,6 +3,7 @@ import type { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-cor
 import {
   isForkAddress,
   parseNodeReference,
+  requireForkUpstream,
   workspaceError,
   type WorkspaceForkFeature,
 } from "@univerjs/univer-workspace-client-core/product";
@@ -72,10 +73,7 @@ export function createUnitCommand(
         const value = {
           unit: await executeCommand(create, async () => {
             const resolved = await context.repoOrFork(options.space);
-            const spaceId = "fork" in resolved ? resolved.fork.upstream?.id : resolved.spaceId;
-            if (spaceId === undefined) {
-              throw workspaceError("workspace-not-found", `You can no longer read the upstream of fork ${options.space}.`);
-            }
+            const spaceId = "fork" in resolved ? requireForkUpstream(resolved.fork).id : resolved.spaceId;
             const input = {
               name: options.name,
               spaceId,

@@ -17,11 +17,20 @@ const UPSTREAM = {
   accessRole: "viewer", capabilities: {}, description: "", fullName: "hana/team", id: "s1", name: "Team",
   owner: { id: "h1", username: "hana" }, publicRead: false, slug: "team", type: "team",
 };
+const READ_ONLY = {
+  ...UPSTREAM, publicRead: true, capabilities: {
+    browseRoot: true, createAtRoot: false, renameSpace: false, manageMembers: false, viewTrash: false,
+    createIssue: false, triageIssues: false, manageIssueLabels: false, propose: false,
+  },
+};
 const summary = { id: "w1", name: "fix", number: 7, state: "draft", teamSpace: { id: "s1" } };
-const fork = (state: "clean" | "drafting" | "removed") => ({
+type ForkState = "clean" | "drafting" | "removed" | "cut" | "readOnly";
+const drafting = (state: ForkState) => state === "drafting" || state === "cut" || state === "readOnly";
+const fork = (state: ForkState) => ({
   createdAt: "2026-11-23T00:00:00.000Z", fullName: "agent/fix", id: "f1", name: "fix",
-  owner: { id: "a1", username: "agent" }, state: state === "drafting" ? state : "clean",
-  upstream: state === "removed" ? null : UPSTREAM, worktree: state === "drafting" ? summary : null,
+  owner: { id: "a1", username: "agent" }, state: drafting(state) ? "drafting" : "clean",
+  upstream: state === "removed" || state === "cut" ? null : state === "readOnly" ? READ_ONLY : UPSTREAM,
+  worktree: drafting(state) ? summary : null,
 });
 const unit = (overrides: Record<string, unknown> = {}) => ({
   activationState: "notApplicable", change: "modified", draftHeadRevision: 1, freshness: null,
@@ -56,7 +65,7 @@ interface Call { readonly method: string; readonly path: string; readonly body: 
 
 let drafts: unknown[];
 let worktreeState: "draft" | "ready";
-let forkState: "clean" | "drafting" | "removed";
+let forkState: ForkState;
 let calls: Call[];
 let executorInputs: { op: string; input: Record<string, unknown> }[];
 let executor: Server;
@@ -64,7 +73,7 @@ let gateway: ReturnType<typeof createGateway>;
 let client: Client;
 
 function routes(call: Call): unknown {
-  const opened = forkState === "drafting" ? [unit(), created, removed] : [];
+  const opened = forkState === "drafting" || forkState === "readOnly" ? [unit(), created, removed] : [];
   const table: Record<string, () => unknown> = {
     "GET /api/session": () => ({ authenticated: true, user: { id: "a1", displayName: "agent", kind: "agent", claimed: true } }),
     "GET /api/forks/lookup?name=fix&owner=agent": () => fork(forkState),
@@ -246,10 +255,49 @@ describe("fork addresses in write tools", () => {
     forkState = "clean";
     expect(await call("unit_list", { worktree: "agent/fix" })).toEqual({ units: [] });
     forkState = "removed";
-    expect(toolError(await client.callTool({ name: "unit_list", arguments: { worktree: "agent/fix" } }))).toMatchObject({
-      code: "workspace-not-found",
-      message: "You can no longer read the upstream of fork agent/fix.",
-    });
+    expect(toolError(await client.callTool({ name: "unit_list", arguments: { worktree: "agent/fix" } }))).toMatchObject(cutOff);
+  });
+});
+
+const cutOff = {
+  code: "FORBIDDEN",
+  message: "You no longer have the access that fork agent/fix needs to its upstream. Ask the upstream's owner to give you access again, or delete the fork with fork_delete (uvw fork delete in the CLI).",
+};
+const forkWrites: [string, Record<string, unknown>][] = [
+  ["execute", { worktree: "agent/fix", unit: "u1", code: "return 1" }],
+  ["execute", { worktree: "agent/fix", unit: "u2", code: "return 1" }],
+  ["unit_add", { worktree: "agent/fix", resource: "r-u2" }],
+  ["unit_create", { worktree: "agent/fix", space: "agent/fix", type: "doc", name: "Notes", idempotency_key: "create-notes-0001" }],
+  ["html_view_save", { page: "page-1", etag: '"up-1"', html: "<p>mine</p>", idempotency_key: "page-key-000000001", worktree: "agent/fix" }],
+];
+
+describe("a fork cut off from its upstream", () => {
+  it.each([
+    ...reads.map(([name, args]): [string, Record<string, unknown>] => [name, { ...args, unit: "u1", worktree: "agent/fix" }]),
+    ["unit_list", { worktree: "agent/fix" }],
+    ["space_browse", { repo: "agent/fix" }],
+    ["space_find", { repo: "agent/fix", query: "notes" }],
+    ["html_view_read", { resource: "page-1", worktree: "agent/fix" }],
+    ["blob_download", { resource: "page-1", worktree: "agent/fix" }],
+    ...forkWrites,
+  ])("%s refuses once the owner cannot read the upstream, naming the way out", async (name, args) => {
+    forkState = "cut";
+    expect(toolError(await client.callTool({ name, arguments: args }))).toMatchObject(cutOff);
+    expect(writes()).toEqual([]);
+    expect(executorInputs).toEqual([]);
+  });
+
+  it.each(forkWrites)("%s refuses once a public upstream takes no proposals from the owner", async (name, args) => {
+    forkState = "readOnly";
+    expect(toolError(await client.callTool({ name, arguments: args }))).toMatchObject(cutOff);
+    expect(writes()).toEqual([]);
+    expect(executorInputs).toEqual([]);
+  });
+
+  it("still reads a public upstream that takes no proposals from the owner", async () => {
+    forkState = "readOnly";
+    await call("read", { range: "Sheet1!A1", unit: "u1", worktree: "agent/fix" });
+    expect(executorInputs).toMatchObject([{ input: { unitId: "u1", scope: { kind: "worktree", worktreeId: "w1" } } }]);
   });
 });
 

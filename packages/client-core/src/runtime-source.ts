@@ -1,6 +1,7 @@
 import { ErrorCode, type IChangeset, type ISheetBlock, type ISnapshot, type UniverType } from "@univerjs/protocol";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import { contentLength } from "./files.js";
+import { refuseCutOffFork } from "./fork.js";
 import { resolveWorkspaceAssetContent } from "./asset-content.js";
 import type { WorkspaceHttp } from "./http.js";
 import {
@@ -36,7 +37,10 @@ export class WorkspaceContentSource {
     readonly unitId: string;
     readonly worktreeId: string;
   }): Promise<WorkspaceRuntimeTarget> {
-    return resolveWorktreeTarget(this.http.origin, input, await getWorktree(this.http, input.worktreeId));
+    const worktree = await getWorktree(this.http, input.worktreeId);
+    // The server hides a Worktree's Units from a caller who may not review it, so a cut-off fork would read as a missing Unit.
+    if (worktree.capabilities?.review === false) await refuseCutOffFork(this.http, worktree.id);
+    return resolveWorktreeTarget(this.http.origin, input, worktree);
   }
 
   public async resolveEditableRuntimeTarget(input: {
@@ -51,6 +55,7 @@ export class WorkspaceContentSource {
         { state: worktree.state, worktreeId: input.worktreeId },
       );
     }
+    if (worktree.capabilities?.editDraft === false) await refuseCutOffFork(this.http, worktree.id);
     return resolveWorktreeTarget(this.http.origin, input, worktree);
   }
 
@@ -205,7 +210,7 @@ function resolveWorktreeTarget(
 function isStoredUnitTypeMismatch(error: unknown): boolean {
   return (
     error instanceof WorkspaceApplicationError &&
-    error.code === String(ErrorCode.INVALID_ARGUMENT) &&
+    error.code === ErrorCode[ErrorCode.INVALID_ARGUMENT] &&
     error.message === "Unit type does not match the stored unit"
   );
 }

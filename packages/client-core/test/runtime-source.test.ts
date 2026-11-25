@@ -90,6 +90,39 @@ describe("Workspace runtime source resolution", () => {
     expect(requests).toEqual(["/api/worktrees/wt-1", "/api/worktrees/wt-1"]);
   });
 
+  it("refuses the open Worktree of a fork its owner lost the upstream of, by Worktree ID, for a read and a write", async () => {
+    const capabilities = { review: false, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge: false, discard: true };
+    const cutOff = (review: boolean) => contentSource(async (input) => {
+      const path = new URL(input instanceof Request ? input.url : input.toString()).pathname;
+      if (path === "/api/forks") {
+        return Response.json({ forks: [{
+          createdAt: "2026-11-23T00:00:00.000Z", fullName: "agent/race", id: "f1", name: "race", owner: { id: "a1", username: "agent" },
+          state: "drafting", upstream: null, worktree: { id: "wt-1", name: "race", state: "draft" },
+        }] });
+      }
+      return Response.json({ worktree: { ...rawWorktree("draft", review ? [rawUnit()] : []), capabilities: { ...capabilities, review } } });
+    });
+    const refusal = {
+      code: "FORBIDDEN",
+      message: "You no longer have the access that fork agent/race needs to its upstream. Ask the upstream's owner to give you access again, or delete the fork with fork_delete (uvw fork delete in the CLI).",
+      detail: { fork: "agent/race" },
+    };
+    await expect(cutOff(false).resolveRuntimeTarget({ unitId: "book-1", worktreeId: "wt-1" })).rejects.toMatchObject(refusal);
+    await expect(cutOff(false).resolveEditableRuntimeTarget({ unitId: "book-1", worktreeId: "wt-1" })).rejects.toMatchObject(refusal);
+    await expect(cutOff(true).resolveEditableRuntimeTarget({ unitId: "book-1", worktreeId: "wt-1" })).rejects.toMatchObject(refusal);
+    await expect(cutOff(true).resolveRuntimeTarget({ unitId: "book-1", worktreeId: "wt-1" })).resolves.toMatchObject({ unitId: "book-1" });
+  });
+
+  it("keeps a Worktree the caller cannot write that is none of its forks' to the runtime's own refusal", async () => {
+    const source = contentSource(async (input) => {
+      const path = new URL(input instanceof Request ? input.url : input.toString()).pathname;
+      if (path === "/api/forks") return Response.json({ forks: [] });
+      const capabilities = { review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge: false, discard: false };
+      return Response.json({ worktree: { ...rawWorktree(), capabilities } });
+    });
+    await expect(source.resolveEditableRuntimeTarget({ unitId: "book-1", worktreeId: "wt-1" })).resolves.toMatchObject({ unitId: "book-1" });
+  });
+
   it("probes wire types in Sheet, Doc, Slide, Base, Board order and stops on success", async () => {
     const requests: string[] = [];
     const source = contentSource(async (input) => {
@@ -108,17 +141,18 @@ describe("Workspace runtime source resolution", () => {
   });
 
   it.each([
-    [{ code: 7, message: "different" }, 400],
-    [{ code: "OTHER", message: "Unit type does not match the stored unit" }, 400],
-    [{ code: "NOT_FOUND", message: "The Unit was not found." }, 404],
-  ])("does not probe after a non-mismatch failure %#", async (error, status) => {
+    [{ code: 7, message: "different" }, 400, "INVALID_ARGUMENT"],
+    [{ code: 3, message: "Cannot read this unit." }, 403, "PERMISSION_DENIED"],
+    [{ code: "OTHER", message: "Unit type does not match the stored unit" }, 400, "OTHER"],
+    [{ code: "NOT_FOUND", message: "The Unit was not found." }, 404, "NOT_FOUND"],
+  ])("does not probe after a non-mismatch failure %#", async (error, status, code) => {
     let requests = 0;
     const source = contentSource(async () => {
       requests += 1;
       return Response.json({ error }, { status });
     });
     await expect(source.resolveTrunkRuntimeTarget({ unitId: "missing" })).rejects.toMatchObject({
-      code: String(error.code),
+      code,
       message: error.message,
     });
     expect(requests).toBe(1);

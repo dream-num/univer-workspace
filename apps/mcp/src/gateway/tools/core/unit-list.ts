@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 import { unitWithUrlSchema } from "../schemas.js";
-import { isForkAddress, worktreeUnits } from "@univerjs/univer-workspace-client-core/product";
-import { forkFeature, upstreamOf } from "./issue-support.js";
+import { isForkAddress, requireForkUpstream, worktreeUnits } from "@univerjs/univer-workspace-client-core/product";
+import { forkFeature } from "./issue-support.js";
 import { attachUnitUrls, worktreeOrForkInput } from "./space-support.js";
 import { worktreeFeature } from "./pr-support.js";
 
@@ -21,7 +21,8 @@ export const unitListTool: ToolDefinition = {
     let { worktree } = inputSchema.parse(args);
     if (isForkAddress(worktree)) {
       const fork = await forkFeature(context).get(worktree);
-      if (fork.worktree === null) return { output: { units: [] }, repo: upstreamOf(fork).id };
+      const upstream = requireForkUpstream(fork);
+      if (fork.worktree === null) return { output: { units: [] }, repo: upstream.id };
       worktree = fork.worktree.id;
     }
     const fetched = await worktreeFeature(context).get(worktree);

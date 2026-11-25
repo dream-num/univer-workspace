@@ -74,6 +74,7 @@ export class WorkspaceForkFeature {
 
   public async units(reference: string): Promise<readonly WorkspaceUnit[]> {
     const fork = await this.get(reference);
+    requireForkUpstream(fork);
     return fork.worktree === null ? [] : worktreeUnits(await getWorktree(await this.authenticatedHttp(), fork.worktree.id));
   }
 
@@ -116,10 +117,18 @@ export class WorkspaceForkFeature {
     return unit;
   }
 
+  /** The open Worktree whose pages a read through the fork sees, or null while the fork is clean. */
+  public async readWorktree(reference: string): Promise<WorkspaceForkWorktree | null> {
+    const fork = await this.get(reference);
+    requireForkUpstream(fork);
+    return fork.worktree;
+  }
+
   /** A read of one Unit through the fork: its open Worktree when that holds the Unit, the upstream Trunk otherwise. */
   public async readScope(reference: string, unitId: string): Promise<WorkspaceRuntimeScope> {
     const http = await this.authenticatedHttp();
     const { fork, worktree } = await this.open(http, reference);
+    requireForkUpstream(fork);
     if (worktree?.units.some((unit) => unit.unitId === unitId)) return { kind: "worktree", worktreeId: worktree.id };
     await upstreamResourceId(http, fork, unitId);
     return { kind: "trunk" };
@@ -135,6 +144,7 @@ export class WorkspaceForkFeature {
   ): Promise<{ readonly kind: "worktree"; readonly worktreeId: string }> {
     const http = await this.authenticatedHttp();
     const { fork, worktree } = await this.open(http, reference);
+    requireProposal(fork);
     const unit = worktree?.units.find((candidate) => candidate.unitId === unitId);
     if (unit?.source === "worktree") return { kind: "worktree", worktreeId: unit.worktreeId };
     const resourceId = unit?.resourceId ?? (await upstreamResourceId(http, fork, unitId));
@@ -147,6 +157,7 @@ export class WorkspaceForkFeature {
    */
   public async openWorktree(reference: string): Promise<WorkspaceForkWorktree> {
     const fork = await this.get(reference);
+    requireProposal(fork);
     const body = await (await this.authenticatedHttp()).json(`/api/forks/${encodeURIComponent(fork.id)}/worktree`, {
       idempotencyKey: randomUUID(),
       method: "POST",
@@ -166,6 +177,7 @@ export class WorkspaceForkFeature {
       ({ readonly filePath: string } | WorkspaceBlobBytes),
   ): Promise<{ readonly worktree: WorkspaceForkWorktree; readonly draft: WorkspaceHtmlViewDraft }> {
     const fork = await this.get(reference);
+    requireProposal(fork);
     const source = "filePath" in input ? await inspectSource(input.filePath) : memorySource(input);
     const http = await this.authenticatedHttp();
     const identity = { etag: input.etag, forkId: fork.id, idempotencyKey: input.idempotencyKey ?? randomUUID(), resourceId: input.resourceId };
@@ -200,9 +212,9 @@ export class WorkspaceForkFeature {
    */
   public async openBlob(reference: string, resourceId: string) {
     const fork = await this.get(reference);
+    const upstream = requireForkUpstream(fork);
     const blobs = new WorkspaceBlobFeature(this.authenticatedHttp);
     const { node } = await blobs.get(resourceId);
-    const upstream = requireUpstream(fork);
     if (node.spaceId !== upstream.id) {
       throw workspaceError(
         "workspace-argument-invalid",
@@ -266,7 +278,7 @@ export class WorkspaceForkFeature {
 
   /** What `WorkspaceSpaceFeature.browse` and `find` list for the fork: the upstream as its open Worktree sees it. */
   public async listing(fork: WorkspaceFork): Promise<Pick<BrowseSpaceInput, "overlay" | "spaceId">> {
-    const upstream = requireUpstream(fork);
+    const upstream = requireForkUpstream(fork);
     if (fork.worktree === null) return { spaceId: upstream.id };
     const worktree = await getWorktree(await this.authenticatedHttp(), fork.worktree.id);
     return { overlay: { accessRole: upstream.accessRole ?? "viewer", worktree }, spaceId: upstream.id };
@@ -294,6 +306,7 @@ export class WorkspaceForkFeature {
     body: Readonly<Record<string, unknown>>,
     idempotencyKey: string,
   ): Promise<WorkspaceUnit> {
+    requireProposal(fork);
     const http = await this.authenticatedHttp();
     const { initialData: _initialData, ...request } = body;
     return await executeWithStableIdentity({
@@ -334,7 +347,7 @@ export async function resolveRepoOrFork(
 }
 
 async function upstreamResourceId(http: WorkspaceHttp, fork: WorkspaceFork, unitId: string): Promise<string> {
-  const upstream = requireUpstream(fork);
+  const upstream = requireForkUpstream(fork);
   const node = parseDetachedNode((await http.json(`/api/unit-resources/${encodeURIComponent(unitId)}`))["node"]);
   if (node.spaceId !== upstream.id || node.resource?.kind !== "univer" || node.resource.unitId !== unitId) {
     throw workspaceError(
@@ -346,11 +359,28 @@ async function upstreamResourceId(http: WorkspaceHttp, fork: WorkspaceFork, unit
   return node.resource.resourceId;
 }
 
-function requireUpstream(fork: WorkspaceFork): WorkspaceSpace {
+function forkCutOffError(fork: string): WorkspaceApplicationError {
+  return workspaceError(
+    "FORBIDDEN",
+    `You no longer have the access that fork ${fork} needs to its upstream. Ask the upstream's owner to give you access again, or delete the fork with fork_delete (uvw fork delete in the CLI).`,
+    { fork },
+  );
+}
+
+export function requireForkUpstream(fork: WorkspaceFork): WorkspaceSpace {
   if (fork.upstream !== null) return fork.upstream;
-  throw workspaceError("workspace-not-found", `You can no longer read the upstream of fork ${fork.fullName}.`, {
-    fork: fork.fullName,
-  });
+  throw forkCutOffError(fork.fullName);
+}
+
+/** A public upstream stays readable after its owner may no longer propose to it, so writes check `propose` too. */
+function requireProposal(fork: WorkspaceFork): void {
+  if (requireForkUpstream(fork).capabilities?.propose === false) throw forkCutOffError(fork.fullName);
+}
+
+/** Refuses a Worktree with `forkCutOffError` when it is the open Worktree of one of the caller's forks. */
+export async function refuseCutOffFork(http: WorkspaceHttp, worktreeId: string): Promise<void> {
+  const fork = (await new WorkspaceForkFeature(async () => http).list()).find((candidate) => candidate.worktree?.id === worktreeId);
+  if (fork !== undefined) throw forkCutOffError(fork.fullName);
 }
 
 function parseFork(value: unknown): WorkspaceFork {

@@ -312,3 +312,50 @@ describe("files through a fork", () => {
     await expect(files("clean", [], "s2").forks.openBlob("agent/fix", "r9")).rejects.toMatchObject({ code: "workspace-argument-invalid" });
   });
 });
+
+describe("a fork cut off from its upstream", () => {
+  const refusal = {
+    code: "FORBIDDEN",
+    message: "You no longer have the access that fork agent/fix needs to its upstream. Ask the upstream's owner to give you access again, or delete the fork with fork_delete (uvw fork delete in the CLI).",
+    detail: { fork: "agent/fix" },
+  };
+  const writesThrough = (forks: WorkspaceForkFeature) => [
+    () => forks.writeScope("agent/fix", "u1"),
+    () => forks.addUnit("agent/fix", "r1"),
+    () => forks.createUnit("agent/fix", { name: "Notes", spaceId: "s1", type: "doc" }),
+    () => forks.openWorktree("agent/fix"),
+    () => forks.replaceBlob("agent/fix", { resourceId: "r9", etag: '"v1"', fileName: "report.pdf", bytes: new Uint8Array([1]) }),
+  ];
+
+  it("refuses every read and write once its owner cannot read the upstream, and still deletes it", async () => {
+    const { calls, forks } = server({
+      [LOOKUP]: () => fork("drafting", { upstream: null }),
+      "GET /api/worktrees/w1": () => ({ worktree: worktree([]) }),
+      "DELETE /api/forks/f1": () => ({ fork: { id: "f1" }, worktree: null }),
+    });
+    const reads = [
+      () => forks.readScope("agent/fix", "u1"),
+      () => forks.readWorktree("agent/fix"),
+      () => forks.units("agent/fix"),
+      () => forks.openBlob("agent/fix", "r9"),
+      async () => await forks.listing(await forks.get("agent/fix")),
+    ];
+    for (const attempt of [...reads, ...writesThrough(forks)]) await expect(attempt()).rejects.toMatchObject(refusal);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+    await expect(forks.delete("agent/fix")).resolves.toMatchObject({ fork: { fullName: "agent/fix" } });
+  });
+
+  it("reads a public upstream that takes no proposals from its owner, and refuses every write", async () => {
+    const capabilities = {
+      browseRoot: true, createAtRoot: false, renameSpace: false, manageMembers: false, viewTrash: false,
+      createIssue: false, triageIssues: false, manageIssueLabels: false, propose: false,
+    };
+    const { calls, forks } = server({
+      [LOOKUP]: () => fork("drafting", { upstream: { ...UPSTREAM, capabilities, publicRead: true } }),
+      "GET /api/worktrees/w1": () => ({ worktree: worktree([unit({ change: "modified" })]) }),
+    });
+    await expect(forks.readScope("agent/fix", "u1")).resolves.toEqual({ kind: "worktree", worktreeId: "w1" });
+    for (const attempt of writesThrough(forks)) await expect(attempt()).rejects.toMatchObject(refusal);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+});

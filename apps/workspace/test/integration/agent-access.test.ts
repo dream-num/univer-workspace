@@ -288,7 +288,11 @@ describe("ceilings", () => {
       expect(response.status).toBe(201);
       nodeIds.push(((await response.json()) as { node: { id: string } }).node.id);
     }
-    await expectRefused(createFileRequest(origin, agent.cookie, "File 21"), "AGENT_QUOTA_EXCEEDED");
+    const refused = await createFileRequest(origin, agent.cookie, "File 21");
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "AGENT_QUOTA_EXCEEDED",
+      message: "An unclaimed agent can keep at most 20 files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, or give a person a claim link so they can claim you, which lifts this limit.",
+    } } });
     // The 20th creation, replayed with its Idempotency-Key, is the same file and not a 21st.
     expect((await createFileRequest(origin, agent.cookie, "File 20", key)).status).toBe(200);
 
@@ -376,7 +380,11 @@ describe("ceilings", () => {
     const { origin } = await start();
     const agent = await createAgent(origin);
     expect((await reserveBlob(origin, agent.cookie, 10 * 1024 * 1024)).status).toBe(201);
-    await expectRefused(reserveBlob(origin, agent.cookie, 10 * 1024 * 1024 + 1), "AGENT_QUOTA_EXCEEDED");
+    const refused = await reserveBlob(origin, agent.cookie, 10 * 1024 * 1024 + 1);
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "AGENT_QUOTA_EXCEEDED",
+      message: "An unclaimed agent can store files of at most 10485760 bytes. Store a smaller file, or give a person a claim link so they can claim you, which lifts this limit.",
+    } } });
 
     await expectRefused(exchangeUpload(origin, agent.cookie, 10 * 1024 * 1024 + 1), "AGENT_QUOTA_EXCEEDED");
     expect((await exchangeUpload(origin, agent.cookie, 5)).status).toBe(201);

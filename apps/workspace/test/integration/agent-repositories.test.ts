@@ -174,7 +174,11 @@ describe("unclaimed agent quotas", () => {
     const { origin } = await start();
     const unclaimed = await guestAgent(origin);
     for (const name of ["One", "Two", "Three"]) await createRepo(origin, unclaimed, name);
-    await expectRefused(send(origin, "POST", "/api/team-spaces", { name: "Four" }, unclaimed.cookie), "AGENT_QUOTA_EXCEEDED");
+    const refused = await send(origin, "POST", "/api/team-spaces", { name: "Four" }, unclaimed.cookie);
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "AGENT_QUOTA_EXCEEDED",
+      message: "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a claim link so they can claim you, which lifts this limit.",
+    } } });
 
     const racing = await guestAgent(origin);
     const statuses = await Promise.all(
