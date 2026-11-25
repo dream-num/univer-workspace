@@ -774,7 +774,7 @@ describe("a private pull request its author merged alone", () => {
     expect(await view(reader), "a public reader who is not a member").toEqual({ reads: hidden, lists: [], activity: [] });
 
     expect((await post(origin, s.owner, `/api/nodes/${forecast.nodeId}/trash`)).status).toBe(201);
-    expect(await seen(s.viewer, personMerged), "a member who cannot read one of its files sees none of them").toBe("space []");
+    expect(await seen(s.viewer, personMerged), "a file moved to Trash after the merge leaves the pull request reviewable").toBe("space [Forecast]");
   }, 60_000);
 });
 

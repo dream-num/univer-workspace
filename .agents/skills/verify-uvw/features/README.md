@@ -93,8 +93,9 @@ keeps the journey `agent`. The helper runs blocks this way:
   file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its claimer only. MI14 shows
   each linked pull request's check results there, counting or not, and says when the repository declares none. MI15
   turns on an acceptance deadline and has the server accept a submitted Issue by deadline, attributed to no one, with a
-  reopen restarting the clock. MI16 reverts an Issue's merged pull requests from its acceptance panel, leaves a file
-  someone edited after the merge blocked until a person overwrites it, and has an agent revert with `pr_revert`. MP11
+  reopen restarting the clock. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every
+  pull request's files in the panel with the file the revert moved to Trash noted, leaves a file someone edited after
+  the merge blocked until a person overwrites it, and has an agent revert with `pr_revert`. MP11
   lists reviewable pull requests, and MP12 has two agents find their own work with prompts that carry no task. MP13 links a fork's
   pull request to an Issue and checks both sides in MCP, uvw and the browser. MP14 drives an
   agent to its budget of open pull requests and counts a merge in `whoami`. MP15 reports check results declared in

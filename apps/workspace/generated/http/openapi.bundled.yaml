@@ -8101,6 +8101,12 @@ components:
           type: string
           format: date-time
           description: When the Unit joined the Worktree.
+    WorktreeUnitFileState:
+      type: string
+      enum:
+        - live
+        - inTrash
+        - deleted
     WorktreeUnit:
       type: object
       additionalProperties: false
@@ -8117,6 +8123,7 @@ components:
         - mergeResult
         - activationState
         - freshness
+        - fileState
       properties:
         unitId:
           type: string
@@ -8153,6 +8160,11 @@ components:
           description: Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, and once the Worktree leaves draft and ready.
           oneOf:
             - $ref: '#/components/schemas/WorktreeUnitFreshness'
+            - type: 'null'
+        fileState:
+          description: Where the Unit's file is now. Null for a new Unit that no merge has created yet. No one opens or compares a file that is inTrash or deleted, and once the pull request is merged such a file no longer decides whether a reader may review the others.
+          oneOf:
+            - $ref: '#/components/schemas/WorktreeUnitFileState'
             - type: 'null'
     WorktreeChecksSummary:
       type: object

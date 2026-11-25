@@ -3934,6 +3934,8 @@ export interface components {
              */
             addedAt: string;
         };
+        /** @enum {string} */
+        WorktreeUnitFileState: "live" | "inTrash" | "deleted";
         WorktreeUnit: {
             unitId: string;
             resourceId: string;
@@ -3950,6 +3952,8 @@ export interface components {
             activationState: components["schemas"]["ActivationState"];
             /** @description Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, and once the Worktree leaves draft and ready. */
             freshness: components["schemas"]["WorktreeUnitFreshness"] | null;
+            /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet. No one opens or compares a file that is inTrash or deleted, and once the pull request is merged such a file no longer decides whether a reader may review the others. */
+            fileState: components["schemas"]["WorktreeUnitFileState"] | null;
         };
         /** @description How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result. */
         WorktreeChecksSummary: {

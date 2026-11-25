@@ -174,19 +174,23 @@ function AcceptanceFile({ worktreeId, unit, merged }: {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const trashed = merged && unit.change === "deleted" && unit.source === "trunk";
+  const note = trashed ? "issueAcceptanceMovedToTrash"
+    : unit.fileState === "inTrash" ? "issueAcceptanceInTrash"
+    : unit.fileState === "deleted" ? "issueAcceptanceDeleted"
+    : null;
   return (
     <li className="grid min-w-0 gap-2">
       <div className="flex min-w-0 items-center gap-2 text-sm">
         <UnitChangeIcon change={unit.change} />
         <UnitTypeIcon type={unit.unitType} />
         <span className="min-w-0 flex-1 truncate">{unit.name}</span>
-        {trashed ? null : (
+        {note ? null : (
           <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
             {t(open ? "issueAcceptanceHideComparison" : "issueAcceptanceCompare")}
           </Button>
         )}
       </div>
-      {trashed ? <Muted>{t("issueAcceptanceMovedToTrash")}</Muted> : null}
+      {note ? <Muted>{t(note)}</Muted> : null}
       {open ? <Comparison worktreeId={worktreeId} unitId={unit.unitId} merged={merged} /> : null}
     </li>
   );

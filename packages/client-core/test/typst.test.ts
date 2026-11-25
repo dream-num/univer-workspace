@@ -298,6 +298,7 @@ function unit(): WorkspaceUnit {
     activationState: "notApplicable",
     change: "added",
     draftHeadRevision: 1,
+    fileState: null,
     freshness: null,
     mergeResult: "pending",
     name: "Runtime paper",

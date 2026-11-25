@@ -29,6 +29,8 @@ export interface WorkspaceUnit {
     | "discarded";
   readonly change: "modified" | "added" | "deleted" | "unchanged";
   readonly draftHeadRevision: number;
+  /** Where the file is now; null for a new Unit no merge has created yet. */
+  readonly fileState: "live" | "inTrash" | "deleted" | null;
   readonly freshness: WorkspaceUnitFreshness | null;
   readonly mergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
   readonly name: string;
@@ -340,6 +342,7 @@ export function parseUnit(value: unknown, worktreeId: string): WorkspaceUnit {
     !isChange(value["change"]) ||
     !isMergeResult(value["mergeResult"]) ||
     !isActivation(value["activationState"]) ||
+    !isFileState(value["fileState"]) ||
     "fileId" in value
   ) {
     throw invalidResponse("Workspace response contains an invalid Unit");
@@ -361,6 +364,7 @@ export function parseUnit(value: unknown, worktreeId: string): WorkspaceUnit {
     activationState: value["activationState"],
     change: value["change"],
     draftHeadRevision: value["draftHeadRevision"],
+    fileState: value["fileState"] ?? null,
     freshness: parseFreshness(value["freshness"]),
     mergeResult: value["mergeResult"],
     name: value["name"],
@@ -443,6 +447,11 @@ function isMergeResult(value: unknown): value is WorkspaceUnit["mergeResult"] {
     value === "conflict" ||
     value === "failed"
   );
+}
+
+// Servers released before fileState existed omit it.
+function isFileState(value: unknown): value is WorkspaceUnit["fileState"] | undefined {
+  return value === undefined || value === null || value === "live" || value === "inTrash" || value === "deleted";
 }
 
 function isActivation(value: unknown): value is WorkspaceUnit["activationState"] {

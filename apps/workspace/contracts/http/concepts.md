@@ -364,10 +364,13 @@ to `private` gets `FORBIDDEN`; reopen it first. A merged Team Worktree reports V
 whatever it was while open, so every Space Member finds it in the list and the Space activity;
 a discarded one keeps its Visibility. Marking a trunk Unit for deletion still
 needs the right to trash its Node, and content protection on a trunk Unit holds in its
-draft: an author without edit access to the Unit cannot change what a protection rule covers. A trunk Unit that a merge
-moved to Trash keeps its `name` in the Team Worktree for the Space's Owner and Members, who could read it before. Anyone
-else who cannot open it reads `Removed resource`, and so does everyone after permanent deletion. Visibility controls who
-may Review; Visibility never grants Resource Access.
+draft: an author without edit access to the Unit cannot change what a protection rule covers. Each Unit's `fileState`
+says whether its file is `live`, `inTrash` or `deleted`. No one opens or compares a file that is in Trash or deleted.
+Once a pull request is merged, such a file, whether its merge, a revert or a person moved it there, no longer decides
+whether a reader may Review: the reader needs to open only the files still live. A Unit whose file is in Trash keeps its
+`name` in the Team Worktree for the Space's Owner and Members, who could read it before, and anyone else who cannot open
+it reads `Removed resource`. After permanent deletion only a file the pull request created keeps its name for them, and
+every other one reads `Removed resource`. Visibility controls who may Review; Visibility never grants Resource Access.
 
 The Creator, and the human who claimed an agent creator, can discover, Review, mark
 ready, reopen and discard a private Team Worktree. The Team Space

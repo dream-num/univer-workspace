@@ -37,6 +37,7 @@ import type {
   WorktreeState,
   WorktreeSummary,
   WorktreeUnit,
+  WorktreeUnitFileState,
   WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
@@ -1187,7 +1188,7 @@ export function createWorktreesModule(options: {
           const unit = requireMappedUnit(value, input.unitId);
           if (input.write && unit.change === "deleted") return false;
           if (
-            unit.source === "trunk" &&
+            unit.fileState !== null &&
             !(await options.access.resolveResource(input.userId, unit.resourceId))?.capabilities.openContent
           )
             return false;
@@ -1253,7 +1254,9 @@ async function worktreeCapabilities(
   let editsAll = true;
   for (const unit of units) {
     const isRemoved = removed.has(unit.unit_id);
-    if (readsAll && !isRemoved) readsAll = await canReadUnit(userId, row, unit, capabilityAccess);
+    // No one opens a file in Trash, so after the merge it no longer decides whether the others may be reviewed.
+    const counts = !isRemoved && !(state === "merged" && leftTrunk(unit));
+    if (readsAll && counts) readsAll = await canReadUnit(userId, row, unit, capabilityAccess);
     if (editsAll && !(unit.source === "worktree" && isRemoved)) {
       editsAll = await canEditUnit(userId, row, unit, capabilityAccess);
     }
@@ -1442,7 +1445,18 @@ function isDiscoverable(row: WorktreeRow, merged: boolean): boolean {
   return teamRole === "owner" || teamRole === "admin";
 }
 
-/** A Team Space member reads every file in the Space, so it read a file before a merge moved it to Trash. */
+function fileState(row: WorktreeUnitRow): WorktreeUnitFileState | null {
+  if (row.source === "worktree" && row.activated_at === null) return null;
+  if (row.existing_name === null) return "deleted";
+  return row.existing_trash_batch_id === null ? "live" : "inTrash";
+}
+
+function leftTrunk(row: WorktreeUnitRow): boolean {
+  const state = fileState(row);
+  return state === "inTrash" || state === "deleted";
+}
+
+/** A Team Space member reads every file in the Space, so it read a file before it moved to Trash. */
 function readsTeamSpace(row: WorktreeRow): boolean {
   return row.kind === "team" && (Boolean(row.actor_owns_team_space) || row.actor_member_role !== null);
 }
@@ -1488,7 +1502,7 @@ async function mapUnits(
       nodeId: row.node_id,
       source: row.source,
       name:
-        state?.removed && row.source === "trunk" && !readsSpace && !(await access.resolveResource(userId, row.resource_id))
+        (state?.removed && row.source === "trunk" || leftTrunk(row)) && !readsSpace && !(await access.resolveResource(userId, row.resource_id))
           ? "Removed resource"
           : (row.existing_name ?? row.new_name ?? "Removed resource"),
       unitType: requireUnitType(
@@ -1517,6 +1531,7 @@ async function mapUnits(
         row.source === "trunk" && trunk && state?.baselineTrunkRevision !== undefined
           ? unitFreshness(state.baselineTrunkRevision, await trunk.revision(row.unit_id), row.added_at, trunk.now)
           : null,
+      fileState: fileState(row),
     };
   }));
 }

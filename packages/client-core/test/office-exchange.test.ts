@@ -543,6 +543,7 @@ function createdUnit(input: CreateInput, overrides: Partial<WorkspaceUnit> = {})
     activationState: "notApplicable",
     change: "added",
     draftHeadRevision: 0,
+    fileState: null,
     freshness: null,
     mergeResult: "pending",
     name: input.name,

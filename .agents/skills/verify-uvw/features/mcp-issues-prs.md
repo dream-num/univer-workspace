@@ -1455,7 +1455,21 @@ $V cli mrv-after-tree space browse "$R" --json
 jq -e '[.. | objects | select(.name? != null and .nodeId? != null) | .name] | unique == ["North","Notes","Old","South"]' "$EVIDENCE/mrv-after-tree.out"
 $V cli mrv-after-issue issue view "$N" -R "$R" --json state,acceptance
 jq -e '.state == "open" and .acceptance.kind == "reverted"' "$EVIDENCE/mrv-after-issue.out"
+for pr in totals summary; do
+  $V cli "mrv-after-pr-$pr" pr view "$(jq -r .number "$EVIDENCE/mrv-pr-$pr.out")" -R "$R" --json capabilities,units
+done
+$V cli mrv-after-pr-old pr view "$N3" -R "$R" --json capabilities,units
+jq -e '.capabilities.review and ([.units[] | [.name, .fileState]] == [["North","live"],["South","live"]])' "$EVIDENCE/mrv-after-pr-totals.out"
+jq -e '.capabilities.review and ([.units[] | [.name, .fileState]] == [["Notes","live"],["Summary","inTrash"]])' "$EVIDENCE/mrv-after-pr-summary.out"
+jq -e '.capabilities.review and ([.units[] | [.name, .fileState]] == [["Old","live"]])' "$EVIDENCE/mrv-after-pr-old.out"
 ```
+
+Reload the Issue page on `Acceptance` at 1440 × 1500. Every pull request lists its files: `Raise the totals` North and
+South, `Finish the notes and write the summary` Notes and Summary, and `Remove Old` Old. No pull request reads `You may
+not see this pull request's files.` Summary reads `This file is now in Trash.` and has no `Compare`, and North, South
+and Notes each have `Compare`. Screenshot the pull requests (`find text "Pull requests"` scrolled into view) as
+`mrv-panel-after.png`. At 390 × 2300, reload, check that `document.documentElement.scrollWidth` is 390, and screenshot
+`mrv-panel-after-narrow.png` with the same files and note.
 
 Choose `Conversation`, scroll to the end and screenshot `mrv-timeline.png`: the sidebar reads `Acceptance` `Reverted`,
 and the timeline ends with `reopened this` and `reverted the merged changes`. Choose `Acceptance` and click `Review
@@ -1519,7 +1533,8 @@ screenshot `mrv-pr-page.png`: its `Revert` section lists North and South.
 
 Pass when every command exits as shown: the plan names Erin on South with a time today and lists each file once with its
 action, the narrow page has no horizontal scroll, the first revert brings Old back, Notes and North back to their
-content before the task and Summary into Trash while South keeps E's edit, the Issue reopens with `reverted`, the
+content before the task and Summary into Trash while South keeps E's edit, the Issue reopens with `reverted`, every
+pull request still lists its files to O after the revert with Summary noted as in Trash at both widths, the
 overwrite returns South to its content before the task, the agent's `pr_revert` has no force argument, restores North,
 leaves South blocked with E's edit and is told only a person can overwrite it, the agent's revert is refused while the
 repository requires checks, and the second Issue's verdict is `reverted` by A.

@@ -80,3 +80,21 @@ it("offers the revert to whoever may accept the Issue, once a linked pull reques
   expect(render(false, "merged")).not.toContain("data-revert");
   expect(render(true, "ready")).not.toContain("data-revert");
 });
+
+it("names a file now in Trash or deleted beside the files it can still compare, and offers no comparison for it", () => {
+  const author = { id: "agent", username: "agent", displayName: "Agent", avatarUrl: null };
+  const file = (name: string, fileState: string) => ({ unitId: name, name, change: "added", source: "worktree", unitType: "sheet", fileState });
+  details.set("pull", { worktree: {
+    units: [file("Totals", "live"), file("Added", "inTrash"), file("Gone", "deleted")],
+    capabilities: { review: true },
+  } });
+  const issue = {
+    body: "", state: "open", acceptance: null, assignees: [], capabilities: { close: false }, space: { id: "space" }, number: 4,
+    pullRequests: [{ id: "pull", number: 2, title: "Fix", state: "merged", author, mergedBy: null }],
+  } as unknown as Issue;
+  const html = renderToStaticMarkup(createElement(IssueAcceptancePanel, { issue, timeline: [] }));
+  expect(html).not.toContain("issueAcceptanceFilesHidden");
+  expect([...html.matchAll(/<li.*?<\/li>/gsu)].map(([row]) => [
+    /truncate">([^<]+)/u.exec(row)?.[1], row.includes("issueAcceptanceCompare"), /issueAcceptance(InTrash|Deleted)/u.exec(row)?.[1] ?? null,
+  ])).toEqual([["Totals", true, null], ["Added", false, "InTrash"], ["Gone", false, "Deleted"]]);
+});
