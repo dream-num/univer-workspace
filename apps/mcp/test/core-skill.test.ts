@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { tools } from "../src/gateway/tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
@@ -114,7 +115,7 @@ describe("MCP core Skill tool bindings", () => {
   });
 
   it("names only registered tools, including single-word table bindings", async () => {
-    const root = new URL("../skills/", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../skills/", import.meta.url));
     for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
       if (!entry.isFile()) continue;
       const path = join(entry.parentPath, entry.name);
@@ -125,7 +126,7 @@ describe("MCP core Skill tool bindings", () => {
   });
 
   it("serves no CLI invocation in any assembled Skill file", async () => {
-    const root = new URL("../dist/skill-data/", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../dist/skill-data/", import.meta.url));
     const files = await readdir(root, { recursive: true, withFileTypes: true });
     expect(files.filter((entry) => entry.isFile()).length).toBeGreaterThan(10);
     for (const entry of files) {
@@ -146,9 +147,9 @@ describe("MCP core Skill tool bindings", () => {
     const skill = await readFile(new URL("SKILL.md", assembled), "utf8");
     expect(skill).toContain("## Read a sheet");
     expect(skill).toContain("(references/reading.md)");
-    const reference = await readFile(new URL("references/reading.md", assembled), "utf8");
+    const lines = (await readFile(new URL("references/reading.md", assembled), "utf8")).split(/\r?\n/u);
     for (const operation of ["outline", "read", "find"]) {
-      expect(reference).toContain(`## ${operation}\n`);
+      expect(lines).toContain(`## ${operation}`);
     }
   });
 

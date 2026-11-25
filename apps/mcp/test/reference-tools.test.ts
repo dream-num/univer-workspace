@@ -4,6 +4,7 @@ import { testStagingDirectory } from "./staging-directory.js";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { skillEntry } from "@modelcontextprotocol/server/ext/skills";
 import { SkillsClient, SKILLS_EXTENSION_ID } from "@modelcontextprotocol/client/ext/skills";
@@ -17,8 +18,8 @@ import { parseGatewayConfig } from "../src/shared/config.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 import { htmlViewStylesSchema } from "../src/gateway/tools/core/html-view-styles.js";
 
-const cliSkillData = new URL("../../cli/skill-data/", import.meta.url).pathname;
-const mcpSkillData = new URL("../skills/", import.meta.url).pathname;
+const cliSkillData = fileURLToPath(new URL("../../cli/skill-data/", import.meta.url));
+const mcpSkillData = fileURLToPath(new URL("../skills/", import.meta.url));
 const MCP_SKILL_NAMES = ["core", "html-view-creator", "skill-creator"];
 // The Skills extension orders entry-file paths, including the slash after each name.
 const SKILL_NAMES = [
@@ -264,7 +265,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     ws.skill("personal", "imported", `---\nname: imported\ndescription: Imported.\nmetadata:\n  source: ${metadata.source}\n  source-commit: ${metadata["source-commit"]}\n---\nPrivate body\n`);
     ws.skill("team", "plain");
     const corePath = join(sourceRoot, "core/SKILL.md");
-    await writeFile(corePath, (await readFile(corePath, "utf8")).replace("---\n", "---\nmetadata:\n  source: builtin-source\n"));
+    await writeFile(corePath, (await readFile(corePath, "utf8")).replace(/^---\r?\n/u, "---\nmetadata:\n  source: builtin-source\n"));
     await start(sourceRoot, ws.fetcher);
     const client = await connect();
     const listed = await call(client, "skills_read", { repo: "bob/team" });
