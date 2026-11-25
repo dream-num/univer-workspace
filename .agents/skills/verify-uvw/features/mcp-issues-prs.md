@@ -21,7 +21,7 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MI13 has a claimed Editor agent merge three pull requests linked to an Issue and submit it, after the run user merges a
   fourth linked one that deletes a file. The run user judges and accepts it in the Issue page's acceptance panel,
   comparing every changed file before and after its merge, sees the deleted file by name as moved to Trash with no
-  comparison, and sees the agent's later Link Sharing there, which a member does not.
+  comparison, and sees the agent's later Link Sharing there, which a member who may not accept does not.
 - MI14 has a claimed Editor agent and a claimed Viewer agent each report both declared checks on their own pull request
   linked to one Issue. After both merge, the acceptance panel shows the Editor's results counting and the Viewer's as
   not counting, and once `.agents/checks.md` is in Trash, says the repository declares no checks.
@@ -32,6 +32,9 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   goes to Trash and a deleted one comes back, a file someone edited after the merge stays blocked and names them until
   a person overwrites it, and the Issue reopens as `reverted`. A claimed agent plans and applies `pr_revert`, cannot
   overwrite, and is refused while the repository requires checks.
+- MI17 has an agent claimed by another person share a file by link in its Personal Space after its assignment. The
+  Space owner, who may accept but did not claim it, sees the share by name, kind and time in the acceptance panel with
+  no link, and the claimer gets the full row.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -70,7 +73,7 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
-`unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, and MI16 calls `pr_revert` and drives `uvw pr revert`. MP17 also calls `space_node`, `claim`,
+`unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, MI16 calls `pr_revert` and drives `uvw pr revert`, and MI17 calls `share` and `issue_verdict` as an agent another person claimed. MP17 also calls `space_node`, `claim`,
 `fork_create` and `fork_view` as an agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`,
 the last two as that agent. MP18 calls `space_node`, `file_upload_create`, `blob_upload`, `repo_edit` and
 `repo_member_write` as an agent on the default connection. A person judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses
@@ -463,8 +466,9 @@ Pass when every command exits as shown, the panel lists all four merged pull req
 before and after, names the deleted Archive as moved to Trash with no comparison while its comparison request gets 409,
 shows no outward action before the share, and accepting closes the Issue as completed. After the share, O's
 panel lists `Notes Link Sharing on (Can view), set by` A under the Personal Space part, the narrow page has no
-horizontal scroll and its comparison shows both sides' cells, and E's panel says `Only the assignee and the user who
-claimed it can see this part.` while E's response has `personalSharing: null` and not the Notes Node ID.
+horizontal scroll and its comparison shows both sides' cells, and E's panel says `Only the assignee, the user who
+claimed it, and people who may accept this Issue can see this part.` while E's response has `personalSharing: null`
+and not the Notes Node ID.
 
 ### MI14. Check results in the acceptance panel
 
@@ -1621,6 +1625,66 @@ pull request still lists its files to O after the revert with Summary noted as i
 overwrite returns South to its content before the task, the agent's `pr_revert` has no force argument, restores North,
 leaves South blocked with E's edit and is told only a person can overwrite it, the agent's revert is refused while the
 repository requires checks, and the second Issue's verdict is `reverted` by A.
+
+### MI17. An acceptor who did not claim the agent
+
+The run user O owns a Team Space and assigns an Issue to an agent A that another person C claimed. After the
+assignment, A shares a Sheet in its own Personal Space by link and submits. O may accept the Issue but did not claim A,
+so the Issue's `Acceptance` view shows O the share by name, kind and time, with no way to open the file, and O's
+response holds no Node ID, Resource ID or URL for it. C, a Viewer who may not accept, gets the same row in full. MI17
+uses one `principal`, which counts toward the 5 agents per hour.
+
+```bash
+R="$O/claimer-summary"
+$V cli mis-repo repo create claimer-summary --name "Claimer summary" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mis-repo.out")
+$V principal sharer mis-a
+A=$(jq -r .agent.username "$EVIDENCE/principal-sharer.json")
+$V mcp --as sharer mis-claim claim '{}'
+```
+
+Create C in a second browser session as MI13 creates E, with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-c` and
+username `mis-c-$VERIFY_UVW_RUN`. In C's session, open the `claimUrl` from `mis-claim.out` and click `Claim agent`.
+Replace the code in `mis-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
+cache. Then:
+
+```bash
+C="mis-c-$VERIFY_UVW_RUN"
+$V cli mis-member repo member add "$A" --role editor -R "$R" --json
+$V cli mis-member-c repo member add "$C" --role viewer -R "$R" --json
+$V cli mis-issue issue create -R "$R" -t "Draft the regional notes" -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mis-issue.out")
+$V mcp --as sharer mis-notes-pr pr_create "{\"repo\":\"$A/personal\",\"title\":\"Notes\"}"
+NP=$(jq -r .number "$EVIDENCE/mis-notes-pr.out")
+$V mcp --as sharer mis-notes unit_create "{\"worktree\":\"$(jq -r .id "$EVIDENCE/mis-notes-pr.out")\",\"space\":\"$A/personal\",\"type\":\"sheet\",\"name\":\"Regional notes\"}"
+NOTES=$(jq -r .unit.nodeId "$EVIDENCE/mis-notes.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mis-notes.out")
+$V mcp --as sharer mis-notes-ready pr_ready "{\"repo\":\"$A/personal\",\"number\":\"$NP\"}"
+$V mcp --as sharer mis-notes-merge pr_merge "{\"repo\":\"$A/personal\",\"number\":\"$NP\"}"
+$V mcp --as sharer mis-share share "{\"node\":\"$NOTES\",\"link\":\"viewer\"}"
+$V mcp --as sharer mis-submit issue_verdict "$(jq -nc --arg r "$R" --arg n "$N" '{repo:$r,number:$n,verdict:"submit",body:"Drafted the regional notes in my Personal Space and shared them by link."}')"
+jq -e '.acceptance.kind == "submitted"' "$EVIDENCE/mis-submit.out"
+```
+
+In the run browser, signed in as O at 1440 × 1500, open `$ORIGIN/spaces/$T/issues/$N`. The page opens on `Acceptance`.
+Under `Outward actions`, the part `Sharing the assignees turned on in their own Personal Spaces after their assignment`
+lists `Regional notes Link Sharing on (Can view), set by` A's display name with a time, followed by `1 change. Only the
+assignee and the user who claimed it can open this file.` Screenshot `Outward actions` as `mis-owner.png`. Run
+`agent-browser eval "document.querySelectorAll('section[aria-label=\"Outward actions\"] a').length"` into
+`mis-owner-links.txt`, which holds 0. At 390 × 2300, check that `document.documentElement.scrollWidth` is 390 and
+screenshot the same part as `mis-owner-narrow.png`. Open `$ORIGIN/api/spaces/$T/issues/$N/access-changes` and save the
+page text as `mis-owner-access.json`. In C's session, open the same URL and save it as `mis-claimer-access.json`. Then:
+
+```bash
+jq -e '.personalSharing.truncated == false and (.personalSharing.items | length) == 1' "$EVIDENCE/mis-owner-access.json"
+jq -e '.personalSharing.items[0] | .kind == "link" and .node == {name: "Regional notes"} and .role == "viewer" and .enabled' "$EVIDENCE/mis-owner-access.json"
+! grep -E -e "$NOTES" -e "$RES" -e 'https?://' -e '/nodes/' "$EVIDENCE/mis-owner-access.json"
+jq -e --arg n "$NOTES" '(.personalSharing.items | length) == 1 and .personalSharing.items[0].node == {id: $n, name: "Regional notes"}' "$EVIDENCE/mis-claimer-access.json"
+AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-c agent-browser close
+```
+
+Pass when every command exits as shown, O's panel names Regional notes with its Link Sharing, A and a time but no link
+at both widths, the narrow page has no horizontal scroll, O's response holds the row without the Node ID, the Resource ID
+or any URL, and C's response holds the same row with the Node ID.
 
 ## Gotchas
 

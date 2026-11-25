@@ -247,11 +247,9 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     );
   }
 
-  async listPersonalSharing(readerUserId: string, actorUserId: string, since: number, limit: number): Promise<PersonalSharingRow[] | null> {
+  async listPersonalSharing(readerUserId: string, actorUserId: string, since: number, limit: number) {
     const connection = this._database.connection;
-    if (!connection.prepare(`SELECT 1 FROM users WHERE id = ? AND ${ownsSpaceSql("users.id", "?")}`).get(actorUserId, readerUserId, readerUserId)) {
-      return null;
-    }
+    const owned = Boolean(connection.prepare(`SELECT 1 FROM users WHERE id = ? AND ${ownsSpaceSql("users.id", "?")}`).get(actorUserId, readerUserId, readerUserId));
     const links = connection
       .prepare(
         `SELECT 'link' AS kind, nodes.id AS node_id, nodes.name AS node_name, sharing.role, sharing.enabled, sharing.updated_at
@@ -277,7 +275,7 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
          LIMIT ?`
       )
       .all(actorUserId, actorUserId, since, limit);
-    return [...links, ...grants] as unknown as PersonalSharingRow[];
+    return { owned, rows: [...links, ...grants] as unknown as PersonalSharingRow[] };
   }
 
   async findNodeOwner(nodeId: string): Promise<NodeOwnerRow> {

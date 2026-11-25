@@ -1,6 +1,6 @@
 import { forbidden, invalid, notFound } from "./issues.errors.js";
 import { randomUUID } from "node:crypto";
-import { checkCommentWrite, checkCreateRelations, requireIssueSpace } from "./issue-changes.js";
+import { checkCommentWrite, checkCreateRelations, mayClose, requireIssueSpace } from "./issue-changes.js";
 import { writeSourceView } from "../identity/index.js";
 import { logger } from "../../logging/logger.js";
 import type { AccessResolver, NodeAccess, SpaceAccess } from "../access/index.js";
@@ -60,6 +60,7 @@ export function createIssuesModule(options: {
     userId: string,
     spaceId: string,
     actors: readonly { readonly userId: string; readonly since: number }[],
+    readerMayAccept: boolean,
   ) => Promise<AccessChanges>;
 }): IssuesModule {
   const { repository, access } = options;
@@ -118,7 +119,7 @@ export function createIssuesModule(options: {
   }
 
   async function issueView(userId: string, { row, space, summary, references, acceptance, acceptAt }: IssueDetail): Promise<IssueView> {
-    const editable = space.member && (row.author_user_id === userId || space.capabilities.triageIssues);
+    const editable = mayClose(space, row, userId);
     return {
       ...summaryView(row, summary),
       body: row.body,
@@ -303,10 +304,11 @@ export function createIssuesModule(options: {
     },
 
     async accessChanges(userId, spaceId, number) {
-      await requireSpace(userId, spaceId);
+      const space = await requireSpace(userId, spaceId);
       const issue = await requireIssue(spaceId, number);
       const assignments = await repository.assignments(issue.id);
-      return options.accessChanges(userId, spaceId, assignments.map((row) => ({ userId: row.user_id, since: row.assigned_at })));
+      const actors = assignments.map((row) => ({ userId: row.user_id, since: row.assigned_at }));
+      return options.accessChanges(userId, spaceId, actors, mayClose(space, issue, userId));
     },
 
     async acceptDue(time, limit) {

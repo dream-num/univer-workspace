@@ -20,6 +20,11 @@ export function checkCreateRelations(space: SpaceAccess, relations: IssueRelatio
   if (Object.values(relations).some((ids) => ids.length > 0) && !space.capabilities.triageIssues) throw forbidden();
 }
 
+/** Who may close an Issue, and so accept it or send it back. */
+export function mayClose(space: SpaceAccess, issue: IssueRow, userId: string): boolean {
+  return space.member && (issue.author_user_id === userId || space.capabilities.triageIssues);
+}
+
 export function checkCommentWrite(space: SpaceAccess, userId: string, author: string, action: "update" | "delete"): void {
   const manager = space.role === "owner" || space.role === "admin";
   if (!space.member || (userId !== author && !(action === "delete" && manager))) throw forbidden();
@@ -65,7 +70,7 @@ export function planVerdict(input: {
   if (unchanged && latest?.kind === kind && latest.actor_user_id === input.userId && latest.body === input.body) return null;
   const allowed = kind === "submitted"
     ? space.member && input.assignee
-    : space.member && (issue.author_user_id === input.userId || space.capabilities.triageIssues);
+    : mayClose(space, issue, input.userId);
   if (!allowed) {
     throw new ApplicationError("FORBIDDEN", 403, kind === "submitted"
       ? "Only an assignee of this Issue may submit it."

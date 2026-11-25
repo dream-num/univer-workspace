@@ -528,9 +528,10 @@ because of the assignees, for anyone who may read the Issue. It is current state
 and each list holds at most 50 rows, newest first. `members` are the Team Space memberships whose
 latest grant an assignee made after its own latest assignment, and `publicRead` is the Space's
 current setting without an actor. `personalSharing` holds the Link Sharing and Node Grants an
-assignee created or last changed in its own Personal Space after that assignment. It is `null`
-unless the caller is that assignee or the user who claimed it, because a link-shared Node's ID is
-its access link. The pages and files the linked pull requests published come from
+assignee created or last changed in its own Personal Space after that assignment. That assignee
+and the user who claimed it get these rows in full. Anyone else who may accept the Issue gets them
+without `node.id`: the file's name, the kind, the Link Sharing role or the grantee and role, and
+when, because a link-shared Node's ID is its access link. It is `null` for everyone else. The pages and files the linked pull requests published come from
 `GET /api/worktrees/{worktreeId}/html-view-drafts`, and their check results from
 `GET /api/worktrees/{worktreeId}/checks`, each under that pull request's own rules.
 

@@ -304,7 +304,7 @@ export function createWorkspaceApplication(
     access,
     onChanged: (change) => worktreeChangeFeed.publishIssues(change),
     pullRequests: (userId, issueId) => worktrees.pullRequestsForIssue(userId, issueId),
-    accessChanges: (userId, spaceId, actors) => permissions.accessChangesBy(userId, spaceId, actors),
+    accessChanges: (userId, spaceId, actors, readerMayAccept) => permissions.accessChangesBy(userId, spaceId, actors, readerMayAccept),
   });
   const worktreeBackend =
     dependencies.worktreeBackend ??

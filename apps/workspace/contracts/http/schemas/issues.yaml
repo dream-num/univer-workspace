@@ -307,8 +307,9 @@ IssueAccessChanges:
         - type: "null"
       description: |
         Link Sharing settings and Node Grants that an assignee created or last changed after its
-        latest assignment, in its own Personal Space. It covers only the assignees the caller is or
-        claimed, and is `null` when the caller is none of them.
+        latest assignment, in its own Personal Space. The assignee and the user who claimed it get its
+        rows in full. Anyone else who may accept the Issue gets them without `node.id`, because a
+        link-shared Node's ID is its access link. `null` when the caller is none of these.
 
 IssuePersonalSharing:
   type: object
@@ -337,10 +338,11 @@ IssuePersonalSharingChange:
 IssueSharedNode:
   type: object
   additionalProperties: false
-  required: [id, name]
+  required: [name]
   properties:
     id:
       type: string
+      description: Present only for the assignee that shared it and the user who claimed that assignee.
     name:
       type: string
 

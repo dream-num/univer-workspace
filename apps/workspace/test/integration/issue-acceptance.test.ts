@@ -187,7 +187,7 @@ describe("the Issue acceptance panel's data", () => {
       [regranted.id, "editor", assignee.id],
       [later.id, "editor", assignee.id],
     ]);
-    expect(changes).toMatchObject({ publicRead: false, membersTruncated: false, personalSharing: null });
+    expect(changes).toMatchObject({ publicRead: false, membersTruncated: false, personalSharing: { items: [], truncated: false } });
 
     await application.spaces.update(owner.id, team, { publicRead: true });
     expect((await application.issues.accessChanges(owner.id, team, issue.number)).publicRead).toBe(true);
@@ -195,43 +195,67 @@ describe("the Issue acceptance panel's data", () => {
     expect((await application.issues.accessChanges(owner.id, team, issue.number)).members).toEqual([]);
   }, 60_000);
 
-  it("shows an assignee's Personal Space sharing to that assignee and its claimer, and to nobody else", async () => {
-    const { application, register, team, owner: claimer } = await setup();
-    const member = await register("member");
+  it("shows an assignee's Personal Space sharing in full to it and its claimer, by name only to whoever may accept, and to nobody else", async () => {
+    const { application, register, team, owner } = await setup();
+    const claimer = await register("claimer");
+    const viewer = await register("viewer");
     const grantee = await register("grantee");
-    await application.permissions.upsertTeamMember(claimer.id, team, member.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(owner.id, team, claimer.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(owner.id, team, viewer.id, { role: "viewer" });
     const { user: agent } = await application.identity.createAgent({ label: "worker", originIp: "203.0.113.9" });
     await application.repositories.identity.claimAgent(agent.id, claimer.id, Date.now());
-    await application.permissions.upsertTeamMember(claimer.id, team, agent.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(owner.id, team, agent.id, { role: "editor" });
     const personal = (await application.spaces.list(agent.id)).spaces.find((space) => space.type === "personal")!.id;
-    const node = (name: string) => application.nodes.create(agent.id, { spaceId: personal, parentNodeId: null, name });
-    const [before, shared, granted] = [await node("Before"), await node("Shared"), await node("Granted")];
+    const sheet = async (name: string) => {
+      const created = await application.resources.create(agent.id, randomUUID(), {
+        kind: "univer", spaceId: personal, parentNodeId: null, name, unitType: "sheet",
+      });
+      if (created.status === 202) throw new Error("Resource creation pending");
+      return { id: created.body.node.id, resourceId: created.body.node.resource!.id };
+    };
+    const [before, shared, granted] = [await sheet("Before"), await sheet("Shared"), await sheet("Granted")];
     await application.permissions.updateNodeLinkSharing(agent.id, before.id, { enabled: true, role: "viewer" });
     await nextMillisecond();
-    const issue = await application.issues.create(claimer.id, team, { title: "Publish totals", assigneeUserIds: [agent.id] });
+    const issue = await application.issues.create(owner.id, team, { title: "Publish totals", assigneeUserIds: [agent.id] });
     await nextMillisecond();
     await application.permissions.updateNodeLinkSharing(agent.id, shared.id, { enabled: true, role: "viewer" });
     await application.permissions.upsertNodeGrant(agent.id, granted.id, grantee.id, { role: "editor" });
 
-    const read = (userId: string) => application.issues.accessChanges(userId, team, issue.number);
-    const expected = {
+    const actor = expect.objectContaining({ id: agent.id });
+    const user = expect.objectContaining({ id: grantee.id });
+    const full = {
       items: expect.arrayContaining([
-        expect.objectContaining({ kind: "link", actor: expect.objectContaining({ id: agent.id }), node: { id: shared.id, name: "Shared" }, enabled: true }),
-        expect.objectContaining({ kind: "grant", node: { id: granted.id, name: "Granted" }, role: "editor", user: expect.objectContaining({ id: grantee.id }) }),
+        expect.objectContaining({ kind: "link", actor, node: { id: shared.id, name: "Shared" }, role: "viewer", enabled: true }),
+        expect.objectContaining({ kind: "grant", actor, node: { id: granted.id, name: "Granted" }, role: "editor", user }),
       ]),
       truncated: false,
     };
     for (const reader of [claimer.id, agent.id]) {
-      const { personalSharing } = await read(reader);
-      expect(personalSharing).toEqual(expected);
+      const { personalSharing } = await application.issues.accessChanges(reader, team, issue.number);
+      expect(personalSharing).toEqual(full);
       expect(personalSharing!.items).toHaveLength(2);
     }
-    expect((await read(member.id)).personalSharing).toBeNull();
 
     const origin = await listen(application);
-    const response = await fetch(`${origin}/api/spaces/${team}/issues/${issue.number}/access-changes`, { headers: { cookie: member.cookie } });
-    expect(response.status).toBe(200);
-    expect(JSON.stringify(await response.json())).not.toContain(shared.id);
+    const read = async (cookie: string) => {
+      const response = await fetch(`${origin}/api/spaces/${team}/issues/${issue.number}/access-changes`, { headers: { cookie } });
+      expect(response.status).toBe(200);
+      return await response.text();
+    };
+    const summary = await read(owner.cookie);
+    expect(JSON.parse(summary).personalSharing).toEqual({
+      items: expect.arrayContaining([
+        { kind: "link", actor, node: { name: "Shared" }, role: "viewer", enabled: true, updatedAt: expect.any(String) },
+        { kind: "grant", actor, node: { name: "Granted" }, role: "editor", user, updatedAt: expect.any(String) },
+      ]),
+      truncated: false,
+    });
+    expect(JSON.parse(summary).personalSharing.items).toHaveLength(2);
+    const hidden = await read(viewer.cookie);
+    expect(JSON.parse(hidden).personalSharing).toBeNull();
+    for (const text of [summary, hidden]) {
+      for (const secret of [shared.id, shared.resourceId, granted.id, granted.resourceId, "/nodes/", "http"]) expect(text).not.toContain(secret);
+    }
   }, 60_000);
 });
 

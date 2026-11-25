@@ -42,7 +42,8 @@ export interface NodeLinkSharing {
 
 export type PersonalSharingChange = {
   readonly actor: PublicUser;
-  readonly node: { readonly id: string; readonly name: string };
+  /** `id` only for the actor and its claimer, because a link-shared Node's ID is its access link. */
+  readonly node: { readonly id?: string; readonly name: string };
   readonly role: GrantRole;
   readonly updatedAt: string;
 } & (
@@ -55,7 +56,7 @@ export interface AccessChanges {
   readonly publicRead: boolean;
   readonly members: readonly TeamMembership[];
   readonly membersTruncated: boolean;
-  /** Null when the reader owns none of the actors' Personal Spaces. */
+  /** Null when the reader owns none of the actors' Personal Spaces and may not accept their work. */
   readonly personalSharing: {
     readonly items: readonly PersonalSharingChange[];
     readonly truncated: boolean;
