@@ -91,7 +91,7 @@ test('verifier saves a spec only after its agent ran the smoke command and stopp
   assert.ok(!spoken(saved).includes(secret));
   const smoke = calls();
   assert.equal(after(smoke[0], '--env'), 'A={"x":1}', 'the smoke test runs with the spec env');
-  assert.equal(after(smoke[0], '--label'), 'verify setup');
+  assert.equal(after(smoke[0], '--label'), 'vu:setup');
   assert.equal(smoke.find((args) => args[1] === 'start')[2], 'setup-pb');
   const target = /printf ok > (\S+)/.exec(smoke.find((args) => args[1] === 'prompt')[3])[1];
   assert.ok(dirname(target).startsWith(`${dirname(run)}/verifier-smoke.`), 'the smoke file is under the run root, where evidence goes');
@@ -156,7 +156,7 @@ test('delegate hands the saved verifier the brief unchanged, keeps its session t
   assert.equal(journeys.status, 0);
   assert.match(journeys.stdout, /RESULT: PASS/);
   assert.equal(done.status, journeys.status, done.stderr);
-  assert.equal(done.stdout, `verifier test-link-sharing-pb in tab "verify test link-sharing" (pane w9:pB): opencode --standalone (env A) from ${file}\n${journeys.stdout}`);
+  assert.equal(done.stdout, `verifier test-link-sharing-pb in tab "vu:test" (pane w9:pB): opencode --standalone (env A) from ${file}\n${journeys.stdout}`);
   assert.ok(!spoken(done).includes(secret));
 
   const seen = calls();
@@ -164,7 +164,7 @@ test('delegate hands the saved verifier the brief unchanged, keeps its session t
   assert.equal(verbs([tab])[0], 'tab create');
   assert.equal(after(tab, '--workspace'), 'w9');
   assert.equal(after(tab, '--cwd'), repo);
-  assert.equal(after(tab, '--label'), 'verify test link-sharing');
+  assert.equal(after(tab, '--label'), 'vu:test');
   assert.equal(after(tab, '--env'), 'A={"x":1}');
   assert.ok(tab.includes('--no-focus'), "the caller's tab keeps focus");
   assert.equal(verbs(seen).filter((verb) => verb === 'agent start').length, 3, 'a start the new shell refused is tried again');
@@ -202,7 +202,7 @@ test('delegate keeps the tab of a verifier that did not stop, and refuses a seco
   const env = { VERIFY_UVW_VERIFIER: spec };
   const blocked = v(['delegate', 'link-sharing', 'LS1'], { ...env, FAKE_HERDR_STATUS: 'blocked' });
   assert.equal(blocked.status, 1);
-  assert.match(blocked.stderr, /waits for approval in tab "verify test link-sharing".*herdr pane close w9:pB/);
+  assert.match(blocked.stderr, /waits for approval in tab "vu:test".*herdr pane close w9:pB/);
   assert.ok(!verbs(calls()).includes('pane close'));
 
   let n = calls().length;
@@ -230,7 +230,7 @@ test('delegate names each verifier agent after its run and feature within herdr 
     writeFileSync(join(dir, 'run.env'), `RUN_ID='${id}'\nWEB_PORT=1\nSERVER_PORT=1\nSERVER_PID=\nWEB_PID=\nGIT_HEAD=\n`);
     const done = v(['delegate', 'link-sharing', 'LS1'], { VERIFY_UVW_VERIFIER: spec, VERIFY_UVW_RUN: `run-${id.length}` });
     assert.match(done.stdout, /^verifier \S+ in tab /, done.stderr);
-    assert.equal(after(calls().findLast((args) => args[1] === 'create'), '--label'), `verify ${id} link-sharing`);
+    assert.equal(after(calls().findLast((args) => args[1] === 'create'), '--label'), `vu:${id}`);
     names[id] = calls().findLast((args) => args[1] === 'start')[2];
   }
   assert.deepEqual(names, {

@@ -1,7 +1,7 @@
 # Hand journeys to your own verifier
 
 `$V delegate` hands a brief to a verifier: another agent, on the model the developer chose, in a
-background [herdr](https://herdr.dev) tab of its own. Its tokens go to that agent's account. You still choose the
+[herdr](https://herdr.dev) tab of its own. Its tokens go to that agent's account. You still choose the
 journeys, start and stop the instance, and judge the evidence, as in
 [Hand the driving to another agent](../SKILL.md#hand-the-driving-to-another-agent). `verifier` and `delegate` need
 your own agent to run inside a herdr pane (`HERDR_ENV=1`).
@@ -31,7 +31,7 @@ when they ask to set one up, change it, or test it again, such as after they upg
    codex --dangerously-bypass-approvals-and-sandbox -m <model> -c model_reasoning_effort=<effort>
    ```
 
-4. Run `$V verifier '<spec>'`. It starts the verifier in a background tab named `verify setup`, asks it to write a
+4. Run `$V verifier '<spec>'`. It starts the verifier in a tab named `vu:setup`, asks it to write a
    file with one shell command, prints the bottom of its screen and closes the tab. It saves the spec only when the
    file was written and herdr saw the agent stop. The file is `~/.config/verify-uvw/verifier` (under
    `$XDG_CONFIG_HOME` when set), mode 0600, because a value may hold an API key. Before it saves, a `transcript:` line
@@ -48,10 +48,11 @@ values, and delegating is the default. The developer can ask for a subagent for 
 ## Delegate
 
 Run `$V delegate <feature> [journey-id|mode...]` in step 3, after `up`, `user`, `doctor` and any `run-journeys`, with
-the selection you would pass to `brief`. It opens a background tab named `verify <run> <feature>` and starts the
+the selection you would pass to `brief`. It opens a tab named `vu:<run>` without moving your focus and starts the
 verifier there as agent `<run>-<feature>-<pane>`, so your tab's layout stays as it is and herdr's sidebar shows which
-run each verifier drives. It sends the verifier `$V brief` unchanged and waits up to 60 minutes for it to stop, so run
-it in the background when your harness can.
+run each verifier drives. `vu:` marks a verify-uvw verifier tab, and a run has one at a time. The developer can click
+the tab to watch the verifier. It sends the verifier `$V brief` unchanged and waits up to 60 minutes for it to stop,
+so run it in the background when your harness can.
 
 | The verifier | `delegate` |
 | --- | --- |

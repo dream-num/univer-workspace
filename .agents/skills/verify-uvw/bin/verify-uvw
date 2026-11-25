@@ -816,9 +816,9 @@ verifier_status() {
   echo "$line"
 }
 
-# Opens a background tab with the spec's env and sets PANE and AGENT. The run leads the tab label and the agent name
-# because herdr's sidebar cuts both to about 12 characters. The pane suffix keeps names unique, as the run lock and
-# the evidence file names need.
+# Opens a tab with the spec's env, without moving focus, and sets PANE and AGENT. The tab label is vu:<run> and the
+# agent name starts with the run because herdr's sidebar cuts both to about 12 characters. The pane suffix keeps names
+# unique, as the run lock and the evidence file names need.
 verifier_pane() { # tab-label name-stem
   local tab=(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$REPO" --label "$1" --no-focus) pair out ids
   for pair in ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"}; do tab+=(--env "$pair"); done
@@ -871,7 +871,7 @@ cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec 
   trap 'rm -rf "$SMOKE"; [[ -z "$PANE" ]] || herdr pane close "$PANE" >/dev/null 2>&1 || true' EXIT
   local status reason="" file since prompt="Run this shell command, then stop: printf ok > $SMOKE/smoke" transcript
   since="$(($(date +%s) * 1000))"
-  verifier_pane "verify setup" setup
+  verifier_pane vu:setup setup
   verifier_start || die "herdr could not start $VERIFIER_KIND in pane $PANE"
   status="$(prompt_verifier "$prompt" 300000)"
   herdr agent read "$AGENT" --source visible --lines 30 2>/dev/null | grep -v '^[[:space:]]*$' || true
@@ -902,7 +902,7 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
   [[ "${HERDR_ENV:-}" == 1 ]] || die "delegate opens a herdr tab; run your agent inside a herdr pane, or hand \$V brief to a subagent"
   load_verifier || die "no verifier; set one up with \$V verifier '<spec>', see .agents/skills/verify-uvw/references/delegate.md#set-up"
   load_run
-  local brief held status lock="$RUN/delegate.agent" since transcript reason label="verify $RUN_ID $1"
+  local brief held status lock="$RUN/delegate.agent" since transcript reason label="vu:$RUN_ID"
   # Command substitution drops trailing newlines, and the x keeps the brief byte for byte.
   brief="$(cmd_brief "$@" && echo x)" || exit $?
   brief="${brief%x}"
