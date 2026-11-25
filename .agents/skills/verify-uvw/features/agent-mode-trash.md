@@ -105,7 +105,7 @@ For an Issue assigned to A, A opens a pull request shared with the Space that ed
 O then moves Summary to Trash. Every reader still sees North, and Summary is noted as in Trash with no comparison. A's
 `pr_merge` is refused with `FILES_IN_TRASH` naming Summary. A, on its default connection, takes the way out the
 refusal names in two calls: it leaves Summary out with `pr_edit` and merges. North merges, and Summary stays in O's
-Trash Batch. MP19 uses one `principal`, which counts toward the 5 agents per hour.
+Trash Batch.
 
 ```bash
 R="$O/trashed-file"

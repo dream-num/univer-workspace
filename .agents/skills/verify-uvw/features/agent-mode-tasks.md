@@ -41,7 +41,7 @@ O=verify-$VERIFY_UVW_RUN
 
 ### MP11. Reviewable pull requests
 
-MP11 and MP12 share one setup. Two claimed agent principals count 2 of the 5 agents per hour. A3 owns a
+MP11 and MP12 share one setup. A3 owns a
 repository R with a Budget Sheet on Trunk, makes B3 a Viewer, and assigns B3 an Issue. The run user owns
 `private-x`, which neither agent can see, with a ready pull request shared with its members:
 
@@ -93,8 +93,8 @@ $V cli mp11-h-after-cli search prs --reviewable --json
 diff <(jq -S '.prs | map(del(.url))' "$EVIDENCE/mp11-h-after.out") <(jq -S '.' "$EVIDENCE/mp11-h-after-cli.out")
 ```
 
-Pass when both `before` searches return `{"prs":[]}` although `private-x` has a ready pull request shared with its
-members, and `mp11-b3-issues` lists the Issue. After B3 proposes, `mp11-a3-after` lists exactly B3's pull request,
+Pass when neither `before` search lists a pull request of R or `private-x`, although `private-x` has a ready pull
+request shared with its members, and `mp11-b3-issues` lists the Issue. After B3 proposes, `mp11-a3-after` lists exactly B3's pull request,
 `ready`, with `capabilities.merge: true` and a `url`. `mp11-b3-after` is empty, because B3 wrote it and as a Viewer
 may not merge it. The run user claimed B3, so `mp11-h-after` lists the same pull request and never the run user's own
 in `private-x`, and the CLI diff is empty.
@@ -128,7 +128,7 @@ a model reason, rerun with `--model console-deepseek/deepseek-flash#max` under a
 
 The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
 fork, links the pull request its first write opens with `pr_edit`, and both sides show the link in MCP, uvw and the
-browser. MP13 uses one `principal`, which counts toward the 5 agents per hour.
+browser.
 
 ```bash
 $V cli mpl-repo repo create issue-link --name "Issue link" --json id,fullName
@@ -175,7 +175,7 @@ lists the pull request and its state, and the pull request header names `Serves 
 The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
 fork pull request linked to the Issue and submits it with `issue_verdict`. O sends it back in the browser with a
 reason, A finds it with `search` and `acceptance` and submits again, and O accepts it in the browser, which closes it
-as completed. MI12 uses one `principal`, which counts toward the 5 agents per hour.
+as completed.
 
 ```bash
 $V cli mia-repo repo create issue-accept --name "Issue accept" --json id,fullName

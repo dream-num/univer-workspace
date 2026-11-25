@@ -12,7 +12,8 @@ the repository. There they accept the task, or revert its merged pull requests, 
   comparison, and sees the agent's later Link Sharing there, which a member who may not accept does not.
 - MI14 has a claimed Editor agent and a claimed Viewer agent each report both declared checks on their own pull request
   linked to one Issue. After both merge, the acceptance panel shows the Editor's results counting and the Viewer's as
-  not counting, and once `.agents/checks.md` is in Trash, says the repository declares no checks.
+  not counting under `Checks at merge`. Once `.agents/checks.md` is in Trash, it says on an open pull request that the
+  repository declares no checks, and the merged ones keep their checks at merge.
 - MI17 has an agent claimed by another person share a file by link in its Personal Space after its assignment. The
   Space owner, who may accept but did not claim it, sees the share by name, kind and time in the acceptance panel with
   no link, and the claimer gets the full row.
@@ -48,8 +49,7 @@ Issue. A opens three pull requests linked to the Issue, two that change two Shee
 them. O opens and merges a fourth linked pull request that deletes the third Sheet, Archive, and then A submits. O opens
 the Issue page on its `Acceptance` view, compares every changed file before and after its merge, sees Archive as moved
 to Trash with no comparison, finds no outward actions, and accepts. Then A turns on Link Sharing for a file in its own Personal Space: O, who claimed A, sees
-it in the panel, and a member E sees neither the row nor the Node ID. MI13 uses one `principal`, which counts toward the
-5 agents per hour.
+it in the panel, and a member E sees neither the row nor the Node ID.
 
 ```bash
 R="$O/acceptance-panel"
@@ -168,8 +168,8 @@ and not the Notes Node ID.
 The run user O holds a Team Space with a Sales Sheet on Trunk and declares two checks in `.agents/checks.md`. A claimed
 Editor agent A and a claimed Viewer agent V each open a pull request linked to one Issue, and each reports both checks
 on its own ready pull request. A merges its own, and O merges V's. O's acceptance panel shows the checks after each
-pull request's files: A's count, V's do not. Then O moves `.agents/checks.md` to Trash, and the panel says the
-repository declares no checks. MI14 uses two `principal`s, which count toward the 5 agents per hour. Its bash blocks
+pull request's files: A's count, V's do not. Then O opens a third linked pull request and moves `.agents/checks.md`
+to Trash, and the panel says on the open one that the repository declares no checks. Its bash blocks
 run in one shell: the second uses `O`, `R`, `U` and `RES` from the first, and the browser steps use `T` and `N`. In a new
 shell, set them again first:
 `R="$O/acceptance-checks"; T=$(jq -r .id "$EVIDENCE/mic-repo.out"); U=$(jq -r .unit.unitId "$EVIDENCE/mic-seed-unit.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mic-seed-unit.out"); N=$(jq -r .number "$EVIDENCE/mic-issue.out")`.
@@ -227,29 +227,30 @@ jq -e '.state == "merged" and ([.checks[] | .state] == ["missing", "missing"]) a
 A merges before V adds Sales, so A's merge does not leave V's results out of date. In the run browser, signed in as O
 at 1440 × 900, open `$ORIGIN/spaces/$T/issues/$N`, choose `Acceptance`, and screenshot the page as `mic-panel.png`. At
 1440 × 1500, screenshot the `Pull requests` section (`section[aria-label="Pull requests"].grid`) as `mic-checks.png`. Each card lists Sales with
-`Compare`, then `Checks`. `Add South` shows `totals-match` and `header-unchanged` each `Missing`, with
+`Compare`, then `Checks at merge`. `Add South` shows `totals-match` and `header-unchanged` each `Missing`, with
 `mic-v · Passed · Does not count ·` and V's summary. `Raise North` shows both `Passed`, with `mic-a · Passed ·` and A's
 summary and no label. At 390 × 844, check that `document.documentElement.scrollWidth` is 390. At 390 × 2300, screenshot
 the section as `mic-checks-narrow.png`. Back at 1440 × 1500:
 
 ```bash
+$V cli mic-open pr create -R "$R" -t "Add East" --issue "$N" --json number
 $V cli mic-trash-checks space node trash "$(jq -r .upload.nodeId "$EVIDENCE/mic-checks.out")" --json
 ```
 
-Reload, choose `Acceptance`, and screenshot the section as `mic-none-declared.png`. Each card now reads `This repository
-declares no checks in .agents/checks.md.` and lists both reported names as `Not declared`, with the same results.
+Reload, choose `Acceptance`, and screenshot the section as `mic-none-declared.png`. The open `Add East` card reads `This
+repository declares no checks in .agents/checks.md.` under `Checks`, and both merged cards still show their `Checks at
+merge` as before.
 
 Pass when every command exits as shown, both `jq` checks hold, the first screenshots label A's results as counting and
 V's as `Does not count` under the right pull request, the narrow page has no horizontal scroll, and the last screenshot
-says the repository declares no checks.
+says on the open pull request that the repository declares no checks while both merged ones keep their checks.
 
 ### MI17. An acceptor who did not claim the agent
 
 The run user O owns a Team Space and assigns an Issue to an agent A that another person C claimed. After the
 assignment, A shares a Sheet in its own Personal Space by link and submits. O may accept the Issue but did not claim A,
 so the Issue's `Acceptance` view shows O the share by name, kind and time, with no way to open the file, and O's
-response holds no Node ID, Resource ID or URL for it. C, a Viewer who may not accept, gets the same row in full. MI17
-uses one `principal`, which counts toward the 5 agents per hour.
+response holds no Node ID, Resource ID or URL for it. C, a Viewer who may not accept, gets the same row in full.
 
 ```bash
 R="$O/claimer-summary"
@@ -312,8 +313,7 @@ checks passed, and O merges a third that deletes Old. A submits and O accepts. E
 South on Trunk. In the Issue's `Acceptance` view, O reviews the revert: Old comes back, Notes and North go back, South
 is blocked and names E, and Summary goes to Trash. O reverts without overwriting, and the Issue reopens with the verdict
 `reverted`. Both of A's pull requests still show their checks as passed at merge, though Summary is in Trash. O reviews again and overwrites South alone. Then A reverts its own second Issue with `pr_revert`: its change
-goes back, a file E edited after the merge stays blocked, and A cannot overwrite it. MI16 uses one `principal`, which
-counts toward the 5 agents per hour.
+goes back, a file E edited after the merge stays blocked, and A cannot overwrite it.
 
 ```bash
 R="$O/revert-story"

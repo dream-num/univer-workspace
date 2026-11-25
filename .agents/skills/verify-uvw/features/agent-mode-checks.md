@@ -44,8 +44,7 @@ O=verify-$VERIFY_UVW_RUN
 The run user O holds a Team Space R and declares two checks in `.agents/checks.md` on its Trunk. A claimed agent A, a
 Viewer, proposes a change and reports both checks with `pr_check`. A person E sees them in the browser, marked as not
 counting. O then changes the Sheet on Trunk, and the page marks A's results out of date. A claimed agent B, an Editor
-who may merge, reports both again, and its results count, also after B merges. MP15 uses two `principal`s, which count
-toward the 5 agents per hour.
+who may merge, reports both again, and its results count, also after B merges.
 
 ```bash
 $V cli mpc-repo repo create checks-demo --name "Checks demo" --json id,fullName
@@ -88,7 +87,7 @@ done
 $V mcp --as checker-a mpc-a-view pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
 jq -e '[.checks[] | {name, declared, state, counts: [.results[].counts]}] == [{name:"totals-match",declared:true,state:"missing",counts:[false]},{name:"header-unchanged",declared:true,state:"missing",counts:[false]}] and .checks[0].results[0].current' "$EVIDENCE/mpc-a-view.out"
 $V cli mpc-cli-view pr view "$N" -R "$R" --json checks
-jq -e '.checks == {passed: 0, failed: 0, missing: 2}' "$EVIDENCE/mpc-cli-view.out"
+jq -e '.checks == {passed: 0, failed: 0, missing: 2, atMerge: null}' "$EVIDENCE/mpc-cli-view.out"
 ```
 
 In a second browser session (`AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e`) signed in as E, open
@@ -124,8 +123,8 @@ test $? -eq 1
 jq -e '.code == "CONFLICT"' "$EVIDENCE/mpc-b-after-merge.out"
 ```
 
-E's reloaded page shows both checks `Passed`, B's results without a label and A's still `Out of date`: screenshot
-`mp15-checks-counted.png`.
+E's reloaded page shows them under `Checks at merge`: both checks `Passed`, B's results without a label and A's still
+`Out of date`. Screenshot `mp15-checks-counted.png`.
 
 Pass when the draft report exits 1 with `CONFLICT`, A's results are current but do not count and the CLI summary reads
 2 missing, the first screenshot shows them, the Trunk merge leaves A's results `current: false` and the second
@@ -141,7 +140,7 @@ request page says why it has no merge button, its Browser opens the Trunk Sheet 
 to `.agents/checks.md` on Trunk are refused with `AGENT_NOT_ALLOWED`. G reports both checks and merges. A pull request
 of G's that changes `.agents/checks.md` is refused naming `.agents/` with both checks passed, and O merges it. O, a
 person, merges another pull request with no results.
-Back in `review`, G merges without results. MP17 creates one guest agent, which counts toward the 5 agents per hour.
+Back in `review`, G merges without results.
 
 ```bash
 RUN=${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN
@@ -224,9 +223,9 @@ gu blob replace --resource "$CR" --file "$RUN/home/g-weaker.md" --etag "$(jq -r 
   --idempotency-key mp17-g-replace-checks --json 2> "$EVIDENCE/mpl-g-replace-checks.err"
 test $? -eq 1
 grep -q '^AGENT_NOT_ALLOWED: This repository requires checks' "$EVIDENCE/mpl-g-replace-checks.err"
-$V mcp --auth oauth --toolsets core,admin mpl-g-trash-checks space_node "{\"action\":\"trash\",\"node\":\"$CN\"}"
+$V mcp --auth oauth mpl-g-trash-checks space_node "{\"action\":\"trash\",\"node\":\"$CN\"}"
 test $? -eq 1
-$V mcp --auth oauth --toolsets core,admin mpl-g-rename-checks space_node "{\"action\":\"rename\",\"node\":\"$CN\",\"name\":\"checks-old.md\"}"
+$V mcp --auth oauth mpl-g-rename-checks space_node "{\"action\":\"rename\",\"node\":\"$CN\",\"name\":\"checks-old.md\"}"
 test $? -eq 1
 jq -s -e 'map(.code) == ["AGENT_NOT_ALLOWED", "AGENT_NOT_ALLOWED"]' "$EVIDENCE/mpl-g-trash-checks.out" "$EVIDENCE/mpl-g-rename-checks.out"
 $V cli mpl-checks-after blob download "$EVIDENCE/mpl-checks-after.md" --resource "$CR" --force --json
@@ -308,8 +307,7 @@ results, leaving Trunk with every row.
 A claimed agent A creates a repository R, declares two checks in `.agents/checks.md` and turns on `landing` `checks`,
 all on the default connection. A adds a claimed agent B as an Editor. B's merge without results is refused with
 `CHECKS_REQUIRED` naming both checks, and succeeds once B reports both. B's `space_node` and `blob_upload` on R's
-Trunk are refused with `AGENT_NOT_ALLOWED`. No call below passes `--toolsets`. MP18 uses two `principal`s, which count
-toward the 5 agents per hour.
+Trunk are refused with `AGENT_NOT_ALLOWED`. No call below passes `--toolsets`.
 
 ```bash
 $V principal decl-a mpd-a
@@ -318,8 +316,10 @@ $V mcp --as decl-a mpd-claim-a claim '{}'
 $V mcp --as decl-b mpd-claim-b claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
-[MH1](agent-handoff.md#mh1-unclaimed-agent) says, and wait 35 s for the gateway's cache. Then A sets up R:
+Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. After MP17 the run browser is signed
+in as G: run `agent-browser close` first, then sign it in as O with the block under **Browser** in
+[the skill](../SKILL.md#drive). Replace the codes as [MH1](agent-handoff.md#mh1-unclaimed-agent) says, and wait 35 s
+for the gateway's cache. Then A sets up R:
 
 ```bash
 A=$(jq -r .agent.username "$EVIDENCE/principal-decl-a.json"); B=$(jq -r .agent.username "$EVIDENCE/principal-decl-b.json")

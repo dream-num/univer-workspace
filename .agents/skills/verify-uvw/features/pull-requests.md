@@ -99,8 +99,8 @@ Mode: mcp.
 As the run user, `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
 then `unit_add` (`worktree`, `resource`), `unit_create` (`worktree`, `space`, `type`, `name`), `execute`
 (`worktree`, `unit`, `code`) and `pr_ready` (`repo`, `number`) succeed the same way, and `pr_ready` returns
-`visibility: "space"`. `$V mcp pp-mcp-merge pr_merge '{"repo":"<H>/team-pr","number":<n>}'` exits `1`
-with `code: "FORBIDDEN"` and the message below.
+`visibility: "space"`. Keep its `number` as `P5`. `$V mcp pp-mcp-merge pr_merge '{"repo":"<H>/team-pr","number":<P5>}'`
+exits `1` with `code: "FORBIDDEN"` and the message below.
 
 ### PR6. Refusals
 
@@ -129,8 +129,8 @@ lists `Proposed`, the file the proposal created. With H's cookie, `GET $ORIGIN/a
 
 Mode: mcp.
 
-A second member with read access (register one and add it as `viewer`) opens
-`$ORIGIN/spaces/$T/pulls/$P` on a ready proposal: the review panel reads
+A second member with read access (register one and add it as `viewer`) opens PR5's ready proposal,
+`$ORIGIN/spaces/$T/pulls/$P5`: the review panel reads
 `Merging this pull request needs edit access to every file it changes.` and has no merge button. In E's
 session the panel has `Confirm merge`; click it, confirm `Merge this task?`, and the page says `Merged`.
 Screenshot both. The panel sits below the fold, so scroll it into view first.
@@ -152,7 +152,8 @@ panel reads `Only the author, <E display name>, can merge this pull request.` be
 Mode: mcp.
 
 The run user's `pr merge` on that merged pull request prints
-`workspace-lifecycle-invalid: Pull request #<n> is already merged.` A draft PR's merge prints
+`workspace-lifecycle-invalid: Pull request #<n> is already merged.` Open a draft with
+`$V cli pp-draft pr create -R <H>/team-pr -t Draft --json`. The run user's `pr merge` on it prints
 `workspace-lifecycle-invalid: Cannot merge pull request #<n> while it is draft.`
 
 ### PR11. A former member learns nothing about the files they cannot see (`pr-name-hidden`)

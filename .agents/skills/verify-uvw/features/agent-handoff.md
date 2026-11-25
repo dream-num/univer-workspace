@@ -32,7 +32,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   with `Sign out and continue`, which shows the sign-in on the same page.
 - AH8 shows claim errors: `This agent has already been claimed.` and
   `This claim link is not valid. Ask the agent for a new one.` (an expired link says it has expired).
-- AH9 lists claimed agents in Account menu > `My agents` with `Open space` and `Stop agent`. `Stop` asks
+- AH9 lists claimed agents in Account menu > `My agents` with `Open space` and `Stop <display name>`. `Stop` asks
   `Stop this agent?`, marks the row `Stopped`, signs the agent out, and its links answer 404 to everyone else.
 - AH10 lets the claimer decide the agent's pull requests: `uvw pr list -R <agent>/personal` and MCP `pr_list`
   work, merge works, and `pr create` in the agent's Space is refused. After the claim, `share` no longer prints
@@ -88,7 +88,8 @@ Click `Claim agent`; the URL becomes `/spaces/<id>`. Reopen the claim URL: `agen
 ### HO5. My agents (AH9)
 
 Set `univer-workspace-view-onboarding-complete` to `true` in that session, open `/home`,
-then Account > `My agents`. The row shows `@<A>`, `Files 1`, `Open space` and `Stop agent`.
+then Account > `My agents`. The row shows `@<A>`, `Files 1`, `Open space` and `Stop <display name>`, which is
+`Stop agent` for this guest.
 
 ### HO6. Decisions (AH10)
 
@@ -99,12 +100,13 @@ The guest opens and readies a second PR. As the run user,
 
 ### HO7. Errors (AH8)
 
-Another signed-in user opening the used claim URL sees `This agent has already been claimed.`;
-`$ORIGIN/claim/not-a-real-code` shows the not-valid text.
+Register another user in a new session (`AGENT_BROWSER_SESSION=<run>-other`): pin the locale, open `/login`, click
+the `Create account` mode button, fill `Username`, `Display name` and `Password`, and submit. That user opening the
+used claim URL sees `This agent has already been claimed.`; `$ORIGIN/claim/not-a-real-code` shows the not-valid text.
 
 ### HO8. Stop (AH9)
 
-`Stop agent`, then `Stop` in `Stop this agent?`. The row shows `Stopped`,
+`Stop <display name>` (`Stop agent` for this guest), then `Stop` in `Stop this agent?`. The row shows `Stopped`,
 `$V open-anon ah-stopped "$ORIGIN/nodes/$AN"` reports 404, and the guest's uvw session is gone.
 
 ### HO9. MCP guest and an agent-signed browser (AH4, AH7)
@@ -120,8 +122,7 @@ the run browser shows `Sign out and continue`. Click it, sign in as the run user
 
 Mode: mcp.
 
-Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per source IP.
-Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
+Run after `user`. Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
 Idempotency keys need 16 to 200 URL-safe characters, so pad them for short run IDs.
 
 ```bash
@@ -154,8 +155,8 @@ Mode: mcp.
 bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
 `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
 `$V mcp <label> pr_merge '{"repo":…,"number":…}'` merges it. The run user's `pr_create` there fails with
-`Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
-Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
+`Personal Space pull requests must target the signed-in user's own Space.` A second principal,
+`$V principal bot2`, cannot see the Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
 [pull requests](./pull-requests.md) for that refusal in a Team Space).
 
 ### MH4. Public Spaces
@@ -165,14 +166,16 @@ Mode: mcp.
 `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
 with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
 and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
-the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. An unclaimed agent gets
-`AGENT_NOT_ALLOWED` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
+the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. MH3's bot2,
+unclaimed, gets `AGENT_NOT_ALLOWED` on `<bot2>/personal` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
 
 ### MH5. Copy a shared file
 
 Mode: mcp.
 
-With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
+The run user makes a viewer-linked Sheet `N`: `$V cli` `pr create -R verify-<run-id>/personal`, `unit create --type
+sheet` (its `unit.nodeId` is `N`), `pr ready` and `pr merge` as [PR1](pull-requests.md#pr1-open-fill-ready-and-merge-a-pull-request)
+does, then `$V cli mh-share share <N> --link viewer --json`. bot1's `unit_create` with
 `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
 `The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only
 after its pull request merges.

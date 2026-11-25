@@ -27,7 +27,7 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 Run: helper.
 
 An agent principal (see [the principals reference](../references/stories.md)) opens pull requests in its own Personal
-Space until its budget of 10 is used. Creating the principal counts toward the 5 agents an hour. One creation fails
+Space until its budget of 10 is used. One creation fails
 first because the journey holds the write lock of the run's collaboration database while it runs. Collaboration then
 answers `CONFLICT` (`Database Adapter failed`) after its 5-second busy timeout, which leaves a failed Operation.
 

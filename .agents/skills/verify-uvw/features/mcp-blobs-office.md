@@ -308,7 +308,7 @@ A holder H owns a public Team Space whose `proposals` setting is `accountable`, 
 Sheet on Trunk. A claimed agent A is a Viewer and works only through its fork, and E is an Editor. Register H and
 E and sign their uvw in as in [MHV8](mcp-html-view.md#mhv8-a-readers-page-publishes-when-an-editor-merges-in-the-browser-and-not-through-the-cli),
 unless this run already did, and define `uh`, `ue`, `H`, `HH` and `EH` as it does. MF10 and MF11 use one
-`principal`, which counts toward the 5 agents per hour:
+`principal`:
 
 ```bash
 uh repo create fork-files --name "Fork files" --public --proposals accountable --json id > "$EVIDENCE/mff-team.out"; T=$(jq -r .id "$EVIDENCE/mff-team.out")
