@@ -244,7 +244,7 @@ jobs:
           name: agent-desktop-${{ matrix.target }}
           if-no-files-found: error
           retention-days: 14
-          path: apps/agent/desktop/artifacts/Univer-Workspace-Agent-${{ inputs.version }}-${{ matrix.installer }}
+          path: apps/agent/desktop/artifacts/Univer-Workspace-Agent-*-${{ matrix.installer }}
       - name: Upload auto-update files separately
         uses: actions/upload-artifact@v4
         if: always()
