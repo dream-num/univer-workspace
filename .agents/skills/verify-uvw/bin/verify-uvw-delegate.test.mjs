@@ -18,7 +18,7 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FAKE_HERDR_LOG, JSON.stringify(args) + '\\n');
 const fail = (code) => { console.error(JSON.stringify({ error: { code, message: code } })); process.exit(1); };
 const verb = args.slice(0, 2).join(' ');
-if (verb === 'pane split') console.log(JSON.stringify({ result: { pane: { pane_id: 'w9:pB' } } }));
+if (verb === 'tab create') console.log(JSON.stringify({ result: { tab: { tab_id: 'w9:t9' }, root_pane: { pane_id: 'w9:pB' } } }));
 else if (verb === 'agent get') { if (process.env.FAKE_HERDR_ALIVE !== '1') fail('agent_not_found'); console.log('{"result":{}}'); }
 else if (verb === 'agent prompt') {
   const file = /printf ok > (\\S+)/.exec(args[3])?.[1];
@@ -62,7 +62,7 @@ function fixture(t) {
   writeFileSync(join(tools, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   const base = {
     ...process.env, PATH: `${tools}:${process.env.PATH}`, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test',
-    XDG_CONFIG_HOME: join(root, 'config'), FAKE_HERDR_LOG: log, HERDR_ENV: '1', VERIFY_UVW_VERIFIER: null,
+    XDG_CONFIG_HOME: join(root, 'config'), FAKE_HERDR_LOG: log, HERDR_ENV: '1', HERDR_WORKSPACE_ID: 'w9', VERIFY_UVW_VERIFIER: null,
   };
   const v = (args, env = {}) => spawnSync('bash', [helper, ...args], {
     env: Object.fromEntries(Object.entries({ ...base, ...env }).filter(([, value]) => value != null)), encoding: 'utf8',
@@ -91,6 +91,8 @@ test('verifier saves a spec only after its agent ran the smoke command and stopp
   assert.ok(!spoken(saved).includes(secret));
   const smoke = calls();
   assert.equal(after(smoke[0], '--env'), 'A={"x":1}', 'the smoke test runs with the spec env');
+  assert.equal(after(smoke[0], '--label'), 'verify setup');
+  assert.equal(smoke.find((args) => args[1] === 'start')[2], 'setup-pb');
   const target = /printf ok > (\S+)/.exec(smoke.find((args) => args[1] === 'prompt')[3])[1];
   assert.ok(dirname(target).startsWith(`${dirname(run)}/verifier-smoke.`), 'the smoke file is under the run root, where evidence goes');
   assert.ok(!existsSync(dirname(target)), 'the smoke directory is removed');
@@ -128,7 +130,7 @@ test('verifier saves a spec only after its agent ran the smoke command and stopp
   assert.equal(v(['doctor']).stdout.trimEnd().split('\n').at(-1), 'info  verifier: none');
 });
 
-test('delegate refuses outside herdr, without a verifier, and when the brief refuses, all before it opens a pane', (t) => {
+test('delegate refuses outside herdr, without a verifier, and when the brief refuses, all before it opens a tab', (t) => {
   const { v, calls } = fixture(t);
   const outside = v(['delegate', 'link-sharing', 'LS1'], { HERDR_ENV: null, VERIFY_UVW_VERIFIER: spec });
   assert.equal(outside.status, 1);
@@ -141,7 +143,7 @@ test('delegate refuses outside herdr, without a verifier, and when the brief ref
   assert.deepEqual(calls(), []);
 });
 
-test('delegate hands the saved verifier the brief unchanged, keeps its session transcript, closes its pane and prints coverage', (t) => {
+test('delegate hands the saved verifier the brief unchanged, keeps its session transcript, closes its tab and prints coverage', (t) => {
   const { run, file, v, calls } = fixture(t);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `# a comment\n\n${spec}\n`);
@@ -154,31 +156,33 @@ test('delegate hands the saved verifier the brief unchanged, keeps its session t
   assert.equal(journeys.status, 0);
   assert.match(journeys.stdout, /RESULT: PASS/);
   assert.equal(done.status, journeys.status, done.stderr);
-  assert.equal(done.stdout, `verifier vu-w9-pb in pane w9:pB: opencode --standalone (env A) from ${file}\n${journeys.stdout}`);
+  assert.equal(done.stdout, `verifier test-link-sharing-pb in tab "verify test link-sharing" (pane w9:pB): opencode --standalone (env A) from ${file}\n${journeys.stdout}`);
   assert.ok(!spoken(done).includes(secret));
 
   const seen = calls();
-  const [split] = seen;
-  assert.equal(verbs([split])[0], 'pane split');
-  assert.equal(after(split, '--cwd'), repo);
-  assert.equal(after(split, '--env'), 'A={"x":1}');
-  assert.ok(split.includes('--no-focus'));
+  const [tab] = seen;
+  assert.equal(verbs([tab])[0], 'tab create');
+  assert.equal(after(tab, '--workspace'), 'w9');
+  assert.equal(after(tab, '--cwd'), repo);
+  assert.equal(after(tab, '--label'), 'verify test link-sharing');
+  assert.equal(after(tab, '--env'), 'A={"x":1}');
+  assert.ok(tab.includes('--no-focus'), "the caller's tab keeps focus");
   assert.equal(verbs(seen).filter((verb) => verb === 'agent start').length, 3, 'a start the new shell refused is tried again');
   const start = seen.findLast((args) => args[1] === 'start');
-  assert.equal(start[2], 'vu-w9-pb');
+  assert.equal(start[2], 'test-link-sharing-pb');
   assert.equal(after(start, '--kind'), 'opencode');
   assert.equal(after(start, '--pane'), 'w9:pB');
   assert.deepEqual(start.slice(start.indexOf('--')), ['--', '--standalone']);
   const prompt = seen.find((args) => args[1] === 'prompt');
-  assert.equal(prompt[2], 'vu-w9-pb');
+  assert.equal(prompt[2], 'test-link-sharing-pb');
   assert.equal(prompt[3], brief.stdout, 'the verifier gets $V brief byte for byte');
   assert.deepEqual(verbs(seen.slice(seen.indexOf(prompt) + 1)), ['pane close'], 'the transcript needs no screen');
   assert.deepEqual(seen.at(-1), ['pane', 'close', 'w9:pB']);
-  const transcript = readFileSync(join(run, 'evidence/vu-w9-pb.transcript.md'), 'utf8');
+  const transcript = readFileSync(join(run, 'evidence/test-link-sharing-pb.transcript.md'), 'utf8');
   assert.ok(transcript.startsWith('# opencode session ses_test\n'), transcript);
   assert.ok(transcript.includes(`**Brief:** identical to \`$V brief\` (${Buffer.byteLength(brief.stdout)} bytes)`), transcript);
   assert.ok(transcript.includes('Recorded LS1 as user [REDACTED]'), 'the transcript is evidence, so run secrets are redacted');
-  assert.ok(!existsSync(join(run, 'evidence/vu-w9-pb.screen.txt')));
+  assert.ok(!existsSync(join(run, 'evidence/test-link-sharing-pb.screen.txt')));
 });
 
 test('delegate saves the screen of a verifier whose agent kind has no transcript reader', (t) => {
@@ -186,33 +190,52 @@ test('delegate saves the screen of a verifier whose agent kind has no transcript
   const done = v(['delegate', 'link-sharing', 'LS1'], { VERIFY_UVW_VERIFIER: 'aider --yes' });
   assert.match(done.stderr, /^warning: no transcript reader for aider agents; saving the verifier's screen instead$/m);
   assert.match(done.stdout, /^link-sharing in run test/m, 'coverage still prints');
-  assert.equal(readFileSync(join(run, 'evidence/vu-w9-pb.screen.txt'), 'utf8'), screen);
-  assert.ok(!existsSync(join(run, 'evidence/vu-w9-pb.transcript.md')));
+  assert.equal(readFileSync(join(run, 'evidence/test-link-sharing-pb.screen.txt'), 'utf8'), screen);
+  assert.ok(!existsSync(join(run, 'evidence/test-link-sharing-pb.transcript.md')));
   const read = calls().find((args) => args[1] === 'read');
   assert.equal(after(read, '--source'), 'recent-unwrapped');
   assert.deepEqual(calls().at(-1), ['pane', 'close', 'w9:pB']);
 });
 
-test('delegate keeps the pane of a verifier that did not stop, and refuses a second verifier while the first lives', (t) => {
+test('delegate keeps the tab of a verifier that did not stop, and refuses a second verifier while the first lives', (t) => {
   const { v, calls } = fixture(t);
   const env = { VERIFY_UVW_VERIFIER: spec };
   const blocked = v(['delegate', 'link-sharing', 'LS1'], { ...env, FAKE_HERDR_STATUS: 'blocked' });
   assert.equal(blocked.status, 1);
-  assert.match(blocked.stderr, /waits for approval in pane w9:pB/);
+  assert.match(blocked.stderr, /waits for approval in tab "verify test link-sharing".*herdr pane close w9:pB/);
   assert.ok(!verbs(calls()).includes('pane close'));
 
   let n = calls().length;
   const second = v(['delegate', 'link-sharing', 'LS1'], { ...env, FAKE_HERDR_ALIVE: '1' });
   assert.equal(second.status, 1);
-  assert.match(second.stderr, /verifier vu-w9-pb still drives run test/);
-  assert.deepEqual(calls().slice(n), [['agent', 'get', 'vu-w9-pb']], 'no second pane opens');
+  assert.match(second.stderr, /verifier test-link-sharing-pb still drives run test/);
+  assert.deepEqual(calls().slice(n), [['agent', 'get', 'test-link-sharing-pb']], 'no second tab opens');
 
   n = calls().length;
   const timedOut = v(['delegate', 'link-sharing', 'LS1'], { ...env, FAKE_HERDR_STATUS: 'timeout' });
   assert.equal(timedOut.status, 1);
   assert.ok(timedOut.stderr.includes(screen), 'the visible screen shows why');
-  assert.match(timedOut.stderr, /herdr agent wait vu-w9-pb/);
+  assert.match(timedOut.stderr, /herdr agent wait test-link-sharing-pb/);
   const later = verbs(calls().slice(n));
-  assert.ok(later.includes('pane split'), 'a verifier that is gone no longer holds the run');
+  assert.ok(later.includes('tab create'), 'a verifier that is gone no longer holds the run');
   assert.ok(!later.includes('pane close'));
+});
+
+test('delegate names each verifier agent after its run and feature within herdr agent-name rules', (t) => {
+  const { run, v, calls } = fixture(t);
+  const names = {};
+  for (const id of ['20261125-101500', 'amt-agent-mode-tasks-retry-2', 'AMC.run+1']) {
+    const dir = join(dirname(run), `run-${id.length}`);
+    mkdirSync(join(dir, 'evidence'), { recursive: true });
+    writeFileSync(join(dir, 'run.env'), `RUN_ID='${id}'\nWEB_PORT=1\nSERVER_PORT=1\nSERVER_PID=\nWEB_PID=\nGIT_HEAD=\n`);
+    const done = v(['delegate', 'link-sharing', 'LS1'], { VERIFY_UVW_VERIFIER: spec, VERIFY_UVW_RUN: `run-${id.length}` });
+    assert.match(done.stdout, /^verifier \S+ in tab /, done.stderr);
+    assert.equal(after(calls().findLast((args) => args[1] === 'create'), '--label'), `verify ${id} link-sharing`);
+    names[id] = calls().findLast((args) => args[1] === 'start')[2];
+  }
+  assert.deepEqual(names, {
+    '20261125-101500': 'v20261125-101500-link-sharing-pb',
+    'amt-agent-mode-tasks-retry-2': 'amt-agent-mode-tasks-retry-2-pb',
+    'AMC.run+1': 'amc-run-1-link-sharing-pb',
+  });
 });
