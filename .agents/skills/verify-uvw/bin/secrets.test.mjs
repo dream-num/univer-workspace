@@ -60,7 +60,7 @@ test('stored credentials give up their secret leaves and keep their labels', () 
   assert.deepEqual(credentialSecrets({ type: 'api', key: 'sk-12345678' }), ['sk-12345678']);
 });
 
-test('run secrets cover the human, the principals, the model credential and story uvw sessions, and the check fails on any of them', () => {
+test('run secrets cover the human, the principals, the model credential, story shell variables and story uvw sessions, and the check fails on any of them', () => {
   const run = mkdtempSync(join(tmpdir(), 'verify-uvw-secrets-'));
   const check = () => spawnSync(process.execPath, [join(run, 'bin/secrets.mjs'), 'check', run, join(run, 'evidence')], { encoding: 'utf8' });
   try {
@@ -72,22 +72,24 @@ test('run secrets cover the human, the principals, the model credential and stor
     writeFileSync(join(run, 'home/mcp-session'), 'human-session\n');
     writeFileSync(join(run, 'home/principals/a1.token'), 'principal-token\n');
     writeFileSync(join(run, 'home/principals/a1.id'), 'principal-id\n');
-    writeFileSync(join(run, 'home/opencode-credential.json'), JSON.stringify([{ value: { access: 'model-access', refresh: 'model-refresh' } }]));
+    writeFileSync(join(run, 'home/opencode-credential-opencode.json'), JSON.stringify([{ value: { access: 'model-access', refresh: 'model-refresh' } }]));
+    writeFileSync(join(run, 'home/story-env.json'), JSON.stringify({ DEEPSEEK_API_KEY: 'story-env-key', PROVIDER_REGION: 'story-env-region' }));
     writeFileSync(join(run, 'home/stories/codex-human/.codex/auth.json'), JSON.stringify({ tokens: { access_token: 'codex-access', refresh_token: 'codex-refresh', id_token: 'codex-id-token' }, OPENAI_API_KEY: 'codex-api-key' }));
     const stored = cookie => JSON.stringify({ sessions: { 'http://127.0.0.1:1': { cookie, subject: { id: 'subject-id-1' } } } });
     writeFileSync(join(run, `home/${sessions}/session.json`), stored('human-cli-session'));
     writeFileSync(join(run, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}/session.json`), stored('story-session'));
-    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-session']);
+    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-env-key', 'story-env-region', 'story-session']);
 
     writeFileSync(join(run, 'evidence/story/transcript.jsonl'), 'agent principal-id said hello\n');
     assert.equal(check().status, 0, check().stdout);
     assert.match(check().stdout, /^ok {4}no token, session cookie or run secret in 1 files/);
     writeFileSync(join(run, 'evidence/story/answer.txt'), `link and ${pat}\n`);
     writeFileSync(join(run, 'evidence/leak.txt'), 'model-refresh\n');
+    writeFileSync(join(run, 'evidence/env-leak.txt'), 'region story-env-region\n');
     const failed = check();
     assert.equal(failed.status, 1);
-    assert.deepEqual(failed.stdout.trim().split('\n').sort(), ['FAIL  leak.txt: a secret of this run', 'FAIL  story/answer.txt: Workspace token']);
-    assert.doesNotMatch(failed.stdout + failed.stderr, /uvw_pat_|model-refresh/);
+    assert.deepEqual(failed.stdout.trim().split('\n').sort(), ['FAIL  env-leak.txt: a secret of this run', 'FAIL  leak.txt: a secret of this run', 'FAIL  story/answer.txt: Workspace token']);
+    assert.doesNotMatch(failed.stdout + failed.stderr, /uvw_pat_|model-refresh|story-env-region/);
   } finally { rmSync(run, { recursive: true, force: true }); }
 });
 

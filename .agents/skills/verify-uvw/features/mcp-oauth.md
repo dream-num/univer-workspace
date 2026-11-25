@@ -37,7 +37,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 Run after `up` with MCP enabled and `user`.
 The script uses the run's browser session and a separate opencode project with no Authorization
 header, with opencode's XDG directories inside it and the run's model credential imported as stories do
-(`home/opencode-credential.json`). Raw auth output and opencode's OAuth
+(`home/opencode-credential-<integration>.json`). With no stored credential, the provider reads its key
+from your shell. Raw auth output and opencode's OAuth
 storage stay in a mode-0700 temporary directory under `$RUN/home`; on success or failure the script
 saves only transcripts redacted by `secrets.mjs redact-sign-in` and deletes that directory. Do not run
 it with shell tracing or record raw authorize or callback URLs.
