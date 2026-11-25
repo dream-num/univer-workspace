@@ -20,7 +20,8 @@ mode, because the runner follows recipes and does not design checks. From the re
 `R="node .agents/skills/verify-uvw/runner/runner.mjs"`, then run `$R --check <feature[:ID,ID]>...` with the rest
 and act on what it prints:
 
-- A `host` line means that feature or those journeys are marked `(host only)`. The runner skips them. Tell the
+- A `host` line means [host-only.mjs](host-only.mjs) leaves that feature or those journeys to the host, and says
+  why each cannot run in a container. The runner skips them. Tell the
   user, then run them in host mode as [SKILL.md](../SKILL.md) describes.
 - Exit `5` or `3` with a `FAIL` line means the key is missing or refused, or Docker is missing. Tell the user in
   one sentence what the runner needs, and offer host mode. Do not switch on your own. For a refused key, quote the
@@ -68,14 +69,16 @@ and so on. The id is also the task's run id.
   `summary.md` then counts each task's checks that held, broke, were blocked or did not run, and the journeys the
   agent drives, and lists every check that did not hold. It exits `1` when one did not hold, `4` when a task
   failed in the runner or leaked, `3` when a task is host only, else `0`.
-- A task expects a verdict for each journey it selects, from the journey headings of its feature file. A journey
-  marked `(host only)` under [the feature contract](../features/README.md#feature-entry-contract) does not run in
-  the runner, and neither does a marked feature. Those still run on the host. The runner lists them in
-  `summary.md` with the `$V up --for` command for each.
+- A task expects a verdict for each journey it selects, from the journey headings of its feature file. The
+  features and journeys in [host-only.mjs](host-only.mjs) do not run in the runner. Those still run on the host.
+  The runner lists them in `summary.md` with the `$V up --for` command for each. Each task passes its journeys to
+  `up --for`, `run-journeys` and `brief` by ID, and sets `VERIFY_UVW_SKIP_JOURNEYS` to the journeys of its feature
+  that host-only.mjs lists, so `run-journeys` never runs one of them, not even as an earlier journey that a later
+  one needs.
 - MCP features run in the runner in the `dist` start mode of [MCP mode](../references/mcp-mode.md#start), which
   starts the gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
   `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
-  journeys that call `docker` or `agent-up`, and the whole MCP security feature, are marked `(host only)`.
+  journeys that call `docker` or `agent-up`, and the whole MCP security feature, are in host-only.mjs.
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
   `summary.md`, and for each task `prepare.log`, `report.md` (its evidence paths open on the host),
   `transcript.jsonl`, `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs`

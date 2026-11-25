@@ -192,7 +192,7 @@ test "$(cat "$EVIDENCE/mcp-origin.txt")" = 403
 
 Pass when the response is 403.
 
-### M10. Production refusal (host only)
+### M10. Production refusal
 
 ```bash
 cid=$(docker run -d --network none --label "com.docker.compose.project=$MCP_PROJECT" \
@@ -233,7 +233,7 @@ Pass when opencode exits 0, a `tool_use` fragment records the completed
 event has outcome `ok` and null client name. Keep the JSONL. It contains the four output
 fragment types, not developer plugins, skills or credentials.
 
-### M12. Cleanup (host only)
+### M12. Cleanup
 
 Run: agent.
 

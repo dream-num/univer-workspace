@@ -71,7 +71,7 @@ jq -e '.code == "workspace-worktree-not-editable" and .detail.state == "ready"' 
 
 Pass when the error preserves `detail.state` and does not execute code.
 
-### MX3. Stopped executor (host only)
+### MX3. Stopped executor
 
 ```bash
 MX_CONTAINER=$(docker ps -q --filter "label=com.docker.compose.project=$MCP_PROJECT" --filter label=com.docker.compose.service=executor)
@@ -159,7 +159,7 @@ jq -e '.outcome == "tool_error" and .error_code == "workspace-argument-invalid"'
 Pass when each call exits 1 with the message above, none names a CLI flag (`--worksheet`) or the CLI, and the event
 records the tool error. The CLI keeps its own wording for the same input.
 
-### MX11. Stale worker session (host only)
+### MX11. Stale worker session
 
 Two PATs share one user and one warm worker. Revoke A, recover B, and reject A.
 
@@ -169,7 +169,7 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
 
 Pass when B succeeds with one auth rerun and A receives HTTP 401. Evidence is `resilience-auth.json`.
 
-### MX12. Concurrent revision conflict (host only)
+### MX12. Concurrent revision conflict
 
 Resolve two writes concurrently against one Unit.
 
@@ -180,7 +180,7 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs revision
 Pass when both writes commit on consecutive revisions, at most one revision rerun is logged (the executor queues same-Unit writes, so none is normal), and inspect contains both values.
 Evidence is `resilience-revision.json`.
 
-### MX13. Two executor replicas (host only)
+### MX13. Two executor replicas
 
 Opt in at launch with `VERIFY_UVW_MCP_EXECUTORS=2`. The default run skips this journey.
 
@@ -192,7 +192,7 @@ Pass when three calls use the same replica, stopping it moves the next call to t
 and killing a slow write returns `workspace-result-unknown` without a replay. A manual retry writes once.
 The journey restarts stopped containers. Evidence is `resilience-replicas.json`.
 
-### MX14. Stale worker session on HTML View validation (host only)
+### MX14. Stale worker session on HTML View validation
 
 Merge a data Sheet, validate a bound HTML View with A, revoke A,
 and validate with B. Then revoke B and call the executor with a 4-second deadline using the dev session, which leaves no time for a rerun.
@@ -204,7 +204,7 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs html-auth
 Pass when B succeeds with one auth rerun, the no-rerun call returns a retryable `workspace-executor-timeout` that is not an
 `auth_error`, the next executor call succeeds on the replaced worker, and the primary bearer still works. Evidence is `resilience-html-auth.json`.
 
-### MX15. Parallel writes and reads during writes (host only)
+### MX15. Parallel writes and reads during writes
 
 Five parallel `execute` calls on one Unit, then an `inspect` loop during eight sequential writes.
 

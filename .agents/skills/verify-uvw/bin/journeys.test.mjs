@@ -19,27 +19,25 @@ test('every feature file parses into journeys whose ids are unique across featur
   const all = [...features.values()].flatMap((f) => f.journeys);
   assert.equal(new Set(ids(all)).size, all.length);
   for (const f of features.values()) assert.ok(f.journeys.length, `${f.name} has journeys`);
-  // The drill's silent skip: the runner gives sheet-lens's MCP half instances of their own, all but the base comparison.
-  const sheet = plan(features.get('sheet-lens'), [], { where: 'runner' });
+  const sheet = plan(features.get('sheet-lens'));
   assert.deepEqual(sheet.partitions.map((p) => [p.mode, ids(p.journeys)]), [
     ['default', [...Array(10)].map((_, k) => `SLC${k + 1}`)],
-    ['mcp', ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
-    ['mcp-same-origin', ['SLM8']]]);
-  assert.deepEqual(ids(sheet.host), ['SLM1']);
+    ['mcp', ['SLM1', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
+    ['mcp-same-origin', ['SLM8']]], 'sheet-lens gives its MCP half instances of their own');
   const declared = (name) => Object.fromEntries(plan(features.get(name)).partitions.map((p) => [p.mode, [ids(p.journeys).join(' '), p.needs.join(' ')]]));
   assert.deepEqual(declared('pull-requests'), { default: ['PR1 PR2 PR3', ''], mcp: ['PR4 PR5 PR6 PR7 PR8 PR9 PR10', ''] }, 'one mode holds the chain of shared state');
   assert.deepEqual(declared('link-sharing').default[1], 'web-build');
   assert.deepEqual(Object.keys(declared('agent-trajectory')), ['mcp-same-origin']);
 });
 
-test('only ### headings under Driving it are journeys, with their title and (host only) mark', () => {
-  const feature = parseFeature('f', recipe('### A1. First\n\ntext\n\n### A2. Second (host only)\n\n### TR2-10. Third'));
+test('only ### headings under Driving it are journeys, with their title', () => {
+  const feature = parseFeature('f', recipe('### A1. First\n\ntext\n\n### A2. Second\n\n### TR2-10. Third'));
   assert.deepEqual(feature.journeys, [
-    { id: 'A1', title: 'First', feature: 'f', line: 17, hostOnly: false, mode: 'default', needs: [], runBy: 'agent', blocks: [] },
-    { id: 'A2', title: 'Second', feature: 'f', line: 21, hostOnly: true, mode: 'default', needs: [], runBy: 'agent', blocks: [] },
-    { id: 'TR2-10', title: 'Third', feature: 'f', line: 23, hostOnly: false, mode: 'default', needs: [], runBy: 'agent', blocks: [] },
+    { id: 'A1', title: 'First', feature: 'f', line: 17, mode: 'default', needs: [], runBy: 'agent', blocks: [] },
+    { id: 'A2', title: 'Second', feature: 'f', line: 21, mode: 'default', needs: [], runBy: 'agent', blocks: [] },
+    { id: 'TR2-10', title: 'Third', feature: 'f', line: 23, mode: 'default', needs: [], runBy: 'agent', blocks: [] },
   ]);
-  assert.ok(parseFeature('f', recipe('### A1. First', '# Feature (host only)')).journeys.every((j) => j.hostOnly));
+  assert.throws(() => parseFeature('f', `Feature\n\n${drive}\n\n### A1. First\n`), /^Error: features\/f\.md:1: a feature starts with an H1$/);
 });
 
 test('a malformed journey heading, a recipe without journeys, or a reused id fails with file and line', () => {
@@ -58,13 +56,10 @@ test('a malformed journey heading, a recipe without journeys, or a reused id fai
   }
 });
 
-test('a plan selects journeys in file order, refuses unknown ids, and keeps host-only journeys out of the runner', () => {
-  const feature = parseFeature('f', recipe('### A1. One\n\n### A2. Two (host only)\n\n### A3. Three'));
+test('a plan selects journeys in file order and refuses unknown ids', () => {
+  const feature = parseFeature('f', recipe('### A1. One\n\n### A2. Two\n\n### A3. Three'));
   assert.deepEqual(ids(plan(feature).partitions[0].journeys), ['A1', 'A2', 'A3']);
   assert.deepEqual(ids(plan(feature, ['A3', 'A1']).partitions[0].journeys), ['A1', 'A3']);
-  const runner = plan(feature, [], { where: 'runner' });
-  assert.deepEqual([ids(runner.partitions[0].journeys), ids(runner.host)], [['A1', 'A3'], ['A2']]);
-  assert.deepEqual(plan(feature, ['A2'], { where: 'runner' }).partitions, []);
   assert.throws(() => plan(feature, ['A4']), /no journey or mode A4 in features\/f\.md; it has A1, A2, A3 in default$/);
 });
 
@@ -96,13 +91,11 @@ test('a misplaced, malformed or unknown metadata line fails with file and line',
 });
 
 test('a plan has one partition per mode in file order, takes mode names as selectors, and names each partition\'s selectors', () => {
-  const feature = parseFeature('f', recipe(['### A1. One', '### A2. Two\n\nMode: mcp.', '### A3. Three (host only)\n\nMode: mcp.', '### A4. Four',
+  const feature = parseFeature('f', recipe(['### A1. One', '### A2. Two\n\nMode: mcp.', '### A3. Three\n\nMode: mcp.', '### A4. Four',
     '### A5. Five\n\nMode: mcp-same-origin. Needs: web-build.'].join('\n\n')));
   const parts = (p) => p.partitions.map((q) => [q.mode, ids(q.journeys), q.needs, q.selectors]);
   assert.deepEqual(parts(plan(feature)), [['default', ['A1', 'A4'], [], ['default']], ['mcp', ['A2', 'A3'], [], ['mcp']],
     ['mcp-same-origin', ['A5'], ['web-build'], ['mcp-same-origin']]]);
-  const runner = plan(feature, [], { where: 'runner' });
-  assert.deepEqual([parts(runner)[1], ids(runner.host)], [['mcp', ['A2'], [], ['mcp']], ['A3']]);
   assert.deepEqual(parts(plan(feature, ['mcp'])), [['mcp', ['A2', 'A3'], [], ['mcp']]]);
   assert.deepEqual(parts(plan(feature, ['A4', 'A1'])), [['default', ['A1', 'A4'], [], ['A1', 'A4']]]);
   assert.deepEqual(parts(plan(feature, ['A4', 'mcp-same-origin'])), [['default', ['A4'], [], ['A4']], ['mcp-same-origin', ['A5'], ['web-build'], ['A5']]]);
@@ -154,15 +147,12 @@ test('fold: a journey without an allowed verdict is MISSING and makes the result
 test('$V verdict records only known journeys and allowed verdicts, and $V journeys prints the plan, then the coverage', () => {
   const root = mkdtempSync(join(tmpdir(), 'verify-uvw-verdict-'));
   const env = { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test' };
-  delete env.VERIFY_UVW_RUNNER;
-  delete env.VERIFY_UVW_EVIDENCE_ROOT;
   const v = (...args) => spawnSync('bash', [helper, ...args], { env, encoding: 'utf8' });
   const journal = join(root, 'test/evidence/journeys.jsonl');
   try {
     const before = v('journeys', 'issues');
     assert.equal(before.status, 0, before.stderr);
     assert.match(before.stdout, /^issues: 5 journeys in \.agents\/skills\/verify-uvw\/features\/issues\.md\ndefault: \$V up --for issues\n {2}IS1 {2}Create repo\n/);
-    assert.match(v('journeys', 'sheet-lens').stdout, /^ {2}SLM1 +Regression against the base \(host only\)$/m, 'the host plan includes host-only journeys');
     assert.notEqual(v('journeys', 'issues', 'IS9').status, 0);
 
     mkdirSync(join(root, 'test/evidence'), { recursive: true });
@@ -191,15 +181,6 @@ test('$V verdict records only known journeys and allowed verdicts, and $V journe
     const complete = v('journeys', 'issues');
     assert.equal(complete.status, 0);
     assert.match(complete.stdout, /RESULT: ISSUES\n$/);
-
-    // In a runner container, coverage spans every run the task started, as the runner folds it, and skips host-only journeys.
-    mkdirSync(join(root, 'slc/evidence'), { recursive: true });
-    writeFileSync(join(root, 'slc/run.env'), 'RUN_ID=slc\nWEB_PORT=1\n');
-    assert.equal(spawnSync('bash', [helper, 'verdict', 'SLC1', 'PASS'], { env: { ...env, VERIFY_UVW_RUN: 'slc' } }).status, 0);
-    assert.equal(v('verdict', 'SLC2', 'PASS').status, 0);
-    const runner = spawnSync('bash', [helper, 'journeys', 'sheet-lens'], { env: { ...env, VERIFY_UVW_RUNNER: '1', VERIFY_UVW_EVIDENCE_ROOT: root }, encoding: 'utf8' });
-    assert.match(runner.stdout, /^sheet-lens in run test: 2 of 19 journeys have a verdict$/m);
-    assert.match(runner.stdout, /^SLM1 run only on the host$/m);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -214,7 +195,6 @@ test('$V journeys prints each mode with its up --for line; up --for and brief ta
   for (const file of ['verify-uvw', 'journeys.mjs', 'secrets.mjs']) copyFileSync(fileURLToPath(new URL(file, import.meta.url)), join(skill, 'bin', file));
   writeFileSync(join(skill, 'features/f.md'), recipe(['### A1. One', '### A2. Two\n\nMode: mcp.', '### A3. Three\n\nMode: mcp-same-origin. Needs: web-build.', '### A4. Four\n\nMode: mcp.'].join('\n\n')));
   const env = { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 't' };
-  delete env.VERIFY_UVW_RUNNER;
   const v = (...args) => spawnSync('bash', [join(skill, 'bin/verify-uvw'), ...args], { env, encoding: 'utf8' });
   try {
     assert.equal(v('journeys', 'f').stdout, ['f: 4 journeys in .agents/skills/verify-uvw/features/f.md',
@@ -267,8 +247,6 @@ function helperRepo(features) {
   writeFileSync(join(run, 'run.env'), 'RUN_ID=t\nWEB_PORT=1\n');
   writeFileSync(join(run, 'user.pw'), 'pw-5f0c1e2d3b4a');
   const env = { ...process.env, VERIFY_UVW_ROOT: join(repo, 'runs'), VERIFY_UVW_RUN: 't' };
-  delete env.VERIFY_UVW_RUNNER;
-  delete env.VERIFY_UVW_EVIDENCE_ROOT;
   const v = (...args) => spawnSync('bash', [join(skill, 'bin/verify-uvw'), ...args], { env, encoding: 'utf8' });
   const checks = () => readJournal(join(run, 'evidence/journeys.jsonl')).filter((e) => e.kind === 'checks');
   return { repo, run, v, checks, done: () => rmSync(repo, { recursive: true, force: true }) };

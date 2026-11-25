@@ -18,7 +18,7 @@ starts the gateway, executor and renderer:
 | `dist` | Only in [the runner](../runner/README.md), whose image sets it. Elsewhere `up` refuses before it starts anything, because `VERIFY_UVW_RUNNER` is not `1`. | Starts `node dist/main.js` in `apps/mcp` once per role, as your own processes on loopback ports that it picks and saves in `run.env`. `apps/mcp/dist` must be newer than `apps/mcp/src` (`pnpm --filter '@univerjs/univer-workspace-mcp...' build`); `up` does not build it. The renderer uses the Chromium at `UNIVER_RENDER_BROWSER`. |
 
 `dist` checks what the roles do, not how they are packaged: it has no image, container, internal network or
-published port. Journeys that check those, or that call `docker`, are marked `(host only)`. Each role writes
+published port. Journeys that check those, or that call `docker`, are in [host-only.mjs](../runner/host-only.mjs). Each role writes
 `logs/mcp-<role>.log` and its process id to `mcp-<role>.pid`. `mcp-logs` shows each role's current process,
 and the file keeps earlier processes of a restarted role.
 
@@ -46,7 +46,7 @@ With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the 
 
 Which mode a journey needs:
 
-- Run [MB](../features/mcp-production.md#mb1-deployment-and-per-account-tools-host-only) with `VERIFY_UVW_MCP_RENDERER=0` and
+- Run [MB](../features/mcp-production.md#mb1-deployment-and-per-account-tools) with `VERIFY_UVW_MCP_RENDERER=0` and
   `VERIFY_UVW_MCP_PRODUCTION=1`.
 - Journeys that use `--auth dev`, MA5 and the session-based second-user client of MF4 need development
   mode, which is the default.
@@ -155,7 +155,7 @@ plugins, installs the pinned DSH runtime and profile under `home/agent/`, and st
 (`logs/agent-install.log`). The one-time browser URL is in `home/agent-url` and the raw logs in
 `home/agent-log.private`. Never copy either into evidence. Open the URL in the run's agent-browser session
 and confirm the onboarding service URL is `$ORIGIN` before signing in. `$V agent-down` stops it, and
-`down` also deletes its installation. MA8 in [PAT sign-in](../features/mcp-auth.md#ma8-existing-sign-in-clients-host-only) drives it.
+`down` also deletes its installation. MA8 in [PAT sign-in](../features/mcp-auth.md#ma8-existing-sign-in-clients) drives it.
 
 ## Benchmarks and probes
 

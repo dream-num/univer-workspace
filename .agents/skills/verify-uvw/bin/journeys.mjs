@@ -15,7 +15,7 @@ export const VERDICTS = ['PASS', 'FAIL', 'DRIFT', 'BLOCKED'];
 const REPO = fileURLToPath(new URL('../../../..', import.meta.url));
 const FEATURES = fileURLToPath(new URL('../features', import.meta.url));
 const DRIVE = '## Driving it with agent-browser and uvw';
-const JOURNEY = /^### ([A-Z][A-Z0-9]*(?:-\d+|\d+))\. (\S.*?)( \(host only\))?$/;
+const JOURNEY = /^### ([A-Z][A-Z0-9]*(?:-\d+|\d+))\. (\S.*)$/;
 const METADATA = /^(Mode|Needs|Run):/;
 // bash never traps a failing `! command`, and bash 3.2 neither `[[ ]]`, `(( ))` nor `( )`, so a helper journey checks with none.
 const UNTRAPPED = /^\s*(!\s|\[\[|\()/;
@@ -28,7 +28,7 @@ export const MODES = {
   'mcp-same-origin': { VERIFY_UVW_MCP: '1', VERIFY_UVW_MCP_SAME_ORIGIN: '1' },
 };
 
-// What must be built before `up`: the runner runs `setup` once per container, and `up --for` refuses until `ready` returns null.
+// What must be built before `up`: `setup` builds it, and `up --for` refuses until `ready` returns null.
 export const NEEDS = {
   'web-build': {
     setup: "pnpm --filter '@univerjs/univer-workspace^...' build && pnpm --filter @univerjs/univer-workspace build:web",
@@ -71,8 +71,7 @@ function metadata(line) {
 export function parseFeature(name, markdown) {
   const lines = markdown.split('\n');
   const fail = (i, message) => { throw new Error(`features/${name}.md:${i + 1}: ${message}`); };
-  const h1 = /^# (.+)$/.exec(lines[0]) ?? fail(0, 'a feature starts with an H1');
-  const hostOnly = h1[1].endsWith(' (host only)');
+  if (!/^# ./.test(lines[0])) fail(0, 'a feature starts with an H1');
   const journeys = [], setup = [], scope = { feature: {} };
   let fenced = false, section = null, open = null, block = null;
   lines.forEach((line, i) => {
@@ -93,7 +92,7 @@ export function parseFeature(name, markdown) {
       if (line === DRIVE) open = scope.feature;
     } else if (section === DRIVE && line.startsWith('### ')) {
       const m = JOURNEY.exec(line) ?? fail(i, `write a journey heading as "### <ID>. <Title>", with an ID such as MS5 or TR2-1: ${line}`);
-      journeys.push({ id: m[1], title: m[2], feature: name, line: i + 1, hostOnly: hostOnly || Boolean(m[3]), blocks: [] });
+      journeys.push({ id: m[1], title: m[2], feature: name, line: i + 1, blocks: [] });
       open = scope[m[1]] = {};
     }
   });
@@ -110,7 +109,7 @@ export function parseFeature(name, markdown) {
       if (UNTRAPPED.test(code)) fail(b.line + k - 1, `the helper cannot check with "!", "[[ ]]", "(( ))" or "( )", because bash does not trap their failure everywhere; write "command; test $? -eq 1", "test" or "{ ...; }": ${code.trim()}`);
     });
   }
-  return { name, hostOnly, setup, journeys };
+  return { name, setup, journeys };
 }
 
 export function loadFeatures(dir = FEATURES) {
@@ -127,15 +126,14 @@ export function loadFeatures(dir = FEATURES) {
 }
 
 // The journeys that selectors (journey IDs or mode names) pick, as one partition per mode in file order, each run
-// on its own instance, and the journeys only the host runs. A partition's `selectors` pick it again on its own.
-export function plan(feature, selectors = [], { where = 'host' } = {}) {
+// on its own instance. A partition's `selectors` pick it again on its own.
+export function plan(feature, selectors = []) {
   const modes = [...new Set(feature.journeys.map((j) => j.mode))];
   const unknown = selectors.filter((s) => !modes.includes(s) && !feature.journeys.some((j) => j.id === s));
   if (unknown.length) throw new Error(`no journey or mode ${unknown.join(', ')} in features/${feature.name}.md; it has ${feature.journeys.map((j) => j.id).join(', ')} in ${modes.join(', ')}`);
   const selected = selectors.length ? feature.journeys.filter((j) => selectors.includes(j.id) || selectors.includes(j.mode)) : feature.journeys;
-  const host = where === 'runner' ? selected.filter((j) => j.hostOnly) : [];
   const partitions = [];
-  for (const j of selected.filter((j) => !host.includes(j))) {
+  for (const j of selected) {
     let p = partitions.find((q) => q.mode === j.mode);
     if (!p) partitions.push(p = { feature: feature.name, mode: j.mode, needs: [], journeys: [] });
     p.journeys.push(j);
@@ -143,7 +141,7 @@ export function plan(feature, selectors = [], { where = 'host' } = {}) {
   }
   const byId = selectors.some((s) => !modes.includes(s));
   for (const p of partitions) p.selectors = byId ? p.journeys.map((j) => j.id) : selectors.length || partitions.length > 1 ? [p.mode] : [];
-  return { partitions, host };
+  return { partitions };
 }
 
 export const upFor = (p) => `$V up --for ${[p.feature, ...p.selectors].join(' ')}`;
@@ -155,7 +153,7 @@ export function readJournal(file) {
   return readFileSync(file, 'utf8').split('\n').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
 }
 
-// Every run's journal under a directory of runs, in time order: a runner task's runs/, or a runner container's evidence root.
+// Every run's journal under a directory of runs, such as an evidence root, in time order.
 export function readRuns(dir) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((run) => readJournal(journalFile(join(dir, run))))
@@ -254,12 +252,13 @@ async function execute({ run, feature, step, repo, timeoutSeconds }) {
 }
 
 // Runs the setup and the helper journeys of one mode of a feature, in file order, up to the last of `ids`, skipping
-// those this run already recorded unless `again` names them. Journeys share shell state through journeys/state.sh, so
-// an earlier journey runs first; the agent's journeys are not in this chain, so no helper journey may need one.
-export async function runJourneys({ run, feature, mode, ids, again = false, where = 'host', timeoutSeconds = 600, repo = REPO, print = console.log }) {
-  const journeys = plan(feature, [mode], { where }).partitions[0]?.journeys ?? [];
+// those this run already recorded unless `again` names them, and never those in `skip`. Journeys share shell state
+// through journeys/state.sh, so an earlier journey runs first; the agent's journeys are not in this chain, so no helper
+// journey may need one.
+export async function runJourneys({ run, feature, mode, ids, again = false, skip = [], timeoutSeconds = 600, repo = REPO, print = console.log }) {
+  const journeys = plan(feature, [mode]).partitions[0]?.journeys ?? [];
   const end = Math.max(...ids.map((id) => journeys.findIndex((j) => j.id === id)));
-  const chain = journeys.slice(0, end + 1).filter((j) => j.runBy === 'helper');
+  const chain = journeys.slice(0, end + 1).filter((j) => j.runBy === 'helper' && !skip.includes(j.id));
   if (!chain.length) return { ok: true, entries: [] };
   if (feature.setup.length) chain.unshift({ id: 'setup', blocks: feature.setup });
   mkdirSync(join(run, 'journeys'), { recursive: true, mode: 0o700 });
@@ -290,7 +289,7 @@ export async function runJourneys({ run, feature, mode, ids, again = false, wher
   return { ok: ids.every((id) => !chain.some((s) => s.id === id) || last(id)?.outcome === 'held'), entries };
 }
 
-export function brief({ own, repo, root, runId, feature, selectors, partition, host }) {
+export function brief({ own, repo, root, runId, feature, selectors, partition }) {
   const file = `.agents/skills/verify-uvw/features/${feature.name}.md`;
   const expected = partition.journeys.map((j) => j.id);
   const others = partition.journeys.length < feature.journeys.length;
@@ -321,7 +320,7 @@ Work from ${repo}. Start every shell command with this line. It selects the inst
 
 export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=${runId}; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env${own ? ' 2>/dev/null' : ''})"
 
-Your journeys are the \`### <ID>. <Title>\` sections of ${file} with these IDs: ${expected.join(', ')}. Each needs a verdict.${host.length ? ` Do not run ${host.map((j) => j.id).join(', ')}. Only the host runs ${host.length === 1 ? 'it' : 'them'}.` : ''}
+Your journeys are the \`### <ID>. <Title>\` sections of ${file} with these IDs: ${expected.join(', ')}. Each needs a verdict.
 
 ${steps.map((step, k) => `${k + 1}. ${step}`).join('\n')}
 
@@ -343,10 +342,9 @@ async function main(argv) {
   let features;
   try { features = loadFeatures(); } catch (error) { die(error.message, 2); }
   const named = (name) => features.get(name) ?? die(`no .agents/skills/verify-uvw/features/${name}.md`);
-  const planned = (feature, selectors, where) => { try { return plan(feature, selectors, { where }); } catch (error) { return die(error.message, 2); } };
-  // A runner container plans and folds as runner.mjs does: no host-only journeys, every run under the task's evidence root.
-  const where = process.env.VERIFY_UVW_RUNNER === '1' ? 'runner' : 'host';
-  const evidenceRoot = where === 'runner' && process.env.VERIFY_UVW_EVIDENCE_ROOT;
+  const planned = (feature, selectors) => { try { return plan(feature, selectors); } catch (error) { return die(error.message, 2); } };
+  // When up links each run's evidence under VERIFY_UVW_EVIDENCE_ROOT, coverage spans every run there, as runs a recipe starts count too.
+  const evidenceRoot = process.env.VERIFY_UVW_EVIDENCE_ROOT;
   const entriesOf = (run) => (evidenceRoot ? readRuns(evidenceRoot) : readJournal(journalFile(run)));
   const runningMode = (run, partition, fix) => {
     const running = modeOf(readEnv(join(run, 'run.env')));
@@ -354,7 +352,6 @@ async function main(argv) {
   };
   // The one partition an instance runs; a selection that spans modes names the `up --for` of each.
   const single = ({ partitions }, name, selectors, what) => {
-    if (!partitions.length) die(`${selectors.length ? `${selectors.join(', ')} in ${name} run` : `${name} runs`} only on the host`, 3);
     if (partitions.length > 1) die(`${[name, ...selectors].join(' ')} spans ${partitions.length} modes, and one instance runs one. ${what} for each:\n${partitions.map((p) => `  ${upFor(p)}`).join('\n')}`, 2);
     return partitions[0];
   };
@@ -373,34 +370,32 @@ async function main(argv) {
   } else if (command === 'list') {
     const [name, ...selectors] = args;
     if (!name) die('usage: verify-uvw journeys <feature> [journey-id|mode...]', 2);
-    const { partitions, host } = planned(named(name), selectors, where);
+    const { partitions } = planned(named(name), selectors);
     const expected = partitions.flatMap((p) => p.journeys);
     const width = Math.max(...expected.map((j) => j.id.length));
     const row = (id, text) => `${id.padEnd(width)}  ${text}`.trimEnd();
-    const hostLine = host.length ? [`${host.map((j) => j.id).join(', ')} run only on the host`] : [];
     if (!opts.run) {
       console.log([`${name}: ${expected.length} journeys in .agents/skills/verify-uvw/features/${name}.md`,
         ...partitions.flatMap((p) => [`${p.mode}${p.needs.length ? `, needs ${p.needs.join(', ')}` : ''}: ${upFor(p)}`,
-          ...p.journeys.map((j) => `  ${row(j.id, `${j.title}${j.hostOnly ? ' (host only)' : ''}${j.runBy === 'helper' ? ', run by the helper' : ''}`)}`)]), ...hostLine].join('\n'));
+          ...p.journeys.map((j) => `  ${row(j.id, `${j.title}${j.runBy === 'helper' ? ', run by the helper' : ''}`)}`)])].join('\n'));
       return;
     }
     const { journeys, result, checks } = fold(expected, entriesOf(opts.run));
     const done = journeys.filter((j) => j.verdict !== 'MISSING').length;
     const said = (j) => [j.note.replace(/\s+/g, ' '), j.checks && `checks ${j.checks}${j.failure ? `: ${j.failure.replace(/\s+/g, ' ')}` : ''}`].filter(Boolean).join('; ');
     console.log([`${name} in run ${basename(opts.run)}: ${done} of ${journeys.length} journeys have a verdict`,
-      ...journeys.map((j) => row(j.id, `${j.verdict.padEnd(7)}  ${said(j)}`)), ...hostLine, ...(checks ? [`CHECKS: ${checks}`] : []), `RESULT: ${result}`].join('\n'));
+      ...journeys.map((j) => row(j.id, `${j.verdict.padEnd(7)}  ${said(j)}`)), ...(checks ? [`CHECKS: ${checks}`] : []), `RESULT: ${result}`].join('\n'));
     if (result === 'INCOMPLETE') process.exitCode = 1;
   } else if (command === 'brief') {
     const [name, ...selectors] = args;
     if (!name || !opts.repo || !opts.root || !opts['run-id']) die('usage: verify-uvw brief [--own <run-id>] <feature> [journey-id|mode...]', 2);
-    const p = planned(named(name), selectors, opts.own ? 'runner' : 'host');
-    const partition = single(p, name, selectors, 'Brief one instance at a time, after');
+    const partition = single(planned(named(name), selectors), name, selectors, 'Brief one instance at a time, after');
     if (!opts.own) runningMode(join(opts.root, opts['run-id']), partition, '');
-    process.stdout.write(brief({ own: opts.own, repo: opts.repo, root: opts.root, runId: opts['run-id'], feature: named(name), selectors, partition, host: p.host }));
+    process.stdout.write(brief({ own: opts.own, repo: opts.repo, root: opts.root, runId: opts['run-id'], feature: named(name), selectors, partition }));
   } else if (command === 'up-env') {
     const [name, ...selectors] = args;
     if (!name) die('usage: verify-uvw up [--reuse] --for <feature> [journey-id|mode...]', 2);
-    const partition = single(planned(named(name), selectors, where), name, selectors, 'Start');
+    const partition = single(planned(named(name), selectors), name, selectors, 'Start');
     for (const need of partition.needs) {
       const why = NEEDS[need].ready();
       if (why) die(`these journeys need ${need}, and ${why}; run: ${NEEDS[need].setup}`);
@@ -410,11 +405,13 @@ async function main(argv) {
     const [name, ...selectors] = args;
     if (!opts.run || !name) die('usage: verify-uvw run-journeys [--again] <feature> [journey-id|mode...]', 2);
     const feature = named(name);
-    const partition = single(planned(feature, selectors, where), name, selectors, 'Run them in an instance of each mode, after');
+    const partition = single(planned(feature, selectors), name, selectors, 'Run them in an instance of each mode, after');
     runningMode(opts.run, partition, ', then run-journeys again');
     const driven = partition.journeys.filter((j) => j.runBy === 'agent' && selectors.includes(j.id)).map((j) => j.id);
     if (driven.length) console.log(`${driven.join(', ')}: the agent follows ${driven.length === 1 ? 'its' : 'their'} text; the helper runs no journey but those marked "Run: helper."`);
-    const { ok } = await runJourneys({ run: opts.run, feature, mode: partition.mode, ids: partition.journeys.filter((j) => j.runBy === 'helper').map((j) => j.id), again: opts.again, where });
+    // Journeys this machine cannot run, which the helper leaves out even when a later journey would run them first.
+    const skip = (process.env.VERIFY_UVW_SKIP_JOURNEYS ?? '').split(' ');
+    const { ok } = await runJourneys({ run: opts.run, feature, mode: partition.mode, ids: partition.journeys.filter((j) => j.runBy === 'helper').map((j) => j.id), again: opts.again, skip });
     process.exitCode = ok ? 0 : 1;
   } else {
     die('usage: journeys.mjs list|verdict|brief|up-env|run ...', 2);

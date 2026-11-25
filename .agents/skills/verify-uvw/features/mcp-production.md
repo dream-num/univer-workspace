@@ -20,7 +20,7 @@ Mode: mcp.
 MB1 starts its own production run, as written below, so do not reuse a default MCP run. The other MCP-mode
 rules in [MCP gateway](mcp.md) still apply.
 
-### MB1. Deployment and per-account tools (host only)
+### MB1. Deployment and per-account tools
 
 Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
 

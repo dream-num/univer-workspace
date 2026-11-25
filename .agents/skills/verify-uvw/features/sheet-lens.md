@@ -154,7 +154,7 @@ Use the built CLI directly for the second user because `$V` resets `UNIVER_HOME`
 first user's home. Pass when the first user's first line is `unit <id> [trunk, rev=…]` and
 the second user gets the same access error from all three commands.
 
-### SLM1. Regression against the base (host only)
+### SLM1. Regression against the base
 
 Mode: mcp.
 

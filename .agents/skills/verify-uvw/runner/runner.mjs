@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NEEDS, fold, loadFeatures, plan, readRuns } from '../bin/journeys.mjs';
+import { HOST_ONLY } from './host-only.mjs';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
 const repo = join(skill, '../../..');
@@ -43,17 +44,22 @@ export function parseArgs(argv) {
 }
 
 // One task per mode partition of each spec, with an id that is a valid run id: the feature, `<feature>-<mode>` when
-// a spec splits, and a number for a repeat. A spec with no partition is host only, and `host` lists every journey
-// the host runs, one entry per instance it needs.
-export function expand(specs, features) {
+// a spec splits, and a number for a repeat. A task names its journeys by ID, without those left to the host, and
+// `skip` names every journey of its feature left to the host. A spec with no partition is host only, and `host` lists
+// every journey the host runs, one entry per instance it needs.
+export function expand(specs, features, leftToHost = HOST_ONLY) {
   const tasks = [], hostOnly = [], host = [], used = new Set();
   const unique = (base) => { let id = base; for (let n = 2; used.has(id); n++) id = `${base}-${n}`; used.add(id); return id; };
   for (const { feature: name, selectors } of specs) {
     const feature = features.get(name);
     if (!feature) throw new Error(`no features/${name}.md`);
-    const { partitions, host: only } = plan(feature, selectors, { where: 'runner' });
+    const left = feature.journeys.filter((j) => leftToHost.has(name) || leftToHost.has(`${name}:${j.id}`));
+    const selected = plan(feature, selectors).partitions.flatMap((p) => p.journeys);
+    const only = selected.filter((j) => left.includes(j)), runs = selected.filter((j) => !left.includes(j));
+    const { partitions } = runs.length ? plan(feature, runs.map((j) => j.id)) : { partitions: [] };
     for (const p of partitions) {
-      tasks.push({ id: unique(partitions.length > 1 && p.mode !== 'default' ? `${name}-${p.mode}` : name), feature: name, mode: p.mode, needs: p.needs, selectors: p.selectors, expected: p.journeys });
+      tasks.push({ id: unique(partitions.length > 1 && p.mode !== 'default' ? `${name}-${p.mode}` : name), feature: name, mode: p.mode, needs: p.needs,
+        selectors: p.selectors, expected: p.journeys, skip: left.map((j) => j.id) });
     }
     if (!partitions.length) hostOnly.push({ id: unique(name), feature: name });
     if (only.length) {
@@ -244,7 +250,7 @@ async function check(specs) {
   else console.log(refused ? `FAIL  ${keyName(found)}: ${refused}` : `ok    ${keyName(found)} works`);
   if (docker.status !== 0) console.log('FAIL  docker is not available');
   else console.log(`ok    docker answers with ${docker.stdout.trim()} CPUs`);
-  for (const h of host) console.log(`host  ${h.feature}${h.selectors.length ? `:${h.selectors.join(',')}` : ''} is marked (host only); run it in host mode`);
+  for (const h of host) console.log(`host  ${h.feature}${h.selectors.length ? `:${h.selectors.join(',')}` : ''} runs only on the host (runner/host-only.mjs); run it in host mode`);
   const runnable = !specs.length || queue.length;
   if (docker.status === 0 && runnable) {
     const image = imageTag();
@@ -325,7 +331,8 @@ async function main() {
     for (let task; (task = queue.shift());) {
       let begun;
       mkdirSync(join(dir, task.id), { recursive: true });
-      const phase = (step, keys) => run(['exec', ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
+      // The skip list keeps run-journeys from running a journey left to the host, even as an earlier one a later journey needs.
+      const phase = (step, keys) => run(['exec', '-e', `VERIFY_UVW_SKIP_JOURNEYS=${task.skip.join(' ')}`, ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
         '/home/node/repo/.agents/skills/verify-uvw/runner/task.sh', step, ...(model ? [] : ['--no-model']), task.id, task.feature, ...task.selectors],
       { log: join(dir, task.id, 'task.log'), env });
       const prepared = await prepareOne(() => {

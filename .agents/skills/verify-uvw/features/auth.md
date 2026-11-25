@@ -111,5 +111,5 @@ with `workspace-authentication-required`. Run `$V user` to sign uvw in again.
 - Registration from curl without `Accept-Language` still names the space
   `<display name> 的个人空间`; the name is fixed server-side, not a locale bug in the run.
 - Browser-approved `uvw auth login` (no `--username`) prints a verification URL and code and exits; after the
-  approval in the Browser, `uvw auth login --complete` finishes it. MA8 in [PAT sign-in](mcp-auth.md#ma8-existing-sign-in-clients-host-only) drives that
+  approval in the Browser, `uvw auth login --complete` finishes it. MA8 in [PAT sign-in](mcp-auth.md#ma8-existing-sign-in-clients) drives that
   approval with agent-browser.

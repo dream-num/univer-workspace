@@ -31,13 +31,11 @@ test('both briefs name the run, the feature file and every expected journey id, 
     writeFileSync(join(root, 'test/run.env'), 'RUN_ID=test\nWEB_PORT=1\nMCP_ENABLED=1\nMCP_SAME_ORIGIN=0\n');
     const host = call('sheet-lens', 'mcp');
     assert.equal(host.status, 0, host.stderr);
-    assert.deepEqual(listed(host.stdout), ['SLM1', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10'], 'the host brief expects host-only journeys too');
-    assert.doesNotMatch(host.stdout, /Do not run SLM1/);
+    assert.deepEqual(listed(host.stdout), ['SLM1', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10'], 'a mode selects every journey of that mode');
 
-    const own = call('--own', 'task-1', 'sheet-lens', 'mcp');
+    const own = call('--own', 'task-1', 'sheet-lens', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10');
     assert.equal(own.status, 0, own.stderr);
     assert.deepEqual(listed(own.stdout), ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']);
-    assert.match(own.stdout, /Do not run SLM1\. Only the host runs it\./);
     assert.match(own.stdout, /Skip its other journeys\./);
     assert.match(own.stdout, /This container is disposable and yours\.\n/);
     assert.ok(own.stdout.includes(`export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
@@ -47,11 +45,6 @@ test('both briefs name the run, the feature file and every expected journey id, 
     assert.ok(own.stdout.includes(`Name each evidence file by its full path, such as ${root}/task-1/evidence/<file>.`));
     assert.doesNotMatch(own.stdout + host.stdout, /RESULT: PASS/);
 
-    assert.equal(call('--own', 'task-1', 'mcp-security').status, 3, 'a host-only feature has no runner brief');
-    assert.equal(call('--own', 'task-1', 'sheet-lens', 'SLM1').status, 3);
-    const mixed = call('--own', 'task-1', 'sheet-lens', 'SLM1', 'SLC1');
-    assert.deepEqual(listed(mixed.stdout), ['SLC1']);
-    assert.match(mixed.stdout, /Do not run SLM1\./);
     assert.notEqual(call('--own', 'Bad Id', 'issues').status, 0);
 
     const unknownId = call('issues', 'IS9');

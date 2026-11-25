@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,22 +79,6 @@ for (const production of [0, 1]) for (const renderer of [0, 1]) {
     assert.equal(config.services.gateway.environment.MCP_DEV_SESSION_PASSTHROUGH ?? undefined, production ? undefined : '1');
   });
 }
-
-test('up refuses the dist start mode outside the verify runner before it starts anything', () => {
-  const root = mkdtempSync(join(tmpdir(), 'verify-uvw-dist-'));
-  try {
-    for (const [from, runner, message] of [['dist', undefined, 'the dist start mode runs only inside the verify runner'],
-      ['dist', '0', 'the dist start mode runs only inside the verify runner'], ['container', '1', 'VERIFY_UVW_MCP_FROM must be image or dist']]) {
-      const env = { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'dist', VERIFY_UVW_MCP: '1', VERIFY_UVW_MCP_FROM: from };
-      delete env.VERIFY_UVW_RUNNER;
-      if (runner !== undefined) env.VERIFY_UVW_RUNNER = runner;
-      const result = spawnSync('bash', [helper, 'up'], { env, encoding: 'utf8' });
-      assert.equal(result.status, 1);
-      assert.equal(result.stderr, `verify-uvw: ${message}\n`);
-      assert.deepEqual(readdirSync(root), [], 'no run directory, so no server, Vite or MCP role');
-    }
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
 
 test('MB expectations cover all combinations and exclude renderer tools', () => {
   assert.deepEqual(Object.keys(expectedTools), ['core', 'files', 'admin', 'core,files', 'core,admin', 'files,admin', 'all']);

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { loadFeatures, parseFeature, plan } from '../bin/journeys.mjs';
+import { HOST_ONLY } from './host-only.mjs';
 import { exitCode, expand, findKey, finish, parseArgs, readTranscript, serial, summary } from './runner.mjs';
 
 const transcript = readFileSync(fileURLToPath(new URL('./fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
@@ -39,31 +40,51 @@ test('a spec is a feature, or a feature with journey IDs or mode names', () => {
   assert.equal(parseArgs(['--no-model', 'auth']).model, false);
 });
 
-test('each spec becomes one task per mode, with a run id per task, and host-only journeys go to the host list', () => {
+test('each spec becomes one task per mode, with a run id per task, and journeys left to the host go to the host list', () => {
   const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.join('\n\n')}\n`;
   const features = new Map(Object.entries({
-    lens: recipe('Lens', '### L1. One', '### L2. Two (host only)\n\nMode: mcp.', '### L3. Three\n\nMode: mcp.', '### L4. Four\n\nMode: mcp-same-origin.', '### L5. Five'),
-    agents: recipe('Agents', 'Mode: mcp-same-origin. Needs: web-build.', '### G1. One', '### G2. Two (host only)'),
-    whole: recipe('Whole (host only)', '### W1. One'),
+    lens: recipe('Lens', '### L1. One', '### L2. Two\n\nMode: mcp.', '### L3. Three\n\nMode: mcp.', '### L4. Four\n\nMode: mcp-same-origin.', '### L5. Five'),
+    agents: recipe('Agents', 'Mode: mcp-same-origin. Needs: web-build.', '### G1. One', '### G2. Two'),
+    whole: recipe('Whole', '### W1. One'),
   }).map(([name, text]) => [name, parseFeature(name, text)]));
-  const tasks = (...specs) => expand(specs.map((spec) => ({ feature: spec[0], selectors: spec.slice(1) })), features);
-  const shape = ({ tasks: t }) => t.map(({ id, mode, needs, selectors, expected }) => [id, mode, needs, selectors, expected.map((j) => j.id)]);
+  const left = new Map([['lens:L2', 'why'], ['agents:G2', 'why'], ['whole', 'why']]);
+  const tasks = (...specs) => expand(specs.map((spec) => ({ feature: spec[0], selectors: spec.slice(1) })), features, left);
+  const shape = ({ tasks: t }) => t.map(({ id, mode, needs, selectors, expected, skip }) => [id, mode, needs, selectors, expected.map((j) => j.id), skip]);
 
   const batch = tasks(['lens'], ['agents'], ['whole'], ['lens', 'L3'], ['lens', 'mcp-same-origin', 'L1']);
   assert.deepEqual(shape(batch), [
-    ['lens', 'default', [], ['default'], ['L1', 'L5']],
-    ['lens-mcp', 'mcp', [], ['mcp'], ['L3']],
-    ['lens-mcp-same-origin', 'mcp-same-origin', [], ['mcp-same-origin'], ['L4']],
-    ['agents', 'mcp-same-origin', ['web-build'], [], ['G1']],
-    ['lens-2', 'mcp', [], ['L3'], ['L3']],
-    ['lens-3', 'default', [], ['L1'], ['L1']],
-    ['lens-mcp-same-origin-2', 'mcp-same-origin', [], ['L4'], ['L4']],
+    ['lens', 'default', [], ['L1', 'L5'], ['L1', 'L5'], ['L2']],
+    ['lens-mcp', 'mcp', [], ['L3'], ['L3'], ['L2']],
+    ['lens-mcp-same-origin', 'mcp-same-origin', [], ['L4'], ['L4'], ['L2']],
+    ['agents', 'mcp-same-origin', ['web-build'], ['G1'], ['G1'], ['G2']],
+    ['lens-2', 'mcp', [], ['L3'], ['L3'], ['L2']],
+    ['lens-3', 'default', [], ['L1'], ['L1'], ['L2']],
+    ['lens-mcp-same-origin-2', 'mcp-same-origin', [], ['L4'], ['L4'], ['L2']],
   ]);
   for (const { id } of batch.tasks) assert.match(id, /^[a-z0-9][a-z0-9_-]*$/, 'a task id is a valid MCP run id');
   assert.deepEqual(batch.hostOnly, [{ id: 'whole', feature: 'whole' }]);
   assert.deepEqual(batch.host, [{ feature: 'lens', selectors: ['L2'] }, { feature: 'agents', selectors: ['G2'] }, { feature: 'whole', selectors: [] }]);
+  assert.deepEqual(tasks(['lens', 'L2']), { tasks: [], hostOnly: [{ id: 'lens', feature: 'lens' }], host: [{ feature: 'lens', selectors: ['L2'] }] });
   assert.throws(() => tasks(['missing']), /no features\/missing\.md/);
   assert.throws(() => tasks(['lens', 'mpc']), /no journey or mode mpc in features\/lens\.md/);
+});
+
+test('every journey host-only.mjs leaves to the host exists, and the recipes get one task per mode without them', () => {
+  const features = loadFeatures();
+  for (const [key, reason] of HOST_ONLY) {
+    const [name, id] = key.split(':');
+    assert.ok(features.get(name)?.journeys.some((j) => !id || j.id === id), `${key} names a feature or journey`);
+    assert.ok(reason.trim(), `${key} says why`);
+  }
+  const { tasks, host } = expand(['sheet-lens', 'mcp-executor', 'mcp-security'].map((feature) => ({ feature, selectors: [] })), features);
+  assert.deepEqual(tasks.map((t) => [t.id, t.selectors]), [
+    ['sheet-lens', [...Array(10)].map((_, k) => `SLC${k + 1}`)],
+    ['sheet-lens-mcp', ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
+    ['sheet-lens-mcp-same-origin', ['SLM8']],
+    ['mcp-executor', ['MX1', 'MX2', 'MX4', 'MX5', 'MX6', 'MX16', 'MT1', 'MV1', 'MT2']]]);
+  assert.deepEqual(tasks.find((t) => t.id === 'mcp-executor').skip, ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15']);
+  assert.deepEqual(host, [{ feature: 'sheet-lens', selectors: ['SLM1'] }, { feature: 'mcp-executor', selectors: ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15'] },
+    { feature: 'mcp-security', selectors: [] }]);
 });
 
 test('runner --check names the key source and fingerprint, proves the key with one request, and names the host-only tasks', async () => {
@@ -91,8 +112,9 @@ test('runner --check names the key source and fingerprint, proves the key with o
     copyFileSync(fileURLToPath(new URL('./runner.mjs', import.meta.url)), join(skill, 'runner/runner.mjs'));
     for (const file of ['journeys.mjs', 'secrets.mjs']) copyFileSync(fileURLToPath(new URL(`../bin/${file}`, import.meta.url)), join(bin, file));
     writeFileSync(join(skill, 'runner/Dockerfile'), `FROM scratch\nENV ANTHROPIC_BASE_URL=http://127.0.0.1:${endpoint.address().port} \\\n    ANTHROPIC_MODEL='stub-model[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=other-model\n`);
-    writeFileSync(join(skill, 'features/whole.md'), recipe('Whole feature (host only)', 'W1. One'));
-    writeFileSync(join(skill, 'features/plain.md'), recipe('Plain feature', 'P1. One', 'P2. Two (host only)', 'P3. Three (host only)'));
+    writeFileSync(join(skill, 'runner/host-only.mjs'), "export const HOST_ONLY = new Map([['whole', 'why'], ['plain:P2', 'why'], ['plain:P3', 'why']]);\n");
+    writeFileSync(join(skill, 'features/whole.md'), recipe('Whole feature', 'W1. One'));
+    writeFileSync(join(skill, 'features/plain.md'), recipe('Plain feature', 'P1. One', 'P2. Two', 'P3. Three'));
     const node = (args, env) => promisify(execFile)(process.execPath, [join(skill, 'runner/runner.mjs'), ...args],
       { env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } })
       .then((r) => ({ status: 0, ...r }), (e) => ({ status: e.code, stdout: e.stdout, stderr: e.stderr }));
@@ -128,10 +150,10 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.match(batch.stderr, /^verify runner: DEEPSEEK_API_KEY from environment \(sha256 [0-9a-f]{8}\): stub-model at \S+ answered HTTP 401/m);
 
     const tasks = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'whole', 'plain:P1');
-    assert.match(tasks.stdout, /^host {2}whole is marked \(host only\); run it in host mode$/m);
+    assert.match(tasks.stdout, /^host {2}whole runs only on the host \(runner\/host-only\.mjs\); run it in host mode$/m);
     assert.doesNotMatch(tasks.stdout, /plain/);
-    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain')).stdout, /^host {2}plain:P2,P3 is marked \(host only\); run it in host mode$/m);
-    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P1,P3')).stdout, /^host {2}plain:P3 is marked/m);
+    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain')).stdout, /^host {2}plain:P2,P3 runs only on the host \(runner\/host-only\.mjs\); run it in host mode$/m);
+    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P1,P3')).stdout, /^host {2}plain:P3 runs only on the host/m);
     assert.equal((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'missing')).status, 2);
     const unknownId = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P9');
     assert.equal(unknownId.status, 2);
@@ -173,7 +195,7 @@ test('the exit code is 4 for any failed or INCOMPLETE task, then 3 for any host-
 
 test('a task with an expected journey that has no verdict is INCOMPLETE and exits 4, whatever its report claims', () => {
   const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-coverage-'));
-  const expected = plan(loadFeatures().get('issues'), [], { where: 'runner' }).partitions[0].journeys;
+  const expected = plan(loadFeatures().get('issues')).partitions[0].journeys;
   const out = join(dir, 'issues');
   const verdicts = (run, ...entries) => {
     mkdirSync(join(out, 'runs', run, 'evidence'), { recursive: true });

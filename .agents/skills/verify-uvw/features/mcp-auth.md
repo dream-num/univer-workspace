@@ -209,7 +209,7 @@ Pass when `pr_merge`, listed in the default `core`, exits 1 with `workspace-scop
 usage event, the instructions leave merging to the user, the CLI still shows the pull request `ready`, and the
 discard with the restored full-scope PAT succeeds.
 
-### MA8. Existing sign-in clients (host only)
+### MA8. Existing sign-in clients
 
 Run: agent.
 

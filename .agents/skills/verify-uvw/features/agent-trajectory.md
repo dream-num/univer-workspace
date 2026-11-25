@@ -33,7 +33,7 @@ agent-browser eval "$(cat .agents/skills/verify-uvw/bin/trajectory-dump.js)"
 
 The result has `skippedRecords` and a `records` array. Each record contains the sequence, outcome, attempts, common-prefix length, rewrite flag, and expanded request body. Compare the body string with the corresponding mock log entry's `raw` without parsing and serializing it again. A provider key pasted into a message is stored as `[redacted]`.
 
-### TR2-1. Unchanged conversation with Debug mode off (host only)
+### TR2-1. Unchanged conversation with Debug mode off
 
 Run the same two-turn script on trunk and head. The first turn calls `repo_list` then returns text; the second returns text. Leave Debug mode off on head. Capture `tr2-regression.png`. Confirm identical conversation content and layout, no tabs, and a new settings row defaulting off.
 
@@ -73,7 +73,7 @@ Search for a repository name in the recorded `repo_list` result. Capture `tr2-se
 
 Prepare IndexedDB directly: sessions live in `univer-workspace-agents-<userId>` and trajectory records in the `modelCalls` store (key `[sessionId, seq]`) of `univer-workspace-agent-trajectory-<userId>`. Create a session with messages but no trajectory records. Create a separate session with three records, where the third request changes an earlier message so its common prefix is shorter. Capture `tr2-unrecorded.png` and `tr2-rewrite.png`. Confirm the old-session notice and usable Conversation tab. Confirm one history rewrite and REWRITTEN markers beginning at the changed position in the third call's Context sent.
 
-### TR2-11. Performance lane (host only)
+### TR2-11. Performance lane
 
 For the performance lane, prepare a 40-call recorded session. Use a MutationObserver and performance.now() to measure from selecting Trajectory until every expected step row exists. Repeat ten times and compare the median with the 500 ms budget. Separately compare first-message visibility with Debug mode off on trunk and head, ten alternating runs each, against the +50 ms budget. Keep timing logs with screenshots. A component fixture alone does not establish the full-page performance budget.
 

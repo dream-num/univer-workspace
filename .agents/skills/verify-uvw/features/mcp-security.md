@@ -1,4 +1,4 @@
-# MCP executor and renderer isolation (host only)
+# MCP executor and renderer isolation
 
 Users who do not trust each other run scripts through the MCP `execute` tool and render through `screenshot`. These journeys measure the
 sandbox boundary from a user script and from the containers, and report for each isolation property whether it holds (`contained`) or does not

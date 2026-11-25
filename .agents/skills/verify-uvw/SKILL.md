@@ -149,7 +149,7 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   proof of the auth feature. The [auth journey](features/auth.md) proves that.
 - Nothing is mocked except the browser Agent's model provider in the Agent journeys. Collaboration,
   Office exchange, and the CLI daemon are all real. External OAuth providers (GitHub, Google, Discord)
-  need a real provider, so report them as skipped. MA8 in [PAT sign-in](features/mcp-auth.md#ma8-existing-sign-in-clients-host-only) drives
+  need a real provider, so report them as skipped. MA8 in [PAT sign-in](features/mcp-auth.md#ma8-existing-sign-in-clients) drives
   browser-approved `uvw auth login`.
 - Report an unreachable entry point with the command you tried and the unmet precondition. Do not
   report it as verified through a different path.
