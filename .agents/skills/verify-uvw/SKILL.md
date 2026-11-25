@@ -59,7 +59,9 @@ A journey declares the mode of the instance it runs on: `default`, `mcp` with th
 `$V journeys <feature>` lists a feature's journeys by mode, each mode with the command that starts its instance,
 such as `$V up --for sheet-lens mcp`. `up --for <feature> [journey-id|mode...]` sets the mode flags of
 [MCP mode](references/mcp-mode.md#start) from what those journeys declare, overriding your shell's, and refuses
-journeys that span modes. One instance runs one mode, so verify such a feature in one instance per mode. Plain `up`
+journeys that span modes. One instance runs one mode, so verify such a feature in one instance per mode. Features
+that declare the same mode can share one instance when it has the needs of each, because `up --for` checks only the
+needs of the feature it names, and the next feature starts from what the last one left. Plain `up`
 starts the default mode, or the mode your flags choose.
 
 `up` and `doctor` check the prerequisites and print the fix for each. `node_modules` must match
@@ -99,6 +101,7 @@ domain and editors degrade elsewhere.
 
 ```bash
 eval "$($V env)"
+agent-browser set viewport 1440 1500               # tall enough that a screenshot shows the whole page
 agent-browser open "$ORIGIN/login" && agent-browser wait 1500
 agent-browser storage local set univer-workspace-language en-US && agent-browser reload && agent-browser wait 1500
 agent-browser find label "Username" fill "verify-$VERIFY_UVW_RUN"
@@ -140,9 +143,11 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
 - UI proof: a screenshot after the action, plus a reload or a second route showing the persisted state.
   Name files `<feature>-<step>.png`.
 - The app scrolls an inner container, not the page, so `screenshot --full` and an element screenshot both stop at the
-  viewport's bottom edge. Before you screenshot a tall section, make the viewport tall enough with
-  `agent-browser set viewport <width> <height>`. An Issue's `Acceptance` view with two pull requests fits at 1440 × 1500
-  and 390 × 2300. Judge layout and horizontal scroll at the journey's own size first, then raise only the height.
+  viewport's bottom edge. The sign-in block above sets 1440 × 1500, which fits an Issue page with its buttons and an
+  Issue's `Acceptance` view with two pull requests; at 390 wide that view needs 2300. The viewport lasts until the
+  session closes, so set it again in a session you open yourself. For a taller section, raise the height with
+  `agent-browser set viewport <width> <height>`. Judge layout and horizontal scroll at the journey's own size first,
+  then raise only the height.
 - A mutation needs a second, read-only view. Examples: a browser edit read back with
   `uvw inspect --trunk`, or a uvw write seen in the browser after reload. A success toast or exit code 0
   alone proves nothing.
