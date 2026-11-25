@@ -588,41 +588,62 @@ describe("executor regression boundaries", () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it.each([413, 426, 400, 500, 503])(
-    "classifies HTTP %s without failover except 503",
+  it.each([413, 426, 400, 500, 502, 504, 503])(
+    "classifies HTTP %s on a write without failover except 503",
     async (status) => {
       const fetcher = vi
         .spyOn(globalThis, "fetch")
         .mockImplementation(async () => new Response("{}", { status }));
       const router = new ExecutorRouter(["http://one.test", "http://two.test"]);
       const down = vi.spyOn(router, "notDelivered");
+      const connection = () => ({
+        router,
+        transport: affinity(),
+        executorToken: token,
+        grant,
+        requestId: "request",
+        deadlineAt: Date.now() + 30_000,
+      });
       try {
+        // A platform 5xx means the invocation was terminated, not rejected: the write may have
+        // committed before the response was lost, so it must not read as "did not run".
+        const ambiguous = status >= 500 && status !== 503;
         await expect(
-          callExecutor(
-            {
-              router,
-              transport: affinity(),
-              executorToken: token,
-              grant,
-              requestId: "request",
-              deadlineAt: Date.now() + 30_000,
-            },
-            opSpecs["content.execute"],
-            { input: { worktreeId: "wt", unitId: "unit", code: "1" } },
-          ),
+          callExecutor(connection(), opSpecs["content.execute"], {
+            input: { worktreeId: "wt", unitId: "unit", code: "1" },
+          }),
         ).rejects.toMatchObject({
-          wire: {
-            code:
-              status === 413
-                ? "workspace-request-too-large"
-                : status === 426
-                  ? "workspace-executor-version-mismatch"
-                  : "workspace-executor-unavailable",
-            outcome: status === 413 || status === 426 ? "tool_error" : "internal_error",
-          },
+          wire: ambiguous
+            ? {
+                code: "workspace-result-unknown",
+                outcome: status === 504 ? "timeout" : "tool_error",
+                detail: { cause: `executor-http-${status}`, retryable: false },
+              }
+            : {
+                code:
+                  status === 413
+                    ? "workspace-request-too-large"
+                    : status === 426
+                      ? "workspace-executor-version-mismatch"
+                      : "workspace-executor-unavailable",
+                outcome: status === 413 || status === 426 ? "tool_error" : "internal_error",
+              },
         });
         expect(fetcher).toHaveBeenCalledTimes(status === 503 ? 2 : 1);
         expect(down).toHaveBeenCalledTimes(status === 503 ? 2 : 0);
+
+        // A read is safe to repeat, so it keeps the definite "unavailable" classification. The
+        // pre-dispatch 413 and 426 rejections are effect-independent and already covered above.
+        if (status !== 413 && status !== 426) {
+          fetcher.mockClear();
+          await expect(
+            callExecutor(connection(), opSpecs["content.inspect"], {
+              input: { target: "workbook", scope: { kind: "trunk" }, unitId: "unit" },
+            }),
+          ).rejects.toMatchObject({
+            wire: { code: "workspace-executor-unavailable", outcome: "internal_error" },
+          });
+        }
       } finally {
         fetcher.mockRestore();
       }

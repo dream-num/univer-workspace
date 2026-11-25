@@ -300,7 +300,11 @@ MCP 2025-11-25 引入了**实验性的 Tasks utility**：`tools/call` 可以携�
 | 单实例 200 并发耗尽 | 429             | 退避重试；评估调小每实例 Session 数             |
 | 实例达到地域上限    | 429             | 退避 + 申请配额                                 |
 | 函数执行超时        | 连接/请求被终止 | 写操作返回 `workspace-result-unknown`，先查状态 |
+| 平台 5xx            | 500/502/504     | 写操作同样返回 `workspace-result-unknown`，先查状态 |
 | 实例回收/冻结       | 连接断开        | 重连；协同 WS 重新 ticket + revision 校验       |
+
+- 413、426、503 在 dispatch 之前返回，因此仍然表示“确定未执行”；503 还会换地址重试。其余 5xx 对写操作一律按结果未知处理（`detail.cause` 为 `executor-http-<status>`），不映射成“executor 不可用”——后者会诱导 agent 重放一次已经提交的写。
+- FC 的函数超时必须大于每个 op 自己的预算（`content.execute` 30 秒，import/export/screenshot/printPdf 240 秒）。配小了会让平台先杀实例，长操作每次都落到 5xx 分支。
 
 `INCR epoch` 后如果新派生 ID 仍返回 401，回退为“不带 Header 创建，并把返回的 Session ID 写入共享映射”；这一行为需要 FC 实测确认（见第 6 节）。
 

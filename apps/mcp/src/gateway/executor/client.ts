@@ -104,6 +104,14 @@ export async function callExecutor<
         connection.router.notDelivered(url);
         continue;
       }
+      // A platform 5xx is the function timeout or a lost instance, not a definite rejection: the
+      // write may have committed before the response was lost. Reporting it as unavailable would
+      // invite a repeat that applies the write twice. 413, 426 and 503 are answered before
+      // dispatch, so they keep their definite meaning.
+      if (effect === "write" && response.status >= 500)
+        throw new ExecutorCallError(
+          resultUnknown(`executor-http-${response.status}`, response.status === 504),
+        );
       throw lastError;
     }
     const chunks: Uint8Array[] = [];
