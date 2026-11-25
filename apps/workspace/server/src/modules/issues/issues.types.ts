@@ -5,7 +5,9 @@ import type { WorktreeState } from "../worktrees/worktrees.types.js";
 export type IssueState = "open" | "closed";
 export type IssueStateReason = "completed" | "not_planned";
 export const ISSUE_VERDICT_KINDS = ["submitted", "accepted", "sent_back"] as const;
-export type IssueVerdictKind = (typeof ISSUE_VERDICT_KINDS)[number];
+/** The verdicts a request records. A revert of the Issue's pull requests records `reverted` itself. */
+export type RequestedVerdictKind = (typeof ISSUE_VERDICT_KINDS)[number];
+export type IssueVerdictKind = RequestedVerdictKind | "reverted";
 
 /** Palette keys; the Browser owns the light and dark values of each key. */
 export const ISSUE_LABEL_COLORS = [
@@ -198,6 +200,8 @@ export interface IssuesModule {
   ): Promise<IssueTimelinePage>;
   createComment(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueCommentView>;
   verdict(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueView>;
+  /** Records that a revert took the Issue's merged pull requests out of Trunk, once per Operation, and reopens the Issue. */
+  recordReverted(userId: string, spaceId: string, number: number, operationId: string): Promise<void>;
   /** Who may read content now, as each current assignee set it after its latest assignment. */
   accessChanges(userId: string, spaceId: string, number: unknown): Promise<AccessChanges>;
   acceptDue(now: number, limit: number): Promise<number>;

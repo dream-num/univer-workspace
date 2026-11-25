@@ -26,6 +26,8 @@ vi.mock("../../shared/ui", () => {
 vi.mock("../worktrees", () => ({
   PullRequestChecks: ({ worktreeId, explainNone }: { worktreeId: string; explainNone: boolean }) =>
     createElement("section", { "data-checks": worktreeId, "data-explain-none": explainNone }),
+  RevertSection: ({ target }: { target: { spaceId: string; number: number } }) =>
+    createElement("section", { "data-revert": `${target.spaceId}#${String(target.number)}` }),
   UnitChangeIcon: () => null,
   UnitTypeIcon: () => null,
   worktreeQueryOptions: (id: string) => ({ queryKey: ["worktree", id] }),
@@ -62,4 +64,19 @@ it("shows checks after each pull request the reader may review, and none for a d
   expect(checks).toEqual(["merged", "ready"]);
   expect(html.indexOf('data-checks="merged"')).toBeGreaterThan(html.indexOf('data-acceptance-pull="merged"'));
   expect(html.indexOf('data-checks="merged"')).toBeLessThan(html.indexOf('data-acceptance-pull="ready"'));
+});
+
+it("offers the revert to whoever may accept the Issue, once a linked pull request is merged", () => {
+  const author = { id: "agent", username: "agent", displayName: "Agent", avatarUrl: null };
+  const render = (close: boolean, state: Pull["state"]) => {
+    details.set("pull", { worktree: { units: [], capabilities: { review: true } } });
+    const issue = {
+      body: "", state: "closed", acceptance: null, assignees: [], capabilities: { close }, space: { id: "space" }, number: 4,
+      pullRequests: [{ id: "pull", number: 2, title: "Fix", state, author, mergedBy: null }],
+    } as unknown as Issue;
+    return renderToStaticMarkup(createElement(IssueAcceptancePanel, { issue, timeline: [] }));
+  };
+  expect(render(true, "merged")).toContain('data-revert="space#4"');
+  expect(render(false, "merged")).not.toContain("data-revert");
+  expect(render(true, "ready")).not.toContain("data-revert");
 });

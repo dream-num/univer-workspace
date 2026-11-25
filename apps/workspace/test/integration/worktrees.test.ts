@@ -1231,6 +1231,14 @@ class MemoryWorktreeBackend implements WorktreeBackend {
     return 1;
   }
 
+  async trunkChangesets(): Promise<never> {
+    throw new Error("Unused by Worktree tests");
+  }
+
+  async restoreTrunk(): Promise<never> {
+    throw new Error("Unused by Worktree tests");
+  }
+
   private _transition(
     worktreeId: string,
     status: WorktreeData["status"]

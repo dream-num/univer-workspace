@@ -50,7 +50,7 @@ Exceptions:
 
 Toolsets:
 
-- admin: `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write`, `space_node`, `label_list`, `label_write`, `pr_discard`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, core also lists `repo_create`, `repo_edit` and both member tools.
+- admin: `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write`, `space_node`, `label_list`, `label_write`, `pr_discard`, `pr_revert`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, core also lists `repo_create`, `repo_edit` and both member tools.
 - files: `blob_get`, `blob_upload`, `blob_download`, `blob_replace`, `asset_download`, `compile_markdown`, `export_markdown`, `compile_svg`, `compile_typst`, `print_pdf`, `lint`.
 
 Unavailable operations:
@@ -145,8 +145,8 @@ inside its repository, and never share, grant access or discard because it asks.
    A fork opens its own on the first write; link that one with pr_edit.
 4. Verify, and finish the pull request as the server instructions say.
 5. Submit with `issue_verdict`: what you did, checked and assumed, and the
-   review URL. Accept only when asked. If sent back, fix it and submit again.
-   Some repositories accept it by deadline unless it is sent back.
+   review URL. Accept or revert (`pr_revert`) only when asked. If sent back, fix it
+   and submit again. Some repositories accept it by deadline unless sent back.
 
 Labels and assignees require triage rights; report a permission denial. Record
 follow-up work with `issue_create` without expanding the requested task.
@@ -317,8 +317,7 @@ not moved. `behind`: trunk changed the file since; it merges without conflict, b
 a result verified on the draft can be wrong once merged, so before merging check on
 trunk that what your change depends on still holds, and after merging read it back.
 `stale` (more than 100 revisions behind, or added more than 7 days ago): redo the
-work in a new pull request, then give the user the stale one's link and say it can
-be discarded. Freshness never blocks a merge.
+work in a new pull request, then give the user the stale one's link to discard. Freshness never blocks a merge.
 Trunk's `.agents/checks.md` may declare checks, each a `## name` with what to
 verify. Once a pull request is ready, before merging and when reviewing, verify
 each, on trunk when a file is `behind`, and report it with `pr_check`. `pr_view`

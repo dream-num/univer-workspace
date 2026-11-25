@@ -4192,6 +4192,100 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/issues/{number}/revert:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags:
+        - Issues
+      operationId: planIssueRevert
+      summary: Show what reverting every merged pull request linked to an Issue would do.
+      description: |
+        Each Unit returns to its Trunk revision before the first of these merges on it. A Unit is `blocked` when a
+        Trunk revision after that merge is not one of the merges, and its `laterEdits` name who wrote them and when.
+        A file the merges added goes to Trash, and a file they removed comes back from its Trash batch. A replaced
+        page or Blob cannot be reverted and is listed `unavailable`. Whoever may accept the Issue may revert it, and
+        needs edit access to every Unit it restores. `refusal` says in plain words why the current User cannot.
+      responses:
+        '200':
+          description: The plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Issues
+      operationId: revertIssue
+      summary: Take every merged pull request linked to an Issue out of Trunk.
+      description: |
+        Starts one `revertWorktrees` Operation that brings removed files back, restores changed Units, then moves added
+        files to Trash. A `blocked` Unit is skipped and stays `blocked` unless `force` names it with the `headRevision`
+        the plan showed; only a person signed in to the browser may send `force`. If someone edits a Unit after the
+        revert reads it, the revert reads the head again and stops that Unit as `blocked` when the edit is not its own.
+        A finished Issue revert records a `reverted` verdict and reopens the Issue if it was closed. A replay with the
+        same Idempotency-Key and body returns the Operation.
+
+        In a Team Space whose `landing` is `checks`, an agent that does not own it cannot revert, because a revert
+        changes Trunk without a merge: `403 AGENT_NOT_ALLOWED`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevertRequest'
+      responses:
+        '200':
+          description: A replay of a finished revert.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertResponse'
+        '201':
+          description: The revert finished. Each item says what it did.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertResponse'
+        '202':
+          description: The revert remains pending and is resumed.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/spaces/{spaceId}/issues/{number}/access-changes:
     parameters:
       - name: spaceId
@@ -4852,6 +4946,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/worktrees/{worktreeId}/revert:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Worktrees
+      operationId: planWorktreeRevert
+      summary: Show what reverting a merged pull request would do.
+      description: |
+        Lists each file the merge changed, added or removed and what a revert does to it, from server facts only.
+        Whoever may merge the pull request may revert it. `refusal` says in plain words why the current User cannot.
+      responses:
+        '200':
+          description: The plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertPlan'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Worktrees
+      operationId: revertWorktree
+      summary: Take a merged pull request's changes out of Trunk.
+      description: |
+        Starts one `revertWorktrees` Operation, the same as the Issue revert with this one pull request. A replay with
+        the same Idempotency-Key and body returns the Operation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevertRequest'
+      responses:
+        '200':
+          description: A replay of a finished revert.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertResponse'
+        '201':
+          description: The revert finished. Each item says what it did.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertResponse'
+        '202':
+          description: The revert remains pending and is resumed.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/worktrees/{worktreeId}/discard:
     parameters:
       - name: worktreeId
@@ -8416,6 +8586,7 @@ components:
         - discardWorktree
         - activateWorktreeResource
         - copyNode
+        - revertWorktrees
     OperationState:
       type: string
       enum:
@@ -9085,6 +9256,8 @@ components:
         - submitted
         - accepted
         - sent_back
+        - reverted
+      description: '`reverted`: a revert took the Issue''s merged pull requests out of Trunk.'
     IssueAcceptance:
       type: object
       additionalProperties: false
@@ -9291,6 +9464,7 @@ components:
         - submitted
         - accepted
         - sent_back
+        - reverted
     IssueTimelineEvent:
       type: object
       additionalProperties: false
@@ -9325,7 +9499,7 @@ components:
             `labelId`, `name` and `color`; `assigned` and `unassigned` carry
             `userId`, `username` and `displayName`; `node_referenced` and
             `node_unreferenced` carry `nodeId` and `name`. The verdicts `submitted`,
-            `accepted` and `sent_back` carry `body`.
+            `accepted` and `sent_back` carry `body`, and `reverted` carries an empty `body`.
         createdAt:
           type: string
           format: date-time
@@ -9392,11 +9566,198 @@ components:
         - kind
       properties:
         kind:
-          $ref: '#/components/schemas/IssueVerdictKind'
+          type: string
+          enum:
+            - submitted
+            - accepted
+            - sent_back
         body:
           type: string
           maxLength: 65536
           description: Required and not blank for `submitted` and `sent_back`; optional for `accepted`.
+    RevertAction:
+      type: string
+      enum:
+        - restore
+        - trash
+        - recover
+        - none
+      description: |
+        `restore` returns a Unit the merges changed to the revision before the first of them on it. `trash` moves a file
+        or page the merges added to Trash. `recover` restores from Trash a file the merges removed. `none` is a change a
+        revert cannot undo, such as a replaced page.
+    RevertItemState:
+      type: string
+      enum:
+        - ready
+        - blocked
+        - done
+        - unavailable
+        - refused
+        - failed
+      description: |
+        A plan's items are `ready`, `blocked` (Trunk has edits after the merge that are not the merges' own),
+        `done` (nothing left to do), `unavailable` (cannot be done, with the reason) or `refused` (the actor may not do
+        it). A finished revert's items are `done`, `blocked`, `unavailable` or `failed`.
+    RevertLaterEdit:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - revisions
+        - lastEditedAt
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: 'null'
+          description: Who wrote these Trunk revisions; `null` when that User no longer exists.
+        revisions:
+          type: integer
+          minimum: 1
+        lastEditedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    RevertItem:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - state
+        - name
+        - nodeId
+        - unitId
+        - unitType
+        - targetRevision
+        - headRevision
+        - laterEdits
+        - reason
+      properties:
+        action:
+          $ref: '#/components/schemas/RevertAction'
+        state:
+          $ref: '#/components/schemas/RevertItemState'
+        name:
+          type: string
+        nodeId:
+          type:
+            - string
+            - 'null'
+        unitId:
+          type:
+            - string
+            - 'null'
+        unitType:
+          oneOf:
+            - $ref: '#/components/schemas/UnitType'
+            - type: 'null'
+        targetRevision:
+          type:
+            - integer
+            - 'null'
+          description: For `restore`, the Trunk revision the Unit returns to.
+        headRevision:
+          type:
+            - integer
+            - 'null'
+          description: For `restore`, Trunk head when the item was read. A force overwrites later edits through it and no further.
+        laterEdits:
+          type: array
+          description: For a `blocked` Unit, who edited it on Trunk after the first merge, other than the merges themselves.
+          items:
+            $ref: '#/components/schemas/RevertLaterEdit'
+        reason:
+          type:
+            - string
+            - 'null'
+          description: Plain words for why the item is not `ready` or `done`.
+    RevertPlan:
+      type: object
+      additionalProperties: false
+      required:
+        - pullRequests
+        - items
+        - capabilities
+        - refusal
+      properties:
+        pullRequests:
+          type: array
+          description: The merged pull requests the revert takes out of Trunk.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - number
+              - title
+            properties:
+              id:
+                type: string
+              number:
+                type:
+                  - integer
+                  - 'null'
+              title:
+                type: string
+        items:
+          type: array
+          description: Back from Trash first, then restored, then moved to Trash, in the order a revert does them.
+          items:
+            $ref: '#/components/schemas/RevertItem'
+        capabilities:
+          type: object
+          additionalProperties: false
+          required:
+            - revert
+            - force
+          properties:
+            revert:
+              type: boolean
+            force:
+              type: boolean
+              description: True only for a person signed in to the browser, and only while an item is `blocked`.
+        refusal:
+          type:
+            - string
+            - 'null'
+          description: Why the actor cannot revert, in plain words; `null` when `capabilities.revert` is true.
+    RevertRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        force:
+          type: array
+          maxItems: 200
+          description: |
+            Blocked Units to overwrite, each with the `headRevision` its plan showed. Only a person signed in to the browser
+            may send it. A Unit edited again after that revision stays `blocked`.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - unitId
+              - headRevision
+            properties:
+              unitId:
+                type: string
+              headRevision:
+                type: integer
+                minimum: 1
+    RevertResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - items
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RevertItem'
     IssueSharedNode:
       type: object
       additionalProperties: false

@@ -24,6 +24,7 @@ import type {
   CreateIssue,
   IssueRelations,
   IssueUpdate,
+  RecordReverted,
   RecordVerdict,
   VerdictRow,
   DueIssue,
@@ -118,6 +119,23 @@ export class PostgresIssuesRepository implements IssuesRepository {
         }
       }
       return await this.readIssueDetail(input.userId, space, input.number);
+    });
+  }
+
+  async recordReverted(input: RecordReverted): Promise<void> {
+    await this._database.transaction(async () => {
+      const row = await this.readIssue(input.spaceId, input.number);
+      if (!row || await this._get("SELECT 1 FROM issue_verdicts WHERE issue_id = ? AND operation_id = ?", row.id, input.operationId)) return;
+      const at = Math.max(input.now, ((await this.readLatestVerdict(row.id))?.created_at ?? 0) + 1);
+      await this._run(
+        "INSERT INTO issue_verdicts (id, issue_id, kind, actor_user_id, body, operation_id, created_at) VALUES (?, ?, 'reverted', ?, '', ?, ?)",
+        input.id, row.id, input.userId, input.operationId, at,
+      );
+      if (row.state === "closed") {
+        await this.setIssueState(row.id, "open", null, null, at);
+        await this.insertEvent({ id: randomUUID(), issueId: row.id, actorUserId: input.userId, kind: "reopened", payload: {}, now: at });
+      }
+      await this.touch(row.id, at);
     });
   }
 

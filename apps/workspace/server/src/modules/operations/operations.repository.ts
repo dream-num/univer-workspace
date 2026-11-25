@@ -10,7 +10,8 @@ export type OperationDatabaseKind =
   | "merge_worktree"
   | "discard_worktree"
   | "activate_worktree_resource"
-  | "copy_node";
+  | "copy_node"
+  | "revert_worktrees";
 
 export interface OperationRow {
   readonly id: string;

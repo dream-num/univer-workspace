@@ -1,8 +1,8 @@
 # Univer Workspace 数据模型
 
 产品库支持 SQLite 和 PostgreSQL，两个后端分别维护 schema 版本和外键约束。
-SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 33`。
-PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 13 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 34`。
+PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 14 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 `DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。Core 使用 `core-s3` V1：快照引用保存在 `snapshots.block_ids`，`sheet_blocks` 记录 Unit 与块 ID，块内容由协同适配器写入 S3。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
@@ -26,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-SQLite 启动入口先将产品数据库准备到 V33，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V34，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
@@ -34,7 +34,7 @@ Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V33，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V34，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -651,10 +651,10 @@ V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue �
 | --- | --- |
 | `id` | 随机主键 |
 | `issue_id` | 所属 Issue，`ON DELETE CASCADE` |
-| `kind` | `submitted | accepted | sent_back | reverted`；目前只写入前三种 |
+| `kind` | `submitted | accepted | sent_back | reverted`；`reverted` 只由撤回 Operation 写入 |
 | `actor_user_id` | 给出 Verdict 的 User；CHECK 只允许 `accepted` 为 `NULL`，只有期限验收写 `NULL` |
 | `body` | Markdown；`submitted` 是做了什么、查了什么、假设了什么，`sent_back` 是退回原因，`accepted` 可为空 |
-| `operation_id` | CHECK 只允许 `reverted` 非空，目前总为 `NULL` |
+| `operation_id` | CHECK 只允许 `reverted` 非空；`reverted` 记写入它的 `revert_worktrees` Operation，同一 Operation 至多写一条 |
 | `created_at` | 毫秒时间；同一 Issue 内每条都晚于上一条 |
 
 索引 `issue_verdicts_issue(issue_id, created_at, id)` 读最新一条。状态由最新 Verdict 与 `issues.state` 推导：
@@ -714,6 +714,7 @@ merge_worktree
 discard_worktree
 activate_worktree_resource
 copy_node
+revert_worktrees
 ```
 
 状态为 `pending | completed | failed`。`payload_json` 在首次请求时固化服务器生成的稳定
@@ -803,6 +804,37 @@ Operation 的 `updated_at`；任一副本的后台维护把超过 60 秒未续�
 读者能打开这些 Sheet 时才显示数据。未认领 Agent 的单文件大小上限按一次复制的全部 Asset 字节之和计算，
 文件数上限把 Pending 的复制计入。
 
+### 撤回已合入的 pull request
+
+`GET /api/worktrees/{id}/revert` 和 `GET /api/spaces/{id}/issues/{n}/revert` 只读出计划；同一路径的 `POST` 执行。
+一组是一个已合入的 pull request，或一个 Issue 关联的全部已合入 pull request。计划只用服务端事实：每个 Worktree
+Unit 的 `mergeResult.trunkRevision`、Trunk 的 changeset 记录和修订、Worktree 的移除批次与 Trash 批次。
+
+| 合入做了什么 | 撤回做什么 | 什么时候做不了 |
+| --- | --- | --- |
+| 改了 Trunk Unit | 提交一个只含 `RevertRevisionMutation` 的 Trunk changeset，恢复到这组第一次合入它之前的修订 | 那次合入之后有一个修订不是这组自己的合入：`blocked`，列出作者、次数和最后时间 |
+| 新增文件或页面 | 把 Node 移入 Trash | 已在 Trash，或撤回者不能移入 Trash |
+| 移除文件 | 恢复合入时的 Trash 批次 | 批次已被永久删除 |
+| 替换页面或文件 | 不做，列为 `unavailable` | 旧版本字节已删除 |
+
+能合入这个 pull request 的人（Issue 时是能验收它的人）可以撤回，还要能编辑每个要恢复的 Unit；恢复仍经过 Trunk 中间件，
+受内容保护约束。`landing` 为 `checks` 的 Team Space 里，不拥有它的 agent 被拒绝（`AGENT_NOT_ALLOWED`）。只有在 Browser
+登录的人可以逐个 Unit 强制覆盖 `blocked` 的 Unit，并带上计划显示的 `headRevision`；之后又有人改过，它仍是 `blocked`。
+
+1. 校验后按 Idempotency Key 预留 `revert_worktrees` Operation，`payload_json` 固化范围、强制列表和每一项的计划，
+   Lease 归本次执行者；
+2. 依次从 Trash 恢复、恢复 Unit、移入 Trash。每个恢复在提交前先把 `sid`（由 Operation ID 推出）、`reqId`、`baseRev`
+   和目标修订写进 `payload_json`；
+3. 恢复只在 Trunk 最新修订上提交。基线过期时重读最新修订，没有别人的新修改就换下一个 `reqId` 再试；出现别人的修改时
+   这一项停为 `blocked`；
+4. 每一项的结果都写回 `payload_json`，每次写都比对 `lease_owner`，Lease 被别的副本接手后旧执行者停止且不再写；
+5. Issue 范围写一条 `reverted` Verdict（以 `operation_id` 去重），Issue 已关闭时重新打开并写 `reopened` 事件；
+   然后标记 Completed，`result_json` 是每一项的结果。
+
+崩溃或 Lease 过期后，后台恢复领取 Pending 的撤回继续执行：已保存的恢复先原样重发，SDK 以 `(unit, sid, reqId)` 去重，
+所以同一项不会恢复两次。可重试错误按指数退避最多尝试 5 次，之后 Failed，可用 Operation Retry 重新开始。撤回恢复整个
+Unit，不撤回评论和历史；历史里同时留着合入和恢复。
+
 ### Rename 与 Move
 
 Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须同 Space、有创建
@@ -813,11 +845,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V33，不备份；
-2. 完整 V33：校验指纹后正常启动，不重复备份；
-3. 完整 V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V33；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V33；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V33；
+1. 不存在或空文件：创建 V34，不备份；
+2. 完整 V34：校验指纹后正常启动，不重复备份；
+3. 完整 V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V34；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V34；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V34；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -1179,3 +1211,12 @@ SQLite V32→V33 只给 `spaces` 追加 `landing TEXT NOT NULL DEFAULT 'review'`
 备份。SQLite→PostgreSQL 存储迁移逐行保留 `landing`。升级前停旧实例，SQLite 生成一致性 V32 备份，再启动单个 V33 实例执行
 迁移、指纹、外键和完整性检查。重启不重复迁移或备份。V32 的代码拒绝打开 V33 数据库，代码回退必须先停 V33，再恢复升级前
 的备份；备份之后写入的数据会丢失。禁止新旧进程同时写同一库。
+
+## 撤回 Operation（V34）
+
+SQLite V33→V34 重建 `operations`，`kind` CHECK 增加 `revert_worktrees`：在关闭外键执行的同一事务内逐行复制全部列、
+删除旧表、改名并重建 `operations_due` 与 `operations_actor`，`blob_upload_sessions` 的入向外键仍指向 `operations`，行数
+和内容不变。PostgreSQL 产品版本 13→14 在 advisory-lock 启动事务内只替换 `operations_kind_check`，失败回滚至版本 13；
+服务器不替 PostgreSQL 创建备份。升级前停旧实例，SQLite 生成一致性 V33 备份，再启动单个 V34 实例执行迁移、指纹、外键和
+完整性检查。重启不重复迁移或备份。V33 的代码拒绝打开 V34 数据库，代码回退必须先停 V34，再恢复升级前的备份；备份之后
+写入的数据会丢失。禁止新旧进程同时写同一库。

@@ -141,9 +141,18 @@ each has a body and a time, and every one but an acceptance by deadline has an a
 _Avoid_: Review, Approval
 
 **Acceptance**:
-The state of an Issue's handover, read from its latest Verdict: submitted, accepted, or sent
-back. Accepting closes the Issue as completed. An Issue that was never submitted has none.
+The state of an Issue's handover, read from its latest Verdict: submitted, accepted, sent
+back, or reverted. Accepting closes the Issue as completed. An Issue that was never submitted has none.
 _Avoid_: Task status, Ticket status
+
+**Revert**:
+Taking merged Worktrees out of Trunk in one Operation: one merged Worktree, or every merged
+Worktree linked to an Issue. Each Unit they changed returns to its Trunk revision before the
+first of them, as a new revision; a file they added moves to Trash, and a file they removed comes
+back from Trash. A Unit edited on Trunk afterwards by anything but those merges is blocked and
+stays as it is unless a person in the browser forces it. An Issue revert records the Verdict
+reverted and reopens the Issue.
+_Avoid_: Rollback, undo, selective revert
 
 ## Change preparation
 

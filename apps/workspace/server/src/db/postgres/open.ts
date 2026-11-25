@@ -8,6 +8,7 @@ import { PostgresAccessRepository } from "./access/access.repository.js";
 import { PostgresBlobsRepository } from "./blobs/blobs.repository.js";
 import { PostgresContentPermissionsRepository } from "./content-permissions/content-permissions.repository.js";
 import { PostgresCopiesRepository } from "./copies/copies.repository.js";
+import { PostgresRevertsRepository } from "./reverts/reverts.repository.js";
 import { PostgresForksRepository } from "./forks/forks.repository.js";
 import { PostgresHtmlViewDraftsRepository } from "./html-view-drafts/drafts.repository.js";
 import { PostgresIdentityRepository } from "./identity/identity.repository.js";
@@ -33,6 +34,7 @@ export function createPostgresRepositories(database: PostgresDatabase): ProductR
     blobs: new PostgresBlobsRepository(database, access),
     contentPermissions: new PostgresContentPermissionsRepository(database, access),
     copies: new PostgresCopiesRepository(database, access),
+    reverts: new PostgresRevertsRepository(database),
     forks: new PostgresForksRepository(database.pool),
     htmlViewDrafts: new PostgresHtmlViewDraftsRepository(database, access),
     identity,

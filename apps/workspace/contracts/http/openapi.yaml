@@ -256,6 +256,8 @@ paths:
     $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1comments
   /api/spaces/{spaceId}/issues/{number}/verdicts:
     $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1verdicts
+  /api/spaces/{spaceId}/issues/{number}/revert:
+    $ref: ./paths/reverts.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1revert
   /api/spaces/{spaceId}/issues/{number}/access-changes:
     $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1access-changes
   /api/issue-comments/{commentId}:
@@ -282,6 +284,8 @@ paths:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1reopen
   /api/worktrees/{worktreeId}/merge:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1merge
+  /api/worktrees/{worktreeId}/revert:
+    $ref: ./paths/reverts.yaml#/~1api~1worktrees~1{worktreeId}~1revert
   /api/worktrees/{worktreeId}/discard:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1discard
   /api/worktrees/{worktreeId}/checks:

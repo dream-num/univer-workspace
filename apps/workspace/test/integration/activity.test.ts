@@ -25,7 +25,7 @@ async function setup() {
     createWorktree: (id) => transition(id, "draft"), getWorktree,
     markReady: (id) => transition(id, "ready"), merge: (id) => transition(id, "merged"),
     discard: (id) => transition(id, "discarded"), reopen: (id) => transition(id, "draft"),
-    addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused, trunkRevision: unused,
+    addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused, trunkRevision: unused, trunkChangesets: unused, restoreTrunk: unused,
   };
   const application = await createSqliteTestApplication({
     host: "127.0.0.1", port: 0, database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },

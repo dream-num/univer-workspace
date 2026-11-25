@@ -97,6 +97,113 @@ export interface WorkspaceCheck {
   readonly results: readonly WorkspaceCheckResult[];
 }
 
+export interface WorkspaceRevertItem {
+  /** restore: back to `targetRevision`; trash: a file the merges added; recover: a file they removed; none: cannot be undone. */
+  readonly action: "restore" | "trash" | "recover" | "none";
+  /** blocked: edited on Trunk after the merge by someone else, and only a person in the browser may overwrite it. */
+  readonly state: "ready" | "blocked" | "done" | "unavailable" | "refused" | "failed";
+  readonly name: string;
+  readonly nodeId: string | null;
+  readonly unitId: string | null;
+  readonly targetRevision: number | null;
+  readonly headRevision: number | null;
+  readonly laterEdits: readonly {
+    readonly user: { readonly id: string; readonly username: string; readonly displayName: string } | null;
+    readonly revisions: number;
+    readonly lastEditedAt: string | null;
+  }[];
+  readonly reason: string | null;
+}
+
+export interface WorkspaceRevertPlan {
+  readonly pullRequests: readonly { readonly id: string; readonly number: number | null; readonly title: string }[];
+  readonly items: readonly WorkspaceRevertItem[];
+  readonly capabilities: { readonly revert: boolean; readonly force: boolean };
+  /** Why the signed-in user cannot revert, or null. */
+  readonly refusal: string | null;
+}
+
+export interface WorkspaceRevertResult {
+  readonly operation: { readonly id: string; readonly state: string };
+  /** Null while the revert Operation is still pending. */
+  readonly items: readonly WorkspaceRevertItem[] | null;
+}
+
+const REVERT_ACTIONS = new Set(["restore", "trash", "recover", "none"]);
+const REVERT_STATES = new Set(["ready", "blocked", "done", "unavailable", "refused", "failed"]);
+const nullable = (value: unknown, type: "string" | "number") => value === null || typeof value === type;
+
+export function parseRevertItem(value: unknown): WorkspaceRevertItem {
+  const edits = isWorkspaceRecord(value) ? value["laterEdits"] : undefined;
+  if (
+    !isWorkspaceRecord(value) ||
+    !REVERT_ACTIONS.has(value["action"] as string) ||
+    !REVERT_STATES.has(value["state"] as string) ||
+    typeof value["name"] !== "string" ||
+    !nullable(value["nodeId"], "string") ||
+    !nullable(value["unitId"], "string") ||
+    !nullable(value["targetRevision"], "number") ||
+    !nullable(value["headRevision"], "number") ||
+    !nullable(value["reason"], "string") ||
+    !Array.isArray(edits)
+  ) {
+    throw invalidResponse("Workspace response contains an invalid revert item");
+  }
+  return {
+    action: value["action"] as WorkspaceRevertItem["action"],
+    state: value["state"] as WorkspaceRevertItem["state"],
+    name: value["name"],
+    nodeId: value["nodeId"] as string | null,
+    unitId: value["unitId"] as string | null,
+    targetRevision: value["targetRevision"] as number | null,
+    headRevision: value["headRevision"] as number | null,
+    laterEdits: edits.map((edit: unknown) => {
+      const user = isWorkspaceRecord(edit) ? edit["user"] : undefined;
+      if (
+        !isWorkspaceRecord(edit) ||
+        typeof edit["revisions"] !== "number" ||
+        !nullable(edit["lastEditedAt"], "string") ||
+        !(user === null || (isWorkspaceRecord(user) && typeof user["id"] === "string" && typeof user["username"] === "string" && typeof user["displayName"] === "string"))
+      ) {
+        throw invalidResponse("Workspace response contains an invalid later edit");
+      }
+      return {
+        user: user === null ? null : { id: user["id"] as string, username: user["username"] as string, displayName: user["displayName"] as string },
+        revisions: edit["revisions"],
+        lastEditedAt: edit["lastEditedAt"] as string | null,
+      };
+    }),
+    reason: value["reason"] as string | null,
+  };
+}
+
+export function parseRevertPlan(value: unknown): WorkspaceRevertPlan {
+  const pulls = isWorkspaceRecord(value) ? value["pullRequests"] : undefined;
+  const capabilities = isWorkspaceRecord(value) ? value["capabilities"] : undefined;
+  if (
+    !isWorkspaceRecord(value) ||
+    !Array.isArray(pulls) ||
+    !Array.isArray(value["items"]) ||
+    !isWorkspaceRecord(capabilities) ||
+    typeof capabilities["revert"] !== "boolean" ||
+    typeof capabilities["force"] !== "boolean" ||
+    !nullable(value["refusal"], "string")
+  ) {
+    throw invalidResponse("Workspace response contains an invalid revert plan");
+  }
+  return {
+    pullRequests: pulls.map((pull: unknown) => {
+      if (!isWorkspaceRecord(pull) || typeof pull["id"] !== "string" || !nullable(pull["number"], "number") || typeof pull["title"] !== "string") {
+        throw invalidResponse("Workspace revert plan contains an invalid pull request");
+      }
+      return { id: pull["id"], number: pull["number"] as number | null, title: pull["title"] };
+    }),
+    items: value["items"].map((item: unknown) => parseRevertItem(item)),
+    capabilities: { revert: capabilities["revert"], force: capabilities["force"] },
+    refusal: value["refusal"] as string | null,
+  };
+}
+
 export function parseCheck(value: unknown): WorkspaceCheck {
   const results = isWorkspaceRecord(value) ? value["results"] : undefined;
   if (

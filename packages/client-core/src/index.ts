@@ -238,6 +238,7 @@ export {
   stableKey,
   WorkspaceWorktreeFeature,
   type ListWorktreesInput,
+  type WorkspaceRevertTarget,
 } from "./worktree.js";
 export {
   parseUnit,
@@ -245,6 +246,9 @@ export {
   type WorkspaceCheck,
   type WorkspaceCheckResult,
   type WorkspaceChecksSummary,
+  type WorkspaceRevertItem,
+  type WorkspaceRevertPlan,
+  type WorkspaceRevertResult,
   type WorkspaceUnit,
   type WorkspaceWorktree,
   type WorkspaceWorktreeState,

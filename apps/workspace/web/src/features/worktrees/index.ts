@@ -11,3 +11,4 @@ export {
 export { PullRequestChecks, UnitChangeIcon, UnitTypeIcon, worktreeStateLabel, worktreeStateVariant } from "./worktree-review-panel";
 export { useWorktreeChangeFeed } from "./worktree-change-feed";
 export { useWorktreeLifecycle, useToggleUnitRemoval } from "./worktrees.commands";
+export { RevertSection } from "./worktree-revert";

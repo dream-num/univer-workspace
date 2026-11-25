@@ -619,7 +619,7 @@ repository; there is no stored default repository.
 | Verify                    | `inspect`, `screenshot`                                                                              |
 | Deliver output            | `export`, `print-pdf`                                                                                |
 | Hand off                  | `pr ready`, `pr check <n> <name> --passed\|--failed`, `browse <n> --unit <id>`                         |
-| User-authorized lifecycle | `pr merge` (needs edit access to every changed file), `pr discard` (irreversible)                    |
+| User-authorized lifecycle | `pr merge` (needs edit access to every changed file), `pr discard` (irreversible), `pr revert` (plan; `--yes` reverts) |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (a guest agent shares its own result)   |
 | Let the user keep files   | `claim` (an unclaimed guest agent only; the link works once, for 10 minutes)                         |
 | User-authorized cleanup   | `space node trash`                                                                                   |

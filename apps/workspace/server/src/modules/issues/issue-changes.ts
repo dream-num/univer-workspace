@@ -3,7 +3,7 @@ import type { SpaceAccess } from "../access/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { forbidden, invalid, notFound } from "./issues.errors.js";
 import type { IssueRelations, IssueRow, IssueUpdate, LabelRow, VerdictRow } from "./issues.repository.js";
-import type { IssueEventKind, IssueState, IssueStateReason, IssueVerdictKind } from "./issues.types.js";
+import type { IssueEventKind, IssueState, IssueStateReason, RequestedVerdictKind } from "./issues.types.js";
 
 interface IssueEvent {
   readonly kind: IssueEventKind;
@@ -54,7 +54,7 @@ export function planVerdict(input: {
   readonly space: SpaceAccess;
   readonly assignee: boolean;
   readonly userId: string;
-  readonly kind: IssueVerdictKind;
+  readonly kind: RequestedVerdictKind;
   readonly body: string;
   readonly now: number;
 }): { readonly createdAt: number } | null {

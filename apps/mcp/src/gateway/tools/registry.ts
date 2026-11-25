@@ -67,6 +67,7 @@ import { labelListTool } from "./admin/label-list.js";
 import { labelWriteTool } from "./admin/label-write.js";
 import { spaceNodeTool } from "./admin/space-node.js";
 import { prDiscardTool } from "./admin/pr-discard.js";
+import { prRevertTool } from "./admin/pr-revert.js";
 import { resourcesRegistriesTool } from "./admin/resources-registries.js";
 import { resourcesFindTool } from "./admin/resources-find.js";
 import { resourcesExportTool } from "./admin/resources-export.js";
@@ -144,6 +145,7 @@ export const tools: readonly ToolDefinition[] = [
   labelWriteTool,
   spaceNodeTool,
   prDiscardTool,
+  prRevertTool,
   resourcesRegistriesTool,
   resourcesFindTool,
   resourcesExportTool,

@@ -1,0 +1,167 @@
+/api/worktrees/{worktreeId}/revert:
+  parameters:
+    - name: worktreeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Worktrees]
+    operationId: planWorktreeRevert
+    summary: Show what reverting a merged pull request would do.
+    description: |
+      Lists each file the merge changed, added or removed and what a revert does to it, from server facts only.
+      Whoever may merge the pull request may revert it. `refusal` says in plain words why the current User cannot.
+    responses:
+      "200":
+        description: The plan.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/reverts.yaml#/RevertPlan
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  post:
+    tags: [Worktrees]
+    operationId: revertWorktree
+    summary: Take a merged pull request's changes out of Trunk.
+    description: |
+      Starts one `revertWorktrees` Operation, the same as the Issue revert with this one pull request. A replay with
+      the same Idempotency-Key and body returns the Operation.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/reverts.yaml#/RevertRequest
+    responses:
+      "200":
+        description: A replay of a finished revert.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/reverts.yaml#/RevertResponse
+      "201":
+        description: The revert finished. Each item says what it did.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/reverts.yaml#/RevertResponse
+      "202":
+        description: The revert remains pending and is resumed.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/operations.yaml#/OperationEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/issues/{number}/revert:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  get:
+    tags: [Issues]
+    operationId: planIssueRevert
+    summary: Show what reverting every merged pull request linked to an Issue would do.
+    description: |
+      Each Unit returns to its Trunk revision before the first of these merges on it. A Unit is `blocked` when a
+      Trunk revision after that merge is not one of the merges, and its `laterEdits` name who wrote them and when.
+      A file the merges added goes to Trash, and a file they removed comes back from its Trash batch. A replaced
+      page or Blob cannot be reverted and is listed `unavailable`. Whoever may accept the Issue may revert it, and
+      needs edit access to every Unit it restores. `refusal` says in plain words why the current User cannot.
+    responses:
+      "200":
+        description: The plan.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/reverts.yaml#/RevertPlan
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  post:
+    tags: [Issues]
+    operationId: revertIssue
+    summary: Take every merged pull request linked to an Issue out of Trunk.
+    description: |
+      Starts one `revertWorktrees` Operation that brings removed files back, restores changed Units, then moves added
+      files to Trash. A `blocked` Unit is skipped and stays `blocked` unless `force` names it with the `headRevision`
+      the plan showed; only a person signed in to the browser may send `force`. If someone edits a Unit after the
+      revert reads it, the revert reads the head again and stops that Unit as `blocked` when the edit is not its own.
+      A finished Issue revert records a `reverted` verdict and reopens the Issue if it was closed. A replay with the
+      same Idempotency-Key and body returns the Operation.
+
+      In a Team Space whose `landing` is `checks`, an agent that does not own it cannot revert, because a revert
+      changes Trunk without a merge: `403 AGENT_NOT_ALLOWED`.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/reverts.yaml#/RevertRequest
+    responses:
+      "200":
+        description: A replay of a finished revert.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/reverts.yaml#/RevertResponse
+      "201":
+        description: The revert finished. Each item says what it did.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/reverts.yaml#/RevertResponse
+      "202":
+        description: The revert remains pending and is resumed.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/operations.yaml#/OperationEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

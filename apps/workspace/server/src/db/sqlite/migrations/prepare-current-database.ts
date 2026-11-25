@@ -1,3 +1,4 @@
+import { migrateV33ToV34 } from "./v33-to-v34/migrate.js";
 import { migrateV32ToV33 } from "./v32-to-v33/migrate.js";
 import { migrateV31ToV32 } from "./v31-to-v32/migrate.js";
 import { migrateV30ToV31 } from "./v30-to-v31/migrate.js";
@@ -38,7 +39,7 @@ import { migrateV16ToV17 } from "./v16-to-v17/migrate.js";
 import { migrateV18ToV19 } from "./v18-to-v19/migrate.js";
 import { migrateV17ToV18 } from "./v17-to-v18/migrate.js";
 
-const TARGET_VERSION = 33;
+const TARGET_VERSION = 34;
 
 const V1_TABLES = [
   "users",
@@ -136,7 +137,7 @@ type DatabasePreparation =
 /**
  * Temporary rollout boundary for the supported legacy schemas.
  *
- * Delete this migrations directory and the initialization call after every deployed database is on V33. Business repositories never
+ * Delete this migrations directory and the initialization call after every deployed database is on V34. Business repositories never
  * import it.
  */
 export function prepareCurrentDatabase(filename: string): DatabasePreparation {
@@ -153,18 +154,31 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     database.exec("PRAGMA busy_timeout = 5000");
     const version = pragmaNumber(database, "user_version");
     if (version === TARGET_VERSION) {
-      assertV33Fingerprint(database);
+      assertV34Fingerprint(database);
       return { status: "current" };
+    }
+    if (version === 33) {
+      assertV33Fingerprint(database);
+      const backupFilename = createBackup(filename, database, 33);
+      try {
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
+        database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } catch (error) {
+        throw new Error(`Workspace V33 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+      }
+      return { status: "migrated", backupFilename };
     }
     if (version === 32) {
       assertV32Fingerprint(database);
       const backupFilename = createBackup(filename, database, 32);
       try {
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V32 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V32 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -174,10 +188,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       try {
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V31 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V31 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -188,10 +203,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V30 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V30 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -203,10 +219,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V29 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V29 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -219,10 +236,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V28 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V28 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -236,10 +254,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V27 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V27 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -254,10 +273,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V26 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V26 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -273,10 +293,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V25 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V25 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -293,10 +314,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V24 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V24 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -314,10 +336,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V23 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V23 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -336,10 +359,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V22 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V22 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -359,10 +383,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V21 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V21 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -383,10 +408,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V20 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V20 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -408,10 +434,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V19 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V19 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -434,10 +461,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V18 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V18 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -461,10 +489,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V17 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V17 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -489,10 +518,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V16 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V16 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -518,10 +548,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V15 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V15 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -548,10 +579,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V14 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V14 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -580,10 +612,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V12 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V12 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -611,10 +644,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V13 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V13 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -644,10 +678,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V11 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V11 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -678,10 +713,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V10 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V10 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -713,10 +749,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V9 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V9 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -749,10 +786,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V8 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V8 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -786,10 +824,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V7 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V7 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -827,10 +866,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V6 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V6 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -869,11 +909,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V5 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V5 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -924,11 +965,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V4 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V4 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -968,11 +1010,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V3 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V3 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -1013,11 +1056,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V2 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V2 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -1059,11 +1103,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v30-to-v31", () => migrateV30ToV31(database));
         startupStage("product.v31-to-v32", () => migrateV31ToV32(database));
         startupStage("product.v32-to-v33", () => migrateV32ToV33(database));
-        assertV33Fingerprint(database);
+        startupStage("product.v33-to-v34", () => migrateV33ToV34(database));
+        assertV34Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V1 to V33 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V1 to V34 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -1071,7 +1116,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     }
     if (version !== 0) {
       throw new Error(
-        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, or ${TARGET_VERSION}.`
+        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, or ${TARGET_VERSION}.`
       );
     }
     if (!hasTable(database, "catalog_entries") && !hasTable(database, "files")) {
@@ -1083,7 +1128,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     const backupFilename = createBackup(filename, database, 0);
 
     try {
-      startupStage("product.v0-to-v33", () => migrateLegacyV0(database));
+      startupStage("product.v0-to-v34", () => migrateLegacyV0(database));
     } catch (error) {
       throw new Error(
         `Legacy Workspace database migration failed. The original V0 database was preserved by the transaction and its consistent backup is at ${backupFilename}.`,
@@ -1091,7 +1136,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       );
     }
     try {
-      assertV33Fingerprint(database);
+      assertV34Fingerprint(database);
       database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     } catch (error) {
       throw new Error(
@@ -1108,7 +1153,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
 function createBackup(
   filename: string,
   database: DatabaseSync,
-  version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32
+  version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33
 ): string {
   const backupFilename = uniqueBackupFilename(filename, version);
   try {
@@ -1123,7 +1168,7 @@ function createBackup(
   }
 }
 
-function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32): string {
+function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33): string {
   const timestamp = new Date()
     .toISOString()
     .replaceAll(":", "")
@@ -1137,7 +1182,7 @@ function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 |
   );
 }
 
-function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32): void {
+function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33): void {
   const backup = new DatabaseSync(filename, { readOnly: true });
   try {
     const integrity = backup.prepare("PRAGMA integrity_check").get() as
@@ -1849,4 +1894,10 @@ export function assertV33Fingerprint(database: DatabaseSync): void {
   assertV32Fingerprint(database, [...SPACE_COLUMNS, "description", "slug", "proposals", "accept_after_hours", "landing"]);
   if (!objectSql(database, "table", "spaces").includes("landing TEXT NOT NULL DEFAULT 'review' CHECK (landing IN ('review', 'checks'))"))
     throw new Error("Product database V33 fingerprint mismatch (landing setting).");
+}
+
+export function assertV34Fingerprint(database: DatabaseSync): void {
+  assertV33Fingerprint(database);
+  if (!objectSql(database, "table", "operations").includes("'revert_worktrees'"))
+    throw new Error("Product database V34 fingerprint mismatch (revert Operation kind).");
 }

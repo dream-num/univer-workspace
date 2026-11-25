@@ -132,8 +132,8 @@ export { WorkspaceBlobFeature } from "./blob.js";
 export { WorkspaceUnitFeature, worktreeUnits } from "./unit.js";
 export { issueUrl, nodeUrl, pullUrl, repoUrl } from "./urls.js";
 export { usernameKey } from "./username.js";
-export { WorkspaceWorktreeFeature } from "./worktree.js";
-export type { WorkspaceCheck, WorkspaceCheckResult, WorkspaceChecksSummary, WorkspaceUnit, WorkspaceWorktree, WorkspaceWorktreeState } from "./worktree-model.js";
+export { WorkspaceWorktreeFeature, type WorkspaceRevertTarget } from "./worktree.js";
+export type { WorkspaceCheck, WorkspaceCheckResult, WorkspaceChecksSummary, WorkspaceRevertItem, WorkspaceRevertPlan, WorkspaceRevertResult, WorkspaceUnit, WorkspaceWorktree, WorkspaceWorktreeState } from "./worktree-model.js";
 
 export { WorkspaceAssetFeature } from "./asset.js";
 

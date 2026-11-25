@@ -11,11 +11,20 @@ import { rethrowUnlessServerOutdated } from "./space.js";
 import { usernameKey } from "./username.js";
 import {
   parseCheck,
+  parseRevertItem,
+  parseRevertPlan,
   parseWorktree,
   type WorkspaceCheck,
+  type WorkspaceRevertPlan,
+  type WorkspaceRevertResult,
   type WorkspaceWorktree,
   type WorkspaceWorktreeState,
 } from "./worktree-model.js";
+
+/** One merged pull request, or every merged pull request linked to an Issue. */
+export type WorkspaceRevertTarget =
+  | { readonly worktreeId: string }
+  | { readonly spaceId: string; readonly issueNumber: number };
 
 export interface ListWorktreesInput {
   readonly scope?: "user" | "space";
@@ -181,6 +190,29 @@ export class WorkspaceWorktreeFeature {
     return parseCheck(body["check"]);
   }
 
+  /** What a revert would do to each file, read from server facts. Nothing changes. */
+  public async revertPlan(target: WorkspaceRevertTarget): Promise<WorkspaceRevertPlan> {
+    return parseRevertPlan(await (await this.authenticatedHttp()).json(revertPath(target)));
+  }
+
+  /**
+   * Takes the merged changes out of Trunk and leaves each blocked file as it is: only a person in the browser may
+   * overwrite later edits. A resend after an unknown result is safe, because a file the first one restored is then
+   * blocked by that restore.
+   */
+  public async revert(target: WorkspaceRevertTarget): Promise<WorkspaceRevertResult> {
+    const body = await (await this.authenticatedHttp()).json(revertPath(target), { idempotencyKey: randomUUID(), method: "POST" });
+    const operation = body["operation"];
+    if (!isWorkspaceRecord(operation) || typeof operation["id"] !== "string" || typeof operation["state"] !== "string") {
+      throw workspaceError("workspace-invalid-response", "Workspace response is missing the revert Operation.");
+    }
+    const items = body["items"];
+    return {
+      operation: { id: operation["id"], state: operation["state"] },
+      items: Array.isArray(items) ? items.map((item: unknown) => parseRevertItem(item)) : null,
+    };
+  }
+
   public async transition(worktreeId: string, action: LifecycleAction): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const http = await this.authenticatedHttp();
@@ -286,6 +318,14 @@ export async function getWorktree(
 ): Promise<WorkspaceWorktree> {
   const body = await http.json(`/api/worktrees/${encodeURIComponent(worktreeId)}`);
   return parseWorktree(body["worktree"], worktreeId);
+}
+
+function revertPath(target: WorkspaceRevertTarget): string {
+  if ("worktreeId" in target) return `/api/worktrees/${encodeURIComponent(requireId(target.worktreeId, "Worktree ID"))}/revert`;
+  if (!Number.isSafeInteger(target.issueNumber) || target.issueNumber < 1) {
+    throw workspaceError("workspace-argument-invalid", "Issue number must be a positive integer.");
+  }
+  return `/api/spaces/${encodeURIComponent(requireId(target.spaceId, "Space ID"))}/issues/${String(target.issueNumber)}/revert`;
 }
 
 export function stableKey(kind: string, ...parts: readonly string[]): string {

@@ -1,5 +1,6 @@
 import { ApplicationError } from "../../middleware/errors.js";
 import type { ResourcesModule } from "../resources/index.js";
+import type { RevertsModule } from "../reverts/reverts.types.js";
 import type { WorktreesModule } from "../worktrees/index.js";
 import type {
   OperationsRepository,
@@ -17,7 +18,8 @@ export type OperationKind =
   | "mergeWorktree"
   | "discardWorktree"
   | "activateWorktreeResource"
-  | "copyNode";
+  | "copyNode"
+  | "revertWorktrees";
 
 export interface OperationView {
   readonly id: string;
@@ -41,6 +43,7 @@ export function createOperationsModule(options: {
   readonly repository: OperationsRepository;
   readonly resources: ResourcesModule;
   readonly worktrees: WorktreesModule;
+  readonly reverts: Pick<RevertsModule, "retry">;
   readonly now?: () => number;
 }): OperationsModule {
   const now = options.now ?? Date.now;
@@ -79,6 +82,12 @@ export function createOperationsModule(options: {
           "CONFLICT",
           409,
           "A failed copy has removed what it created; copy again with a new Idempotency-Key."
+        );
+      }
+      if (row.kind === "revert_worktrees") {
+        await options.reverts.retry(userId, operationId);
+        return operationView(
+          await requireOperation(options.repository, userId, operationId)
         );
       }
       if (row.kind === "activate_worktree_resource") {
@@ -162,6 +171,7 @@ async function retryWorktreeOperation(
     case "replace_blob_content":
     case "activate_worktree_resource":
     case "copy_node":
+    case "revert_worktrees":
       return;
   }
 }
@@ -222,6 +232,7 @@ function operationKind(kind: OperationDatabaseKind): OperationKind {
     discard_worktree: "discardWorktree",
     activate_worktree_resource: "activateWorktreeResource",
     copy_node: "copyNode",
+    revert_worktrees: "revertWorktrees",
   };
   return kinds[kind];
 }

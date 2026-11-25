@@ -91,6 +91,11 @@ import {
   type CopiesModule,
 } from "./modules/copies/index.js";
 import {
+  createRevertsModule,
+  createRevertsRouter,
+  type RevertsModule,
+} from "./modules/reverts/index.js";
+import {
   createForksModule,
   createForksRouter,
   type ForksModule,
@@ -152,6 +157,7 @@ export interface WorkspaceApplication {
   readonly worktrees: WorktreesModule;
   readonly operations: OperationsModule;
   readonly copies: CopiesModule;
+  readonly reverts: RevertsModule;
   readonly forks: ForksModule;
   readonly blobs: BlobsModule;
   readonly skillDrafts: SkillDraftsModule;
@@ -336,10 +342,26 @@ export function createWorkspaceApplication(
     worktrees,
     store: blobStore,
   });
+  const reverts = createRevertsModule({
+    repository: repositories.reverts,
+    access,
+    worktrees,
+    issues,
+    trash,
+    trashBatches: repositories.trash,
+    backend: worktreeBackend,
+    async publishedPages(worktreeId) {
+      return (await repositories.htmlViewDrafts.listForWorktree(worktreeId))
+        .filter((draft) => draft.state === "published")
+        .map((draft) => ({ name: draft.name, kind: draft.kind, nodeId: draft.result_node_id }));
+    },
+    users: (userIds) => identity.findUsers(userIds),
+  });
   const operations = createOperationsModule({
     repository: repositories.operations,
     resources,
     worktrees,
+    reverts,
   });
   const copies = createCopiesModule({
     repository: repositories.copies,
@@ -483,6 +505,7 @@ export function createWorkspaceApplication(
     createOperationsRouter({ identity, operations })
   );
   app.use("/api", createCopiesRouter({ identity, copies }));
+  app.use("/api", createRevertsRouter({ identity, reverts }));
   app.use("/api", createForksRouter({ identity, forks }));
   app.use(
     "/api",
@@ -525,6 +548,7 @@ export function createWorkspaceApplication(
     worktrees,
     operations,
     copies,
+    reverts,
     forks,
     blobs,
     htmlViewDrafts,
@@ -595,5 +619,7 @@ function unavailableWorktreeBackend(): WorktreeBackend {
     discard: unavailable,
     submitChangeset: unavailable,
     trunkRevision: unavailable,
+    trunkChangesets: unavailable,
+    restoreTrunk: unavailable,
   };
 }

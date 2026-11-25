@@ -1,0 +1,137 @@
+RevertAction:
+  type: string
+  enum: [restore, trash, recover, none]
+  description: |
+    `restore` returns a Unit the merges changed to the revision before the first of them on it. `trash` moves a file
+    or page the merges added to Trash. `recover` restores from Trash a file the merges removed. `none` is a change a
+    revert cannot undo, such as a replaced page.
+
+RevertItemState:
+  type: string
+  enum: [ready, blocked, done, unavailable, refused, failed]
+  description: |
+    A plan's items are `ready`, `blocked` (Trunk has edits after the merge that are not the merges' own),
+    `done` (nothing left to do), `unavailable` (cannot be done, with the reason) or `refused` (the actor may not do
+    it). A finished revert's items are `done`, `blocked`, `unavailable` or `failed`.
+
+RevertLaterEdit:
+  type: object
+  additionalProperties: false
+  required: [user, revisions, lastEditedAt]
+  properties:
+    user:
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
+      description: Who wrote these Trunk revisions; `null` when that User no longer exists.
+    revisions:
+      type: integer
+      minimum: 1
+    lastEditedAt:
+      type: [string, "null"]
+      format: date-time
+
+RevertItem:
+  type: object
+  additionalProperties: false
+  required: [action, state, name, nodeId, unitId, unitType, targetRevision, headRevision, laterEdits, reason]
+  properties:
+    action:
+      $ref: "#/RevertAction"
+    state:
+      $ref: "#/RevertItemState"
+    name:
+      type: string
+    nodeId:
+      type: [string, "null"]
+    unitId:
+      type: [string, "null"]
+    unitType:
+      oneOf:
+        - $ref: ./nodes.yaml#/UnitType
+        - type: "null"
+    targetRevision:
+      type: [integer, "null"]
+      description: For `restore`, the Trunk revision the Unit returns to.
+    headRevision:
+      type: [integer, "null"]
+      description: For `restore`, Trunk head when the item was read. A force overwrites later edits through it and no further.
+    laterEdits:
+      type: array
+      description: For a `blocked` Unit, who edited it on Trunk after the first merge, other than the merges themselves.
+      items:
+        $ref: "#/RevertLaterEdit"
+    reason:
+      type: [string, "null"]
+      description: Plain words for why the item is not `ready` or `done`.
+
+RevertPlan:
+  type: object
+  additionalProperties: false
+  required: [pullRequests, items, capabilities, refusal]
+  properties:
+    pullRequests:
+      type: array
+      description: The merged pull requests the revert takes out of Trunk.
+      items:
+        type: object
+        additionalProperties: false
+        required: [id, number, title]
+        properties:
+          id:
+            type: string
+          number:
+            type: [integer, "null"]
+          title:
+            type: string
+    items:
+      type: array
+      description: Back from Trash first, then restored, then moved to Trash, in the order a revert does them.
+      items:
+        $ref: "#/RevertItem"
+    capabilities:
+      type: object
+      additionalProperties: false
+      required: [revert, force]
+      properties:
+        revert:
+          type: boolean
+        force:
+          type: boolean
+          description: True only for a person signed in to the browser, and only while an item is `blocked`.
+    refusal:
+      type: [string, "null"]
+      description: Why the actor cannot revert, in plain words; `null` when `capabilities.revert` is true.
+
+RevertRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    force:
+      type: array
+      maxItems: 200
+      description: |
+        Blocked Units to overwrite, each with the `headRevision` its plan showed. Only a person signed in to the browser
+        may send it. A Unit edited again after that revision stays `blocked`.
+      items:
+        type: object
+        additionalProperties: false
+        required: [unitId, headRevision]
+        properties:
+          unitId:
+            type: string
+          headRevision:
+            type: integer
+            minimum: 1
+
+RevertResponse:
+  type: object
+  additionalProperties: false
+  required: [operation, items]
+  properties:
+    operation:
+      $ref: ./operations.yaml#/OperationView
+    items:
+      type: array
+      items:
+        $ref: "#/RevertItem"

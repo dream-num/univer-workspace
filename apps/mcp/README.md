@@ -454,6 +454,7 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
+| `pr_revert` | Required `repo` and exactly one of `number` (a merged pull request) and `issue` (every merged pull request linked to it); optional `apply` | Without `apply`, the plan and nothing changes: `{ applied: false, pullRequests, canRevert, refusal, items }`. With `apply: true`, `{ applied: true, operation, items }`. Each item says what the revert does to one file (`restore`, `trash`, `recover`, `none`) and its state; a `blocked` file has `laterEdits` and stays as it is, because only a person in the browser may overwrite it. A gated agent in a repository that requires checks gets `AGENT_NOT_ALLOWED`. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
 | `resources_export` | Required `handles` (`<registryId>/<resourceId>`); optional `cursor` | `{ resources: [{ handle, svg }], failed: [{ handle, code, message }] }`. The SVG text itself, written nowhere. A page may carry `truncated` and `cursor` |
@@ -567,8 +568,8 @@ with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `fork_list`, `fork_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
 `search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `repo_member_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for `fork_create`, `fork_delete`, the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `pr_check`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `repo_member_write`, `space_node`, `share` and `claim`; `worktree:merge` for
-`pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
-true only for `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
+`pr_merge`, `pr_discard` and `pr_revert`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
+true only for `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard` and `pr_revert`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns

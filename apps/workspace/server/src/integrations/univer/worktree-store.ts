@@ -1,3 +1,4 @@
+import { RevertRevisionMutation } from "@univerjs-pro/collaboration";
 import { CollabError, type UniverCollabService } from "@univerjs-pro/collaboration-service";
 import type { UniverCollabWorktreeService } from "@univerjs-pro/collaboration-worktree-service";
 import {
@@ -168,6 +169,40 @@ export function createWorktreeBackend(
         unitId,
       );
       return unit?.headRevision ?? null;
+    },
+    async trunkChangesets(unitId, type, after, to, userId) {
+      if (to <= after) return [];
+      const { changesets } = await trunk.getChangesets({ unitID: unitId, type, from: after, to }, collaborationCallOptions(userId));
+      return changesets
+        .filter((record) => record.revision > after)
+        .map((record) => ({
+          revision: record.revision,
+          userId: record.userID,
+          sid: record.sid ?? "",
+          // The SDK records changeset time in Unix seconds.
+          createdAt: typeof record.createTime === "number" && record.createTime > 0 ? record.createTime * 1000 : null,
+        }));
+    },
+    async restoreTrunk(input, userId) {
+      const options = collaborationCallOptions(userId);
+      const result = await trunk.submitChangeset({
+        changeset: {
+          unitID: input.unitId,
+          type: input.type,
+          baseRev: input.baseRev,
+          revision: input.baseRev + 1,
+          sid: input.sid,
+          reqId: input.reqId,
+          userID: userId,
+          memberID: options.memberID,
+          mutations: [{ id: RevertRevisionMutation.id, data: JSON.stringify({ unitId: input.unitId, revision: input.targetRevision }) }],
+        },
+      }, options);
+      if (!("error" in result)) return { status: result.status, changeset: result.changeset };
+      return {
+        status: result.status,
+        error: { code: result.error.code, message: result.error.message, retryable: result.error.retryable },
+      };
     },
   };
 }

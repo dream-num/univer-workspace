@@ -848,3 +848,21 @@ one V33 instance, and wait for its backup, migration and health checks before re
 before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or backup. V32 code refuses
 a V33 database, so a code rollback needs the backup taken before the upgrade: stop V33 and restore it, which loses what
 was written since. Never run V32 and V33 writers on the same SQLite file.
+
+### Reverting merged pull requests, and product database V34
+
+Whoever may merge a pull request can revert it, and whoever may accept an Issue can revert every merged pull request
+linked to it, from the merged pull request page, the Issue's Acceptance panel, `uvw pr revert` or the MCP `pr_revert`
+tool. The plan comes first and lists each file: a Unit the merges changed returns to its content before the first of
+them as a new Trunk revision, a file they added moves to Trash, and a file they removed comes back from Trash. Replaced
+pages and files cannot be reverted. A Unit someone else edited on Trunk after the merge is blocked, and the plan names
+who and when. Only a person in the browser can overwrite it, Unit by Unit. A revert is one `revert_worktrees`
+Operation, so a crash or a replica restart resumes it. An Issue revert records the verdict `reverted` and reopens the
+Issue. In a repository whose `landing` is `checks`, an agent that does not own it cannot revert.
+
+V33→V34 rebuilds `operations` so its kind check accepts `revert_worktrees`, keeping every row. On PostgreSQL the same
+step moves `workspace_product_schema` from version 13 to 14 and swaps only that check. Stop every old instance, start
+one V34 instance, and wait for its backup, migration and health checks before restoring service. Back up PostgreSQL
+before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or backup. V33 code refuses
+a V34 database, so a code rollback needs the backup taken before the upgrade: stop V34 and restore it, which loses what
+was written since. Never run V33 and V34 writers on the same SQLite file.
