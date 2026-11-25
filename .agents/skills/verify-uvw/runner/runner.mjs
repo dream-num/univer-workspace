@@ -49,9 +49,10 @@ export function parseArgs(argv) {
 // One task per mode partition of each spec, with an id that is a valid run id: the feature, `<feature>-<mode>` when
 // a spec splits, and a number for a repeat. A task names its journeys by ID, without those left to the host, and
 // `skip` names every journey of its feature left to the host. A spec with no partition is host only, and `host` lists
-// every journey the host runs, one entry per instance it needs.
-export function expand(specs, features, leftToHost = HOST_ONLY) {
-  const tasks = [], hostOnly = [], host = [], used = new Set();
+// every journey the host runs, one entry per instance it needs. With no model only the helper runs, so a task with no
+// "Run: helper." journey goes to `dropped`: it would start an instance and check nothing.
+export function expand(specs, features, leftToHost = HOST_ONLY, { model = true } = {}) {
+  const tasks = [], hostOnly = [], host = [], dropped = [], used = new Set();
   const unique = (base) => { let id = base; for (let n = 2; used.has(id); n++) id = `${base}-${n}`; used.add(id); return id; };
   for (const { feature: name, selectors } of specs) {
     const feature = features.get(name);
@@ -61,8 +62,8 @@ export function expand(specs, features, leftToHost = HOST_ONLY) {
     const only = selected.filter((j) => left.includes(j)), runs = selected.filter((j) => !left.includes(j));
     const { partitions } = runs.length ? plan(feature, runs.map((j) => j.id)) : { partitions: [] };
     for (const p of partitions) {
-      tasks.push({ id: unique(partitions.length > 1 && p.mode !== 'default' ? `${name}-${p.mode}` : name), feature: name, mode: p.mode, needs: p.needs,
-        selectors: p.selectors, expected: p.journeys, skip: left });
+      (model || p.journeys.some((j) => j.runBy === 'helper') ? tasks : dropped).push({ id: unique(partitions.length > 1 && p.mode !== 'default' ? `${name}-${p.mode}` : name),
+        feature: name, mode: p.mode, needs: p.needs, selectors: p.selectors, expected: p.journeys, skip: left });
     }
     if (!partitions.length) hostOnly.push({ id: unique(name), feature: name });
     if (only.length) {
@@ -70,7 +71,7 @@ export function expand(specs, features, leftToHost = HOST_ONLY) {
       host.push(...again.partitions.map((p) => ({ feature: name, selectors: p.selectors })));
     }
   }
-  return { tasks, hostOnly, host };
+  return { tasks, hostOnly, host, dropped };
 }
 
 // For a batch with a task in an MCP mode, the line that names the MCP packaging files in `changed` (the paths the
@@ -217,7 +218,7 @@ export function finish(task, dir, wallSeconds, key, { model = true } = {}) {
   return result;
 }
 
-export function summary({ batch, sha, head, image, key, jobs, dir, results, host, setup, wallSeconds, model = true, hint = null }) {
+export function summary({ batch, sha, head, image, key, jobs, dir, results, host, setup, wallSeconds, model = true, hint = null, dropped = [] }) {
   const n = (v) => (v == null ? '' : String(v));
   const tally = (r, outcome) => (r.journeys ? r.journeys.filter((j) => j.checks === outcome).length : '');
   const checked = (r) => OUTCOMES.filter((o) => tally(r, o)).map((o) => `${tally(r, o)} ${o === 'none' ? 'not run' : o}`).join(', ');
@@ -253,6 +254,8 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
     '',
     ...table,
     `Each task's ${model ? 'report is' : 'helper output is'} ${dir}/<task>/${model ? 'report.md' : 'run-journeys.log'}, and its runs are under ${dir}/<task>/runs/.`,
+    ...(dropped.length ? ['', 'With --no-model the helper runs only "Run: helper." journeys, and these tasks select none, so they did not run:', '',
+      ...dropped.map((t) => `- ${t.id}`)] : []),
     ...(unprepared.length ? ['', 'These tasks could not start their instance, so no verifier ran:', '', ...unprepared] : []),
     ...(errors.length ? ['', 'These tasks stopped on an API error:', '', ...errors] : []),
     // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
@@ -267,10 +270,10 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
 const readKey = () => findKey(process.env, existsSync(join(repo, '.env')) ? readFileSync(join(repo, '.env'), 'utf8') : '');
 const imageTag = () => `uvw-verify-runner:${createHash('sha256').update(readFileSync(join(skill, 'runner/Dockerfile'))).digest('hex').slice(0, 12)}`;
 
-function expanded(specs) {
+function expanded(specs, model) {
   try {
     const features = loadFeatures();
-    return { ...expand(specs, features), features };
+    return { ...expand(specs, features, HOST_ONLY, { model }), features };
   } catch (error) { return fail(2, error.message); }
 }
 
@@ -309,8 +312,12 @@ async function main() {
   try { options = parseArgs(process.argv.slice(2)); } catch (error) { fail(2, error.message); }
   if (options.check) return check(options.specs);
   const { keep, model } = options;
-  const { tasks, hostOnly, host, features } = expanded(options.specs);
+  const { tasks, hostOnly, host, dropped, features } = expanded(options.specs, model);
   const queue = [...tasks];
+  if (dropped.length && !tasks.length) {
+    const helped = expand([...features.keys()].map((feature) => ({ feature, selectors: [] })), features, HOST_ONLY, { model }).tasks;
+    fail(2, `with --no-model the helper runs only "Run: helper." journeys, and ${dropped.map((t) => t.id).join(', ')} select${dropped.length > 1 ? '' : 's'} none, so nothing would run. These features have such journeys: ${[...new Set(helped.map((t) => t.feature))].join(', ')}`);
+  }
 
   const found = model ? readKey() : { key: null };
   if (!found) fail(5, 'DEEPSEEK_API_KEY not found; set it or add it to .env');
@@ -397,7 +404,7 @@ async function main() {
   for (const t of queue) results.set(t.id, { task: t.id, mode: t.mode, status: 'infra-error', result: null, turns: null, wallSeconds: 0, usage: null });
 
   const ordered = [...tasks, ...hostOnly].map((t) => results.get(t.id));
-  const text = summary({ batch, sha, head, image, key: keyText, jobs, dir, results: ordered, host, setup, wallSeconds: seconds(started), model, hint });
+  const text = summary({ batch, sha, head, image, key: keyText, jobs, dir, results: ordered, host, setup, wallSeconds: seconds(started), model, hint, dropped });
   writeFileSync(join(dir, 'summary.md'), text);
   process.stdout.write(text);
   if (keep) console.error(`kept containers; remove them with: docker rm -f $(docker ps -aq --filter label=uvw-verify.batch=${batch})`);

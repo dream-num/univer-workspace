@@ -64,9 +64,24 @@ test('each spec becomes one task per mode, with a run id per task, and journeys 
   for (const { id } of batch.tasks) assert.match(id, /^[a-z0-9][a-z0-9_-]*$/, 'a task id is a valid MCP run id');
   assert.deepEqual(batch.hostOnly, [{ id: 'whole', feature: 'whole' }]);
   assert.deepEqual(batch.host, [{ feature: 'lens', selectors: ['L2'] }, { feature: 'agents', selectors: ['G2'] }, { feature: 'whole', selectors: [] }]);
-  assert.deepEqual(tasks(['lens', 'L2']), { tasks: [], hostOnly: [{ id: 'lens', feature: 'lens' }], host: [{ feature: 'lens', selectors: ['L2'] }] });
+  assert.deepEqual(tasks(['lens', 'L2']), { tasks: [], hostOnly: [{ id: 'lens', feature: 'lens' }], host: [{ feature: 'lens', selectors: ['L2'] }], dropped: [] });
   assert.throws(() => tasks(['missing']), /no features\/missing\.md/);
   assert.throws(() => tasks(['lens', 'mpc']), /no journey or mode mpc in features\/lens\.md/);
+});
+
+test('with no model, a task whose journeys include no "Run: helper." journey is dropped, and the rest still run', () => {
+  const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.join('\n\n')}\n`;
+  const features = new Map(Object.entries({
+    checked: recipe('Checked', '### C1. One\n\nMode: mcp. Run: helper.', '### C2. Two\n\nMode: mcp.', '### C3. Three'),
+    driven: recipe('Driven', '### D1. One', '### D2. Two\n\nRun: helper.'),
+  }).map(([name, text]) => [name, parseFeature(name, text)]));
+  const ids = (model) => {
+    const batch = expand([['checked'], ['driven'], ['checked', 'C2']].map(([feature, ...selectors]) => ({ feature, selectors })), features, new Map([['driven:D2', 'why']]), { model });
+    return { tasks: batch.tasks.map((t) => t.id), dropped: batch.dropped.map((t) => t.id), host: batch.host };
+  };
+  assert.deepEqual(ids(false), { tasks: ['checked-mcp'], dropped: ['checked', 'driven', 'checked-2'], host: [{ feature: 'driven', selectors: ['D2'] }] },
+    'a helper journey left to the host does not count, and the journeys a spec selects decide');
+  assert.deepEqual(ids(true), { tasks: ['checked-mcp', 'checked', 'driven', 'checked-2'], dropped: [], host: [{ feature: 'driven', selectors: ['D2'] }] });
 });
 
 test('every journey host-only.mjs leaves to the host exists, and the recipes get one task per mode without them', () => {
@@ -137,7 +152,10 @@ test('runner --check names the key source and fingerprint, proves the key with o
     writeFileSync(join(skill, 'runner/host-only.mjs'), "export const HOST_ONLY = new Map([['whole', 'why'], ['plain:P2', 'why'], ['plain:P3', 'why']]);\n");
     writeFileSync(join(skill, 'features/whole.md'), recipe('Whole feature', 'W1. One'));
     writeFileSync(join(skill, 'features/plain.md'), recipe('Plain feature', 'P1. One', 'P2. Two', 'P3. Three'));
-    const node = (args, env) => promisify(execFile)(process.execPath, [join(skill, 'runner/runner.mjs'), ...args],
+    for (const [name, journey] of [['mcp', 'M1. One\n\nRun: helper.'], ['mcp-renderer', 'MR9. One'], ['mcp-security', 'MG2. One']]) {
+      writeFileSync(join(skill, `features/${name}.md`), `# ${name}\n\n## Driving it with agent-browser and uvw\n\nMode: mcp.\n\n### ${journey}\n`);
+    }
+    const node =(args, env) => promisify(execFile)(process.execPath, [join(skill, 'runner/runner.mjs'), ...args],
       { env: { PATH: process.env.PATH, DOCKER_HOST: `unix://${join(root, 'no-docker.sock')}`, ...env } })
       .then((r) => ({ status: 0, ...r }), (e) => ({ status: e.code, stdout: e.stdout, stderr: e.stderr }));
     const check = (env, ...tasks) => node(['--check', ...tasks], env);
@@ -149,9 +167,12 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.match(noKey.stdout, /^FAIL {2}docker is not available$/m);
     const keyless = await node(['plain:P1'], { VERIFY_UVW_ROOT: join(root, 'runs') });
     assert.equal(keyless.status, 5);
-    const noModel = await node(['--no-model', 'plain:P1'], { VERIFY_UVW_ROOT: join(root, 'runs') });
+    const noModel = await node(['--no-model', 'mcp'], { VERIFY_UVW_ROOT: join(root, 'runs') });
     assert.equal(noModel.status, 3, 'with no model, a batch with no key anywhere goes on to Docker');
     assert.match(noModel.stderr, /docker is not available/);
+    const unchecked = await node(['--no-model', 'plain:P1', 'whole', 'mcp-renderer'], { VERIFY_UVW_ROOT: join(root, 'runs') });
+    assert.equal(unchecked.status, 2, 'with no helper journey to run, a no-model batch stops before it asks Docker for anything');
+    assert.match(unchecked.stderr, /^verify runner: with --no-model the helper runs only "Run: helper\." journeys, and plain, mcp-renderer select none, .*These features have such journeys: mcp$/m);
     assert.equal(requests.length, 0);
 
     const good = await check({ DEEPSEEK_API_KEY: 'good-key' });
@@ -181,10 +202,7 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.equal(unknownId.status, 2);
     assert.match(unknownId.stderr, /no journey or mode P9 in features\/plain\.md/);
 
-    for (const [name, id] of [['mcp', 'M1'], ['mcp-renderer', 'MR9'], ['mcp-security', 'MG2']]) {
-      writeFileSync(join(skill, `features/${name}.md`), `# ${name}\n\n## Driving it with agent-browser and uvw\n\nMode: mcp.\n\n### ${id}. One\n`);
-    }
-    const git = (...args) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@localhost', '-c', 'commit.gpgsign=false', ...args]);
+    const git =(...args) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@localhost', '-c', 'commit.gpgsign=false', ...args]);
     git('init', '-q');
     git('add', '-A');
     git('commit', '-q', '--no-verify', '-m', 'base');
@@ -395,6 +413,10 @@ test('a no-model task is finished without a session, and summary.md counts its c
     assert.ok(summarized.includes(`Checks that did not hold:\n\n- f H2 broke: features/f.md:9 exit 1: jq -e '.ok' "$EVIDENCE/x.json"\n- f H3 did not run\n`));
     assert.doesNotMatch(summarized, /\| PASS \||report\.md/);
     assert.ok(summarized.includes(`Each task's helper output is ${dir}/<task>/run-journeys.log`));
+    assert.doesNotMatch(summarized, /did not run:/);
+    const partial = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [result], host: [], setup: [80], wallSeconds: 140, model: false,
+      dropped: [{ id: 'link-sharing' }, { id: 'link-sharing-2' }] });
+    assert.ok(partial.includes('\n\nWith --no-model the helper runs only "Run: helper." journeys, and these tasks select none, so they did not run:\n\n- link-sharing\n- link-sharing-2\n'));
     const judged = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir, results: [{ ...result, result: 'INCOMPLETE', turns: 9 }], host: [], setup: [80], wallSeconds: 140 });
     assert.match(judged, /^\| f \| mcp \| finished \| INCOMPLETE \| 4 \| 0 \| 0 \| 0 \| 0 \| 4 \| 1 held, 1 broke, 1 not run \| 9 \|/m, 'the model summary has a Checks column');
     assert.match(judged, /^- f H2 MISSING \(checks broke: features\/f\.md:9 exit 1: jq -e/m);

@@ -72,9 +72,11 @@ and so on. The id is also the task's run id.
   `run-journeys.log`, then gives a new Claude Code session `brief.txt`. When the prepare fails, no session starts,
   the task is `infra-error`, and `summary.md` quotes the `FAIL` and `verify-uvw:` lines of its `prepare.log`.
 - `--no-model` stops each task after `run-journeys`, so it needs no key, starts no session and judges nothing.
-  `summary.md` then counts each task's checks that held, broke, were blocked or did not run, and the journeys the
-  agent drives, and lists every check that did not hold. It exits `1` when one did not hold, `4` when a task
-  failed in the runner or leaked, `3` when a task is host only, else `0`.
+  The helper runs only `Run: helper.` journeys, so a task that selects none of them does not run, and `summary.md`
+  lists it. When that leaves no task, the batch exits `2` before it builds or starts anything, and names the
+  features that have such journeys. `summary.md` counts each task's checks that held, broke, were blocked or did
+  not run, and the journeys the agent drives, and lists every check that did not hold. It exits `1` when one did
+  not hold, `4` when a task failed in the runner or leaked, `3` when a task is host only, else `0`.
 - A task expects a verdict for each journey it selects, from the journey headings of its feature file. The
   features and journeys in [host-only.mjs](host-only.mjs) do not run in the runner. Those still run on the host.
   The runner lists them in `summary.md` with the `$V up --for` command for each. Each task passes its journeys to
