@@ -233,6 +233,7 @@ function OutwardActions({ issue }: { readonly issue: Issue }) {
   const date = (value: string) => formatRelativeDate(value, language);
   const none = (rows: readonly unknown[]) => (rows.length ? null : t("issueAcceptanceNone"));
   const personal = changes.data?.personalSharing;
+  const unopenable = personal?.items.some((item) => item.node.id === undefined) ?? false;
   return (
     <Section title={t("issueAcceptanceOutward")} note={t("issueAcceptanceCurrentState")}>
       <Part title={t("issueAcceptancePublished")} emptyText={none(published)} truncated={published.length > MAX_ROWS}>
@@ -266,17 +267,22 @@ function OutwardActions({ issue }: { readonly issue: Issue }) {
             emptyText={personal ? none(personal.items) : t("issueAcceptancePersonalHidden")}
             truncated={personal?.truncated ?? false}
           >
-            {personal?.items.map((item) => (
-              <Row key={`${item.kind}:${item.node.id}:${item.kind === "grant" ? item.user.id : ""}`} meta={date(item.updatedAt)}>
-                <Link to="/nodes/$nodeId" params={{ nodeId: item.node.id }} className="text-foreground [overflow-wrap:anywhere]">
-                  {item.node.name}
-                </Link>{" "}
+            {personal?.items.map((item, index) => (
+              <Row key={index} meta={date(item.updatedAt)}>
+                {item.node.id === undefined ? (
+                  <span className="text-foreground [overflow-wrap:anywhere]">{item.node.name}</span>
+                ) : (
+                  <Link to="/nodes/$nodeId" params={{ nodeId: item.node.id }} className="text-foreground [overflow-wrap:anywhere]">
+                    {item.node.name}
+                  </Link>
+                )}{" "}
                 {item.kind === "link"
                   ? t(item.enabled ? "issueAcceptanceLinkOn" : "issueAcceptanceLinkOff", { role: t(ROLE_LABELS[item.role]), actor: item.actor.displayName })
                   : t("issueAcceptanceGrantRow", { user: item.user.displayName, role: t(ROLE_LABELS[item.role]), actor: item.actor.displayName })}
               </Row>
             ))}
           </Part>
+          {unopenable ? <Muted>{t("issueAcceptancePersonalSummary", { count: personal!.items.length })}</Muted> : null}
         </>
       )}
       <Muted>{t("issueAcceptanceCopiesUnknown")}</Muted>

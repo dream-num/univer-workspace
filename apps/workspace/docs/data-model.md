@@ -695,7 +695,8 @@ Assignee 指派时必须是 Space Owner 或成员，最多 10 人；成员离开
 `GET /api/spaces/{spaceId}/issues/{number}/access-changes` 用它筛出每个 Assignee 指派之后的访问变化，只读当前行，
 不是历史：`space_members` 中 `granted_by` 是这个 Assignee、`updated_at` 晚于指派的行（之后别人重新授权会覆盖
 `granted_by`，这一行随之消失）；它自己 Personal Space 里 `node_link_sharing` 由它创建或最后修改、`node_grants`
-由它最后授予，且时间晚于指派的行。Personal Space 的行只返回给这个 Assignee 和认领它的用户（`agents.owner_user_id`）。
+由它最后授予，且时间晚于指派的行。Personal Space 的行完整返回给这个 Assignee 和认领它的用户（`agents.owner_user_id`），
+能关闭这个 Issue 的其他读者拿到不带 Node ID 的同一组行，其余读者拿不到。
 引用 Node 指派时必须在同一 Space 且不在回收站，最多 20 个；Node 被永久删除时引用级联删除，
 Node 在回收站时读取侧显示为不可用且不返回名称。
 

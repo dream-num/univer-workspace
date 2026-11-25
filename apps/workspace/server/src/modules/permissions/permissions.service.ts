@@ -72,13 +72,15 @@ export interface PermissionsModule {
   nodeOwnerCategory(nodeId: string): Promise<Exclude<PrincipalCategory, "anonymous">>;
   /**
    * Who may read content now, as the actors last set it, each after its own `since`: memberships
-   * of this Team Space they granted, and, for a reader who owns an actor's Personal Space (the actor
-   * or its claimer), the Link Sharing and Node Grants they set there.
+   * of this Team Space they granted, and the Link Sharing and Node Grants they set in their own
+   * Personal Spaces. A reader who owns an actor's Personal Space (the actor or its claimer) gets that
+   * actor's rows in full, and a reader who may accept their work gets the others without Node IDs.
    */
   accessChangesBy(
     readerUserId: string,
     spaceId: string,
-    actors: readonly { readonly userId: string; readonly since: number }[]
+    actors: readonly { readonly userId: string; readonly since: number }[],
+    readerMayAccept: boolean
   ): Promise<AccessChanges>;
 }
 
@@ -202,7 +204,7 @@ export function createPermissionsModule(options: {
       return principalCategory(ownerView(await options.repository.findNodeOwner(nodeId)).owner);
     },
 
-    async accessChangesBy(readerUserId, spaceId, actors) {
+    async accessChangesBy(readerUserId, spaceId, actors, readerMayAccept) {
       const space = requireTeam(await options.access.resolveSpace(readerUserId, spaceId));
       const since = new Map(actors.map((actor) => [actor.userId, actor.since]));
       const members = (await options.repository.listMembers(spaceId))
@@ -210,10 +212,10 @@ export function createPermissionsModule(options: {
         .sort((a, b) => b.updated_at - a.updated_at);
       let personal: PersonalSharingChange[] | null = null;
       for (const { userId, since } of actors) {
-        const rows = await options.repository.listPersonalSharing(readerUserId, userId, since, MAX_ACCESS_CHANGES + 1);
-        if (rows === null) continue;
+        const { owned, rows } = await options.repository.listPersonalSharing(readerUserId, userId, since, MAX_ACCESS_CHANGES + 1);
+        if (!owned && !readerMayAccept) continue;
         const actor = await requireUser(options.repository, userId);
-        (personal ??= []).push(...rows.map((row) => personalSharingView(actor, row)));
+        (personal ??= []).push(...rows.map((row) => personalSharingView(actor, row, owned)));
       }
       personal?.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       return {
@@ -229,10 +231,10 @@ export function createPermissionsModule(options: {
   };
 }
 
-function personalSharingView(actor: PublicUser, row: PersonalSharingRow): PersonalSharingChange {
+function personalSharingView(actor: PublicUser, row: PersonalSharingRow, owned: boolean): PersonalSharingChange {
   const common = {
     actor,
-    node: { id: row.node_id, name: row.node_name },
+    node: owned ? { id: row.node_id, name: row.node_name } : { name: row.node_name },
     role: row.role,
     updatedAt: new Date(row.updated_at).toISOString(),
   };

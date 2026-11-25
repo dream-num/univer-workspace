@@ -92,9 +92,14 @@ export interface PermissionsRepository {
   findLinkSharing(nodeId: string): Promise<LinkSharingRow | null>;
   /**
    * The Link Sharing settings and Node Grants in the actor's own Personal Space that the actor created
-   * or last changed after `since`, up to `limit` of each kind, or null when the reader does not own that Space.
+   * or last changed after `since`, up to `limit` of each kind, and whether the reader owns that Space.
    */
-  listPersonalSharing(readerUserId: string, actorUserId: string, since: number, limit: number): Promise<PersonalSharingRow[] | null>;
+  listPersonalSharing(
+    readerUserId: string,
+    actorUserId: string,
+    since: number,
+    limit: number,
+  ): Promise<{ readonly owned: boolean; readonly rows: PersonalSharingRow[] }>;
   findNodeOwner(nodeId: string): Promise<NodeOwnerRow>;
   upsertLinkSharing(input: {
     readonly nodeId: string;

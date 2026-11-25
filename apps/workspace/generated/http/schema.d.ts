@@ -2392,9 +2392,10 @@ export interface paths {
          * Show who may read content now, as the Issue's assignees set it after they were assigned.
          * @description For each current assignee, counted from its latest assignment: the memberships of this Team
          *     Space it granted, and the Link Sharing settings and Node Grants it set in its own Personal
-         *     Space. Only a reader who is that assignee, or who claimed that agent, gets the Personal Space
-         *     rows, because a link-shared Node's ID is its access link. Every row is the current setting, not
-         *     a history: a later change by someone else replaces it, and a removed grant disappears.
+         *     Space. A reader who is that assignee, or who claimed that agent, gets the Personal Space rows in
+         *     full. Anyone else who may accept the Issue gets them without the Node ID, because a link-shared
+         *     Node's ID is its access link. Every row is the current setting, not a history: a later change by
+         *     someone else replaces it, and a removed grant disappears.
          */
         get: operations["getIssueAccessChanges"];
         put?: never;
@@ -4563,7 +4564,8 @@ export interface components {
             items: components["schemas"]["RevertItem"][];
         };
         IssueSharedNode: {
-            id: string;
+            /** @description Present only for the assignee that shared it and the user who claimed that assignee. */
+            id?: string;
             name: string;
         };
         IssueLinkSharingChange: {
@@ -4610,8 +4612,9 @@ export interface components {
             membersTruncated: boolean;
             /**
              * @description Link Sharing settings and Node Grants that an assignee created or last changed after its
-             *     latest assignment, in its own Personal Space. It covers only the assignees the caller is or
-             *     claimed, and is `null` when the caller is none of them.
+             *     latest assignment, in its own Personal Space. The assignee and the user who claimed it get its
+             *     rows in full. Anyone else who may accept the Issue gets them without `node.id`, because a
+             *     link-shared Node's ID is its access link. `null` when the caller is none of these.
              */
             personalSharing: components["schemas"]["IssuePersonalSharing"] | null;
         };

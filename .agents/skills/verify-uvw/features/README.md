@@ -90,7 +90,8 @@ keeps the journey `agent`. The helper runs blocks this way:
 - [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull
   request, search and browse tools with uvw, including idempotency keys and preserved errors. MI12 submits an Issue
   over MCP, sends it back and accepts it in the browser. MI13 judges four merged pull requests, one of which deletes a
-  file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its claimer only. MI14 shows
+  file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its claimer and not to a member
+  who may not accept. MI17 shows that sharing to an acceptor who did not claim the agent by name only. MI14 shows
   each linked pull request's check results there, counting or not, and says when the repository declares none. MI15
   turns on an acceptance deadline and has the server accept a submitted Issue by deadline, attributed to no one, with a
   reopen restarting the clock. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every

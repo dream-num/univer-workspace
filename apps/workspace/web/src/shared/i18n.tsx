@@ -998,7 +998,8 @@ export const messages = {
     issueAcceptancePublicRead: "这个团队空间当前开启了公开只读：获得链接的任何人无需登录即可只读查看。",
     issueAcceptanceMembersOnly: "这个团队空间当前只对成员开放。",
     issueAcceptancePersonal: "指派对象在被指派后在自己个人空间里开启的分享",
-    issueAcceptancePersonalHidden: "只有指派对象本人和认领它的用户能看到这一部分。",
+    issueAcceptancePersonalHidden: "只有指派对象本人、认领它的用户和能验收这个 Issue 的人能看到这一部分。",
+    issueAcceptancePersonalSummary: "共 {count} 项。只有指派对象本人和认领它的用户能打开这些文件。",
     issueAcceptanceLinkOn: "链接分享已开启（{role}），由 {actor} 设置",
     issueAcceptanceLinkOff: "链接分享已关闭，由 {actor} 设置",
     issueAcceptanceCopiesUnknown: "复制到别处、没有留下来源记录的内容无法在这里显示。",
@@ -2057,7 +2058,8 @@ export const messages = {
     issueAcceptancePublicRead: "This Team Space is public read: anyone with its link can read it without signing in.",
     issueAcceptanceMembersOnly: "This Team Space is open to its members only.",
     issueAcceptancePersonal: "Sharing the assignees turned on in their own Personal Spaces after their assignment",
-    issueAcceptancePersonalHidden: "Only the assignee and the user who claimed it can see this part.",
+    issueAcceptancePersonalHidden: "Only the assignee, the user who claimed it, and people who may accept this Issue can see this part.",
+    issueAcceptancePersonalSummary: "{count} changes. Only the assignee and the user who claimed it can open these files.",
     issueAcceptanceLinkOn: "Link Sharing on ({role}), set by {actor}",
     issueAcceptanceLinkOff: "Link Sharing off, set by {actor}",
     issueAcceptanceCopiesUnknown: "Content copied elsewhere without lineage cannot be shown here.",
@@ -2122,6 +2124,7 @@ const englishSingularMessages: Partial<Record<MessageKey, string>> = {
   issueCommentCount: "{count} comment",
   issueReferenceCount: "{count} linked file",
   copyCount: "{count} copy",
+  issueAcceptancePersonalSummary: "{count} change. Only the assignee and the user who claimed it can open this file.",
 };
 
 const englishPluralRules = new Intl.PluralRules("en-US");
