@@ -785,8 +785,11 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(agent).toContain(declare);
     expect(claimed).toContain(declare);
     expect(human).not.toContain(declare);
-    const filesHint = "PDF, Markdown, Typst, SVG, Blob work needs ?toolsets=files";
-    expect([human, agent, claimed].every((text) => text.includes(filesHint))).toBe(true);
+    expect(human).toContain("PDF, Markdown, Typst, SVG, Blob work needs ?toolsets=files");
+    const agentFilesHint =
+      "PDF, Markdown, Typst, SVG work, and the tools blob_download, blob_get, blob_replace need ?toolsets=files";
+    expect(agent).toContain(agentFilesHint);
+    expect(claimed).toContain(agentFilesHint);
     for (const sentence of [limits, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(claimed).not.toContain(sentence);
     }

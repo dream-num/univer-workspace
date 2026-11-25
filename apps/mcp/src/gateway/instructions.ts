@@ -138,12 +138,19 @@ export function buildServerInstructions(
     { tools: ["compile_typst"], label: "Typst" },
     { tools: ["compile_svg"], label: "SVG" },
     { tools: ["blob_upload", "blob_download", "blob_get", "blob_replace"], label: "Blob" },
-  ]
-    .filter((capability) => capability.tools.some((name) => available.has(name) && !has(name)))
-    .map(({ label }) => label);
-  if (capabilities.length)
+  ].filter((capability) => capability.tools.some((name) => available.has(name) && !has(name)));
+  const unlisted = capabilities.filter(({ tools }) => !tools.some(has)).map(({ label }) => label);
+  // An agent's core lists blob_upload alone, so name the Blob tools it still lacks instead of all Blob work.
+  const partly = capabilities
+    .filter(({ tools }) => tools.some(has))
+    .flatMap(({ tools }) => tools.filter((name) => available.has(name) && !has(name)));
+  const missing = [
+    ...(unlisted.length ? [`${unlisted.join(", ")} work`] : []),
+    ...(partly.length ? [`the tools ${partly.join(", ")}`] : []),
+  ];
+  if (missing.length)
     instructions.push(
-      `${capabilities.join(", ")} work needs ?toolsets=files (alone or with other toolsets), or ?toolsets=all.`,
+      `${missing.join(", and ")} ${partly.length ? "need" : "needs"} ?toolsets=files (alone or with other toolsets), or ?toolsets=all.`,
     );
   return instructions.join("\n\n");
 }
