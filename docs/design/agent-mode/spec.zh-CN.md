@@ -111,7 +111,7 @@ upstream repo (someone else's Team Space)        agent
 | ---- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---- |
 | R15  | 回程是现有的 Worktree Merge。fork 里的 Unit 和上游的 Unit 共享修订历史                   | 已有                                                                                | 2    |
 | R16  | 每个来自 Trunk 的 Worktree Unit 返回落后距离和加入时间。超过阈值时标记为 stale，提示重做 | 已有。视图给每个来自 Trunk 的 Unit 返回 `freshness`：基线修订、落后距离、加入时间和 `current`、`behind`、`stale` 标签，阈值见 5.6 | 2    |
-| R17  | 落后距离大于零时，验证在 merge preview 上做，不在草稿上做                                | 部分。merge preview 只有 Browser 能打开，MCP、CLI 和 Client Core 都打不开。MCP 核心 Skill 要求文件 `behind` 时先在 Trunk 上核对改动依赖的内容，合入后再读回 | 2    |
+| R17  | 落后距离大于零时，验证在 merge preview 上做，不在草稿上做                                | 部分。人在 Browser 和 Workspace Agent 的评审面板里能打开 merge preview，agent 的连接（MCP、CLI 和 Client Core）打不开。MCP 核心 Skill 要求文件 `behind` 时先在 Trunk 上核对改动依赖的内容，合入后再读回 | 2    |
 | R18  | HTML View 的修改覆盖写。上游的内容在草稿创建之后变了，就不覆盖                           | 已有。`replace` 草稿的 `base_etag` 不一致时只有这一页 `conflicted`，Sheet 照常合入  | 5    |
 | R19  | 其他 Blob 在 fork 里的修改覆盖写，规则同 R18                                             | 已有。经 fork 替换的 Blob 是挂在 Worktree 上的文件草稿，`base_etag` 不一致时只有这一份 `conflicted`，Sheet 照常合入。只能替换，不能新增 | 5    |
 
