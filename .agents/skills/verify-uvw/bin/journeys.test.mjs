@@ -345,6 +345,18 @@ test('run-journeys carries state, first runs the earlier journeys that have not 
   } finally { done(); }
 });
 
+test('run-journeys runs a feature\'s own setup on an instance where another feature already recorded one', () => {
+  const f = feature(...bash('true'), '', '### A1. One', '', 'Run: helper.', '', ...bash('true'));
+  const g = feature(...bash('G_SETUP=ran'), '', '### B1. Own setup', '', 'Run: helper.', '', ...bash('test "$G_SETUP" = ran'));
+  const { v, checks, done } = helperRepo({ f, g });
+  try {
+    assert.equal(v('run-journeys', 'f').status, 0);
+    const ran = v('run-journeys', 'g');
+    assert.equal(ran.status, 0, ran.stdout + ran.stderr);
+    assert.deepEqual(checks().map((e) => [e.feature, e.journey, e.outcome]), [['f', 'setup', 'held'], ['f', 'A1', 'held'], ['g', 'setup', 'held'], ['g', 'B1', 'held']]);
+  } finally { done(); }
+});
+
 test('a broken setup blocks every journey, a timeout blocks one, and a failure tail is redacted and short', () => {
   const broken = helperRepo({ f: feature(...bash('false'), '', '### A1. One', '', 'Run: helper.', '', ...bash('true')) });
   try {
