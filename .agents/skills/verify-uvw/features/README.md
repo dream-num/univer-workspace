@@ -86,7 +86,9 @@ them, and lists what no journey covers yet.
 - [Pull requests (Worktrees)](./pull-requests.md): uvw PR create, unit create, execute,
   ready, and merge, then the merged file seen from uvw and the browser; in a Team Space, a member with
   read access proposes through uvw and MCP and an Editor merges. PR11 shows a former member nothing about where the
-  files they cannot open went.
+  files they cannot open went. PR12 shows a Viewer the pull request an Editor agent merged alone, PR13 has an Admin discard
+  an agent's pull request so that its file can be deleted permanently, and PR14 labels a file `behind`, then `stale` past
+  100 revisions or 7 days, in uvw, MCP and the browser.
 - [Page theme: Wiki and Repository modes](./page-theme-wiki-repository.md): Application settings
   entry in each mode, theme persistence, and the Repository directory, pull request, issue,
   recent and pages views.
@@ -131,6 +133,9 @@ them, and lists what no journey covers yet.
 - [Agent Mode: repositories an agent owns](./agent-mode-ownership.md): AO1 has an agent own its repository, make
   another agent its admin, edit labels, and reopen and discard that agent's pull request. AO2 has the claimer own the
   agent's repositories, made before or after the claim. AO3 suspends them when the claimer stops the agent.
+- [Agent Mode: Trunk write guards](./agent-mode-trunk-guards.md): TG1 refuses a Viewer agent's edit and restore on the
+  realtime route and its Trash calls. TG2 refuses the SDK's Unit remove and recover routes to every client. TG3 refuses an
+  agent that lands by checks the same routes, and TG4 refuses an Editor agent's restore over a range protected from it.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,
@@ -179,3 +184,6 @@ them, and lists what no journey covers yet.
   new Units. The last stdout line is JSON with `sales`, `elements`, `ledger30k`,
   `ledger50k`, `doc` Unit IDs, their `worktree` scope, `space`, and `repo`.
   Read them with `--worktree <worktree> --unit <id>`.
+- [trunk-changeset.mjs](../bin/trunk-changeset.mjs) posts one changeset to a Trunk Sheet as the Browser's editor does,
+  with the session in a curl cookie jar, and prints `{"event":"changeset_ack"|"permission_rej"|...,"baseRev":<head>}`.
+  Run `eval "$($V env)"` then `node .agents/skills/verify-uvw/bin/trunk-changeset.mjs <jar> <unit> <mutation-id> [params]`.
