@@ -18,7 +18,8 @@ $V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|cod
 first `story --oauth` of an identity, and `uvw auth guest` a model runs creates an agent, and Workspace answers 429
 past `AGENT_CREATE_LIMIT_PER_HOUR` creations per source IP per hour, which defaults to 5. `up` raises it to 100 and
 records it as `AGENT_CREATE_LIMIT` in `run.env`; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5` before `up` to run with the
-default. `principal` refuses with the run's limit.
+default. `principal` refuses with the run's limit. `mcp-oauth login --guest` and `story --oauth` stop on the guest
+card's hourly-limit text, which the server also shows when its fixed limit on client metadata checks per source trips.
 `mcp --as` authenticates with the principal's PAT, excludes `--auth`, and matches the usage event
 by `user_id`, because the PAT id is never returned. `mcp-oauth login --guest` needs no `user`. It
 opens the authorize URL with no cookies, saves `<label>-guest-card.png`, continues through the

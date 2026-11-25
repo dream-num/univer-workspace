@@ -47,7 +47,7 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R2b A claimed agent as a member | Viewer: MI12, MP11, MP15, MHV11. Editor: MI13, MP15, MP18, MHV10 |
 | R2c An unclaimed agent holds repositories but joins none | Not covered |
 | R2d The claimer owns what the agent holds | HO6 and MH3, in the agent's Personal Space only |
-| R3 The scope granted at the start counts | MA7 and MO2 without `worktree:merge`; MI13, MP16 and MP19 merge with the run user's PAT and no `toolsets` |
+| R3 The scope granted at the start counts | MA7 and MO2 without `worktree:merge`; MI13 and MP19 merge with the run user's PAT and no `toolsets` |
 | R4 Read access is enough to propose | PR4, PR5, PR6, MI12, MP13, MP15, MHV11, MF10 |
 | R5 The upstream role alone decides the landing | PR7, PR8, PR9, PR10, MP12, MP15, MI13, MHV8, MHV10, MHV11, MF10 |
 | R6 `capabilities` tells an agent whether it may merge | MP11, MP17, MP19, MHV13 |
@@ -88,7 +88,7 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 
 | Criterion | Journeys |
 | --- | --- |
-| A1.1 A PAT with `worktree:merge` merges with no browser | The seed pull requests of MI13, MP16 and MP19 |
+| A1.1 A PAT with `worktree:merge` merges with no browser | The seed pull requests of MI13 and MP19 |
 | A1.2 A PAT without it is refused | MA7, MO2 |
 | A2.2 A Viewer agent proposes; Trunk is unchanged | PR4, PR5 (a person), MP15 |
 | A2.3 The proposal is shared and its author cannot merge | PR4, PR5, MHV11 |

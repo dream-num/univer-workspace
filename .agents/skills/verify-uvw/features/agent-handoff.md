@@ -175,10 +175,12 @@ Mode: mcp.
 
 The run user makes a viewer-linked Sheet `N`: `$V cli` `pr create -R verify-<run-id>/personal`, `unit create --type
 sheet` (its `unit.nodeId` is `N`), `pr ready` and `pr merge` as [PR1](pull-requests.md#pr1-open-fill-ready-and-merge-a-pull-request)
-does, then `$V cli mh-share share <N> --link viewer --json`. bot1's `unit_create` with
-`"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
-`The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only
-after its pull request merges.
+does, then `$V cli mh-share share <N> --link viewer --json`. bot1 runs `pr_create` in `<bot1>/personal`, then
+`unit_create` with that pull request's `worktree`, `"space":"<bot1>/personal"`, `"type":"sheet"`,
+`"name":"Shared copy"` and `"from":"$ORIGIN/nodes/<N>"`. It returns `unit.change: "added"` and
+`unit.name: "Shared copy"`. The same call with `"type":"doc"` fails with
+`The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only after
+bot1's `pr_ready` and `pr_merge` merge its pull request.
 
 ## Gotchas
 
