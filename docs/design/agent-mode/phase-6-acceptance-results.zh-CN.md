@@ -2,12 +2,12 @@
 
 > 日期 2026-11-25。对应 [规格](spec.zh-CN.md) 6.7 的完成标准 A6.1 到 A6.8，以及 1.3 的前三项指标。
 > 运行基于 `main` 的 `65f24e6f`，阶段 0 到 6 已合入。verify-uvw 的 MCP 模式，run id `p69`。
-> 证据在运行机器的 `/tmp/verify-uvw/p69/evidence/` 下，不在仓库里。下文的文件名都相对这个目录。引用的证据都通过了 `$V secret-check`（746 个文件）。
+> 证据在运行机器的 `/tmp/verify-uvw/p69/evidence/` 下，不在仓库里。下文的文件名都相对这个目录。引用的证据都通过了 `$V secret-check`（748 个文件）。
 
 ## 1. 结论
 
 - **A6.1 到 A6.6 和 A6.8 都走通了。** 每个故事只跑了一次，模型是 `console-deepseek/deepseek-flash#high`，客户端是 `mcp`（opencode v2.0.29），和[第一版验收](acceptance-results.zh-CN.md)相同。verify-uvw 现在的默认值也是这一组。没有一次因为模型失败而重跑，也没有用到点名 Issue 编号的重试。
-- **任务只在 Issue 和打回理由里。** 授权之后，A、A3、B3 的每一次运行都只用一句固定提示词“看看有没有等你处理的工作，处理完。”。唯一带任务内容的提示词是 A6.4 里给 A3 的那一次准备，它就是头部的授权。A6.5 按约定重跑第一版故事 2，沿用它带任务的提示词。
+- **任务只在 Issue 和打回理由里。** 授权之后，A、A3、B3 的每一次运行都只用一句固定提示词“看看有没有等你处理的工作，处理完。”。唯一带任务内容的提示词是 A6.4 里给 A3 的那一次准备，它就是头部的授权。A6.5 按约定重跑第一版故事 2，沿用它带任务的提示词。故事 4 和故事 5 的 Issue 写出了做法（fork、拆分、关联、检查、合入、提交），故事 7 的没有，见 2.3。
 - **人的动作和 6.7 一致。** 故事 4 三次：加成员、写 Issue、验收。故事 5 三次：写 Issue、打回、验收。故事 6 一次：撤回。故事 7 为零。
 - **中途没有拒绝。** 所有 agent 运行里，`AGENT_NOT_ALLOWED` 和 `INTERACTIVE_SESSION_REQUIRED` 在 `mcp.tool_call` 事件、transcript 的工具结果和 `workspace_ceiling_denials_total` 三处都是 0，事件的 `principal_category` 都是 `agent_claimed`。
 - **尾部几十秒能判断。** 验收人从打开面板到给出结论：故事 4 是 40.9 秒，读 3 个 pull request、4 个文件的对比和 6 条检查结论。故事 5 打回 23.2 秒、验收 24.3 秒。故事 6 撤回 19.0 秒。H 由驱动者按脚本扮演，这些是下限，见 2.4。故事 7 的验收人是 A3，不需要人。
@@ -86,14 +86,14 @@ $V story --as a3 s7-a3-setup mcp '建一个新仓库，名为 budget-2028。在�
 >
 > 在你自己的 fork 里用一个 pull request 完成，关联这个 Issue，按仓库声明的检查核对并报告，通过后自己合入，然后提交验收。
 
-Issue 写明了拆成几个 pull request 和收尾的步骤。这是交办的人写进任务的要求，不是给 agent 的提示词。
+这两个 Issue 几乎写出了整条路径：用 fork、拆成几个 pull request、关联 Issue、报告检查、自己合入、提交验收。它们是交办的人写进任务的要求，不是给 agent 的提示词，所以不算转达。但这样一来，故事 4 和故事 5 证明的是 agent 只凭固定提示词能找到自己的工作，并用工具按 Issue 写的步骤做完；不证明 agent 在没有人写出步骤时自己想到这条路径。故事 7 里 A3 写给 B3 的 Issue 只说了改什么、核对什么、“用 issue_verdict submit 提交给我验收”，没有写 fork、关联和检查，B3 的路径是它自己找的。
 
 ### 2.4 怎样计数和计时
 
 沿用[第一版](acceptance-results.zh-CN.md) 2.4 的规则，改了下面几处。
 
 - **人的动作。** 驱动者每做一个人的动作，就在 `timeline.tsv` 里写一行。H 加成员和写 Issue 用 uvw，看面板、通过、打回和撤回用 Browser（agent-browser，1440 × 1500）。认领和 E 在故事 6 里的编辑是准备，不算任务里的人的动作。
-- **一次运行的起止。** 起点是 `run-meta.json` 的 `started_at`，终点是起点加上 `duration_seconds`。第一版用驱动者在 `story` 返回之后写的标记，多算了 opencode 退出后约 15 到 20 秒的收尾。
+- **一次运行的起止。** 起点是 `run-meta.json` 的 `started_at`，终点是起点加上 `duration_seconds`。第一版用驱动者在 `story` 返回之后写的标记。两次运行的标记都只比 `run-meta.json` 的终点晚 0.1 到 0.3 秒（本次故事 4 是 0.27 秒，第一版故事 1 是 0.24 秒），所以两种取法的结果几乎相同，和第一版的对比不受影响。
 - **任务时长。** 从第一次 agent 运行开始，到最后一个结论（`accepted`）和最后一次 agent 运行结束两者中较晚的一个。结论的时间取 Issue 时间线的事件时间（`<story>-issue-final.out`）。A6.5 没有 Issue，终点是运行结束和 `pr_merge` 事件中较晚的一个。
 - **等人。** 从验收人打开面板（`timeline.tsv` 的 `human action … start`）到 Issue 时间线上的 `sent_back` 或 `accepted`。这一段就是“验收人的时间”。H 由驱动者按脚本扮演：打开页面，等 4 秒，展开每个 `Compare`，等 10 秒加载对比，截图，再点按钮。真人读得更久，所以这是下限。
 - **驱动者间隔。** 任务时长减去 agent 运行和等人，剩下的是驱动者间隔：一次运行结束到下一步开始之间，驱动者读结果、启动下一次运行或打开面板的时间。它对应真实部署里 harness 唤醒 agent 或人看到通知的延迟。第一版把这一段叫“转达”，因为那时下一次运行的提示词带着任务内容。本次另数“授权之后带任务内容的提示词”，这一项才是转达，它在每个故事里都是 0。
@@ -113,7 +113,7 @@ Issue 写明了拆成几个 pull request 和收尾的步骤。这是交办的人
 | 08:13:54.012 | A   | 合入 #4                                                   | 同上，`s4-pr-4.out`                                         |
 | 08:15:34.246 | A   | 合入 #5                                                   | 同上，`s4-pr-5.out`                                         |
 | 08:15:54.304 | A   | `issue_verdict` submit                                    | `s4-issue-final.out`                                        |
-| 08:15:58.922 | A   | 运行结束                                                  | `s4-a/run-meta.json`                                        |
+| 08:16:18.922 | A   | 运行结束                                                  | `s4-a/run-meta.json`                                        |
 | 08:16:32.080 | H   | 打开 Issue #2，面板直接显示 `Acceptance`，人的动作 3 开始 | `s4-h-panel.png`，`timeline.tsv`                            |
 | 08:17:12.997 | H   | 展开 4 个对比之后点 `Accept`，Issue 以 completed 关闭     | `s4-h-pull-1.png` 到 `s4-h-pull-3.png`，`s4-h-accepted.png` |
 
@@ -239,7 +239,7 @@ Issue 写明了拆成几个 pull request 和收尾的步骤。这是交办的人
 - 源码的结构对等：28 个历史 `schema.sql`（V6 到 V34，包括 `v0.4.0` 到 `v0.5.3` 的发布标签）都输出 `ok`，退出码 0（`a68-schema-parity-source.txt`）。
 - 生产构建：`build:server` 成功（`a68-build-server.txt`），`--dist` 的结构对等同样 28 个 `ok`（`a68-schema-parity-dist.txt`），`test:production-import` 退出码 0，V6 到 V33 的矩阵和 Collaboration SDK 的迁移矩阵都通过（`a68-production-import.txt`）。日志里有一条 `no such table: collaboration_history_revisions` 的 `failed`，它属于矩阵里预期失败的用例，脚本最后仍输出通过。
 
-阶段 6 的数据库改动是 V30 到 V34，都在这条链上。这个 skill 只覆盖 SQLite，PostgreSQL 的迁移本次没有跑。
+阶段 6 的数据库改动是 V30 到 V34，都在这条链上。这个 skill 只覆盖 SQLite，PostgreSQL 的迁移本次没有跑。加入 V30 到 V34 的 #578、#580、#583、#589 和 #597 在 CI 的 `PostgreSQL product database` job 上都通过了；这个 job 跑 PostgreSQL 的测试，包括 `postgres-startup.test.ts` 从旧版本升级的用例，但不像 `verify-db-migration` 那样回放发布标签的结构。
 
 ## 8. A6.7：和第一版的对比
 
@@ -268,6 +268,7 @@ Issue 写明了拆成几个 pull request 和收尾的步骤。这是交办的人
 读这张表要注意三点。
 
 - 故事 4 和第一版故事 1 不是同一条路线。故事 1 的 A 是 viewer，人在合入之前评审，等人那一段挡在改动进入 Trunk 之前。故事 4 的 A 是 `checks` 仓库里的 editor，改动在 A 的运行里就进了 Trunk，人的 40.9 秒在之后。人的动作从 2 次变成 3 次，多出来的是写 Issue，它在头部。
+- 故事 4 和故事 5 的 Issue 写出了做法（见 2.3），所以它们的数字说明的是“任务和步骤都写在 Issue 里时，中间不需要人”，不说明 agent 能自己设计做法。故事 7 的 Issue 没有写做法。
 - 本次每个数字都只跑了一次。验收人的时间由脚本操作 Browser，包括固定的 4 秒加载和 10 秒等对比渲染，所以它更接近面板的加载时间，不是一个人读完的时间。任务时长的大部分是模型的运行时间（故事 4 是 419 / 473.1 秒），所以换模型或客户端，数字会变，表里的占比也会变。
 - 故事 7 比第一版故事 3 多了 66.1 秒，因为它多做了检查文件、成员和 Issue，B3 和 A3 还要自己去找工作。省下的是转达：第一版的 59.3 秒转达，本次是 0 条带任务内容的提示词。
 
@@ -287,7 +288,7 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 
 ### 9.4 没有被隔离的部分
 
-和第一版相同，`mcp` 客户端的 opencode `execute` 包装不能被禁止。故事 5 第一次运行里，模型在包装里调用了 `fetch('http://127.0.0.1:1/')`，得到连接失败（`s5-a1/transcript.jsonl`），之后没有再用 `fetch`。其他运行的轨迹里没有包装之外的网络访问。
+和第一版相同，`mcp` 客户端的 opencode `execute` 包装不能被禁止。故事 5 第一次运行里，模型在包装里调用了 `fetch('http://127.0.0.1:1/')`，得到连接失败。同一次运行后来又 `fetch` 了 Browser 的页面 `http://127.0.0.1:6101/nodes/<id>`，拿到 Vite 的 HTML 外壳，里面没有数据（`s5-a1/trajectory.txt` 第 1 行和第 27 行）。A3 的准备运行用 `fetch` 对网关的 `/mcp/files/...` 上传和下载地址发了 PUT 和 GET，这是 `blob_upload` 设计好的流程。这说明包装里的代码能访问网络，模型会用它。
 
 ### 9.5 A6.6 的第一次尝试
 
@@ -316,8 +317,8 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 
 ### 10.2 本次运行里看到的
 
-- **撤回之后，被撤回的 pull request 的检查显示为未通过。** #5 合入时两项检查都是 `Passed`（`s4-h-panel.png`）。撤回把它新建的 Doc 移入 Trash 之后，面板上这两项变成 `Missing`，A 的结论标为 `Does not count`（`s6-h-panel-after.txt`）。原因是计入按当前的权限判断，合入之后不再固定。读者会以为这个 pull request 没有通过检查就合入了。
-- **验收人不是认领人时，看不到三类对外动作中的一类。** 故事 4 的 H 不是 A 的认领人，面板上“指派对象在自己 Personal Space 里开启的分享”一节对 H 只显示 `Only the assignee and the user who claimed it can see this part.`。这是规格写明的可见范围，但这样的验收人判断不了这一类外泄。
+- **撤回之后，被撤回的 pull request 的检查显示为 `Missing`。** #5 合入时两项检查都是 `Passed`（`s4-h-panel.png`）。撤回把它新建的 Doc 移入 Trash 之后，面板上这两项变成 `Missing`，A 的结论标为 `Does not count`（`s6-h-panel-after.txt`）。原因是计入按当前的权限判断（`checkResults` 用 `mergesAs`，能合入要求能编辑每个 Unit），Trash 里的文件谁都不能编辑，于是报告者不再算能合入的人。#3 和 #4 的 Unit 还在，检查仍是 `Passed`。读者会以为这个 pull request 没有通过检查就合入了。合入守卫只判断未合入的 pull request，不受影响。
+- **验收人不是认领人时，看不到三类对外动作中的一类。** 故事 4 的 H 不是 A 的认领人，面板上“指派对象在自己 Personal Space 里开启的分享”一节对 H 只显示一句说明，告诉 H 只有指派对象和认领人能看到。面板截图在 1500 px 处截断，没有留下这一节，这句是按 `i18n.tsx` 和 `permissions.service.ts` 推断的。这是规格写明的可见范围，但这样的验收人判断不了这一类外泄。
 - **agent 在默认连接上不能声明检查。** 见 9.1。
 
 ## 11. 没有测到的

@@ -502,7 +502,7 @@ HTML View 沿用 `html_view_drafts`。它满足覆盖写的规则：`replace` �
 
 | 编号 | 标准 | 结果 |
 | ---- | ---- | ---- |
-| A6.1 | S 的 `landing` 是 `checks`，有两项声明的检查。H 把 A 加为 editor，写 Issue 指派给 A。A 经 fork 开三个 pull request，各自关联 Issue，报告检查，合入，提交。H 在验收面板上看到三个 pull request、每个文件的前后对比和检查结果，通过。人的动作：加成员，写 Issue，验收 | 走通。A 只收到固定提示词，H 在面板上 40.9 秒给出结论，见第 3 节 |
+| A6.1 | S 的 `landing` 是 `checks`，有两项声明的检查。H 把 A 加为 editor，写 Issue 指派给 A。A 经 fork 开三个 pull request，各自关联 Issue，报告检查，合入，提交。H 在验收面板上看到三个 pull request、每个文件的前后对比和检查结果，通过。人的动作：加成员，写 Issue，验收 | 走通。A 只收到固定提示词，做法写在 Issue 里。H 由脚本扮演，在面板上 40.9 秒给出结论，真人只会更久，见第 3 节 |
 | A6.2 | H 打回并写明原因。A 只用不含任务内容的固定提示词启动，找到打回，用新的 pull request 修正，再提交。H 通过 | 走通。打回的理由如实写明是改了需求，见第 4 节 |
 | A6.3 | A6.1 之后 E 在 Trunk 上改了其中一张 Sheet。H 撤回这个 Issue。另外两张 Sheet 回到任务之前的内容，新建的 Doc 进入 Trash，E 改过的 Sheet 列为未撤回且不变 | 走通。恢复是新的修订，Issue 重新打开为 `reverted`，见第 5 节 |
 | A6.4 | A3 创建 R，声明检查，把 B3 加为 viewer，写 Issue 指派给 B3。之后 A3 和 B3 只用不含任务内容的固定提示词运行。B3 提议并提交，A3 报告检查、合入、验收。人的动作为零，驱动者转达的任务内容为零 | 走通，B3 和 A3 各一轮。A3 的连接带上 `?toolsets=all` 才能写 `.agents/checks.md`，见第 6 节和 9.1 节 |
