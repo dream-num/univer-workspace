@@ -166,6 +166,31 @@ export class WorkspaceWorktreeFeature {
     return parseWorktree(body["worktree"], id);
   }
 
+  /**
+   * Leaves out every file that is in Trash or permanently deleted, which no merge can write, so the other files can
+   * merge. Those files stay as they are. The server takes this only on a draft, so a ready pull request goes back to
+   * draft and is marked ready again.
+   */
+  public async leaveOutTrashed(worktreeId: string): Promise<WorkspaceWorktree> {
+    const id = requireId(worktreeId, "Worktree ID");
+    const worktree = await this.get(id);
+    const trashed = worktree.units.filter(
+      (unit) => unit.change !== "deleted" && (unit.fileState === "inTrash" || unit.fileState === "deleted"),
+    );
+    if (!trashed.length) return worktree;
+    const ready = worktree.state === "ready";
+    if (ready) await this.transition(id, "reopen");
+    const http = await this.authenticatedHttp();
+    for (const unit of trashed) {
+      await http.json(
+        `/api/worktrees/${encodeURIComponent(id)}/units/${encodeURIComponent(unit.unitId)}/removal`,
+        { body: { removed: true }, method: "POST" },
+      );
+    }
+    if (ready) await this.transition(id, "ready");
+    return await this.get(id);
+  }
+
   /** Declared checks in Trunk's `.agents/checks.md` order, then reported names that are not declared. */
   public async checks(worktreeId: string): Promise<readonly WorkspaceCheck[]> {
     const id = requireId(worktreeId, "Worktree ID");

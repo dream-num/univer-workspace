@@ -115,6 +115,9 @@ it("records check results on the ready content, counts only those of someone who
   expect(merged.map((check) => [check.name, check.state, check.results.filter((result) => result.current).length])).toEqual([
     ["totals-match", "passed", 1], ["header-unchanged", "passed", 1], ["smoke", "missing", 0],
   ]);
+  await application.trash.trashNode(owner, created.body.node.id);
+  expect((await checks()).map((check) => [check.name, check.state]), "its file moving to Trash does not undo what counted")
+    .toEqual([["totals-match", "passed"], ["header-unchanged", "passed"], ["smoke", "missing"]]);
   await expect(report(editor, "totals-match", { state: "failed" })).rejects.toMatchObject({
     code: "CONFLICT",
     message: "Check results are reported on a ready pull request, and this one is merged.",

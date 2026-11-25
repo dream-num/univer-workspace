@@ -65,7 +65,8 @@ vi.mock("./worktree-review-header", () => ({
 vi.mock("../../shared/ui", () => {
   const Box = ({ children }: { children?: ReactNode }) => createElement("div", null, children);
   return {
-    Alert: Box, Badge: Box, Empty: Box, Segmented: Box, Spinner: Box, Tooltip: Box,
+    Alert: Box, Badge: Box, Segmented: Box, Spinner: Box, Tooltip: Box,
+    Empty: ({ title }: { title: ReactNode }) => createElement("div", null, title),
     ConfirmDialog: ({ trigger, description, confirmText, onConfirm }: { trigger: ReactNode; description: ReactNode; confirmText: string; onConfirm: () => void }) => {
       state.clicks.set(confirmText, onConfirm);
       return createElement("div", null, trigger, description);
@@ -165,6 +166,26 @@ describe("Worktree merge", () => {
     expect(html({ ...shared, visibility: "private" }), "nobody else sees a private one").not.toContain("memberWithEditAccessMerges");
     state.me = "user-2";
     expect(html(shared)).not.toContain("memberWithEditAccessMerges");
+  });
+
+  it("notes a file in Trash instead of comparing it, and says its author leaves it out so the rest can merge", () => {
+    const unit = (unitId: string, name: string, fileState: "live" | "inTrash") => ({
+      unitId, resourceId: `resource-${unitId}`, nodeId: `node-${unitId}`, name, unitType: "sheet", source: "trunk", target: null,
+      draftHeadRevision: 2, change: "modified", mergeResult: "pending", activationState: "notApplicable", freshness: null, fileState,
+    }) as Worktree["units"][number];
+    const open: Worktree = {
+      ...worktree(false), kind: "team", visibility: "space", units: [unit("north", "North", "live"), unit("summary", "Summary", "inTrash")],
+    };
+    const html = (value: Worktree, selectedUnitId: string) =>
+      renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value, selectedUnitId }));
+    expect(html(open, "summary")).toContain("issueAcceptanceInTrash");
+    expect(html(open, "north")).not.toContain("issueAcceptanceInTrash");
+    expect(html(open, "north")).toContain("filesInTrashBlockMerge");
+    expect(html(open, "north")).not.toContain("mergeNeedsEditAccess");
+    state.me = "user-1";
+    const draft: Worktree = { ...open, state: "draft", capabilities: { ...open.capabilities, editDraft: true } };
+    expect(html(draft, "summary")).toContain("leaveOutOfPullRequest");
+    expect(html(draft, "north")).toContain("markUnitRemoved");
   });
 
   it("names the person who claimed an agent author beside the agent, except to that person", () => {

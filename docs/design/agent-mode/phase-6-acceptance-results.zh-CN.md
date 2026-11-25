@@ -302,10 +302,7 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 
 这些不在本次的范围里，记在这里，因为它们会改变读者对上面结果的理解。
 
-- 一个未合入的 pull request，它在 Trunk 上的文件被移入 Trash 后，整个 pull request 的文件都看不到（`review: false`）。
-- pull request 页面上，对 Trash 里的文件点 `Compare`，提示“稍后再试”，但这个状态是永久的。
 - 撤回从 Trash 恢复的文件，面板里仍写着 “Deleted by this pull request and moved to Trash.”。
-- 对文件在 Trash 里的 Worktree Unit，`openUnit` 返回草稿范围的描述。
 - Operation 重试不能推进一个什么都没撤回的撤回。
 - 撤回返回 `201` 而 Operation 是 `failed`，只看 HTTP 状态的客户端会被误导。
 - 已经不是成员的人请求对比，得到 403 或 409，泄漏一个比特；`fileState` 泄漏同一个比特。之后已修：读者打不开文件、看到的名字是 `Removed resource` 时，对比一律返回 403，`fileState` 为 null。
@@ -319,7 +316,7 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 
 ### 10.2 本次运行里看到的
 
-- **撤回之后，被撤回的 pull request 的检查显示为 `Missing`。** #5 合入时两项检查都是 `Passed`（`s4-h-panel.png`）。撤回把它新建的 Doc 移入 Trash 之后，面板上这两项变成 `Missing`，A 的结论标为 `Does not count`（`s6-h-panel-after.txt`）。原因是计入按当前的权限判断（`checkResults` 用 `mergesAs`，能合入要求能编辑每个 Unit），Trash 里的文件谁都不能编辑，于是报告者不再算能合入的人。#3 和 #4 的 Unit 还在，检查仍是 `Passed`。读者会以为这个 pull request 没有通过检查就合入了。合入守卫只判断未合入的 pull request，不受影响。
+- **撤回之后，被撤回的 pull request 的检查显示为 `Missing`。** #5 合入时两项检查都是 `Passed`（`s4-h-panel.png`）。撤回把它新建的 Doc 移入 Trash 之后，面板上这两项变成 `Missing`，A 的结论标为 `Does not count`（`s6-h-panel-after.txt`）。原因是计入按当前的权限判断（`checkResults` 用 `mergesAs`，能合入要求能编辑每个 Unit），Trash 里的文件谁都不能编辑，于是报告者不再算能合入的人。#3 和 #4 的 Unit 还在，检查仍是 `Passed`。读者会以为这个 pull request 没有通过检查就合入了。合入守卫只判断未合入的 pull request，不受影响。这个问题已修复：文件在 Trash 里或已永久删除的 Unit 不再计入“能编辑全部 Unit”，结论保持计入。
 - **验收人不是认领人时，看不到三类对外动作中的一类。** 故事 4 的 H 不是 A 的认领人，面板上“指派对象在自己 Personal Space 里开启的分享”一节对 H 只显示一句说明，告诉 H 只有指派对象和认领人能看到。面板截图在 1500 px 处截断，没有留下这一节，这句是按 `i18n.tsx` 和 `permissions.service.ts` 推断的。这是当时规格写明的可见范围，但这样的验收人判断不了这一类外泄。本次运行之后已经修改：能验收这个 Issue、又不是指派对象或认领人的读者，现在看到这一类的摘要，包括条数、每个文件的名字、类别（链接分享和它的访问级别，或 Node 授权和授予了谁）和时间，不含 Node ID、访问链接和 Resource ID，打不开文件，见规格 6.7。
 - **agent 在默认连接上不能声明检查。** 见 9.1。之后 agent 的 `core` 加上了 `space_node` 和 `blob_upload`，默认连接就能声明。
 

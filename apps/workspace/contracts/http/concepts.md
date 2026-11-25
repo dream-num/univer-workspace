@@ -366,8 +366,11 @@ a discarded one keeps its Visibility. Marking a trunk Unit for deletion still
 needs the right to trash its Node, and content protection on a trunk Unit holds in its
 draft: an author without edit access to the Unit cannot change what a protection rule covers. Each Unit's `fileState`
 says whether its file is `live`, `inTrash` or `deleted`. No one opens or compares a file that is in Trash or deleted.
-Once a pull request is merged, such a file, whether its merge, a revert or a person moved it there, no longer decides
-whether a reader may Review: the reader needs to open only the files still live. A Unit whose file is in Trash keeps its
+Such a file, whether a merge, a revert or a person moved it there, no longer decides whether a reader may Review, in an
+open or a merged pull request: the reader needs to open only the files still live. No merge writes such a file, so an
+open pull request that still changes one cannot merge, and the merge gets `409 FILES_IN_TRASH` naming those files. Its
+author leaves each one out with the Unit removal intent, which needs no right to trash a file already gone. The merge then
+writes the other files and leaves that file where it is. A Unit whose file is in Trash keeps its
 `name` for the Owner and Members of the Space that holds it, who could read it before, and anyone else who cannot open
 it reads `Removed resource`. A deleted file belongs to no Space: only a file a Team Worktree created keeps its name, for
 its Team Space's Owner and Members, and every other one reads `Removed resource`. A file the pull request removed reads `Removed resource` too for anyone else who

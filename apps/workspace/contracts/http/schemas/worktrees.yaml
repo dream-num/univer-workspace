@@ -221,8 +221,9 @@ WorktreeUnit:
       description: >-
         Where the Unit's file is now. Null for a new Unit that no merge has created yet, and for a reader who
         reads the name `Removed resource` because they cannot open the file, so that nothing tells them whether
-        it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and once
-        the pull request is merged such a file no longer decides whether a reader may review the others.
+        it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and such a
+        file no longer decides whether a reader may review the others. An open pull request that still changes
+        one cannot merge until its author leaves it out.
       oneOf:
         - $ref: "#/WorktreeUnitFileState"
         - type: "null"

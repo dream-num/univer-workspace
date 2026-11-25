@@ -20,6 +20,15 @@ export function onlyAuthorMerges(row: {
   );
 }
 
+export function filesInTrash(files: readonly { readonly name: string; readonly fileState: string | null }[]): ApplicationError {
+  const names = files.map((file) => `${file.name} (${file.fileState === "deleted" ? "permanently deleted" : "in Trash"})`);
+  return new ApplicationError(
+    "FILES_IN_TRASH",
+    409,
+    `No one can merge changes to files that are no longer in the repository: ${names.join(", ")}. Its author can leave them out of this pull request, where they stay as they are, and then merge the other files. A file in Trash can instead be restored from Trash first.`,
+  );
+}
+
 export function mergeNeedsEditAccess(): ApplicationError {
   return new ApplicationError(
     "FORBIDDEN",

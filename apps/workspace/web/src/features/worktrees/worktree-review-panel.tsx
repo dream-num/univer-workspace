@@ -91,7 +91,7 @@ export function WorktreeReviewPanel({
     selectedUnitId !== undefined && selectedUnitId !== null && !selectedUnit;
   const mergeReviewUnits =
     worktree.state === "ready" && worktree.capabilities.review
-      ? worktree.units.filter((unit) => unit.source === "trunk" && unit.change === "modified")
+      ? worktree.units.filter((unit) => unit.source === "trunk" && unit.change === "modified" && !leftTrunk(unit))
       : [];
   const mergeReviewQueries = useQueries({
     queries: mergeReviewUnits.map((unit) =>
@@ -109,7 +109,7 @@ export function WorktreeReviewPanel({
   const activeView = selectedUnit
     ? resolveReviewView(worktree, selectedUnit, selectedView, selectedMergeReviewQuery?.data)
     : selectedView;
-  const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
+  const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined && !leftTrunk(selectedUnit);
 
   const pageList = useQuery({ ...worktreeHtmlViewDraftsQueryOptions(worktree.id), enabled: worktree.capabilities.review });
   // The merge acts on every page listed pending or conflicted: it publishes the first and leaves the second conflicted.
@@ -151,7 +151,9 @@ export function WorktreeReviewPanel({
 
   const authorSide = me === worktree.creator.id || me === worktree.claimer?.id;
   const mergeHint =
-    worktree.kind !== "team" || worktree.state !== "ready" || me === undefined
+    worktree.state === "ready" && worktree.units.some((unit) => unit.change !== "deleted" && leftTrunk(unit))
+      ? t("filesInTrashBlockMerge")
+      : worktree.kind !== "team" || worktree.state !== "ready" || me === undefined
       ? null
       : agent && landsByChecks
         ? t("checksRequiredToMerge")
@@ -264,7 +266,7 @@ export function WorktreeReviewPanel({
                 disabled={removal.isPending || action.isPending}
                 onClick={() => removal.mutate(selectedUnit, { onError })}
               >
-                {t(selectedUnit.change === "deleted" ? "undoUnitRemoval" : "markUnitRemoved")}
+                {t(selectedUnit.change === "deleted" ? "undoUnitRemoval" : leftTrunk(selectedUnit) ? "leaveOutOfPullRequest" : "markUnitRemoved")}
               </Button>
             ) : null}
             {layout ? null : lifecycleActions}
@@ -279,6 +281,12 @@ export function WorktreeReviewPanel({
         <Empty className="my-auto" title={t("reviewDocumentNotFound")} />
       ) : !selectedUnit ? (
         <Empty className="my-auto" title={t("noAgentDocuments")} />
+      ) : leftTrunk(selectedUnit) ? (
+        <Empty
+          className="my-auto"
+          icon={Trash2}
+          title={t(selectedUnit.fileState === "deleted" ? "issueAcceptanceDeleted" : "issueAcceptanceInTrash")}
+        />
       ) : selectedUnit.change === "deleted" ? (
         <Empty className="my-auto" title={t("removedUnitPreview")} />
       ) : (
@@ -296,6 +304,11 @@ export function WorktreeReviewPanel({
     </article>
   );
   return layout ? layout({ review, actions: lifecycleActions, pages }) : review;
+}
+
+/** No one opens a file in Trash or permanently deleted, so it has no view or comparison. */
+function leftTrunk(unit: WorktreeUnit): boolean {
+  return unit.fileState === "inTrash" || unit.fileState === "deleted";
 }
 
 const CHECK_STATES = {

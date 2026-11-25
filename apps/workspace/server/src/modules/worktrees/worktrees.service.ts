@@ -41,7 +41,7 @@ import type {
   WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { checkNeedsReady, checksRequired, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
+import { checkNeedsReady, checksRequired, filesInTrash, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
 import { CHECK_NAME, checksSummary, checkViews, contentKey, draftKey, type DeclaredChecksReader } from "./checks.js";
 
 interface WorktreeContext {
@@ -70,6 +70,8 @@ interface WorktreeFacts {
   readonly readsAll: boolean;
   readonly editsAll: boolean;
   readonly writesPages: boolean;
+  /** It still changes a file that is in Trash or deleted, which no merge can write. */
+  readonly changesGoneFiles: boolean;
 }
 
 /** The pending HTML View drafts attached to a Worktree, which its merge publishes as the merger. */
@@ -326,7 +328,8 @@ export function createWorktreesModule(options: {
           "propose",
         );
       }
-      if (removed && unit.source === "trunk") {
+      // A file already in Trash or deleted is only left out; the merge does not move it.
+      if (removed && unit.source === "trunk" && unit.fileState === "live") {
         const node = unit.nodeId === null ? null : await options.access.resolveNode(userId, unit.nodeId);
         if (!node?.capabilities.trash) throw forbidden();
       }
@@ -420,7 +423,11 @@ export function createWorktreesModule(options: {
         } else if (result.status === "merged") {
           units.push({ ...base, change: { kind: "modified", trunkRevision: result.trunkRevision } });
         } else if (result.status === "removed") {
-          units.push({ ...base, change: { kind: "removed", removalBatchId: await options.repository.removalBatchId(worktreeId, unit.unitID) } });
+          const removalBatchId = await options.repository.removalBatchId(worktreeId, unit.unitID);
+          // A file left out while someone else's Trash Batch held it was not moved by this pull request.
+          if (row.existing_trash_batch_id === null || row.existing_trash_batch_id === removalBatchId) {
+            units.push({ ...base, change: { kind: "removed", removalBatchId } });
+          }
         }
       }
       return {
@@ -903,7 +910,7 @@ export function createWorktreesModule(options: {
       const value = await context(userId, worktreeId);
       const unit = requireMappedUnit(value, unitId);
       if (
-        unit.source === "trunk" &&
+        unit.fileState !== null &&
         !(await options.access.resolveResource(userId, unit.resourceId))?.capabilities.openContent
       ) {
         throw notFound();
@@ -1016,6 +1023,9 @@ export function createWorktreesModule(options: {
       const recordsApplied = resumeMerged && !unfinished && existing !== null &&
         !(await options.repository.mergers([worktreeId])).has(worktreeId);
       if (!value.capabilities.merge && existing?.state !== "completed" && !finishes && !recordsApplied) {
+        if (value.facts.changesGoneFiles && value.state === "ready" && value.capabilities.review) {
+          throw filesInTrash(value.units.filter((unit) => unit.change !== "deleted" && (unit.fileState === "inTrash" || unit.fileState === "deleted")));
+        }
         if (value.checksGate?.blocked) throw checksRequired(value.checksGate.blocked);
         if (!value.facts.authorOrClaimer && !value.facts.shared) throw onlyAuthorMerges(value.row);
         if (value.state === "ready" || unfinished) throw mergeNeedsEditAccess();
@@ -1098,7 +1108,7 @@ export function createWorktreesModule(options: {
               const mapped = requireMappedUnit(value, unit.unitID);
               if (mapped.source === "worktree") {
                 await options.repository.markLocalUnitDiscarded(worktreeId, unit.unitID, now());
-              } else {
+              } else if (mapped.fileState === "live") {
                 if (mapped.nodeId === null) throw notFound();
                 await options.trash.trashNodeOnce(
                   userId,
@@ -1256,9 +1266,9 @@ async function worktreeCapabilities(
   let editsAll = true;
   for (const unit of units) {
     const isRemoved = removed.has(unit.unit_id);
-    // No one opens a file in Trash, so after the merge it no longer decides whether the others may be reviewed.
-    const counts = !isRemoved && !(state === "merged" && leftTrunk(unit));
-    if (readsAll && counts) readsAll = await canReadUnit(userId, row, unit, capabilityAccess);
+    // No one opens or edits a file in Trash, so it decides no one's rights over the others; it only blocks the merge.
+    if (leftTrunk(unit)) continue;
+    if (readsAll && !isRemoved) readsAll = await canReadUnit(userId, row, unit, capabilityAccess);
     if (editsAll && !(unit.source === "worktree" && isRemoved)) {
       editsAll = await canEditUnit(userId, row, unit, capabilityAccess);
     }
@@ -1276,6 +1286,7 @@ async function worktreeCapabilities(
     readsAll,
     editsAll,
     writesPages: row.pending_page_drafts === 0 || await pages.writable(row.id, userId),
+    changesGoneFiles: units.some((unit) => leftTrunk(unit) && !removed.has(unit.unit_id)),
   };
   const capabilities = Object.fromEntries(
     Object.entries(capabilityRules).map(([capability, allows]) => [capability, allows(facts)]),
@@ -1312,7 +1323,7 @@ const capabilityRules: { readonly [C in keyof WorktreeCapabilities]: (facts: Wor
   changeVisibility: (facts) => facts.team && (facts.author || administers(facts)),
   markReady: (facts) => facts.state === "draft" && (mayMerge(facts) || mayPropose(facts)),
   reopen: (facts) => facts.state === "ready" && decides(facts),
-  merge: (facts) => facts.state === "ready" && mayMerge(facts),
+  merge: (facts) => facts.state === "ready" && !facts.changesGoneFiles && mayMerge(facts),
   discard: (facts) => (facts.state === "draft" || facts.state === "ready") && decides(facts),
 };
 
@@ -1378,6 +1389,7 @@ async function validateAllTargets(
     if (states.find((state) => state.unitId === unit.unit_id)?.change === "deleted") {
       if (
         unit.source === "worktree" ||
+        leftTrunk(unit) ||
         await options.repository.hasRemovalReceipt(row.id, unit.unit_id, userId)
       )
         continue;

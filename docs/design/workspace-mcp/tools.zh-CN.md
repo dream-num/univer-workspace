@@ -95,7 +95,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `pr_list` | `pr list` | `repo`、`state`、`author`、`search`、`limit` | 是 | 否 | `read` |
 | `pr_view` | `pr view` | `repo`、`number` | 是 | 否 | `read` |
 | `pr_create` | `pr create` | `repo`、`title`、`body`、`visibility`、`idempotency_key` | 否 | 否 | `write` |
-| `pr_edit` | `pr edit` | `repo`、`number`、`title`、`body`、`visibility` | 否 | 否 | `write` |
+| `pr_edit` | `pr edit` | `repo`、`number`、`title`、`body`、`visibility`、`issue`、`leave_out_trashed`（只有 MCP，见第 4 节） | 否 | 否 | `write` |
 | `pr_ready` | `pr ready [--undo]` | `repo`、`number`、`undo` | 否 | 否 | `write` |
 | `search` | `search issues`、`search prs` | `kind`（`issues`、`prs`），其余同对应命令 | 是 | 否 | `read` |
 | `browse` | `browse` | `repo`、`number`、`unit` | 是 | 否 | `read` |
@@ -209,6 +209,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `config *`、`daemon *`、`screenshot setup`、`resources cache path`、`resources cache clear`、`skills path`、`-v` | 不提供。`whoami` 返回服务端版本 | 这些命令描述的是本机环境 |
 | `uvw worktree` 命令组（`list`、`get`、`create`、`update`、`ready`、`reopen`、`merge`、`discard`） | 由 `pr_*` 工具覆盖，不单独提供 | 两组命令共用同一套处理函数（`apps/cli/src/features/pr/command.ts:49-73`） |
 | `pr close`、`pr reopen` | 不提供 | 它们只输出引导性错误 |
+| 无 | `pr_edit` 的 `leave_out_trashed` 把 pull request 里文件已在 Trash 或已永久删除的 Unit 移出，CLI 没有对应命令 | agent 在默认连接上拿到 `pr_merge` 的 `FILES_IN_TRASH` 时要有出路 |
 | `-F/--body-file`、`--comment-file`、stdin | 改为字符串参数 | 远程读不到本机文件 |
 | `execute --script` | 改为 `code` 字符串 | 同上 |
 | `--file`（import、blob、html-view），Markdown 目录，Typst bundle，SVG 相对图片 | 上传句柄或字符串 | 同上，见第 6 节 |
