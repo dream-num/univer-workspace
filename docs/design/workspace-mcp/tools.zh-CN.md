@@ -196,7 +196,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 - `repo_edit` 改 `slug` 会让旧引用失效，描述里写明。
 - `label_write`、`repo_member_write` 和 `space_node` 用 `action` 枚举合并低频操作，以控制工具数量。
-- agent 主体的默认 `core` 也列出 `repo_create`、`repo_edit`、`repo_member_list` 和 `repo_member_write`：agent 持有自己创建的仓库，宿主只配置一次的默认连接要能建仓库、加成员和设置 `proposals`。人仍然只在 `admin` 里看到它们。
+- agent 主体的默认 `core` 也列出 `repo_create`、`repo_edit`、`repo_member_list`、`repo_member_write`、`space_node` 和 `blob_upload`：agent 持有自己创建的仓库，宿主只配置一次的默认连接要能建仓库、加成员、设置 `proposals`，并建 `.agents` 文件夹、上传 `checks.md` 来声明检查。人仍然只在 `admin` 或 `files` 里看到它们。工具列表不是权限边界：在要求检查而 agent 不拥有的仓库里，服务端仍拒绝它对 Trunk 的写入。
 - `resources_export` 返回 SVG 文本，不写目录。实测差异：库的 `read` 直接返回 SVG 文本，不必借临时目录；结果是 `{resources: [{handle, svg}], failed: [...]}`（CLI 为 `{exported: [{handle, path}], failed}`），`failed` 与 CLI 一致。`query` 和 `registry` 各取一个值（CLI 可传多个）。
 - `@univer-cli/resource-library` 1.4.0 未限制缓存符号链接，上游需修复。gateway 通过公开 `ResourceCache` 接口补上校验，默认缓存为 `<os.tmpdir()>/univer-workspace-mcp-<uid>/resources`，新建根目录、父目录与 registry 目录使用 `0700`。首次使用前及每次 registry 读取前，根目录、gateway 创建的父目录及 registry 必须是当前 uid 拥有且不可由 group/world 写入的真实目录；registry 的 `realpath` 必须位于根目录内。导出文件必须是非符号链接的普通文件，且 `realpath` 位于根目录内。违反条件时整次调用返回 `workspace-resource-cache-unsafe`，按内部错误记录日志，不记录文件内容。`MCP_RESOURCE_CACHE_DIRECTORY` 覆盖路径也遵守这些校验。
 

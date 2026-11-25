@@ -76,6 +76,15 @@ export const adminNames = [
   "resources_find",
   "resources_export",
 ];
+// Listed after core for an agent, so its default connection can set up a repository it owns and declare its checks.
+export const agentCoreNames = [
+  "blob_upload",
+  "repo_create",
+  "repo_edit",
+  "repo_member_list",
+  "repo_member_write",
+  "space_node",
+];
 export const writeNames = [
   "fork_create",
   "fork_delete",

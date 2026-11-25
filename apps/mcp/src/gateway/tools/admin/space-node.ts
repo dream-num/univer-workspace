@@ -30,6 +30,8 @@ function required<Value>(value: Value | undefined, field: string, action: string
 export const spaceNodeTool: ToolDefinition = {
   name: "space_node",
   toolset: "admin",
+  // An agent declares checks in a repository it owns, which needs the .agents folder.
+  agentToolsets: ["core", "admin"],
   scope: "publish",
   title: "Organize repository files",
   description:

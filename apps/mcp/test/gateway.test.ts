@@ -17,7 +17,7 @@ import {
 import { createGateway } from "./gateway.js";
 import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
-import { adminNames, coreNames, destructiveNames, filesNames, writeNames } from "./tool-names.js";
+import { adminNames, agentCoreNames, coreNames, destructiveNames, filesNames, writeNames } from "./tool-names.js";
 
 const identityOrigin = "https://workspace.example";
 const session = "test-session-secret-do-not-log";
@@ -669,7 +669,7 @@ describe("gateway over real HTTP and the MCP client", () => {
   });
 
   it.each([false, true])(
-    "lists the same admin tools for an agent as for a person, and repository setup in core too (claimed: %s)",
+    "lists the same admin tools for an agent as for a person, and repository setup and checks in core too (claimed: %s)",
     async (claimed) => {
       principal = { kind: "agent", claimed };
       const names = async (suffix: string) =>
@@ -678,12 +678,11 @@ describe("gateway over real HTTP and the MCP client", () => {
         );
       const agentAdmin = adminNames;
       const agentCore = claimed ? coreNames : coreNames.flatMap((name) => (name === "share" ? [name, "claim"] : [name]));
-      const repositorySetup = ["repo_create", "repo_edit", "repo_member_list", "repo_member_write"];
-      expect(await names("")).toEqual([...agentCore, ...repositorySetup]);
-      expect(await names("?toolsets=core")).toEqual([...agentCore, ...repositorySetup]);
+      expect(await names("")).toEqual([...agentCore, ...agentCoreNames]);
+      expect(await names("?toolsets=core")).toEqual([...agentCore, ...agentCoreNames]);
       expect(await names("?toolsets=files")).toEqual(filesNames);
       expect(await names("?toolsets=admin")).toEqual(agentAdmin);
-      expect(await names("?toolsets=admin,core")).toEqual([...agentCore, ...agentAdmin]);
+      expect(await names("?toolsets=admin,core")).toEqual([...agentCore, "blob_upload", ...agentAdmin]);
       expect(await names("?toolsets=core,files,admin")).toEqual([
         ...agentCore,
         ...filesNames,
@@ -727,7 +726,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"ebbdd9fa3da7089eb8f7410367d84740a1f7a4cb2a04992d7c536d6826c1ee81"`);
+    expect(digest).toMatchInlineSnapshot(`"77cace0a0574ba863eb82656b83ecebe73cd3782dada2f1e8f9ed414f718a790"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
@@ -782,6 +781,12 @@ describe("gateway over real HTTP and the MCP client", () => {
     const checks = "In a repository that requires checks, report every declared check with pr_check, then merge. If pr_merge refuses one for changing .agents/, give the user its link to merge.";
     expect([human, agent, claimed].every((text) => text.includes(checks))).toBe(true);
     expect(filesOnly).not.toContain(checks);
+    const declare = "To make a repository you own require checks, declare them on its trunk: create a folder named .agents at the repository root with space_node";
+    expect(agent).toContain(declare);
+    expect(claimed).toContain(declare);
+    expect(human).not.toContain(declare);
+    const filesHint = "PDF, Markdown, Typst, SVG, Blob work needs ?toolsets=files";
+    expect([human, agent, claimed].every((text) => text.includes(filesHint))).toBe(true);
     for (const sentence of [limits, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(claimed).not.toContain(sentence);
     }
