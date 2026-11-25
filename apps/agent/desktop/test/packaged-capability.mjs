@@ -16,29 +16,32 @@ assert.equal(imported.unitType, 'sheet');
 const exported = await exchange.exportUnitData(imported.data, 'sheet', 'probe.csv');
 assert.match(Buffer.from(exported).toString('utf8'), /Packaged,42/);
 
-let poolModule;
-for (const name of files.filter(name => /^dist-.*\.js$/.test(name))) {
-  if (/export\s*\{[^}]*\bcreateUniverCollaborationRuntimePool\b/.test(await readFile(join(directory, name), 'utf8'))) {
-    poolModule = await import(pathToFileURL(join(directory, name)).href);
-    break;
-  }
-}
-assert.ok(poolModule?.createUniverCollaborationRuntimePool, 'Packaged lazy runtime pool chunk is missing');
+// Use the same bundled RuntimeManager as the shipped Workspace provider.
+// Generated esbuild chunk names are not a stable runtime boundary.
+const { RuntimeManager } = await import(pathToFileURL(join(directory, 'runtime-manager.js')).href);
 const scratch = await mkdtemp(join(tmpdir(), 'uwa-worker-probe-'));
-let pool;
+let manager;
 try {
   const marker = join(scratch, 'worker-started');
   const entry = join(scratch, 'worker.mjs');
   await writeFile(entry, `import { writeFileSync } from 'node:fs';
     export default { createRuntime(init) {
-      writeFileSync(init.marker, 'ready');
+      writeFileSync(init.unitId, 'ready');
       throw new Error('uwa-packaged-worker-probe');
     } };`);
-  pool = poolModule.createUniverCollaborationRuntimePool({ entry: pathToFileURL(entry), openTimeoutMs: 15000 });
-  await assert.rejects(pool.acquire({ key: 'probe', init: { marker } }), /uwa-packaged-worker-probe/);
+  manager = new RuntimeManager(pathToFileURL(entry));
+  await assert.rejects(manager.exportUnitData({
+    origin: 'http://127.0.0.1',
+    revision: 0,
+    scope: { kind: 'trunk' },
+    unitId: marker,
+    unitType: 'sheet',
+    sessionToken: 'packaged-smoke-fixture',
+    license: '',
+  }), /uwa-packaged-worker-probe/);
   assert.equal(await readFile(marker, 'utf8'), 'ready');
 } finally {
-  await pool?.close();
+  await manager?.close();
   await rm(scratch, { recursive: true, force: true });
 }
 console.log('Packaged lazy Office roundtrip and worker fork passed.');
