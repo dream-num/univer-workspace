@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id|mode...] | verifier ['<spec>'|off] | delegate <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -707,6 +707,7 @@ cmd_doctor() {
     echo "info  no disposable user yet; run: verify-uvw user"
   fi
   [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_doctor
+  echo "info  $(verifier_status)"
   return "$fail"
 }
 
@@ -769,7 +770,166 @@ EOF
 cmd_brief() { # feature [journey-id|mode...]: the text to hand an agent that drives a run, from journeys.mjs
   [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id|mode...]"
   load_run
-  exec node "$BIN/journeys.mjs" brief --repo "$REPO" --root "$ROOT" --run-id "$RUN_ID" "$@"
+  node "$BIN/journeys.mjs" brief --repo "$REPO" --root "$ROOT" --run-id "$RUN_ID" "$@"
+}
+
+verifier_file() { echo "${XDG_CONFIG_HOME:-$HOME/.config}/verify-uvw/verifier"; }
+
+# Sets VERIFIER_SOURCE and the parsed spec from VERIFY_UVW_VERIFIER, else from the developer's config file.
+load_verifier() {
+  local spec="${VERIFY_UVW_VERIFIER:-}"
+  VERIFIER_SOURCE=VERIFY_UVW_VERIFIER
+  if [[ -z "$spec" ]]; then
+    VERIFIER_SOURCE="$(verifier_file)"
+    [[ ! -f "$VERIFIER_SOURCE" ]] || spec="$(grep -v -m1 -e '^#' -e '^[[:space:]]*$' "$VERIFIER_SOURCE" || true)"
+  fi
+  parse_spec "$spec"
+}
+
+# [NAME=VALUE...] <kind> [agent args...]: env for the verifier's pane only, a herdr agent kind, and that agent's arguments.
+# shortcut: words split on whitespace, so no value or argument can hold a space; parse shell quoting if one must.
+parse_spec() {
+  local words word
+  read -r -a words <<<"$1"
+  VERIFIER_ENV=() VERIFIER_KIND="" VERIFIER_ARGS=()
+  for word in ${words[@]+"${words[@]}"}; do
+    if [[ -n "$VERIFIER_KIND" ]]; then VERIFIER_ARGS+=("$word")
+    elif [[ "$word" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then VERIFIER_ENV+=("$word")
+    else VERIFIER_KIND="$word"; fi
+  done
+  [[ -n "$VERIFIER_KIND" ]]
+}
+
+# The only form of a spec the helper prints: an env value may hold an API key, so only its name shows.
+verifier_display() {
+  local text="$VERIFIER_KIND" names=() pair
+  for pair in ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"}; do names+=("${pair%%=*}"); done
+  [[ ${#VERIFIER_ARGS[@]} -eq 0 ]] || text+=" ${VERIFIER_ARGS[*]}"
+  [[ ${#names[@]} -eq 0 ]] || text+=" (env ${names[*]})"
+  echo "$text from $VERIFIER_SOURCE"
+}
+
+verifier_status() {
+  load_verifier || { echo "verifier: none"; return 1; }
+  local line="verifier: $(verifier_display)"
+  [[ "${HERDR_ENV:-}" == 1 ]] || line+="; outside a herdr pane, delegate refuses"
+  echo "$line"
+}
+
+# Splits a pane beside this one with the spec's env, and sets PANE and the name of the agent it will hold.
+verifier_pane() {
+  local split=(herdr pane split --current --direction right --cwd "$REPO" --no-focus) pair out
+  for pair in ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"}; do split+=(--env "$pair"); done
+  out="$("${split[@]}")" || die "herdr could not split a pane"
+  PANE="$(node -p 'JSON.parse(process.argv[1]).result.pane.pane_id' "$out")"
+  # herdr refuses agent names with capitals, which pane ids such as w9:pB have.
+  AGENT="$(tr '[:upper:]' '[:lower:]' <<<"vu-${PANE//:/-}")"
+}
+
+verifier_start() {
+  local start=(herdr agent start "$AGENT" --kind "$VERIFIER_KIND" --pane "$PANE") out tries=0
+  [[ ${#VERIFIER_ARGS[@]} -eq 0 ]] || start+=(-- "${VERIFIER_ARGS[@]}")
+  # herdr refuses a pane whose new shell has not reached its prompt yet, and starts nothing then.
+  until out="$("${start[@]}" 2>&1)"; do
+    [[ "$out" == *agent_pane_busy* && $((tries += 1)) -lt 20 ]] || { echo "$out" >&2; return 1; }
+    sleep 0.5
+  done
+  # shortcut: herdr reports the agent ready a moment before opencode 2.0.29 takes input, and a prompt sent at once
+  # can stall; wait on a herdr signal instead if it gains one.
+  sleep 2
+}
+
+prompt_verifier() { # text timeout-ms: the agent's status once it stops, or herdr's error code, such as timeout
+  local out
+  out="$(herdr agent prompt "$AGENT" "$1" --wait --timeout "$2" 2>&1)" || true
+  node -e 'let v={};try{v=JSON.parse(process.argv[1])}catch{}console.log(v.result?.agent?.agent_status??v.error?.code??"error")' "$out"
+}
+
+# The verifier's session that began after since (epoch ms) with this prompt, as markdown from its agent's own record.
+# Exits 3 for an agent kind verifier-transcript.mjs cannot read, and 1 when no session matches.
+# The spec's env goes along, so a CODEX_HOME or XDG_DATA_HOME there leads the reader to the agent's sessions.
+verifier_transcript() { # since prompt [--run run]
+  env ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"} node "$BIN/verifier-transcript.mjs" --kind "$VERIFIER_KIND" --repo "$REPO" \
+    --since "$1" --prompt-file <(printf '%s' "$2") "${@:3}"
+}
+
+cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec and save it; or forget it
+  [[ $# -eq 0 ]] && { verifier_status; return; }
+  [[ $# -eq 1 ]] || die "usage: verify-uvw verifier ['<spec>'|off]  (quote the spec as one argument)"
+  [[ "$1" != off ]] || { rm -f "$(verifier_file)"; verifier_status || true; return; }
+  [[ "${HERDR_ENV:-}" == 1 ]] || die "run your agent inside a herdr pane to set a verifier up"
+  parse_spec "$1" || die "the spec names no agent kind: [NAME=VALUE...] <kind> [agent args...]"
+  mkdir -p "$ROOT"
+  # Under ROOT, where the verifier writes evidence, so the test proves it may write there.
+  SMOKE="$(mktemp -d "$ROOT/verifier-smoke.XXXXXX")" PANE=""
+  trap 'rm -rf "$SMOKE"; [[ -z "$PANE" ]] || herdr pane close "$PANE" >/dev/null 2>&1 || true' EXIT
+  local status reason="" file since prompt="Run this shell command, then stop: printf ok > $SMOKE/smoke" transcript
+  since="$(($(date +%s) * 1000))"
+  verifier_pane
+  verifier_start || die "herdr could not start $VERIFIER_KIND in pane $PANE"
+  status="$(prompt_verifier "$prompt" 300000)"
+  herdr agent read "$AGENT" --source visible --lines 30 2>/dev/null | grep -v '^[[:space:]]*$' || true
+  # herdr reports done when a provider error stopped the agent, so only the file proves it ran a command.
+  case "$status" in
+    idle|done) [[ "$(cat "$SMOKE/smoke" 2>/dev/null)" == ok ]] || reason="the verifier did not run the command; the screen above says why" ;;
+    blocked) reason="the verifier waits for approval; configure it to run commands without asking" ;;
+    timeout) reason="the verifier did not stop within 5 minutes" ;;
+    *) reason="herdr answered $status" ;;
+  esac
+  [[ -z "$reason" ]] || die "$reason; the saved verifier is unchanged"
+  if transcript="$(verifier_transcript "$since" "$prompt" 2>&1)"; then
+    transcript="${transcript%%$'\n'*}"
+    echo "transcript: ${transcript#\# }"
+  else
+    echo "transcript: unavailable ($transcript); delegate saves the screen instead"
+  fi
+  file="$(verifier_file)"
+  (umask 077 && mkdir -p "$(dirname "$file")" && printf '%s\n' \
+    "# The verifier that verify-uvw delegate starts in a herdr pane. VERIFY_UVW_VERIFIER overrides this file." \
+    "# One line, [NAME=VALUE...] <kind> [agent args...], split on whitespace. Each NAME=VALUE goes into the pane's env." \
+    "$1" >"$file.tmp" && mv "$file.tmp" "$file")
+  verifier_status
+}
+
+cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the developer's verifier in a herdr pane, then print coverage
+  [[ $# -ge 1 ]] || die "usage: verify-uvw delegate <feature> [journey-id|mode...]"
+  [[ "${HERDR_ENV:-}" == 1 ]] || die "delegate opens a herdr pane beside yours; run your agent inside a herdr pane, or hand \$V brief to a subagent"
+  load_verifier || die "no verifier; set one up with \$V verifier '<spec>', see .agents/skills/verify-uvw/references/delegate.md#set-up"
+  load_run
+  local brief held status lock="$RUN/delegate.agent" since transcript reason
+  # Command substitution drops trailing newlines, and the x keeps the brief byte for byte.
+  brief="$(cmd_brief "$@" && echo x)" || exit $?
+  brief="${brief%x}"
+  held="$(cat "$lock" 2>/dev/null || true)"
+  if [[ -n "$held" ]] && herdr agent get "$held" >/dev/null 2>&1; then
+    die "verifier $held still drives run $RUN_ID; a run takes one verifier at a time"
+  fi
+  since="$(($(date +%s) * 1000))"
+  verifier_pane
+  # shortcut: the check above sees a verifier only once herdr has started it, so a second delegate in those seconds
+  # starts too; take a real lock if orchestrators ever share a run.
+  echo "$AGENT" >"$lock"
+  herdr pane rename "$PANE" verify "$RUN_ID" "$1" >/dev/null 2>&1 || true
+  verifier_start || { herdr pane close "$PANE" >/dev/null 2>&1 || true; die "herdr could not start $VERIFIER_KIND in pane $PANE"; }
+  echo "verifier $AGENT in pane $PANE: $(verifier_display)"
+  status="$(prompt_verifier "$brief" 3600000)"
+  case "$status" in
+    idle|done)
+      transcript="$RUN/evidence/$AGENT.transcript.md"
+      if ! reason="$(verifier_transcript "$since" "$brief" --run "$RUN" 2>&1 >"$transcript")"; then
+        rm -f "$transcript"
+        echo "warning: $reason; saving the verifier's screen instead" >&2
+        herdr agent read "$AGENT" --source recent-unwrapped --lines 200 >"$RUN/evidence/$AGENT.screen.txt" \
+          || echo "warning: cannot save the verifier's screen" >&2
+      fi
+      herdr pane close "$PANE" >/dev/null || echo "warning: cannot close pane $PANE; close it yourself" >&2
+      cmd_journeys "$@" ;;
+    blocked)
+      die "verifier $AGENT waits for approval in pane $PANE; answer it there, or configure it to run commands without asking. Then run \$V journeys $* and herdr pane close $PANE" ;;
+    *)
+      herdr agent read "$AGENT" --source visible --lines 40 >&2 || true
+      die "verifier $AGENT in pane $PANE did not stop ($status); wait with herdr agent wait $AGENT, then run \$V journeys $* and herdr pane close $PANE" ;;
+  esac
 }
 
 cmd_journeys() { # feature [journey-id|mode...]: the plan before up, this run's coverage after; exit 1 while it is INCOMPLETE
@@ -858,6 +1018,8 @@ case "${1:-}" in
   open-anon) shift; cmd_open_anon "$@" ;;
   env) shift; cmd_env "$@" ;;
   brief) shift; cmd_brief "$@" ;;
+  verifier) shift; cmd_verifier "$@" ;;
+  delegate) shift; cmd_delegate "$@" ;;
   journeys) shift; cmd_journeys "$@" ;;
   verdict) shift; cmd_verdict "$@" ;;
   run-journeys) shift; cmd_run_journeys "$@" ;;

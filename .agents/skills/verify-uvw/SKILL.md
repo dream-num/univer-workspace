@@ -22,6 +22,8 @@ $V journeys <feature> [journey-id|mode...]   # the journeys to verify, by mode; 
 $V verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note]   # record one journey's verdict in this run
 $V run-journeys [--again] <feature> [journey-id|mode...]   # run the blocks of "Run: helper." journeys as written; record their checks
 $V brief <feature> [journey-id|mode...]   # print the brief for an agent that drives this run
+$V verifier ['<spec>'|off]   # show the verifier delegate uses; test and save one; or forget it
+$V delegate <feature> [journey-id|mode...]   # hand the brief to that verifier in a herdr pane, wait, print coverage
 $V down      # stop what this run started; delete data; keep evidence + logs
 ```
 
@@ -45,6 +47,7 @@ feature file as the recipe. Read more only for the mode you need:
 | --- | --- |
 | MCP gateway, renderer, Workspace Agent (`VERIFY_UVW_MCP=1`, `agent-up`) | [references/mcp-mode.md](references/mcp-mode.md) |
 | Agent principals and real-model stories (`principal`, `story`) | [references/stories.md](references/stories.md) |
+| Hand journeys to your own verifier agent through herdr (`verifier`, `delegate`) | [references/delegate.md](references/delegate.md) |
 | Browser Agent mock model | `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help`, then AS1 in [Browser Agent skills](features/agent-skills.md) |
 | HTML View style thumbnails, after changing a built-in template | `node .agents/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --help` |
 
@@ -206,8 +209,15 @@ subagent, give it the journey and keep your own turns for choosing what to verif
    recipe is a defect.
 5. Stop the instance yourself with `$V down`, then repeat from step 2 for the feature's next mode.
 
+`$V doctor` ends with a `verifier:` line. When it names a verifier, the developer has set up delegation, and that
+is the default: in step 3 run `$V delegate <feature> [journey-id|mode...]` with the same selection. It hands the
+brief, unchanged, to their agent in a herdr pane and prints step 4's coverage. Start a subagent instead only when
+the user asks for one this time. When the line says `none`, hand the brief to a subagent as above, unless the user
+asks to delegate; then set a verifier up with them first. Read [references/delegate.md](references/delegate.md)
+before you run `verifier` or `delegate`.
+
 Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
-design checks. This section names no model, harness or host for the verifier. The developer chooses the model in their own
+design checks. This section names no model or host for the verifier. The developer chooses the model in their own
 configuration, outside this repository, and the harness default applies otherwise. The subagent runs where
 `up` ran, because the instance listens only on `127.0.0.1`. On the host, MCP mode and `uvw` stories need
 macOS.
