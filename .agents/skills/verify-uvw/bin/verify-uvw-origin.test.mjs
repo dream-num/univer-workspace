@@ -10,8 +10,7 @@ const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const cliMain = fileURLToPath(new URL('../../../../apps/cli/dist/main.js', import.meta.url));
 const origin = 'http://127.0.0.1:1';
 
-test('uvw runs only against the run origin, never the CLI default', () => {
-  assert(existsSync(cliMain), "build the CLI first: pnpm --filter 'univer-workspace-cli...' build");
+test('uvw runs only against the run origin, never the CLI default', { skip: !existsSync(cliMain) && "needs a built CLI: pnpm --filter 'univer-workspace-cli...' build" }, () => {
   const root = mkdtempSync(join(process.env.VERIFY_UVW_TEST_ROOT ?? tmpdir(), 'verify-uvw-origin-'));
   const run = join(root, 'test');
   const call = (...args) => spawnSync('bash', [helper, ...args], {

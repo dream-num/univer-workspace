@@ -76,15 +76,22 @@ test('every journey host-only.mjs leaves to the host exists, and the recipes get
     assert.ok(features.get(name)?.journeys.some((j) => !id || j.id === id), `${key} names a feature or journey`);
     assert.ok(reason.trim(), `${key} says why`);
   }
-  const { tasks, host } = expand(['sheet-lens', 'mcp-executor', 'mcp-security'].map((feature) => ({ feature, selectors: [] })), features);
-  assert.deepEqual(tasks.map((t) => [t.id, t.selectors]), [
-    ['sheet-lens', [...Array(10)].map((_, k) => `SLC${k + 1}`)],
-    ['sheet-lens-mcp', ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
-    ['sheet-lens-mcp-same-origin', ['SLM8']],
-    ['mcp-executor', ['MX1', 'MX2', 'MX4', 'MX5', 'MX6', 'MX16', 'MT1', 'MV1', 'MT2']]]);
-  assert.deepEqual(tasks.find((t) => t.id === 'mcp-executor').skip.map((j) => j.id), ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15']);
-  assert.deepEqual(host, [{ feature: 'sheet-lens', selectors: ['SLM1'] }, { feature: 'mcp-executor', selectors: ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15'] },
-    { feature: 'mcp-security', selectors: [] }]);
+  const names = ['sheet-lens', 'mcp-executor', 'mcp-security'];
+  const { tasks, host } = expand(names.map((feature) => ({ feature, selectors: [] })), features);
+  const ids = (journeys) => journeys.map((j) => j.id).sort();
+  for (const name of names) {
+    const { journeys } = features.get(name);
+    const left = journeys.filter((j) => HOST_ONLY.has(name) || HOST_ONLY.has(`${name}:${j.id}`));
+    const own = tasks.filter((t) => t.feature === name);
+    assert.ok(left.length, `${name} leaves journeys to the host`);
+    assert.deepEqual(ids(own.flatMap((t) => t.expected)), ids(journeys.filter((j) => !left.includes(j))), `${name}: the tasks run every journey the host does not`);
+    for (const t of own) {
+      assert.ok(t.expected.every((j) => j.mode === t.mode), `${t.id} runs one mode`);
+      assert.deepEqual(ids(t.skip), ids(left), `${t.id} skips the host's journeys`);
+    }
+    assert.equal(new Set(own.map((t) => t.mode)).size, own.length, `${name} gets one task per mode`);
+    assert.deepEqual(host.filter((h) => h.feature === name).flatMap((h) => h.selectors).sort(), HOST_ONLY.has(name) ? [] : ids(left), `${name}: the host gets the rest`);
+  }
 });
 
 test('the addendum gives the verifier the container, the journeys only the host runs and, in MCP modes, the dist start mode', () => {
@@ -210,7 +217,7 @@ test('the exit code is 4 for any failed or INCOMPLETE task, then 3 for any host-
 
 test('a task with an expected journey that has no verdict is INCOMPLETE and exits 4, whatever its report claims', () => {
   const dir = mkdtempSync(join(tmpdir(), 'verify-uvw-coverage-'));
-  const expected = plan(loadFeatures().get('issues')).partitions[0].journeys;
+  const expected = plan(parseFeature('issues', recipe('Issues', 'IS1. One', 'IS2. Two', 'IS3. Three', 'IS4. Four', 'IS5. Five'))).partitions[0].journeys;
   const out = join(dir, 'issues');
   const verdicts = (run, ...entries) => {
     mkdirSync(join(out, 'runs', run, 'evidence'), { recursive: true });

@@ -140,7 +140,7 @@ test('a story refuses bad input and a label that already has evidence before it 
     assert.equal(story('s1', 'mcp').status, 2);
     assert.match(story('s1', 'mcp', 'prompt').stderr, /MCP not enabled for this run/);
     assert.match(story('s1', 'codex', 'prompt').stderr, /MCP not enabled for this run/);
-    assert.match(story('s1', 'uvw', 'prompt').stderr, /no user; run: verify-uvw user/);
+    assert.match(story('s1', 'uvw', 'prompt').stderr, existsSync('/usr/bin/sandbox-exec') ? /no user; run: verify-uvw user/ : /a uvw story sandboxes its shell with macOS sandbox-exec, which this machine does not have/);
     assert.deepEqual(readdirSync(run), ['evidence']);
     assert.deepEqual(readdirSync(join(run, 'evidence')), ['taken']);
   } finally { rmSync(run, { recursive: true, force: true }); }

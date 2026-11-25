@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { NEEDS, allowed, fold, loadFeatures, parseFeature, plan, readJournal } from './journeys.mjs';
 
-const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const drive = '## Driving it with agent-browser and uvw';
 const recipe = (journeys, h1 = '# Feature') =>
   `${h1}\n\nWhat it does.\n\n## Sub-features\n\n### Not a journey\n\n${drive}\n\nSetup.\n\n\`\`\`bash\n### a comment in a block\n\`\`\`\n\n${journeys}\n\n## Gotchas\n\n### Not one either\n`;
@@ -20,12 +19,10 @@ test('every feature file parses into journeys whose ids are unique across featur
   assert.equal(new Set(ids(all)).size, all.length);
   for (const f of features.values()) assert.ok(f.journeys.length, `${f.name} has journeys`);
   const sheet = plan(features.get('sheet-lens'));
-  assert.deepEqual(sheet.partitions.map((p) => [p.mode, ids(p.journeys)]), [
-    ['default', [...Array(10)].map((_, k) => `SLC${k + 1}`)],
-    ['mcp', ['SLM1', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
-    ['mcp-same-origin', ['SLM8']]], 'sheet-lens gives its MCP half instances of their own');
+  assert.deepEqual(sheet.partitions.map((p) => [p.mode, p.journeys.every((j) => j.id.startsWith(p.mode === 'default' ? 'SLC' : 'SLM'))]),
+    [['default', true], ['mcp', true], ['mcp-same-origin', true]], 'sheet-lens gives its MCP half instances of their own');
   const declared = (name) => Object.fromEntries(plan(features.get(name)).partitions.map((p) => [p.mode, [ids(p.journeys).join(' '), p.needs.join(' ')]]));
-  assert.deepEqual(declared('pull-requests'), { default: ['PR1 PR2 PR3', ''], mcp: ['PR4 PR5 PR6 PR7 PR8 PR9 PR10', ''] }, 'one mode holds the chain of shared state');
+  assert.deepEqual(Object.entries(declared('pull-requests')).map(([mode, [, needs]]) => [mode, needs]), [['default', ''], ['mcp', '']], 'one mode holds the chain of shared state');
   assert.deepEqual(declared('link-sharing').default[1], 'web-build');
   assert.deepEqual(Object.keys(declared('agent-trajectory')), ['mcp-same-origin']);
 });
@@ -145,9 +142,10 @@ test('fold: a journey without an allowed verdict is MISSING and makes the result
 });
 
 test('$V verdict records only known journeys and allowed verdicts, and $V journeys prints the plan, then the coverage', () => {
-  const root = mkdtempSync(join(tmpdir(), 'verify-uvw-verdict-'));
+  const { repo, skill } = skillRepo({ issues: recipe(['### IS1. Create repo', '### IS2. Open Issue', '### IS3. Comment', '### IS4. Close', '### IS5. Read back'].join('\n\n')) });
+  const root = join(repo, 'runs');
   const env = { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test' };
-  const v = (...args) => spawnSync('bash', [helper, ...args], { env, encoding: 'utf8' });
+  const v = (...args) => spawnSync('bash', [join(skill, 'bin/verify-uvw'), ...args], { env, encoding: 'utf8' });
   const journal = join(root, 'test/evidence/journeys.jsonl');
   try {
     const before = v('journeys', 'issues');
@@ -182,18 +180,13 @@ test('$V verdict records only known journeys and allowed verdicts, and $V journe
     assert.equal(complete.status, 0);
     assert.match(complete.stdout, /RESULT: ISSUES\n$/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
   }
 });
 
 test('$V journeys prints each mode with its up --for line; up --for and brief take one mode, and brief only the running one', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'verify-uvw-modes-'));
-  const skill = join(repo, '.agents/skills/verify-uvw');
+  const { repo, skill } = skillRepo({ f: recipe(['### A1. One', '### A2. Two\n\nMode: mcp.', '### A3. Three\n\nMode: mcp-same-origin. Needs: web-build.', '### A4. Four\n\nMode: mcp.'].join('\n\n')) });
   const root = join(repo, 'runs');
-  mkdirSync(join(skill, 'bin'), { recursive: true });
-  mkdirSync(join(skill, 'features'));
-  for (const file of ['verify-uvw', 'journeys.mjs', 'secrets.mjs']) copyFileSync(fileURLToPath(new URL(file, import.meta.url)), join(skill, 'bin', file));
-  writeFileSync(join(skill, 'features/f.md'), recipe(['### A1. One', '### A2. Two\n\nMode: mcp.', '### A3. Three\n\nMode: mcp-same-origin. Needs: web-build.', '### A4. Four\n\nMode: mcp.'].join('\n\n')));
   const env = { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 't' };
   const v = (...args) => spawnSync('bash', [join(skill, 'bin/verify-uvw'), ...args], { env, encoding: 'utf8' });
   try {
@@ -230,8 +223,8 @@ test('$V journeys prints each mode with its up --for line; up --for and brief ta
   }
 });
 
-// A repository with this skill's helper and one feature, and a run whose `$V env` works without a server.
-function helperRepo(features) {
+// A repository with this skill's helper and the given features, so a test does not depend on the real recipes.
+function skillRepo(features) {
   const repo = mkdtempSync(join(tmpdir(), 'verify-uvw-run-'));
   const skill = join(repo, '.agents/skills/verify-uvw');
   mkdirSync(join(skill, 'bin'), { recursive: true });
@@ -239,6 +232,12 @@ function helperRepo(features) {
   for (const file of ['verify-uvw', 'journeys.mjs', 'secrets.mjs', 'journey-prelude.sh']) copyFileSync(fileURLToPath(new URL(file, import.meta.url)), join(skill, 'bin', file));
   chmodSync(join(skill, 'bin/verify-uvw'), 0o755);
   for (const [name, text] of Object.entries(features)) writeFileSync(join(skill, 'features', `${name}.md`), text);
+  return { repo, skill };
+}
+
+// skillRepo, and a run whose `$V env` works without a server.
+function helperRepo(features) {
+  const { repo, skill } = skillRepo(features);
   const run = join(repo, 'runs/t');
   mkdirSync(join(run, 'evidence'), { recursive: true });
   writeFileSync(join(run, 'run.env'), 'RUN_ID=t\nWEB_PORT=1\n');

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { readJournal } from '../bin/journeys.mjs';
+import { loadFeatures, readJournal } from '../bin/journeys.mjs';
 
 const host = (file) => fileURLToPath(new URL(`../bin/${file}`, import.meta.url));
 const helper = host('verify-uvw');
@@ -60,9 +60,11 @@ test('with VERIFY_UVW_EVIDENCE_ROOT, coverage spans every run under it', () => {
       mkdirSync(join(root, run, 'evidence'), { recursive: true });
       writeFileSync(join(root, run, 'run.env'), `RUN_ID=${run}\nWEB_PORT=1\n`);
     }
-    assert.equal(v('first', {}, 'verdict', 'IS1', 'PASS').status, 0);
-    assert.equal(v('second', {}, 'verdict', 'IS2', 'PASS').status, 0);
-    assert.match(v('second', {}, 'journeys', 'issues').stdout, /^issues in run second: 1 of 5 journeys have a verdict$/m);
-    assert.match(v('second', { VERIFY_UVW_EVIDENCE_ROOT: root }, 'journeys', 'issues').stdout, /^issues in run second: 2 of 5 journeys have a verdict$/m);
+    const issues = loadFeatures().get('issues').journeys;
+    assert.equal(v('first', {}, 'verdict', issues[0].id, 'PASS').status, 0);
+    assert.equal(v('second', {}, 'verdict', issues[1].id, 'PASS').status, 0);
+    const covered = (n) => new RegExp(`^issues in run second: ${n} of ${issues.length} journeys have a verdict$`, 'm');
+    assert.match(v('second', {}, 'journeys', 'issues').stdout, covered(1));
+    assert.match(v('second', { VERIFY_UVW_EVIDENCE_ROOT: root }, 'journeys', 'issues').stdout, covered(2));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
