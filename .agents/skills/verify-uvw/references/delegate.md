@@ -25,13 +25,21 @@ Set a verifier up with the developer, once per machine, when they ask to delegat
    OPENCODE_CONFIG_CONTENT={"model":"<provider>/<model>#<variant>"} opencode --standalone
    ```
 
+   codex reads `~/.codex` as usual, and the flag lets it run commands without approval, which a verifier needs:
+
+   ```text
+   codex --dangerously-bypass-approvals-and-sandbox -m <model> -c model_reasoning_effort=<effort>
+   ```
+
 4. Run `$V verifier '<spec>'`. It starts the verifier in a pane, asks it to write a file with one shell command,
    prints the bottom of its screen and closes the pane. It saves the spec only when the file was written and herdr
    saw the agent stop. The file is `~/.config/verify-uvw/verifier` (under `$XDG_CONFIG_HOME` when set), mode 0600,
-   because a value may hold an API key. Show the developer the screen so they confirm the model. The test cannot,
-   because an agent may run on another model without an error, as opencode does when the named one does not
-   exist. When the test fails, the screen says why, such as an approval prompt or a provider error, and any saved
-   spec stays as it was.
+   because a value may hold an API key. Before it saves, a `transcript:` line names the test's session in the
+   agent's own record, which is where `delegate` reads the transcript. When it says `unavailable`, `delegate` saves
+   the verifier's screen instead. That line never fails the test. Show the developer the screen so they confirm the
+   model. The test cannot, because an agent may run on another model without an error, as opencode does when the
+   named one does not exist. When the test fails, the screen says why, such as an approval prompt or a provider
+   error, and any saved spec stays as it was.
 
 From then on `$V doctor` and `$V verifier` print the verifier, with the names of its variables but never their
 values, and delegating is the default. The developer can ask for a subagent for one task, set
@@ -45,12 +53,17 @@ unchanged and waits up to 60 minutes for it to stop, so run it in the background
 
 | The verifier | `delegate` |
 | --- | --- |
-| stops | saves its screen to `evidence/<agent>.reply.txt`, closes the pane, prints `$V journeys` and exits with its code |
+| stops | saves its transcript to `evidence/<agent>.transcript.md`, closes the pane, prints `$V journeys` and exits with its code |
 | waits for approval | keeps the pane open and exits 1 |
 | still works after 60 minutes, or herdr fails | prints the visible screen, keeps the pane open and exits 1 |
 
+The transcript is the verifier's session as its agent recorded it. It holds the verifier's messages and each command
+it ran, with the command's exit code and the first 40 lines of its output, and run secrets are redacted. `delegate`
+reads opencode and codex sessions. For another agent kind, or when it finds no session that began with the brief, it
+prints a warning and saves the verifier's screen to `evidence/<agent>.screen.txt` instead.
+
 When the pane stays open, answer in it or wait with `herdr agent wait <agent>`. Then run `$V journeys` and
-`herdr pane close <pane>` yourself. The verdicts in the journal decide the result, not the reply. A verifier that
+`herdr pane close <pane>` yourself. The verdicts in the journal decide the result, not the transcript. A verifier that
 stopped on a provider error leaves journeys `MISSING`, so `delegate` exits 1 with `INCOMPLETE`. Then do step 4 as
 usual, and open the evidence before you repeat a verdict.
 

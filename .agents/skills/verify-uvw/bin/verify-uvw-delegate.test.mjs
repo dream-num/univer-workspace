@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +34,19 @@ else if (verb === 'agent prompt') {
 else console.log('{"result":{}}');
 `;
 
+// Answers as opencode 2.4.1 does, with one session in this repository that recorded the prompt herdr sent last.
+const fakeOpencode = `const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (process.env.A !== '{"x":1}') { console.error('opencode: started without the spec env'); process.exit(1); }
+const prompt = fs.readFileSync(process.env.FAKE_HERDR_LOG, 'utf8').trim().split('\\n').map((line) => JSON.parse(line)).findLast((call) => call[1] === 'prompt')[3];
+const secret = fs.readFileSync(process.env.VERIFY_UVW_ROOT + '/test/user.pw', 'utf8');
+if (args[1] === 'list') console.log(JSON.stringify([{ id: 'ses_test', created: Date.now(), directory: ${JSON.stringify(realpathSync(repo))} }]));
+else console.log(JSON.stringify({ info: { model: { id: 'model-x', providerID: 'provider-y' } }, messages: [
+  { type: 'user', text: prompt }, { type: 'assistant', content: [{ type: 'text', text: 'Recorded LS1 as user ' + secret }] },
+] }));
+`;
+const password = 'pw-delegate-secret';
+
 function fixture(t) {
   const root = mkdtempSync(join(process.env.VERIFY_UVW_TEST_ROOT ?? tmpdir(), 'verify-uvw-delegate-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -41,8 +54,11 @@ function fixture(t) {
   mkdirSync(join(run, 'evidence'), { recursive: true });
   mkdirSync(tools);
   writeFileSync(join(run, 'run.env'), 'RUN_ID=test\nWEB_PORT=1\nSERVER_PORT=1\nSERVER_PID=\nWEB_PID=\nGIT_HEAD=\n');
-  writeFileSync(join(tools, 'fake-herdr.cjs'), fakeHerdr);
-  writeFileSync(join(tools, 'herdr'), `#!/bin/sh\nexec node '${join(tools, 'fake-herdr.cjs')}' "$@"\n`, { mode: 0o755 });
+  writeFileSync(join(run, 'user.pw'), password);
+  for (const [name, source] of [['herdr', fakeHerdr], ['opencode', fakeOpencode]]) {
+    writeFileSync(join(tools, `fake-${name}.cjs`), source);
+    writeFileSync(join(tools, name), `#!/bin/sh\nexec node '${join(tools, `fake-${name}.cjs`)}' "$@"\n`, { mode: 0o755 });
+  }
   writeFileSync(join(tools, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   const base = {
     ...process.env, PATH: `${tools}:${process.env.PATH}`, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test',
@@ -59,7 +75,7 @@ const verbs = (calls) => calls.map((args) => args.slice(0, 2).join(' '));
 const after = (args, flag) => args[args.indexOf(flag) + 1];
 const spoken = (result) => result.stdout + result.stderr;
 
-test('verifier saves a spec only after its agent ran the smoke command and stopped, and shows it without env values', (t) => {
+test('verifier saves a spec only after its agent ran the smoke command and stopped, names its transcript, and shows it without env values', (t) => {
   const { run, file, v, calls } = fixture(t);
   const none = v(['verifier']);
   assert.equal(none.status, 1);
@@ -70,6 +86,7 @@ test('verifier saves a spec only after its agent ran the smoke command and stopp
   assert.equal(readFileSync(file, 'utf8').split('\n').find((line) => line.trim() && !line.startsWith('#')), spec);
   assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.ok(saved.stdout.includes('  Model Flash · high\n'), 'the verifier screen shows its model');
+  assert.ok(saved.stdout.includes('\ntranscript: opencode session ses_test\n'), saved.stdout);
   assert.ok(saved.stdout.endsWith(`verifier: opencode --standalone (env A) from ${file}\n`));
   assert.ok(!spoken(saved).includes(secret));
   const smoke = calls();
@@ -99,6 +116,11 @@ test('verifier saves a spec only after its agent ran the smoke command and stopp
   assert.equal(outside.stdout, `verifier: opencode --standalone (env A) from ${file}; outside a herdr pane, delegate refuses\n`);
   assert.equal(v(['doctor']).stdout.trimEnd().split('\n').at(-1), `info  verifier: opencode --standalone (env A) from ${file}`);
 
+  const unread = v(['verifier', 'aider --yes'], { FAKE_HERDR_RUNS_COMMAND: '1' });
+  assert.equal(unread.status, 0, unread.stderr);
+  assert.match(unread.stdout, /^transcript: unavailable \(no transcript reader for aider agents\); delegate saves the screen instead$/m);
+  assert.ok(unread.stdout.endsWith(`verifier: aider --yes from ${file}\n`));
+
   const off = v(['verifier', 'off']);
   assert.equal(off.status, 0, off.stderr);
   assert.equal(off.stdout, 'verifier: none\n');
@@ -119,7 +141,7 @@ test('delegate refuses outside herdr, without a verifier, and when the brief ref
   assert.deepEqual(calls(), []);
 });
 
-test('delegate hands the saved verifier the brief unchanged, keeps its screen, closes its pane and prints coverage', (t) => {
+test('delegate hands the saved verifier the brief unchanged, keeps its session transcript, closes its pane and prints coverage', (t) => {
   const { run, file, v, calls } = fixture(t);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `# a comment\n\n${spec}\n`);
@@ -150,10 +172,25 @@ test('delegate hands the saved verifier the brief unchanged, keeps its screen, c
   const prompt = seen.find((args) => args[1] === 'prompt');
   assert.equal(prompt[2], 'vu-w9-pb');
   assert.equal(prompt[3], brief.stdout, 'the verifier gets $V brief byte for byte');
-  assert.deepEqual(verbs(seen.slice(seen.indexOf(prompt) + 1)), ['agent read', 'pane close']);
-  assert.equal(after(seen.at(-2), '--source'), 'recent-unwrapped');
+  assert.deepEqual(verbs(seen.slice(seen.indexOf(prompt) + 1)), ['pane close'], 'the transcript needs no screen');
   assert.deepEqual(seen.at(-1), ['pane', 'close', 'w9:pB']);
-  assert.equal(readFileSync(join(run, 'evidence/vu-w9-pb.reply.txt'), 'utf8'), screen);
+  const transcript = readFileSync(join(run, 'evidence/vu-w9-pb.transcript.md'), 'utf8');
+  assert.ok(transcript.startsWith('# opencode session ses_test\n'), transcript);
+  assert.ok(transcript.includes(`**Brief:** identical to \`$V brief\` (${Buffer.byteLength(brief.stdout)} bytes)`), transcript);
+  assert.ok(transcript.includes('Recorded LS1 as user [REDACTED]'), 'the transcript is evidence, so run secrets are redacted');
+  assert.ok(!existsSync(join(run, 'evidence/vu-w9-pb.screen.txt')));
+});
+
+test('delegate saves the screen of a verifier whose agent kind has no transcript reader', (t) => {
+  const { run, v, calls } = fixture(t);
+  const done = v(['delegate', 'link-sharing', 'LS1'], { VERIFY_UVW_VERIFIER: 'aider --yes' });
+  assert.match(done.stderr, /^warning: no transcript reader for aider agents; saving the verifier's screen instead$/m);
+  assert.match(done.stdout, /^link-sharing in run test/m, 'coverage still prints');
+  assert.equal(readFileSync(join(run, 'evidence/vu-w9-pb.screen.txt'), 'utf8'), screen);
+  assert.ok(!existsSync(join(run, 'evidence/vu-w9-pb.transcript.md')));
+  const read = calls().find((args) => args[1] === 'read');
+  assert.equal(after(read, '--source'), 'recent-unwrapped');
+  assert.deepEqual(calls().at(-1), ['pane', 'close', 'w9:pB']);
 });
 
 test('delegate keeps the pane of a verifier that did not stop, and refuses a second verifier while the first lives', (t) => {

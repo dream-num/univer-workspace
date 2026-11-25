@@ -845,6 +845,14 @@ prompt_verifier() { # text timeout-ms: the agent's status once it stops, or herd
   node -e 'let v={};try{v=JSON.parse(process.argv[1])}catch{}console.log(v.result?.agent?.agent_status??v.error?.code??"error")' "$out"
 }
 
+# The verifier's session that began after since (epoch ms) with this prompt, as markdown from its agent's own record.
+# Exits 3 for an agent kind verifier-transcript.mjs cannot read, and 1 when no session matches.
+# The spec's env goes along, so a CODEX_HOME or XDG_DATA_HOME there leads the reader to the agent's sessions.
+verifier_transcript() { # since prompt [--run run]
+  env ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"} node "$BIN/verifier-transcript.mjs" --kind "$VERIFIER_KIND" --repo "$REPO" \
+    --since "$1" --prompt-file <(printf '%s' "$2") "${@:3}"
+}
+
 cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec and save it; or forget it
   [[ $# -eq 0 ]] && { verifier_status; return; }
   [[ $# -eq 1 ]] || die "usage: verify-uvw verifier ['<spec>'|off]  (quote the spec as one argument)"
@@ -855,10 +863,11 @@ cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec 
   # Under ROOT, where the verifier writes evidence, so the test proves it may write there.
   SMOKE="$(mktemp -d "$ROOT/verifier-smoke.XXXXXX")" PANE=""
   trap 'rm -rf "$SMOKE"; [[ -z "$PANE" ]] || herdr pane close "$PANE" >/dev/null 2>&1 || true' EXIT
+  local status reason="" file since prompt="Run this shell command, then stop: printf ok > $SMOKE/smoke" transcript
+  since="$(($(date +%s) * 1000))"
   verifier_pane
   verifier_start || die "herdr could not start $VERIFIER_KIND in pane $PANE"
-  local status reason="" file
-  status="$(prompt_verifier "Run this shell command, then stop: printf ok > $SMOKE/smoke" 300000)"
+  status="$(prompt_verifier "$prompt" 300000)"
   herdr agent read "$AGENT" --source visible --lines 30 2>/dev/null | grep -v '^[[:space:]]*$' || true
   # herdr reports done when a provider error stopped the agent, so only the file proves it ran a command.
   case "$status" in
@@ -868,6 +877,12 @@ cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec 
     *) reason="herdr answered $status" ;;
   esac
   [[ -z "$reason" ]] || die "$reason; the saved verifier is unchanged"
+  if transcript="$(verifier_transcript "$since" "$prompt" 2>&1)"; then
+    transcript="${transcript%%$'\n'*}"
+    echo "transcript: ${transcript#\# }"
+  else
+    echo "transcript: unavailable ($transcript); delegate saves the screen instead"
+  fi
   file="$(verifier_file)"
   (umask 077 && mkdir -p "$(dirname "$file")" && printf '%s\n' \
     "# The verifier that verify-uvw delegate starts in a herdr pane. VERIFY_UVW_VERIFIER overrides this file." \
@@ -881,7 +896,7 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
   [[ "${HERDR_ENV:-}" == 1 ]] || die "delegate opens a herdr pane beside yours; run your agent inside a herdr pane, or hand \$V brief to a subagent"
   load_verifier || die "no verifier; set one up with \$V verifier '<spec>', see .agents/skills/verify-uvw/references/delegate.md#set-up"
   load_run
-  local brief held status lock="$RUN/delegate.agent"
+  local brief held status lock="$RUN/delegate.agent" since transcript reason
   # Command substitution drops trailing newlines, and the x keeps the brief byte for byte.
   brief="$(cmd_brief "$@" && echo x)" || exit $?
   brief="${brief%x}"
@@ -889,6 +904,7 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
   if [[ -n "$held" ]] && herdr agent get "$held" >/dev/null 2>&1; then
     die "verifier $held still drives run $RUN_ID; a run takes one verifier at a time"
   fi
+  since="$(($(date +%s) * 1000))"
   verifier_pane
   # shortcut: the check above sees a verifier only once herdr has started it, so a second delegate in those seconds
   # starts too; take a real lock if orchestrators ever share a run.
@@ -899,8 +915,13 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
   status="$(prompt_verifier "$brief" 3600000)"
   case "$status" in
     idle|done)
-      herdr agent read "$AGENT" --source recent-unwrapped --lines 200 >"$RUN/evidence/$AGENT.reply.txt" \
-        || echo "warning: cannot save the verifier's screen" >&2
+      transcript="$RUN/evidence/$AGENT.transcript.md"
+      if ! reason="$(verifier_transcript "$since" "$brief" --run "$RUN" 2>&1 >"$transcript")"; then
+        rm -f "$transcript"
+        echo "warning: $reason; saving the verifier's screen instead" >&2
+        herdr agent read "$AGENT" --source recent-unwrapped --lines 200 >"$RUN/evidence/$AGENT.screen.txt" \
+          || echo "warning: cannot save the verifier's screen" >&2
+      fi
       herdr pane close "$PANE" >/dev/null || echo "warning: cannot close pane $PANE; close it yourself" >&2
       cmd_journeys "$@" ;;
     blocked)
