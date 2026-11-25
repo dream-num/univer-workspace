@@ -16,10 +16,10 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium \
     ANTHROPIC_DEFAULT_SONNET_MODEL='deepseek-flash[1m]' ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash \
     CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash CLAUDE_CODE_EFFORT_LEVEL=high \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432
-# The MCP journeys need opencode (npm's opencode-ai stops at 1.19.6), poppler, ImageMagick, uuidgen, and a magick
-# command, which bookworm's ImageMagick 6 lacks.
+# The MCP journeys need opencode (npm's opencode-ai stops at 1.19.6), poppler, ImageMagick, uuidgen, sqlite3 (MP14's
+# database lock), and a magick command, which bookworm's ImageMagick 6 lacks.
 ARG TARGETARCH
-RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils imagemagick uuid-runtime \
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils imagemagick uuid-runtime sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && case "$TARGETARCH" in arm64) asset=opencode-linux-arm64.tar.gz ;; amd64) asset=opencode-linux-x64-baseline.tar.gz ;; \
          *) echo "no opencode build for architecture '$TARGETARCH'" >&2; exit 1 ;; esac \
