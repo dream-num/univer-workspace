@@ -110,7 +110,7 @@ it("restarts the clock when someone reopens a submitted Issue another person clo
 
 it("passes over an Issue whose acceptance fails and still accepts the rest up to the limit", async () => {
   const failing = new Set<string>();
-  const { applications: [application], owner, agent, team } = await setup(1, failing);
+  const { applications: [application], owner, agent, team } = await setup(1, { failAccepting: failing });
   const { issues } = application!;
   await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
   const numbers: number[] = [];
@@ -124,6 +124,46 @@ it("passes over an Issue whose acceptance fails and still accepts the rest up to
   expect(await issues.acceptDue(Date.now() + HOUR, 2)).toBe(2);
   const states = await Promise.all(numbers.map(async (number) => (await issues.get(owner, team, number)).state));
   expect(states).toEqual(["open", "closed", "closed"]);
+}, 120_000);
+
+it("tries at most four times its limit per pass, and Issues that keep failing do not hold back the rest", async () => {
+  const failing = new Set<string>();
+  const { applications: [application], owner, agent, team, attempts } = await setup(1, { failAccepting: failing });
+  const { issues } = application!;
+  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  const submit = async (title: string) => {
+    const issue = await issues.create(owner, team, { title, assigneeUserIds: [agent] });
+    await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
+    return issue;
+  };
+  for (let index = 0; index < 10; index++) failing.add((await submit(`Stuck ${index}`)).id);
+  const healthy = await submit("Healthy");
+
+  let passes = 0;
+  while ((await issues.get(owner, team, healthy.number)).state === "open") {
+    expect(++passes, "the healthy Issue is reached").toBeLessThan(30);
+    attempts.length = 0;
+    await issues.acceptDue(Date.now() + HOUR, 2);
+    expect(attempts.length).toBeLessThanOrEqual(8);
+  }
+}, 120_000);
+
+it("announces the Issues a pass accepted even when listing due Issues again would fail", async () => {
+  const failing = new Set<string>();
+  const { applications: [application], owner, agent, team, origin } = await setup(1, { failAccepting: failing, listings: 1 });
+  const { issues } = application!;
+  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  for (const title of ["Oldest", "Next"]) {
+    const issue = await issues.create(owner, team, { title, assigneeUserIds: [agent] });
+    await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
+    if (title === "Oldest") failing.add(issue.id);
+  }
+  const socket = await connect(origin, await login(origin, "owner"));
+  const announced = nextMessage(socket);
+
+  expect(await issues.acceptDue(Date.now() + HOUR, 2)).toBe(1);
+  await expect(announced).resolves.toEqual({ event: "issuesChanged", spaceId: team });
+  socket.close();
 }, 120_000);
 
 it("records one acceptance and one close per Issue when two replicas run the job together, in bounded passes", async () => {
@@ -150,8 +190,11 @@ it("records one acceptance and one close per Issue when two replicas run the job
   }
 }, 120_000);
 
-/** Replicas share only the database, so more than one needs PostgreSQL. */
-async function setup(replicas = 1, failAccepting: ReadonlySet<string> = new Set()) {
+/** Replicas share only the database, so more than one needs PostgreSQL. `listings` caps the due listings that succeed. */
+async function setup(
+  replicas = 1,
+  { failAccepting = new Set(), listings = Infinity }: { readonly failAccepting?: ReadonlySet<string>; readonly listings?: number } = {},
+) {
   // The Issue module reads the clock it finds when the application is created.
   vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
   const cleanup = new AsyncDisposableStack();
@@ -172,6 +215,8 @@ async function setup(replicas = 1, failAccepting: ReadonlySet<string> = new Set(
       : { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
   };
   const applications: WorkspaceApplication[] = [];
+  const attempts: string[] = [];
+  let listed = 0;
   let claimAgent: ((agentId: string, ownerId: string) => Promise<unknown>) | undefined;
   for (let replica = 0; replica < (postgres ? replicas : 1); replica++) {
     const database = await openProductDatabase(config.database);
@@ -183,8 +228,14 @@ async function setup(replicas = 1, failAccepting: ReadonlySet<string> = new Set(
     const issuesRepository = new Proxy(real, {
       get(target, key) {
         if (key === "acceptDueIssue") {
-          return (issueId: string, now: number) =>
-            failAccepting.has(issueId) ? Promise.reject(new Error("acceptance failed")) : target.acceptDueIssue(issueId, now);
+          return (issueId: string, now: number) => {
+            attempts.push(issueId);
+            return failAccepting.has(issueId) ? Promise.reject(new Error("acceptance failed")) : target.acceptDueIssue(issueId, now);
+          };
+        }
+        if (key === "listDueIssues") {
+          return (...args: Parameters<typeof target.listDueIssues>) =>
+            ++listed > listings ? Promise.reject(new Error("listing failed")) : target.listDueIssues(...args);
         }
         const value = Reflect.get(target, key) as unknown;
         return typeof value === "function" ? value.bind(target) : value;
@@ -197,6 +248,7 @@ async function setup(replicas = 1, failAccepting: ReadonlySet<string> = new Set(
   }
   const [application] = applications;
   const server = createServer(application!.app);
+  application!.attachWebSocket(server);
   cleanup.defer(() => new Promise<void>((resolve) => server.close(() => resolve())));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -206,7 +258,7 @@ async function setup(replicas = 1, failAccepting: ReadonlySet<string> = new Set(
   await claimAgent!(user.id, owner);
   const { id: team } = await application!.spaces.createTeamSpace(owner, { name: "Team" });
   await application!.permissions.upsertTeamMember(owner, team, user.id, { role: "viewer" });
-  return { applications, owner, agent: user.id, team, origin };
+  return { applications, owner, agent: user.id, team, origin, attempts };
 }
 
 async function login(origin: string, username: string): Promise<string> {
@@ -214,4 +266,22 @@ async function login(origin: string, username: string): Promise<string> {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username, password: PASSWORD }),
   });
   return response.headers.get("set-cookie")!.split(";")[0]!;
+}
+
+async function connect(origin: string, cookie: string): Promise<WebSocket> {
+  const { ticket } = await (await fetch(`${origin}/universer-api/user/session-ticket`, { headers: { cookie } })).json() as { ticket: string };
+  const socket = new WebSocket(`${origin.replace("http:", "ws:")}/api/worktree-events?sessionTicket=${encodeURIComponent(ticket)}`);
+  const ready = nextMessage(socket);
+  await new Promise<void>((resolve, reject) => {
+    socket.addEventListener("open", () => resolve(), { once: true });
+    socket.addEventListener("error", () => reject(new Error("Change feed did not open")), { once: true });
+  });
+  expect(await ready).toEqual({ event: "worktreeChangeFeedReady" });
+  return socket;
+}
+
+function nextMessage(socket: WebSocket): Promise<unknown> {
+  return new Promise((resolve) => {
+    socket.addEventListener("message", (event) => resolve(JSON.parse(String(event.data)) as unknown), { once: true });
+  });
 }

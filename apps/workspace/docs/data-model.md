@@ -672,14 +672,14 @@ V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue �
 `submitted` 的 `created_at` 与最后一条 `reopened` 事件的 `created_at` 中较晚者加上 `accept_after_hours` 小时，
 只对开放、最新 Verdict 是 `submitted`、所在 Space 的 `accept_after_hours` 非空且 owner 未被暂停的 Issue 存在。两个
 repository 各用一条 SQL 计算它：任务用它找到期的 Issue，Issue 详情用它返回 `acceptance.deadline`，所以页面、uvw 与
-MCP 显示的时间就是任务使用的时间。任务按期限和 id 的顺序取期限不晚于本副本当前时间的 Issue，逐个在一个事务里重新确认
+MCP 显示的时间就是任务使用的时间。任务按随机顺序取至多 100 个（25 的 4 倍）期限不晚于本副本当前时间的 Issue，逐个在一个事务里重新确认
 同一条件，然后写一条 `actor_user_id`
 为 `NULL`、`body` 为空的 `accepted`，并以 `completed` 关闭 Issue，`closed_by_user_id` 为 `NULL`。它不写 `closed`
 事件：时间线里这条无 actor 的 `accepted` 就是关闭记录，活动流显示 actor 为 `null` 的 `issue-closed`。退回让最新一条
 不再是 `submitted`，计时停止；再次提交从新的 `created_at` 重新计时；提交后被关闭再重新打开的 Issue 从重新打开时
 重新计时；关闭设置后不再验收；开启设置或调小小时数后，已超过新期限的 Issue 在下一轮被验收。某个 Issue 的事务失败只记日志，
-不中止本轮，也不占用 25 个的名额：任务按期限顺序越过它继续取后面的 Issue，所以持续失败的 Issue 每轮各重试一次，不会挡住
-其他 Issue。期限按副本的系统时钟比较，
+不中止本轮，也不占用 25 个的名额：任务越过它继续验收同一批里的下一个。每轮只取一次，至多尝试 100 个 Issue，取出的顺序
+每轮不同，所以持续失败的 Issue 再多也挡不住其他 Issue，只是让它们晚几轮。验收过的 Issue 所在的 Space 在本轮结束时收到变更通知。期限按副本的系统时钟比较，
 副本之间的时钟偏差使验收提前或推迟同样的量；以小时计的期限下，秒级偏差可以忽略。多个副本同时执行时，事务内的重新
 确认和对 `issues` 行的更新让 PostgreSQL 只放行一个，另一个重试后不再匹配：每个 Issue 只记一条验收、只关闭一次。
 
