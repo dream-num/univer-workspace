@@ -169,7 +169,8 @@ export function createCollaborationGateway(options: {
   // Workaround: SDK 1.6.1 analyzes a RevertRevisionMutation as Edit on the Unit only, so an editor could
   // restore over content protected from them and drop its rule. Require Edit on every protection object
   // bound at head, as the SDK History UI does before it offers restore. A rule bound only at the target
-  // comes back with the restore and narrows access. Remove once the SDK lists the objects a restore replaces.
+  // comes back with the restore and narrows access. Remove once the SDK lists the objects a restore replaces
+  // (dream-num/univer-collaboration-sdk#217).
   async function protectionReplacedByRestore(
     context: CommitChangesetMiddlewareContext
   ): Promise<RequiredUnitPermission[]> {
