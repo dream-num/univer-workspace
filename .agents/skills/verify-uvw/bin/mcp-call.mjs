@@ -231,8 +231,11 @@ function eventIssues(event) {
   const validation = dryRunHtmlView ? toolOutput(result) : undefined;
   if (dryRunHtmlView && !result.isError && (validation?.dryRun !== true || validation?.valid !== true || 'draft' in validation || event.cost?.committed_revisions !== 0)) issues.push('HTML View dry run must validate without creating a draft');
   // The gateway records no repository for a dry run, even with repo and pr selecting pull-request source data.
+  // A fork whose owner can no longer read its upstream returns upstream null, and records no repository.
+  const forkTool = ['fork_view', 'fork_delete'].includes(tool), forkOutput = forkTool ? toolOutput(result) : undefined;
   const resolvesRepo = dryRunHtmlView ? false : (tool === 'html_view_save' && (typeof args.page === 'string' || typeof args.draft === 'string')) || typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get', 'fork_view', 'fork_delete'].includes(tool) || (['execute', 'inspect', 'outline', 'read', 'find', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string' && toolOutput(result)?.scope?.kind !== 'trunk');
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get'].includes(tool) || (['execute', 'inspect', 'outline', 'read', 'find', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string' && toolOutput(result)?.scope?.kind !== 'trunk') ||
+    (forkTool && (forkOutput?.fork ?? forkOutput)?.upstream !== null);
   const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true && !['worktree', 'space', 'parent'].some((key) => args[key] !== undefined);
   const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
   const invalidUnitType = event.executor === 'none' || compileOnlyTypst

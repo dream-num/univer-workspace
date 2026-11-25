@@ -67,7 +67,7 @@ keeps the journey `agent`. The helper runs blocks this way:
 ## Agent Mode
 
 Agent Mode keeps people out of an agent's task between the grant at the start and the merge at the end. Its journeys
-are in the five `agent-mode-*` files and in parts of `pull-requests`, `agent-handoff`, `mcp-blobs-office` and
+are in the `agent-mode-*` files and in parts of `pull-requests`, `agent-handoff`, `mcp-blobs-office` and
 `mcp-html-view`. [references/agent-mode.md](../references/agent-mode.md) maps the spec to them, says how to run all of
 them, and lists what no journey covers yet.
 
@@ -122,6 +122,9 @@ them, and lists what no journey covers yet.
   file, the merge is refused with `FILES_IN_TRASH`, and the agent leaves the file out with `pr_edit` and merges.
 - [Agent Mode: an agent's limits](./agent-mode-limits.md): MP14 drives an agent to its budget of open pull requests
   and counts a merge in `whoami`.
+- [Agent Mode: forks](./agent-mode-forks.md): FK1-FK8 have a claimed Viewer agent fork a repository that copies
+  nothing, read Trunk through it, open one pull request with its first writes, also two at once, reopen a ready one to
+  write again, delete a fork and lose its membership; FK8 drives `uvw fork create`, `list`, `view` and `delete`.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,
