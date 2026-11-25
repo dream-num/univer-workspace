@@ -51,8 +51,10 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   page shows the deletion note and no server error.
 - MP17 turns on `Require checks before an agent merges` in a repository's settings. A claimed guest agent's
   `pr_merge` and `uvw pr merge` are refused with `CHECKS_REQUIRED` naming the declared checks, its pull request page
-  says why, and its Blob replacement, Trash and rename of `.agents/checks.md` are refused with `AGENT_NOT_ALLOWED`. It
-  merges once both checks pass, the run user merges with no results, and in `review` the agent merges without them.
+  says why, its Browser opens a Trunk Sheet `Read only`, and its Blob replacement, Trash and rename of
+  `.agents/checks.md` are refused with `AGENT_NOT_ALLOWED`. It merges once both checks pass, but not a pull request
+  that changes `.agents/checks.md`, which the run user merges. The run user merges with no results, and in `review`
+  the agent merges without them.
 
 ## How to get to it (user POV)
 
@@ -61,10 +63,10 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
-`unit_add`, `execute`, `pr_check` and `pr_merge`, and MI15 calls `repo_edit`. MP17 also calls `space_node` and `claim` as an
-agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`, the last two as that agent. A person
-judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses `uvw space node trash` and the
-repository's `Trash` page.
+`unit_add`, `execute`, `pr_check` and `pr_merge`, and MI15 calls `repo_edit`. MP17 also calls `space_node`, `claim`,
+`fork_create` and `fork_view` as an agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`,
+the last two as that agent. A person judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses
+`uvw space node trash` and the repository's `Trash` page.
 
 ## Driving it with agent-browser and uvw
 
@@ -1117,8 +1119,10 @@ open pull requests, the server log has no 500, and the screenshot shows the dele
 The run user O holds a Team Space R, declares two checks in `.agents/checks.md` and turns on
 `Require checks before an agent merges` in its settings. A claimed guest agent G, an Editor there, opens a pull
 request. Its `pr_merge` and `uvw pr merge` are refused with `CHECKS_REQUIRED` and the names of both checks, its pull
-request page says why it has no merge button, and its direct changes to `.agents/checks.md` on Trunk are refused with
-`AGENT_NOT_ALLOWED`. G reports both checks and merges. O, a person, merges another pull request with no results.
+request page says why it has no merge button, its Browser opens the Trunk Sheet `Read only`, and its direct changes
+to `.agents/checks.md` on Trunk are refused with `AGENT_NOT_ALLOWED`. G reports both checks and merges. A pull request
+of G's that changes `.agents/checks.md` is refused naming `.agents/` with both checks passed, and O merges it. O, a
+person, merges another pull request with no results.
 Back in `review`, G merges without results. MP17 creates one guest agent, which counts toward the 5 agents per hour.
 
 ```bash
@@ -1190,7 +1194,10 @@ grep -q '^CHECKS_REQUIRED: .*totals-match (missing), header-unchanged (missing)'
 In the run browser, signed in as G, set the viewport to 1280 × 1300, open `$ORIGIN/spaces/$T/pulls/$N` and screenshot
 `mp17-agent-refusal.png`. The `Checks` section lists both checks as `Missing`, there is no merge button, and the line
 under `Continue editing` reads `This repository requires an agent to pass every check declared in .agents/checks.md.
-You can merge once each one has passed.` G then tries to change the declaration on Trunk:
+You can merge once each one has passed.` Then open `$ORIGIN/nodes/$(jq -r .unit.nodeId "$EVIDENCE/mpl-h-unit.out")`,
+wait for the grid, hover the lock icon in the header (`agent-browser hover '[aria-label="Read only"]'`) and screenshot
+`mp17-agent-trunk-readonly.png`. Its tooltip reads `Read only`, where an editor sees a pencil and `Editable`, and a
+value typed into an empty cell does not appear. G then tries to change the declaration on Trunk:
 
 ```bash
 gu blob download "$RUN/home/g-checks.md" --resource "$CR" --json > "$EVIDENCE/mpl-g-download.out"
@@ -1220,6 +1227,30 @@ $V mcp --auth oauth mpl-g-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N\"}"
 jq -e '.state == "merged"' "$EVIDENCE/mpl-g-merge.out"
 ```
 
+G proposes a note in `.agents/checks.md` through a fork, passes both checks, and still cannot merge it. O can:
+
+```bash
+$V mcp --auth oauth mpl-g-fork fork_create "{\"repo\":\"$R\",\"name\":\"notes\"}"
+printf '# Checks\n\n## totals-match\nB2 reads a number.\n\n## header-unchanged\nRow 1 reads Region, Total.\n\n### Notes\nRead B2 on Trunk.\n' > "$RUN/home/g-notes.md"
+gu blob replace --resource "$CR" --file "$RUN/home/g-notes.md" --etag "$(jq -r .download.etag "$EVIDENCE/mpl-g-download.out")" \
+  --worktree "$G/notes" --idempotency-key mp17-g-propose-checks --json > "$EVIDENCE/mpl-g-propose-checks.out"
+$V mcp --auth oauth mpl-g-fork-view fork_view "{\"fork\":\"$G/notes\"}"
+N4=$(jq -r .worktree.number "$EVIDENCE/mpl-g-fork-view.out")
+$V mcp --auth oauth mpl-g4-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N4\"}"
+for name in totals-match header-unchanged; do
+  $V mcp --auth oauth "mpl-g4-check-$name" pr_check "{\"repo\":\"$R\",\"number\":\"$N4\",\"name\":\"$name\",\"state\":\"passed\",\"summary\":\"Still declared.\"}"
+done
+$V mcp --auth oauth mpl-g4-view pr_view "{\"repo\":\"$R\",\"number\":\"$N4\"}"
+jq -e '.capabilities.merge == false and ([.checks[].state] == ["passed", "passed"])' "$EVIDENCE/mpl-g4-view.out"
+$V mcp --auth oauth mpl-g4-refused pr_merge "{\"repo\":\"$R\",\"number\":\"$N4\"}"
+test $? -eq 1
+jq -e '.code == "CHECKS_REQUIRED" and (.message | contains("This pull request changes .agents/."))' "$EVIDENCE/mpl-g4-refused.out"
+$V cli mpl-o4-merge pr merge "$N4" -R "$R" --json state
+jq -e '.state == "merged"' "$EVIDENCE/mpl-o4-merge.out"
+$V cli mpl-checks-notes blob download "$EVIDENCE/mpl-checks-notes.md" --resource "$CR" --force --json
+cmp "$RUN/home/g-notes.md" "$EVIDENCE/mpl-checks-notes.md"
+```
+
 O merges another pull request with no results, then sets the repository back to `review`, where G merges without
 results:
 
@@ -1247,10 +1278,12 @@ jq -e '[.. | objects | select(has("v")) | .v] == ["Region","Total","North",50,"S
 
 Pass when the setting reads back as `checks` and the first screenshot shows it checked; G's first `pr_merge` and
 `uvw pr merge` exit 1 with `CHECKS_REQUIRED` naming both checks, and `capabilities.merge` is false; the second
-screenshot shows the reason and no merge button; the Blob replacement, Trash and rename of `.agents/checks.md` all
-answer `AGENT_NOT_ALLOWED` and the file is unchanged; a merge after one result names only the other check; G's merge
-after both succeeds; O's merge with no results succeeds; and after `--landing review` G merges without results,
-leaving Trunk with every row.
+screenshot shows the reason and no merge button; the third shows the Trunk Sheet `Read only`; the Blob replacement,
+Trash and rename of `.agents/checks.md` all answer `AGENT_NOT_ALLOWED` and the file is unchanged; a merge after one
+result names only the other check; G's merge after both succeeds; G's pull request that changes `.agents/checks.md`
+has both checks passed, `capabilities.merge` false and a `pr_merge` refused naming `.agents/`, and O's merge of it
+leaves Trunk's file with G's note; O's merge with no results succeeds; and after `--landing review` G merges without
+results, leaving Trunk with every row.
 
 ## Gotchas
 

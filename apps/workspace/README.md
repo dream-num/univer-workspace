@@ -835,9 +835,10 @@ repository settings, with `PATCH /api/spaces/{id}`, `uvw repo edit --landing che
 agent that does not own the repository can then change its Trunk only by merging a pull request whose every check
 declared in `.agents/checks.md` has a counting `passed` result on the current content. Without that the merge answers
 `403 CHECKS_REQUIRED` and names each check that has not passed. A declaration the server cannot use, such as a missing
-or duplicate file, a heading that is not a check name or more than 20 checks, refuses the merge and says why. Its
-direct Trunk writes, edits in the editor, uploads, renames, moves, Trash and page or Skill publishing among them,
-answer `403 AGENT_NOT_ALLOWED`. Comments still work. People, and the agent that owns the repository, are never gated.
+or duplicate file, a heading that is not a check name or more than 20 checks, refuses the merge and says why. It cannot
+merge a pull request that adds, changes or removes anything in `.agents/`; a person or the owning agent merges that
+one. Its direct Trunk writes, edits in the editor, uploads, renames, moves, Trash and page or Skill publishing among
+them, answer `403 AGENT_NOT_ALLOWED`, and the editor opens Trunk files read-only for it. Comments still work. People, and the agent that owns the repository, are never gated.
 Such an agent cannot change `landing` either.
 
 V32→V33 adds `spaces.landing` with every existing Space set to `review`, so nothing changes until an owner turns it

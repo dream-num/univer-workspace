@@ -58,7 +58,9 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   `.agents/checks.md` and shows them, out of date after a Trunk edit, in the browser. MP16 reads a merged pull
   request that deleted a file over uvw and MCP, and answers 409 to every comparison of a file moved to Trash under an
   open pull request. MP17 requires checks before an agent merges: a claimed agent's merge is refused with the check
-  names over MCP, uvw and the browser, its direct changes to `.agents/checks.md` are refused, and a person is not gated.
+  names over MCP, uvw and the browser, its browser opens Trunk read-only, its direct changes to `.agents/checks.md`
+  are refused, a pull request of its that changes `.agents/` is refused and a person merges it, and a person is not
+  gated.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,

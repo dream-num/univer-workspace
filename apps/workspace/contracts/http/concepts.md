@@ -308,11 +308,16 @@ server reads the declaration as the Space owner, and it must be exactly one read
 `.agents/checks.md` of at most 64 KiB, outside Trash, in exactly one root `.agents` folder,
 whose every level-2 heading outside fences is a distinct check name, with 1 to 20 names, no
 byte order mark and no unclosed fence. Anything else refuses that agent's merge and names the
-problem. The server decides again inside the merge Operation, just before Trunk moves, and a
-refused merge takes no place in the merge budget. Such an agent changes that Trunk in no other
-way: its direct changesets on Trunk Units, comment-only ones aside, are rejected with
-`PERMISSION_DENIED`, and its Node, file, page and Skill writes there return
-`403 AGENT_NOT_ALLOWED`. People are never gated.
+problem. Such an agent also never merges a pull request that adds, changes or removes anything
+in Trunk's `.agents` folder, whatever its checks say; the refusal names `.agents/`, and a person
+or the owning agent merges it. The server decides again inside the merge Operation, just before
+Trunk moves, on the content the merge began with, and a refused merge takes no place in the
+merge budget. While a merge runs, `ready` and `reopen` answer `409 CONFLICT`, and the
+Collaboration Service starts the merge only while the draft is the one that decision read.
+Such an agent changes that Trunk in no other way: its direct changesets on Trunk Units,
+comment-only ones aside, are rejected with `PERMISSION_DENIED`, its Node, file, page and Skill
+writes there return `403 AGENT_NOT_ALLOWED`, and its Trunk Units open with `editorMode`
+`readOnly`. People are never gated.
 
 A Worktree has one author, its creator, and only the author edits its draft. People and
 agents collaborate on trunk, each through their own Worktrees. Merging needs edit access

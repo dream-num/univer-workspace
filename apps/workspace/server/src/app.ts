@@ -317,6 +317,7 @@ export function createWorkspaceApplication(
       pending: (worktreeId, before) => htmlViewDrafts.pending(worktreeId, before),
       writable: (worktreeId, userId, draftIds) => htmlViewDrafts.writable(worktreeId, userId, draftIds),
       foreign: (worktreeId, draftIds) => htmlViewDrafts.foreign(worktreeId, draftIds),
+      targets: (worktreeId, draftIds) => htmlViewDrafts.targets(worktreeId, draftIds),
       publish: (worktreeId, mergerId, draftIds) => htmlViewDrafts.publishForWorktree(worktreeId, mergerId, draftIds),
     },
     declaredChecks: createDeclaredChecksReader({ nodes: repositories.nodes, access, store: blobStore }),

@@ -556,7 +556,7 @@ Trunk 记录（`trunkRevision`），与读 pull request 详情相同；草稿 ID
 
 只在 `ready` 时接受报告（否则 `409 CONFLICT`），需要 `review` 能力。Trunk 对其中 Unit 的编辑、改变内容的 reopen、
 草稿增减或过期都会改变内容键，旧结论保留并显示，但不再 current。合入开始时，`merge_worktree` Operation 的 payload
-记下当时的 `contentKey`，合入后的 pull request 以它判断 current；discard 后没有 current。一个内容键下最多 40 个检查名。
+记下当时的 `contentKey`；受限 agent 的合入在第二次判断后改记那次判断读的内容键。合入后的 pull request 以它判断 current；discard 后没有 current。一个内容键下最多 40 个检查名。
 
 声明的检查来自 Team Space Trunk 根目录 `.agents/checks.md`（恰好一个 `.agents` 文件夹和其中恰好一个 `checks.md`
 Blob），以读者自己的权限读取前 64 KiB。代码块外的 `## name` 标题里，名字合法的前 20 个按文件顺序成为声明的检查，
@@ -573,19 +573,38 @@ Blob），以读者自己的权限读取前 64 KiB。代码块外的 `## name` �
 没有 BOM 和未闭合的代码块，名字 1–20 个。任何一条不满足都拒绝这个 agent 合入并说明原因；人仍可合入。同名兄弟按
 ASCII 大小写折叠排序，读取从名字所在位置分页，最多读 10 页 100 个兄弟，超出视为无法判断而拒绝。
 
+这样的 agent 也不能合入在 Trunk 的 `.agents` 文件夹里新增、修改或移除任何东西的 pull request，检查是否通过都一样，
+消息点名 `.agents/`；人或拥有者 agent 才能合入它。判断和检查门槛在同一处、同样两次：pull request 的每个 Trunk Unit 的
+Node、每个新文件的目标文件夹、每个待发布页面或文件草稿的目标（替换的文件或新页面的文件夹），只要祖先链的根是名为
+`.agents` 的文件夹（`nodes.breadcrumbs`，按 Space owner 解析）就算；解析不到的替换目标也算。重命名和移动不经过
+pull request，它们是直接写入，已经被拒绝。作者是这样的 agent 而 pull request 改 `.agents` 时，ready 后像作者不能合入的
+pull request 一样共享给 Space，好让人看到并合入。
+
 判断在两处各做一次，都用当时的内容键、Trunk head、待发布草稿和报告人的合入权限重新计算：请求进入时（拒绝发生在预留
-Operation 之前，不占合入预算），以及 `merge_worktree` Operation 内、调用 SDK 合入之前。后一次拒绝把 Operation 记为
+Operation 之前，不占合入预算），以及 `merge_worktree` Operation 内、调用 SDK 合入之前。后一次还要求内容键与合入开始时
+的内容（含当时固定的待发布草稿）一致，不一致就拒绝；通过后把它读的内容键写进 Operation payload，并把 Operation 的
+`lease_expires_at` 续到一分钟后。后一次拒绝把 Operation 记为
 `failed`、错误码 `CHECKS_REQUIRED`；`readBudget` 不把这种 Operation 计入 24 小时合入数，它的重试（`POST
 /operations/{id}/retry` 或同一 Idempotency-Key 重放）重新经过门槛并重新占用预算。合入 Operation 没有自动恢复，所以
-被拒绝的合入不会被无限重试。剩余窗口在第二次判断与 SDK 逐个 Unit 提交 Trunk 之间：窗口内受限 agent 的直接写入都会被拒绝，
-能改 Trunk 的只有人、拥有者 agent 和其它已通过门槛的合入，它们与本次合入按 OT 合并，结论不会因此被重新判定。窗口长度
-等于一次 SDK 合入的耗时，没有额外等待。
+被拒绝的合入不会被无限重试。
+
+第二次判断之后，受限 agent 自己的调用不能让合入落下别的内容，在任何副本上都一样。合入期间 Worktree 停在 ready，草稿不收
+写入；产品的 `ready` 与 `reopen` 在同一 Worktree 有 `pending` 且租约未过期的 `merge_worktree` Operation 时返回
+`409 CONFLICT`，这个事实存在产品数据库里，不在进程内。产品把第二次判断读到的每个 Unit 的草稿 head 与移除状态（`draftKey`）
+作为服务端 `customData.checkedDraft` 交给 SDK 合入，Worktree 后端的 `mergeWorktree` 中间件在 SDK 把 Worktree 从
+ready 改成 merging 之前重读一次，状态不是 ready 或草稿不同就拒绝，Operation 记为 `failed`、`409 CONFLICT`，什么都不合入。
+剩下的窗口只在这个中间件的读取和 SDK 改成 merging 之间，而 ready 的 Worktree 在其中仍不收草稿写入；要穿过它，得有一个
+`reopen` 在租约生效前通过产品检查、却晚到窗口里，再加一次编辑和一次 `ready`，都在一次 SDK 状态切换的时间内完成。租约
+过期（合入卡住一分钟以上）后 `reopen` 不再被产品拒绝，但那时 SDK 已经是 merging，同样拒绝。窗口内能改 Trunk 的只有人、
+拥有者 agent、评论类 changeset 和其它已通过门槛的合入，它们与本次合入按 OT 合并，结论不会因此被重新判定。
 
 门槛不缓存，每次读 pull request 都重新计算，只对受限 agent 生效：一次判断多读一次请求者类别、至少两页 `listChildren`、
 声明文件的 Node 与 Resource、最多 64 KiB 的 BlobStore 读取、检查结果行与待发布草稿，并为每个当前报告人求一次合入权限。
 人和 `review` Space 不增加读取。列表只对原本可合入的 `checks` Space 行计算。
 
-这样的 agent 不能用合入以外的方式改 Trunk。Collaboration 中间件在 `submitChangeset`、`applyChangeset` 与
+这样的 agent 不能用合入以外的方式改 Trunk。它打开 Trunk Unit 时，`GET /api/resources/{resourceId}/open` 与
+pull request 的 `trunk` 打开方式都给 `editorMode: readOnly`（`trunkEditorMode`，与下面的拒绝读同一个
+`landsByChecks`），所以 Browser 不显示 `Editable`。Collaboration 中间件在 `submitChangeset`、`applyChangeset` 与
 `commitChangeset` 上拒绝它对 Trunk Unit 的非评论 changeset（`ResourceContentAccess.landsByChecks`，和权限一同读出，不多
 一次查询），包括 HTML View 的实时编辑和 Revision 恢复；只有产品合入调用带服务端 `customData.merge` 标记的 changeset 才放行，
 客户端设不了 `customData`，SDK 端点也拒绝客户端自称 `worktree-merge` 成员。产品写入在入口处调用

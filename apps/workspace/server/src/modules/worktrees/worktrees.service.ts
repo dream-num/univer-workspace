@@ -7,6 +7,7 @@ import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
 import {
   landsByChecks,
+  trunkEditorMode,
   type AccessResolver,
   type ResourceAccess,
   type ResourceContentAccess,
@@ -39,7 +40,7 @@ import type {
   WorktreeVisibility,
 } from "./worktrees.types.js";
 import { checkNeedsReady, checksRequired, forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, pageReviewRequired, pagesChanged, proposalStaysShared, tooManyChecks } from "./worktrees.errors.js";
-import { CHECK_NAME, checksSummary, checkViews, contentKey, type DeclaredChecksReader } from "./checks.js";
+import { CHECK_NAME, checksSummary, checkViews, contentKey, draftKey, type DeclaredChecksReader } from "./checks.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -48,8 +49,11 @@ interface WorktreeContext {
   readonly facts: WorktreeFacts;
   readonly capabilities: WorktreeCapabilities;
   readonly canSeeUnits: boolean;
-  /** Set when the actor lands by checks here: what blocks its merge now, or null once every declared check passed. */
-  readonly checksGate?: { readonly blocked: string | null };
+  /**
+   * Set when the actor lands by checks here: what blocks its merge now, or null once every declared check passed, and
+   * the content key the decision read the results on.
+   */
+  readonly checksGate?: { readonly blocked: string | null; readonly contentKey: string };
 }
 
 /** What a Worktree decision reads: who the actor is to the author, their Team Space role, and their access to every Unit and pending page. */
@@ -74,13 +78,18 @@ export interface WorktreePages {
   writable(worktreeId: string, userId: string, draftIds?: readonly string[]): Promise<boolean>;
   /** Names of the pending pages among `draftIds` whose own author may not write their target. */
   foreign(worktreeId: string, draftIds: readonly string[]): Promise<readonly string[]>;
+  /** Where each pending draft among `draftIds` writes: the file it replaces, or the folder a new page goes into. */
+  targets(worktreeId: string, draftIds: readonly string[]): Promise<readonly ({ readonly resourceId: string } | { readonly parentNodeId: string | null })[]>;
   publish(worktreeId: string, mergerId: string, draftIds: readonly string[]): Promise<readonly PublishedPage[]>;
 }
 
 interface MergePayload {
   readonly worktreeId: string;
   readonly pageDraftIds?: readonly string[];
-  /** The content key when the merge left ready, so results stay current on the merged pull request. */
+  /**
+   * The content key when the merge left ready, or for an agent that lands by checks the one its last check decided on,
+   * so results stay current on the merged pull request.
+   */
   readonly contentKey?: string;
 }
 
@@ -95,7 +104,7 @@ export function createWorktreesModule(options: {
   ) => Promise<void>;
   readonly pages: WorktreePages;
   /** The checks a Team Space declares on its Trunk, as a user reads them and as the merge gate does. */
-  readonly declaredChecks: Pick<DeclaredChecksReader, "names" | "gate">;
+  readonly declaredChecks: Pick<DeclaredChecksReader, "names" | "gate" | "writesAgentsFolder">;
   readonly publicOrigin: string | null;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
@@ -164,8 +173,25 @@ export function createWorktreesModule(options: {
     return withChecksGate(userId, { row, state: data.status, units, ...access });
   }
 
+  /** Whether the author may merge the pull request, as a merge decides it before reading check results. */
   async function authorMerges(value: WorktreeContext): Promise<boolean> {
-    return mergesAs(value, value.row.creator_user_id);
+    const { row } = value;
+    if (!(await mergesAs(value, row.creator_user_id))) return false;
+    const gated = row.team_landing === "checks" && row.team_owner_user_id !== null &&
+      landsByChecks(await options.access.principalCategory(row.creator_user_id), { landing: row.team_landing, owns: row.team_owner_user_id === row.creator_user_id });
+    return !gated || !(await writesAgents(value, await options.pages.pending(row.id)));
+  }
+
+  /** Whether the pull request writes in Trunk's `.agents` folder, which only a person or the owning agent merges. */
+  async function writesAgents(value: WorktreeContext, pending: readonly string[]): Promise<boolean> {
+    const drafts = await options.pages.targets(value.row.id, pending);
+    return options.declaredChecks.writesAgentsFolder(value.row.team_owner_user_id!, {
+      nodeIds: [
+        ...value.units.flatMap((unit) => unit.source === "trunk" ? unit.nodeId ?? [] : unit.target?.parentNodeId ?? []),
+        ...drafts.flatMap((draft) => "parentNodeId" in draft ? draft.parentNodeId ?? [] : []),
+      ],
+      resourceIds: drafts.flatMap((draft) => "resourceId" in draft ? draft.resourceId : []),
+    });
   }
 
   async function mergesAs(value: WorktreeContext, userId: string): Promise<boolean> {
@@ -193,13 +219,13 @@ export function createWorktreesModule(options: {
   async function checkList(userId: string, value: WorktreeContext): Promise<WorktreeCheck[]> {
     if (!value.capabilities.review) throw forbidden();
     const { row } = value;
-    return checkResults(value, row.kind === "team" && row.team_space_id ? await options.declaredChecks.names(userId, row.team_space_id) : []);
+    const declared = row.kind === "team" && row.team_space_id ? await options.declaredChecks.names(userId, row.team_space_id) : [];
+    return checkResults(value, declared, await currentContentKey(value));
   }
 
-  /** The declared checks and every reported one, each passed only by a current result of someone who may merge. */
-  async function checkResults(value: WorktreeContext, declared: readonly string[]): Promise<WorktreeCheck[]> {
-    const { row } = value;
-    const [rows, key] = await Promise.all([options.repository.checks(row.id), currentContentKey(value)]);
+  /** The declared checks and every reported one, each passed only by a result on `key` of someone who may merge. */
+  async function checkResults(value: WorktreeContext, declared: readonly string[], key: string | null): Promise<WorktreeCheck[]> {
+    const rows = await options.repository.checks(value.row.id);
     const merges = new Map<string, boolean>();
     for (const result of rows) {
       if (result.content_key === key && !merges.has(result.reporter_user_id)) {
@@ -210,8 +236,9 @@ export function createWorktreesModule(options: {
   }
 
   /**
-   * An agent that does not own a Team Space requiring checks merges there only once every check that Trunk declares
-   * has a counting pass on the current content. The server reads the declaration and recomputes the results each time.
+   * An agent that does not own a Team Space requiring checks merges there only a pull request that leaves `.agents`
+   * alone, once every check that Trunk declares has a counting pass on the current content. The server reads the
+   * declaration and recomputes the results each time.
    */
   async function withChecksGate(userId: string, value: WorktreeContext): Promise<WorktreeContext> {
     const { row } = value;
@@ -219,15 +246,37 @@ export function createWorktreesModule(options: {
         !landsByChecks(await options.access.principalCategory(userId), { landing: row.team_landing, owns: Boolean(row.actor_owns_team_space) })) {
       return value;
     }
-    const declaration = await options.declaredChecks.gate(row.team_space_id, row.team_owner_user_id);
-    const blocked = "problem" in declaration
+    const pending = await options.pages.pending(row.id);
+    const key = contentKey(value.units, pending);
+    const blocked = await gateBlocker(value, row.team_space_id, row.team_owner_user_id, pending, key);
+    return { ...value, checksGate: { blocked, contentKey: key }, capabilities: { ...value.capabilities, merge: blocked === null } };
+  }
+
+  async function gateBlocker(
+    value: WorktreeContext,
+    teamSpaceId: string,
+    ownerUserId: string,
+    pending: readonly string[],
+    key: string,
+  ): Promise<string | null> {
+    if (await writesAgents(value, pending)) {
+      return "This pull request changes .agents/. In a repository that requires checks, a person or the agent that owns the repository merges such a pull request.";
+    }
+    const declaration = await options.declaredChecks.gate(teamSpaceId, ownerUserId);
+    return "problem" in declaration
       ? `This repository requires checks before an agent merges, and its declaration cannot be used: ${declaration.problem} A person can merge this pull request, or fix .agents/checks.md on Trunk.`
-      : unmetChecks(await checkResults(value, declaration.names));
-    return { ...value, checksGate: { blocked }, capabilities: { ...value.capabilities, merge: blocked === null } };
+      : unmetChecks(await checkResults(value, declaration.names, key));
   }
 
   async function detailWithChecks(userId: string, value: WorktreeContext): Promise<WorktreeDetail> {
     return { ...detailView(value), checks: value.capabilities.review ? checksSummary(await checkList(userId, value)) : null };
+  }
+
+  /** A merge decides on the ready content, so nobody moves the Worktree out of ready and back while one runs, on any replica. */
+  async function refuseWhileMerging(worktreeId: string): Promise<void> {
+    if (await options.repository.mergeRunning(worktreeId, now())) {
+      throw conflict("This pull request is being merged. View it again once the merge finishes.");
+    }
   }
 
   /** A ready Worktree that its author cannot merge is shared with the Space, where someone can. */
@@ -820,23 +869,13 @@ export function createWorktreesModule(options: {
         throw notFound();
       }
       if (mode === "trunk") {
-        const resource = await options.access.resolveResource(
-          userId,
-          unit.resourceId
-        );
-        if (
-          !resource ||
-          !resource.capabilities.openContent
-        ) {
-          throw notFound();
-        }
+        const resource = await options.access.resolveResourceContent(userId, unit.resourceId);
+        if (!resource?.capabilities.openContent) throw notFound();
         return {
           unit: {
             unitId,
             unitType: unit.unitType,
-            editorMode: resource.capabilities.editContent
-              ? "edit"
-              : "readOnly",
+            editorMode: trunkEditorMode(resource),
           },
           collaborationScope: { kind: "trunk" },
         };
@@ -887,6 +926,7 @@ export function createWorktreesModule(options: {
     async markReady(userId, worktreeId) {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.markReady) throw forbidden();
+      await refuseWhileMerging(worktreeId);
       // Shared before the transition, so a retry after a failed transition still leaves it shared.
       await shareUnlessAuthorMerges(value);
       const data = await backendCall(() =>
@@ -906,6 +946,7 @@ export function createWorktreesModule(options: {
     async reopen(userId, worktreeId) {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.reopen) throw forbidden();
+      await refuseWhileMerging(worktreeId);
       const data = await backendCall(() =>
         options.backend.reopen(worktreeId, userId)
       );
@@ -981,12 +1022,26 @@ export function createWorktreesModule(options: {
             );
           }
           // Checks and permissions may change while the merge waits, so the gate decides again just before Trunk moves.
-          const blocked = !resumeMerged && value.checksGate ? (await context(userId, worktreeId)).checksGate?.blocked : null;
-          if (blocked) throw checksRequired(blocked);
+          let checkedDraft: string | undefined;
+          if (!resumeMerged && value.checksGate) {
+            const fresh = await context(userId, worktreeId);
+            const gate = fresh.checksGate;
+            if (gate?.blocked) throw checksRequired(gate.blocked);
+            // The pages the merge publishes were fixed when it began, so the checked content must still be them.
+            if (!fresh.capabilities.merge || (gate && gate.contentKey !== contentKey(fresh.units, pageDraftIds))) {
+              throw checksRequired("This pull request changed while its merge waited. View it again, and merge once its checks pass on what it holds now.");
+            }
+            if (gate) {
+              await options.repository.holdForMerge(operationId, gate.contentKey, now());
+              checkedDraft = draftKey(fresh.units.map((unit) => ({
+                unitID: unit.unitId, draftHeadRevision: unit.draftHeadRevision, removed: unit.change === "deleted",
+              })));
+            }
+          }
           const data = await backendCall(() =>
             resumeMerged
               ? options.backend.getWorktree(worktreeId, userId)
-              : options.backend.merge(worktreeId, userId),
+              : options.backend.merge(worktreeId, userId, checkedDraft),
           );
           const mergedUnitIds = await activateSuccessfulUnits(
             userId,

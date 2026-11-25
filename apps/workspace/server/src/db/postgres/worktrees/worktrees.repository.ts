@@ -597,6 +597,29 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     return row?.key ?? null;
   }
 
+  async holdForMerge(operationId: string, contentKey: string, heldAt: number): Promise<void> {
+    await this._database
+      .prepare(
+        `UPDATE operations
+         SET payload_json = jsonb_set(payload_json::jsonb, '{contentKey}', to_jsonb(?::text))::text,
+             lease_expires_at = ?, updated_at = ?
+         WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
+      )
+      .run(contentKey, heldAt + 60_000, heldAt, operationId);
+  }
+
+  async mergeRunning(worktreeId: string, now: number): Promise<boolean> {
+    const row = await this._database
+      .prepare(
+        `SELECT 1 AS running FROM operations
+         WHERE kind = 'merge_worktree' AND state = 'pending' AND lease_expires_at > ?
+           AND payload_json::jsonb ->> 'worktreeId' = ?
+         LIMIT 1`
+      )
+      .get(now, worktreeId);
+    return row !== undefined;
+  }
+
   async getOperation(operationId: string): Promise<WorktreeOperationRow | null> {
     return (
       (await this._database

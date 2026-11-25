@@ -106,7 +106,7 @@ export function buildServerInstructions(
         ]
       : []),
     ...(finishes && has("pr_check")
-      ? ["In a repository that requires checks, report every declared check with pr_check, then merge."]
+      ? ["In a repository that requires checks, report every declared check with pr_check, then merge. If pr_merge refuses one for changing .agents/, give the user its link to merge."]
       : []),
     has("html_view_save")
       ? "For a page sharing or presenting Workspace data, use an HTML View and read the html-view-creator Skill."

@@ -175,6 +175,129 @@ it("decides again just before Trunk moves, leaves a late refusal out of the budg
   expect((await f.application.access.budget(f.bot.id)).merges.used).toBe(1);
 }, 120_000);
 
+it("records on the merge the content its last check decided on", async () => {
+  const f = await repository("checks");
+  const { worktrees } = f.application;
+  const moved = await f.readyPull(f.bot.id);
+  await f.reportAll(f.bot.id, moved);
+  f.beforeSecondRead(async () => {
+    await f.commitToTrunk(f.owner.id, f.sheet.unitId);
+    await f.reportAll(f.alice.id, moved);
+  });
+  expect(await f.merge(f.bot.id, moved)).toMatchObject({ worktree: { state: "merged" } });
+  const current = (await worktrees.checks(f.owner.id, moved)).checks
+    .map((check) => check.results.filter((result) => result.current).map((result) => result.reporter.id));
+  expect(current, "only results on the content the second check read stay current").toEqual([[f.alice.id], [f.alice.id]]);
+}, 120_000);
+
+it("lands only the content the last check decided on, whatever the agent does after it", async () => {
+  const f = await repository("checks");
+  const { worktrees } = f.application;
+  const held = await f.readyPull(f.bot.id, f.sheet.id, f.team, true);
+  await f.reportAll(f.bot.id, held);
+  f.beforeSdkMerge(async () => {
+    await expect(worktrees.reopen(f.bot.id, held), "a running merge holds the pull request in ready").rejects.toMatchObject({
+      code: "CONFLICT", status: 409, message: "This pull request is being merged. View it again once the merge finishes.",
+    });
+  });
+  expect(await f.merge(f.bot.id, held)).toMatchObject({ worktree: { state: "merged" } });
+
+  const slipped = await f.readyPull(f.bot.id, f.otherSheet.id, f.team, true);
+  await f.reportAll(f.bot.id, slipped);
+  const trunkBefore = await f.trunkHead(f.otherSheet.unitId, f.owner.id);
+  f.beforeSdkMerge(async () => {
+    // Requests that passed the product's own checks before this merge began reach the Collaboration Service late.
+    await f.sdk.reopen(slipped, f.bot.id);
+    await f.editDraft(f.bot.id, slipped);
+    await f.sdk.markReady(slipped, f.bot.id);
+  });
+  await expect(f.merge(f.bot.id, slipped)).rejects.toMatchObject({
+    code: "CONFLICT", message: expect.stringContaining("changed after its checks were decided, so nothing was merged"),
+  });
+  expect(await f.trunkHead(f.otherSheet.unitId, f.owner.id), "Trunk keeps what it had").toBe(trunkBefore);
+  expect((await worktrees.get(f.bot.id, slipped)).worktree).toMatchObject({ state: "ready", capabilities: { merge: false } });
+}, 120_000);
+
+it("lets only a person or the agent that owns the repository merge a pull request that changes .agents/", async () => {
+  const f = await repository("checks");
+  const { worktrees, htmlViewDrafts, forks, permissions, spaces, nodes, resources } = f.application;
+  const rules = await f.sheetNamed("Rules", f.folder);
+  const html = "<!doctype html><html><body><h1>Rules</h1></body></html>";
+  const changes: [string, () => Promise<string>][] = [
+    ["change a file in .agents/", () => f.readyPull(f.bot.id, rules.id, f.team, true)],
+    ["add a file to .agents/", async () => {
+      const pull = await f.openPull(f.bot.id);
+      await worktrees.addUnit(f.bot.id, pull, randomUUID(), {
+        source: "worktree", name: "More rules", unitType: "sheet", targetSpaceId: f.team, targetParentNodeId: f.folder,
+      });
+      await worktrees.markReady(f.bot.id, pull);
+      return pull;
+    }],
+    ["add a page to .agents/", async () => {
+      const pull = await f.openPull(f.bot.id);
+      await htmlViewDrafts.submit(f.bot.id, randomUUID(), {
+        kind: "create", name: "Rules page", spaceId: f.team, parentNodeId: f.folder, html, sourceWorktreeId: pull,
+      });
+      await worktrees.markReady(f.bot.id, pull);
+      return pull;
+    }],
+    ["replace .agents/checks.md", async () => {
+      const { body: fork } = await forks.create(f.bot.id, { upstreamSpaceId: f.team, name: "rules" });
+      const declaration = await f.application.access.resolveResource(f.owner.id, f.declaration.resourceId);
+      if (declaration?.kind !== "blob") throw new Error("Blob missing");
+      const bytes = Buffer.from(`${CHECKS_MD}\nRevised by an agent.\n`);
+      const { body } = await forks.replaceBlob(await f.principal(f.bot), fork.id, f.declaration.resourceId, randomUUID(), {
+        ifMatch: `"${declaration.etag}"`, contentLength: String(bytes.length),
+      }, Readable.from([bytes]));
+      await worktrees.markReady(f.bot.id, body.worktree.id);
+      return body.worktree.id;
+    }],
+  ];
+  for (const [change, open] of changes) {
+    const pull = await open();
+    await f.reportAll(f.bot.id, pull);
+    expect((await worktrees.get(f.bot.id, pull)).worktree.capabilities.merge, change).toBe(false);
+    await expect(f.merge(f.bot.id, pull), change).rejects.toMatchObject({
+      code: "CHECKS_REQUIRED", status: 403, message: expect.stringContaining("This pull request changes .agents/."),
+    });
+    expect(await f.merge(f.alice.id, pull), `a person can ${change}`).toMatchObject({ worktree: { state: "merged" } });
+  }
+  const children = await nodes.listChildren(f.owner.id, f.folder, { cursor: undefined, limit: undefined });
+  expect(children.nodes.map((node) => node.name).sort(), "every change landed through a person").toEqual(["More rules", "Rules", "Rules page.univer.html", "checks.md"]);
+
+  // Only an admin proposes removing a file, and an agent is an admin only where an agent owns the repository.
+  const lead = await f.agent(f.owner, "lead");
+  const { id: crew } = await spaces.createTeamSpace(lead.id, { name: "Crew" });
+  await spaces.update(lead.id, crew, { landing: "checks" });
+  await permissions.upsertTeamMember(lead.id, crew, f.bot.id, { role: "admin" });
+  const crewFolder = (await nodes.create(lead.id, { spaceId: crew, parentNodeId: null, name: ".agents" })).id;
+  const created = await resources.create(lead.id, randomUUID(), { kind: "univer", spaceId: crew, parentNodeId: crewFolder, name: "Rules", unitType: "sheet" });
+  if (created.status === 202 || !created.body.node.resource) throw new Error("Sheet missing");
+  const removal = await f.openPull(f.bot.id, crew);
+  const { body } = await worktrees.addUnit(f.bot.id, removal, randomUUID(), { source: "trunk", resourceId: created.body.node.resource.id });
+  await worktrees.setUnitRemoved(f.bot.id, removal, body.unit.unitId, { removed: true });
+  await worktrees.markReady(f.bot.id, removal);
+  await expect(f.merge(f.bot.id, removal), "remove a file from .agents/").rejects.toMatchObject({
+    code: "CHECKS_REQUIRED", message: expect.stringContaining("This pull request changes .agents/."),
+  });
+  expect(await f.merge(lead.id, removal), "the agent that owns the repository can").toMatchObject({ worktree: { state: "merged" } });
+  expect((await nodes.listChildren(lead.id, crewFolder, { cursor: undefined, limit: undefined })).nodes).toEqual([]);
+}, 120_000);
+
+it("opens Trunk files read-only for an agent that lands by checks, as Trunk refuses its edits", async () => {
+  const f = await repository();
+  const { resources, worktrees, spaces } = f.application;
+  const editorMode = async (userId: string) => (await resources.open(userId, f.sheet.id)).resource;
+  expect(await editorMode(f.bot.id)).toMatchObject({ editorMode: "edit" });
+  await spaces.update(f.owner.id, f.team, { landing: "checks" });
+  expect(await editorMode(f.bot.id)).toMatchObject({ editorMode: "readOnly" });
+  expect(await editorMode(f.alice.id), "a person is not gated").toMatchObject({ editorMode: "edit" });
+  const pull = await f.openPull(f.bot.id);
+  const { body } = await worktrees.addUnit(f.bot.id, pull, randomUUID(), { source: "trunk", resourceId: f.sheet.id });
+  expect((await worktrees.openUnit(f.bot.id, pull, body.unit.unitId, { mode: "trunk" })).unit.editorMode).toBe("readOnly");
+  expect((await worktrees.openUnit(f.bot.id, pull, body.unit.unitId, { mode: "draft" })).unit.editorMode, "its own draft stays editable").toBe("edit");
+}, 120_000);
+
 it("keeps such an agent from changing Trunk's files outside a merge, its check declaration included", async () => {
   const f = await repository();
   const { nodes, blobs, resources, trash, htmlViewDrafts, skillDrafts, access } = f.application;
@@ -202,6 +325,7 @@ it("keeps such an agent from changing Trunk's files outside a merge, its check d
     ["rename checks.md", () => nodes.update(bot, f.declaration.nodeId, { name: "checks.txt" })],
     ["rename .agents", () => nodes.update(bot, f.folder, { name: "agents" })],
     ["move checks.md", () => nodes.update(bot, f.declaration.nodeId, { parentNodeId: null })],
+    ["move a file into .agents", async () => nodes.update(bot, (await access.resolveResource(f.owner.id, f.sheet.id))!.node.id, { parentNodeId: f.folder })],
     ["replace checks.md", () => f.replace(f.bot, f.declaration.resourceId, "## anything\n")],
     ["trash checks.md", () => trash.trashNode(f.bot.id, f.declaration.nodeId)],
     ["trash .agents", () => trash.trashNode(f.bot.id, f.folder)],
@@ -266,7 +390,7 @@ interface Actor {
  * viewer agent, both claimed by the owner.
  */
 async function repository(landing: "review" | "checks" = "review") {
-  const { application, origin, trunk, trunkHead, unreadable, beforeSecondRead, sql } = await start();
+  const { application, origin, trunk, trunkHead, unreadable, beforeSecondRead, beforeSdkMerge, sdk, sql } = await start();
   const person = async (username: string): Promise<Actor> => {
     const issued = await application.identity.registerWithPassword({ username, displayName: username, password: "correct horse battery staple" });
     return { id: issued.view.user.id, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
@@ -301,9 +425,9 @@ async function repository(landing: "review" | "checks" = "review") {
     if (resource?.kind !== "blob") throw new Error("Blob missing");
     return resource.objectKey;
   };
-  const sheetNamed = async (name: string) => {
+  const sheetNamed = async (name: string, parentNodeId: string | null = null) => {
     const created = await application.resources.create(owner.id, randomUUID(), {
-      kind: "univer", spaceId: team, parentNodeId: null, name, unitType: "sheet",
+      kind: "univer", spaceId: team, parentNodeId, name, unitType: "sheet",
     });
     if (created.status === 202 || created.body.node.resource?.kind !== "univer") throw new Error("Sheet missing");
     return created.body.node.resource;
@@ -324,14 +448,28 @@ async function repository(landing: "review" | "checks" = "review") {
   const otherSheet = await sheetNamed("South");
   if (landing === "checks") await application.spaces.update(owner.id, team, { landing });
 
+  /** Moves the draft head of the pull request's first Unit by one changeset. */
+  const editDraft = async (userId: string, pull: string) => {
+    const unit = (await application.worktrees.get(userId, pull)).worktree.units[0]!;
+    const result = await application.worktrees.submitChangeset(userId, pull, unit.unitId, {
+      changeset: {
+        unitID: unit.unitId, type: UniverType.UNIVER_SHEET, baseRev: unit.draftHeadRevision, revision: unit.draftHeadRevision + 1,
+        sid: randomUUID(), reqId: 1, userID: "", memberID: "", createTime: 1, mutations: [],
+      },
+    });
+    if (result.status !== "committed") throw new Error(`Draft write was ${result.status}`);
+  };
+  const openPull = async (userId: string, teamSpaceId: string = team) => (await application.worktrees.create(userId, randomUUID(), {
+    kind: "team", teamSpaceId, name: "Fix totals", summary: null, visibility: "space",
+  })).body.id;
+
   return {
-    application, origin, team, folder, declaration, sheet, otherSheet, owner, alice, bot, reader, unreadable, beforeSecondRead, sql,
-    agent, principal, upload, objectKey,
-    async readyPull(userId: string, resourceId: string = sheet.id, teamSpaceId: string = team) {
-      const id = (await application.worktrees.create(userId, randomUUID(), {
-        kind: "team", teamSpaceId, name: "Fix totals", summary: null, visibility: "space",
-      })).body.id;
+    application, origin, team, folder, declaration, sheet, otherSheet, owner, alice, bot, reader, unreadable, beforeSecondRead,
+    beforeSdkMerge, sdk, sql, agent, principal, upload, objectKey, sheetNamed, editDraft, openPull, trunkHead,
+    async readyPull(userId: string, resourceId: string = sheet.id, teamSpaceId: string = team, edit = false) {
+      const id = await openPull(userId, teamSpaceId);
       await application.worktrees.addUnit(userId, id, randomUUID(), { source: "trunk", resourceId });
+      if (edit) await editDraft(userId, id);
       await application.worktrees.markReady(userId, id);
       return id;
     },
@@ -399,6 +537,7 @@ async function start() {
   };
   const backend = createWorktreeBackend(runtime.worktreeService, runtime.service);
   let hook: { run: () => Promise<void>; reads: number } | undefined;
+  let mergeHook: (() => Promise<void>) | undefined;
   const worktreeBackend: WorktreeBackend = {
     ...backend,
     async getWorktree(worktreeId, userId) {
@@ -408,6 +547,12 @@ async function start() {
         await run();
       }
       return backend.getWorktree(worktreeId, userId);
+    },
+    async merge(worktreeId, userId, checkedDraft) {
+      const run = mergeHook;
+      mergeHook = undefined;
+      await run?.();
+      return backend.merge(worktreeId, userId, checkedDraft);
     },
   };
   const application: WorkspaceApplication = createWorkspaceApplication(config, database.repositories, collaboration, {
@@ -450,6 +595,11 @@ async function start() {
     beforeSecondRead(run: () => Promise<void>) {
       hook = { run, reads: 0 };
     },
+    /** Runs once the second gate decided, just before the product asks the Collaboration Service to merge. */
+    beforeSdkMerge(run: () => Promise<void>) {
+      mergeHook = run;
+    },
+    sdk: backend,
     sql,
   };
 }

@@ -323,7 +323,8 @@ Trunk's `.agents/checks.md` may declare checks, each a `## name` with what to
 verify. Once a pull request is ready, before merging and when reviewing, verify
 each, on trunk when a file is `behind`, and report it with `pr_check`. `pr_view`
 lists them; a result counts while the content is unchanged and its reporter may merge.
-In a repository that requires checks, report every declared check, then merge.
+In a repository that requires checks, report every declared check, then merge. If
+`pr_merge` refuses one for changing `.agents/`, give the user its link to merge.
 `share` works only on files in a Personal Space. For a Team repository, return the
 pull request link instead.
 An agent's `share` url also says, in `access`, who can open it. While unclaimed, it also gives the user the `claimUrl` from `share`, or

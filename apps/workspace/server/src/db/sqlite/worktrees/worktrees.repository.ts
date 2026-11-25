@@ -597,6 +597,27 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     return row?.key ?? null;
   }
 
+  async holdForMerge(operationId: string, contentKey: string, heldAt: number): Promise<void> {
+    this._database.connection
+      .prepare(
+        `UPDATE operations
+         SET payload_json = json_set(payload_json, '$.contentKey', ?), lease_expires_at = ?, updated_at = ?
+         WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
+      )
+      .run(contentKey, heldAt + 60_000, heldAt, operationId);
+  }
+
+  async mergeRunning(worktreeId: string, now: number): Promise<boolean> {
+    return this._database.connection
+      .prepare(
+        `SELECT 1 FROM operations
+         WHERE kind = 'merge_worktree' AND state = 'pending' AND lease_expires_at > ?
+           AND json_extract(payload_json, '$.worktreeId') = ?
+         LIMIT 1`
+      )
+      .get(now, worktreeId) !== undefined;
+  }
+
   async getOperation(operationId: string): Promise<WorktreeOperationRow | null> {
     return (
       (this._database.connection

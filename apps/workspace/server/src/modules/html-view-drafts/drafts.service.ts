@@ -417,6 +417,10 @@ export function createHtmlViewDraftsModule(options: {
       for (const row of await livePages(worktreeId, draftIds)) if (!(await mayWrite(row.author_user_id, row))) names.push(row.name);
       return names;
     },
+    async targets(worktreeId: string, draftIds: readonly string[]) {
+      return (await livePages(worktreeId, draftIds)).map((row) =>
+        row.kind === "replace" ? { resourceId: row.target_resource_id! } : { parentNodeId: row.parent_node_id });
+    },
     /** Publishes as the merger the drafts its merge fixed when it began; a draft pending later was never reviewed with it. */
     async publishForWorktree(worktreeId: string, mergerId: string, draftIds: readonly string[]): Promise<PublishedPage[]> {
       const publishedPages: PublishedPage[] = [];

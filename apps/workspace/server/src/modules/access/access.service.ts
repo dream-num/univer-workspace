@@ -127,6 +127,11 @@ export function resolveStoredContentAccess(
   };
 }
 
+/** How a Trunk Unit opens in an editor: read-only where Trunk would refuse the requester's edits, the checks ceiling included. */
+export function trunkEditorMode(access: ResourceContentAccess | null): "edit" | "readOnly" {
+  return access?.capabilities.editContent && !access.landsByChecks ? "edit" : "readOnly";
+}
+
 export function resolveStoredNodeAccess(userId: string, row: ResolvedNodeRow | null): NodeAccess | null {
   if (!row) return null;
   const { regularRole, role } = resolvedRoles(userId, row);

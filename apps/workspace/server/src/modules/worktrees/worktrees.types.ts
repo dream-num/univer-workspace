@@ -193,7 +193,8 @@ export interface WorktreeBackend {
     userId: string,
   ): Promise<WorktreeData>;
   reopen(worktreeId: string, userId: string): Promise<WorktreeData>;
-  merge(worktreeId: string, userId: string): Promise<WorktreeData>;
+  /** `checkedDraft` is the `draftKey` the checks gate decided on; the merge starts only while the draft still matches it. */
+  merge(worktreeId: string, userId: string, checkedDraft?: string): Promise<WorktreeData>;
   discard(worktreeId: string, userId: string): Promise<WorktreeData>;
   submitChangeset(
     worktreeId: string,

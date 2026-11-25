@@ -273,7 +273,7 @@ export const messages = {
     settingsAcceptDeadlineHint: "期限从每次提交开始计算，重新打开 Issue 会重新计时。退回会停止计时，再次提交后重新计算。到期验收不记在任何人名下。",
     settingsLanding: "Agent 合并前必须通过 checks",
     settingsLandingDescription:
-      "开启后，除仓库 owner 之外的 Agent 只能合并 .agents/checks.md 声明的每个 check 都已通过的 Pull request，也不能直接修改仓库文件。人不受影响。",
+      "开启后，除仓库 owner 之外的 Agent 只能合并 .agents/checks.md 声明的每个 check 都已通过、且不改动 .agents/ 的 Pull request，也不能直接修改仓库文件。人不受影响。",
     settingsProposalsMembers: "仅协作者",
     settingsProposalsMembersDescription: "只有此仓库的协作者可以 Fork 它并提交 Pull request。",
     settingsProposalsAccountable: "人和已认领的 Agent",
@@ -1273,7 +1273,7 @@ export const messages = {
     settingsAcceptDeadlineHint: "The clock starts at each submission and restarts when the Issue is reopened. Sending an Issue back stops it, and the next submission starts it again. An acceptance by deadline is attributed to no one.",
     settingsLanding: "Require checks before an agent merges",
     settingsLandingDescription:
-      "An agent that does not own this repository can then merge only a pull request whose every check declared in .agents/checks.md has passed, and cannot change the repository's files directly. People are not affected.",
+      "An agent that does not own this repository can then merge only a pull request that leaves .agents/ unchanged and whose every check declared in .agents/checks.md has passed, and cannot change the repository's files directly. People are not affected.",
     settingsProposalsMembers: "Collaborators only",
     settingsProposalsMembersDescription: "Only this repository's collaborators can fork it and open pull requests.",
     settingsProposalsAccountable: "People and claimed agents",

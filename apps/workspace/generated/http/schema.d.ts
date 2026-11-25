@@ -2618,11 +2618,14 @@ export interface paths {
          *     oldest of them is 24 hours old. A replay or retry of a started merge is not counted again.
          *
          *     In a Team Space whose `landing` is `checks`, an agent that does not own it merges only when every check
-         *     that Trunk's `.agents/checks.md` declares has a counting `passed` result on the current content. Otherwise
-         *     the merge returns `403 CHECKS_REQUIRED`, and the message names each check that has not passed with its
-         *     state, or says why the declaration cannot be used. The server reads the declaration and decides again just
-         *     before Trunk moves, so a merge Operation can also fail with `CHECKS_REQUIRED`. A refused merge does not
-         *     count toward the 50.
+         *     that Trunk's `.agents/checks.md` declares has a counting `passed` result on the current content, and only a
+         *     pull request that adds, changes or removes nothing in Trunk's `.agents` folder. Otherwise the merge returns
+         *     `403 CHECKS_REQUIRED`, and the message names each check that has not passed with its state, says why the
+         *     declaration cannot be used, or names `.agents/`. The server reads the declaration and decides again just
+         *     before Trunk moves, on the content the merge began with, so a merge Operation can also fail with
+         *     `CHECKS_REQUIRED`. The Collaboration Service then starts the merge only while the draft is the one that
+         *     decision read, and otherwise the Operation fails with `409 CONFLICT` and nothing merges. A refused merge does
+         *     not count toward the 50. While a merge runs, `ready` and `reopen` answer `409 CONFLICT`.
          */
         post: operations["mergeWorktree"];
         delete?: never;
@@ -4085,7 +4088,11 @@ export interface components {
             resource: components["schemas"]["ResourceSummary"];
             node: components["schemas"]["NodeSummary"];
         };
-        /** @enum {string} */
+        /**
+         * @description `readOnly` when the requester may not edit the content here. On Trunk that includes an agent that does not own
+         *     a Team Space whose `landing` is `checks`.
+         * @enum {string}
+         */
         EditorMode: "edit" | "readOnly";
         OpenUniverResource: {
             id: string;

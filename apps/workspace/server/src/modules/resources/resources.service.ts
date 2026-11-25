@@ -6,6 +6,7 @@ import {
 } from "../../integrations/univer/unit-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import {
+  trunkEditorMode,
   type AccessResolver,
   type ResourceAccess,
   type UnitType,
@@ -241,9 +242,7 @@ export function createResourcesModule(options: {
           unitId: access.unitId,
           unitType: access.unitType,
           accessRole: access.node.role,
-          editorMode: access.capabilities.editContent
-            ? "edit"
-            : "readOnly",
+          editorMode: trunkEditorMode(await options.access.resolveResourceContent(userId, resourceId)),
         },
       };
     },

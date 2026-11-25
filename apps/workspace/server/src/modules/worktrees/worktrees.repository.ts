@@ -209,8 +209,12 @@ export interface WorktreesRepository {
     readonly summary: string;
     readonly reportedAt: number;
   }): Promise<void>;
-  /** The content key the latest merge recorded when it left ready. */
+  /** The content key the latest merge recorded when it left ready, or when its checks gate last decided. */
   mergedContentKey(worktreeId: string): Promise<string | null>;
+  /** Records the content key a merge's checks gate decided on, and holds the merge's lease for another minute. */
+  holdForMerge(operationId: string, contentKey: string, heldAt: number): Promise<void>;
+  /** Whether a merge of the Worktree has started and still holds its lease. */
+  mergeRunning(worktreeId: string, now: number): Promise<boolean>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;
   reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
   completeOperation(

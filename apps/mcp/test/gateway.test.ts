@@ -727,7 +727,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"34408427b2795a4c49e6eec8f266c78e40649b56e383105e3df4d186b58fca91"`);
+    expect(digest).toMatchInlineSnapshot(`"f8229e756593d74a67ea03cb41d2153722698f8107deb39e1970712a8005291b"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
@@ -779,7 +779,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     );
     expect(claimed).toContain(share);
     expect(claimed).toContain("A file link from someone else gives an agent identity read access only.");
-    const checks = "In a repository that requires checks, report every declared check with pr_check, then merge.";
+    const checks = "In a repository that requires checks, report every declared check with pr_check, then merge. If pr_merge refuses one for changing .agents/, give the user its link to merge.";
     expect([human, agent, claimed].every((text) => text.includes(checks))).toBe(true);
     expect(filesOnly).not.toContain(checks);
     for (const sentence of [limits, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {

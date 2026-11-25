@@ -38,6 +38,14 @@ export function contentKey(units: readonly WorktreeUnit[], pendingDraftIds: read
   return createHash("sha256").update(JSON.stringify([parts, [...pendingDraftIds].sort()])).digest("base64url");
 }
 
+/** Names the draft a merge would land, in the Collaboration Service's own terms: every Unit's draft head and removal. */
+export function draftKey(units: readonly { readonly unitID: string; readonly draftHeadRevision: number; readonly removed?: boolean }[]): string {
+  const parts = units
+    .map((unit) => [unit.unitID, unit.draftHeadRevision, unit.removed === true] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return createHash("sha256").update(JSON.stringify(parts)).digest("base64url");
+}
+
 export function checkViews(
   declared: readonly string[],
   rows: readonly WorktreeCheckRow[],
@@ -115,7 +123,7 @@ const asciiLower = (name: string) => name.replace(/[A-Z]/g, (letter) => letter.t
 
 /** Reads Trunk's `.agents/checks.md`: leniently for the check list, and strictly, as the server, for the merge gate. */
 export function createDeclaredChecksReader(options: {
-  readonly nodes: Pick<NodesRepository, "listChildren">;
+  readonly nodes: Pick<NodesRepository, "listChildren" | "breadcrumbs">;
   readonly access: AccessResolver;
   readonly store: BlobStore;
 }) {
@@ -185,6 +193,23 @@ export function createDeclaredChecksReader(options: {
         if (error instanceof DeclarationProblem) return { problem: error.message };
         throw error;
       }
+    },
+    /**
+     * Whether a pull request writes in Trunk's `.agents` folder: `nodeIds` are the files it changes or removes and the
+     * folders it adds files to, `resourceIds` the files it replaces. Read as the Space owner; a file the owner cannot
+     * resolve cannot be placed, so it counts as in the folder.
+     */
+    async writesAgentsFolder(ownerUserId: string, places: { readonly nodeIds: readonly string[]; readonly resourceIds: readonly string[] }): Promise<boolean> {
+      const nodeIds = [...places.nodeIds];
+      for (const resourceId of places.resourceIds) {
+        const resource = await options.access.resolveResource(ownerUserId, resourceId);
+        if (!resource) return true;
+        nodeIds.push(resource.node.id);
+      }
+      for (const nodeId of nodeIds) {
+        if ((await options.nodes.breadcrumbs(nodeId))[0]?.name === ".agents") return true;
+      }
+      return false;
     },
   };
 }
