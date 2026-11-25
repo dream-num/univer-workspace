@@ -7,7 +7,7 @@ import type { AgentClaims } from "./agent-claims.js";
 import type { IdentityModule } from "./identity.service.js";
 import type { AgentBudget } from "./identity.types.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
-import { createSourceRateLimiter, SOURCE_WINDOW_SECONDS } from "./source-rate-limiter.js";
+import { createSourceRateLimiter, SOURCE_WINDOW_SECONDS, type SourceRateStore } from "./source-rate-limiter.js";
 
 const WORKSPACE_AGENTS_CLIENT_ID = "univer-workspace-agents";
 const MAX_AGENT_LABEL_LENGTH = 64;
@@ -24,6 +24,7 @@ export function createIdentityRouter(options: {
   readonly discordBotApiKey?: string;
   /** True when TRUST_PROXY is set. Unset, `request.ip` can be a proxy every client shares, and one count would refuse them all. */
   readonly emailSourceLimits: boolean;
+  readonly sourceRates: SourceRateStore;
   readonly budget: (userId: string) => Promise<AgentBudget>;
 }): Router {
   const router = Router();
@@ -67,17 +68,16 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
-  // shortcut: counts live in this process, so each replica allows the full limit, and past 10,000 tracked sources a new source passes uncounted; share them in a store when Workspace runs more than one replica.
   const emailSources = options.emailSourceLimits
     ? {
-        codeRequests: createSourceRateLimiter(EMAIL_CODE_REQUESTS_PER_SOURCE_HOUR, Date.now, "admit"),
-        codeChecks: createSourceRateLimiter(EMAIL_CODE_CHECKS_PER_SOURCE_HOUR, Date.now, "admit"),
+        codeRequests: createSourceRateLimiter(options.sourceRates, "email_code_request", EMAIL_CODE_REQUESTS_PER_SOURCE_HOUR, Date.now),
+        codeChecks: createSourceRateLimiter(options.sourceRates, "email_code_check", EMAIL_CODE_CHECKS_PER_SOURCE_HOUR, Date.now),
       }
     : null;
 
   router.post("/auth/email/code", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    if (emailSources && !emailSources.codeRequests.take(request.ip)) {
+    if (emailSources && !(await emailSources.codeRequests.take(request.ip))) {
       throw emailSourceLimited("Too many sign-in codes were requested from this network. Try again later.");
     }
     const issued = await identity.requestEmailLoginCode({
@@ -87,7 +87,7 @@ export function createIdentityRouter(options: {
   });
 
   router.post("/auth/email/login", async (request, response) => {
-    if (emailSources && !emailSources.codeChecks.take(request.ip)) {
+    if (emailSources && !(await emailSources.codeChecks.take(request.ip))) {
       throw emailSourceLimited("Too many sign-in attempts came from this network. Try again later.");
     }
     const issued = await identity.loginWithEmailCode({
@@ -163,7 +163,7 @@ export function createIdentityRouter(options: {
     if (!session.guestAuthEnabled) {
       throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
     }
-    identity.assertAgentCreationAllowed(request.ip);
+    await identity.assertAgentCreationAllowed(request.ip);
     const { user } = await identity.createAgent({
       label,
       // The name comes from the client the server resolved, never from the request.

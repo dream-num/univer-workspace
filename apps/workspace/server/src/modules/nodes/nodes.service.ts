@@ -7,7 +7,7 @@ import type {
   SpaceAccess,
 } from "../access/index.js";
 import { resourceCapabilities } from "../access/access.service.js";
-import { ANONYMOUS_USER_ID, createSourceRateLimiter, type Principal } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, createSourceRateLimiter, type Principal, type SourceRateStore } from "../identity/index.js";
 import { nodeNotFound as notFound } from "./nodes.errors.js";
 import type {
   NodesRepository,
@@ -49,7 +49,7 @@ export interface NodesModule {
   update(actor: Principal, nodeId: string, input: unknown): Promise<NodeSummary>;
   /**
    * Files an abuse report on a Node the requester can read; anyone may, signed in or not. The
-   * source IP is only the rate-limit key and is never stored.
+   * source IP is only the rate-limit key and is never stored with the report.
    */
   report(
     userId: string,
@@ -62,10 +62,11 @@ export interface NodesModule {
 export function createNodesModule(options: {
   readonly repository: NodesRepository;
   readonly access: AccessResolver;
+  readonly sourceRates: SourceRateStore;
   readonly now?: () => number;
 }): NodesModule {
   const now = options.now ?? Date.now;
-  const reportLimiter = createSourceRateLimiter(REPORT_LIMIT_PER_HOUR, now);
+  const reportLimiter = createSourceRateLimiter(options.sourceRates, "node_report", REPORT_LIMIT_PER_HOUR, now);
 
   async function listPage(
     userId: string,
@@ -170,7 +171,7 @@ export function createNodesModule(options: {
       // A Node the requester cannot read is indistinguishable from a missing one, as on the Node route.
       if (!(await options.access.resolveNode(userId, nodeId))) throw notFound();
       const reason = validReportReason(inputValue);
-      if (!reportLimiter.take(originIp)) {
+      if (!(await reportLimiter.take(originIp))) {
         throw new ApplicationError(
           "REPORT_RATE_LIMITED",
           429,

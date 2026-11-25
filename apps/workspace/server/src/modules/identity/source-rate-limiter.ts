@@ -1,44 +1,39 @@
+import { randomUUID } from "node:crypto";
 import { isIPv4, isIPv6 } from "node:net";
+import type { IdentityRepository } from "./identity.repository.js";
 
 export const SOURCE_WINDOW_SECONDS = 60 * 60;
 const WINDOW_MS = SOURCE_WINDOW_SECONDS * 1000;
-const BUCKET_CAPACITY = 10_000;
+
+export type SourceRateAction = "agent_create" | "email_code_request" | "email_code_check" | "client_metadata_fetch" | "node_report";
+export type SourceRateStore = Pick<IdentityRepository, "takeSourceEvent" | "countSourceEvents">;
 
 export interface SourceRateLimiter {
-  /** Records one event for the source and returns true, or returns false when the source is over its limit. */
-  take(ip: string | undefined): boolean;
-  /** Returns whether `take` would accept the source now, without recording an event. */
-  allows(ip: string | undefined): boolean;
+  /** Records one event for the source and resolves true, or resolves false when the source is over its limit. */
+  take(ip: string | undefined): Promise<boolean>;
+  /** Resolves whether `take` would accept the source now, without recording an event. */
+  allows(ip: string | undefined): Promise<boolean>;
 }
 
 /**
- * In-process sliding one-hour window per source. A limit of 0 refuses every event.
- * The map holds at most BUCKET_CAPACITY sources; `whenFull` either refuses a new source past that
- * or admits it without counting it.
+ * Sliding one-hour window per source and action. The product database holds the events, so every
+ * replica shares one count and a restart keeps it. A limit of 0 refuses every event.
  */
 export function createSourceRateLimiter(
+  store: SourceRateStore,
+  action: SourceRateAction,
   limitPerHour: number,
-  now: () => number,
-  whenFull: "refuse" | "admit" = "refuse"
+  now: () => number
 ): SourceRateLimiter {
-  const buckets = new Map<string, number[]>();
-  function admit(ip: string | undefined, record: boolean): boolean {
-    const at = now();
-    const windowStart = at - WINDOW_MS;
-    for (const [key, times] of buckets) {
-      if (times.at(-1)! <= windowStart) buckets.delete(key);
-    }
-    const key = sourceBucket(ip);
-    const recent = (buckets.get(key) ?? []).filter((time) => time > windowStart);
-    if (recent.length >= limitPerHour) return false;
-    if (recent.length === 0 && buckets.size >= BUCKET_CAPACITY) return whenFull === "admit";
-    if (record) {
-      recent.push(at);
-      buckets.set(key, recent);
-    }
-    return true;
-  }
-  return { take: (ip) => admit(ip, true), allows: (ip) => admit(ip, false) };
+  return {
+    take(ip) {
+      const at = now();
+      return store.takeSourceEvent({ id: randomUUID(), action, source: sourceBucket(ip), createdAt: at }, at - WINDOW_MS, limitPerHour);
+    },
+    async allows(ip) {
+      return (await store.countSourceEvents(action, sourceBucket(ip), now() - WINDOW_MS)) < limitPerHour;
+    },
+  };
 }
 
 /**

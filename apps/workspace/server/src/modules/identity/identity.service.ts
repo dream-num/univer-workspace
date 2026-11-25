@@ -101,7 +101,7 @@ export interface IdentityModule {
    */
   createAgent(input: AgentCreation): Promise<CreatedAgent>;
   /** Throws the error `createAgent` would throw for a source over its limit, without counting a creation. */
-  assertAgentCreationAllowed(originIp: string | undefined): void;
+  assertAgentCreationAllowed(originIp: string | undefined): Promise<void>;
   startCliAuthorization(): CliAuthorizationStart;
   approveCliAuthorization(
     cookieHeader: string | undefined,
@@ -241,7 +241,7 @@ export function createIdentityModule(options: {
     options.emailAuthEnabled ?? emailSender !== null;
   const trialDeployment = options.trialDeployment ?? false;
   const agentCreateLimitPerHour = options.agentCreateLimitPerHour ?? 5;
-  const agentCreateLimiter = createSourceRateLimiter(agentCreateLimitPerHour, now);
+  const agentCreateLimiter = createSourceRateLimiter(repository, "agent_create", agentCreateLimitPerHour, now);
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
 
@@ -626,12 +626,12 @@ export function createIdentityModule(options: {
       );
     },
 
-    assertAgentCreationAllowed(originIp) {
-      if (!agentCreateLimiter.allows(originIp)) throw agentCreateRateLimited();
+    async assertAgentCreationAllowed(originIp) {
+      if (!(await agentCreateLimiter.allows(originIp))) throw agentCreateRateLimited();
     },
 
     async createAgent(input) {
-      if (!agentCreateLimiter.take(input.originIp)) throw agentCreateRateLimited();
+      if (!(await agentCreateLimiter.take(input.originIp))) throw agentCreateRateLimited();
       const explicitLabel = deriveDisplayName(input.label);
       const clientName = explicitLabel ? undefined : deriveDisplayName(input.clientName, MAX_AGENT_CLIENT_NAME_LENGTH) || undefined;
       const label = explicitLabel || clientName || DEFAULT_AGENT_LABEL;

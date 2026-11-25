@@ -7,6 +7,16 @@ import {
   fetchClientMetadataDocument, isCimdClientId, parseCimdExemptNetworks, parseClientMetadataDocument,
   type CimdClientId, type FetchClientMetadataDocument,
 } from "../../server/src/modules/identity/client-metadata-document.js";
+import { openProductDatabase, type ProductDatabase } from "../../server/src/db/index.js";
+
+const products: ProductDatabase[] = [];
+async function sourceRates() {
+  const product = await openProductDatabase({ provider: "sqlite", filename: ":memory:" });
+  products.push(product);
+  return product.repositories.identity;
+}
+// Lets requests already in flight finish counting their start before the next ones arrive.
+const settle = () => new Promise((done) => setImmediate(done));
 
 function id(raw = "https://client.example/metadata"): CimdClientId {
   if (!isCimdClientId(raw, [])) throw new Error("Invalid test client_id");
@@ -17,7 +27,10 @@ const response = (clientId = id(), fields: Record<string, unknown> = {}, cacheCo
   ...(cacheControl === undefined ? {} : { cacheControl }),
 });
 beforeEach(() => { vi.spyOn(logger, "info").mockImplementation(() => {}); });
-afterEach(() => vi.restoreAllMocks());
+afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const product of products.splice(0)) await product.close();
+});
 
 describe("CIMD URL and document validation", () => {
   it.each([
@@ -167,7 +180,7 @@ describe("CIMD cache and fetch limits", () => {
     let release: (() => void) | undefined;
     let gate: Promise<void> | undefined;
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (clientId) => { await gate; return response(clientId); });
-    const resolve = createClientMetadataDocumentResolver({ fetchDocument, now: () => now });
+    const resolve = createClientMetadataDocumentResolver({ sourceRates: await sourceRates(), fetchDocument, now: () => now });
     const cached = await resolve(id(), "owner");
     now = 300_001;
     gate = new Promise((done) => { release = done; });
@@ -190,7 +203,7 @@ describe("CIMD cache and fetch limits", () => {
   it("keeps stale documents for temporary errors for at most 24 h, drops invalid ones, and never caches failures", async () => {
     let now = 0;
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockResolvedValue(response());
-    const resolve = createClientMetadataDocumentResolver({ fetchDocument, now: () => now });
+    const resolve = createClientMetadataDocumentResolver({ sourceRates: await sourceRates(), fetchDocument, now: () => now });
     const cached = await resolve(id(), "user");
     expect(await resolve(id(), "user")).toBe(cached);
     expect(fetchDocument).toHaveBeenCalledTimes(1);
@@ -214,10 +227,11 @@ describe("CIMD cache and fetch limits", () => {
     let release!: () => void;
     const gate = new Promise<void>((done) => { release = done; });
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (clientId) => { await gate; return response(clientId); });
-    const resolve = createClientMetadataDocumentResolver({ fetchDocument });
+    const resolve = createClientMetadataDocumentResolver({ sourceRates: await sourceRates(), fetchDocument });
     const outcome = (promise: Promise<unknown>) => promise.then(() => "fetched", (error: unknown) => error);
     const anonymous = Array.from({ length: 9 }, (_, i) => outcome(resolve(id(`https://guest.test/${i}`), `192.0.2.${i}`, "anonymous")));
     const joined = outcome(resolve(id("https://guest.test/0"), "192.0.2.9", "anonymous"));
+    await settle();
     const signedIn = Array.from({ length: 25 }, (_, i) => outcome(resolve(id(`https://user.test/${i}`), `user${i}`)));
     release();
     const busy = expect.objectContaining({ temporary: true, reason: "busy" });
@@ -235,7 +249,7 @@ describe("CIMD cache and fetch limits", () => {
       if (clientId === "https://shared.test/doc") await shared;
       return response(clientId);
     });
-    const resolve = createClientMetadataDocumentResolver({ fetchDocument, now: () => now });
+    const resolve = createClientMetadataDocumentResolver({ sourceRates: await sourceRates(), fetchDocument, now: () => now });
     const cached = await resolve(id(), "192.0.2.1", "anonymous");
     for (let i = 0; i < 9; i++) {
       await expect(resolve(id(`https://slow.test/${i}`), "192.0.2.1", "anonymous")).rejects.toMatchObject({ temporary: true });
@@ -244,6 +258,7 @@ describe("CIMD cache and fetch limits", () => {
     expect(fetchDocument).not.toHaveBeenCalledWith(id("https://slow.test/next"));
     expect(await resolve(id(), "192.0.2.1", "anonymous")).toBe(cached);
     const started = resolve(id("https://shared.test/doc"), "192.0.2.2", "anonymous");
+    await settle();
     const joined = resolve(id("https://shared.test/doc"), "192.0.2.1", "anonymous");
     release();
     expect(await joined).toBe(await started);
@@ -254,7 +269,7 @@ describe("CIMD cache and fetch limits", () => {
   it("bounds the cache at 1000, evicting expired documents before the oldest insertion", async () => {
     let now = 0;
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (clientId) => response(clientId, {}, clientId.endsWith("/long") ? "max-age=86400" : undefined));
-    const resolve = createClientMetadataDocumentResolver({ fetchDocument, now: () => now });
+    const resolve = createClientMetadataDocumentResolver({ sourceRates: await sourceRates(), fetchDocument, now: () => now });
     await resolve(id("https://cache.test/long"), "u");
     for (let i = 0; i < 999; i++) await resolve(id(`https://cache.test/${i}`), "u");
     now = 300_001;

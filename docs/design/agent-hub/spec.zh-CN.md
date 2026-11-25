@@ -53,7 +53,7 @@
 - 服务层新增 `createAgent({ label, originIp })`，放在 identity 模块。它在一个事务里建 User、Personal Space 和 `agents` 行，复用现有建 User 的路径。`expires_at` 是 30 天后。用户名由 `label` 的 slug 加 4 位随机后缀生成，冲突时重试。
 - `POST /api/agents`，不需要凭据。请求体 `{ label? }`。返回 `{ agent: { id, username }, token, mcpUrl, expiresAt }`。`token` 走现有个人访问令牌的签发路径。
 - `POST /api/auth/guest`，不需要凭据。同样调用 `createAgent`，但签发浏览器会话并写 cookie，返回 `{ agent }`。
-- 两个接口共用一个按来源 IP 的进程内限速器，默认每 IP 每小时 5 个，可配置。超限返回 429 和 `AGENT_CREATE_RATE_LIMITED`。做法参考现有的 `EMAIL_CODE_RATE_LIMITED`。
+- 两个接口共用一个按来源 IP 的限速器（产品库 V35 起计数存在 `source_rate_events`，所有副本共用），默认每 IP 每小时 5 个，可配置。超限返回 429 和 `AGENT_CREATE_RATE_LIMITED`。做法参考现有的 `EMAIL_CODE_RATE_LIMITED`。
 
 **F1.3 访客入口。**
 
