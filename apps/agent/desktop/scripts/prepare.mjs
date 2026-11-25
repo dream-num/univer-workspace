@@ -141,14 +141,11 @@ for (const name of ["LICENSE", "README.md", "CHANGELOG.md"]) {
 }
 const node = join(runtime, "node", "bin", platform === "win32" ? "node.exe" : "node");
 const bootstrap = join(runtime, "bootstrap");
-// Materialize the DSH runtime cohort (packages/dsh-runtime) from its own
-// committed lockfile instead of floating at build time. The cohort lives in a
-// standalone nested workspace: sharing the root graph re-resolves consumers'
-// optional peers and splits branded types (SessionId, Context) across the
-// workspace. The hoisted deploy output is a load-bearing layout: finalize
-// scans its top-level @deepseek-ai scope for the profile's portability
-// overrides, pack-host copies preset templates from it, and the packed ASAR
-// root must stay free of store symlinks.
+// Install the committed DSH graph into the directory that becomes host.asar.
+// Legacy pnpm deploy ignores the source lockfile even after a frozen install.
+// A floating deployment can pick Cordis 4.1, whose service records do not
+// expose the fiber required by the pinned agent preset. The hoisted layout
+// still keeps top-level DSH packages visible and the archive free of store links.
 await rm(bootstrap, { recursive: true, force: true });
 // prepare:runtime always runs through the pnpm CLI, which exposes its own
 // entry script so the deploy uses the same pnpm that produced the lockfile.
@@ -157,19 +154,20 @@ if (!pnpmExecPath || !/\.[cm]js$/.test(pnpmExecPath)) {
   throw new Error("prepare:runtime must run through the pnpm CLI (pnpm --dir apps/agent/desktop prepare:runtime)");
 }
 const dshRuntime = join(repo, "packages", "dsh-runtime");
-// Fail here when the manifest and the committed lockfile drift apart.
-run(node, [pnpmExecPath, "install", "--frozen-lockfile"], { cwd: dshRuntime });
+await mkdir(bootstrap, { recursive: true });
+for (const file of ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"]) {
+  await cp(join(dshRuntime, file), join(bootstrap, file));
+}
 run(node, [
   pnpmExecPath,
-  "deploy",
-  // pnpm v10+ deploys only injected workspaces; nothing here needs injection.
-  "--legacy",
-  "--filter",
-  "@univerjs/univer-workspace-dsh-runtime",
+  "install",
+  "--frozen-lockfile",
   "--prod",
   "--config.node-linker=hoisted",
-  bootstrap,
-], { cwd: dshRuntime });
+], { cwd: bootstrap });
+// The lock and configuration are build inputs, not product resources.
+await rm(join(bootstrap, "pnpm-workspace.yaml"));
+await rm(join(bootstrap, "pnpm-lock.yaml"));
 const { delimiter } = await import("node:path");
 const env = {
   ...process.env,
