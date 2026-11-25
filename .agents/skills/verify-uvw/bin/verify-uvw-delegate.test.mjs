@@ -227,7 +227,7 @@ test('delegate keeps the tab and exits 1 when the verifier stops while a story i
   t.after(() => story.kill());
   const stopped = v(['delegate', 'link-sharing', 'LS1'], { VERIFY_UVW_VERIFIER: spec });
   assert.equal(stopped.status, 1);
-  assert.match(stopped.stderr, new RegExp(`^${story.pid} .*story\\.mjs .* mp12-b3 mcp prompt$`, 'm'), stopped.stderr);
+  assert.match(stopped.stderr, new RegExp(`^ *${story.pid} .*story\\.mjs .* mp12-b3 mcp prompt$`, 'm'), stopped.stderr);
   assert.match(stopped.stderr, /stopped while the stories above still run; the tab stays open.*herdr pane close w9:pB/);
   assert.ok(!verbs(calls()).includes('pane close'), 'closing the tab would kill the story');
   assert.ok(!existsSync(join(run, 'evidence/test-link-sharing-pb.transcript.md')));
