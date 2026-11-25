@@ -483,6 +483,26 @@ it("keeps the checks of the merge that landed when a merge that read the pull re
   expect((await f.application.worktrees.checks(f.owner.id, pull)).checks).toMatchObject(passedAtMerge(f.alice.id));
 }, 120_000);
 
+it("names the person whose merge landed as its merger when another merge read the pull request before it landed", async () => {
+  const f = await repository();
+  const issue = await f.application.issues.create(f.owner.id, f.team, { title: "Fix totals" });
+  const { pull } = await passedPull(f);
+  await f.application.worktrees.update(f.alice.id, pull, { issueNumber: issue.number });
+  f.beforeReserve(async () => {
+    await f.merge(f.owner.id, pull);
+  });
+  expect(await f.merge(f.alice.id, pull)).toMatchObject({ worktree: { state: "merged" } });
+
+  const mergedBy = async () => [
+    (await f.application.worktrees.activity(f.owner.id, { kind: "team", teamSpaceId: f.team }, 0)).items.find(({ id }) => id === pull)?.mergedBy?.id,
+    (await f.application.issues.get(f.owner.id, f.team, issue.number)).pullRequests.find(({ id }) => id === pull)?.mergedBy?.id,
+  ];
+  expect(await mergedBy()).toEqual([f.owner.id, f.owner.id]);
+
+  await f.sql(`UPDATE operations SET payload_json = replace(payload_json, '"landed"', '"unclaimed"') WHERE payload_json LIKE ?`, `%${pull}%`);
+  expect(await mergedBy(), "merges from before the claim keep naming the last to complete").toEqual([f.alice.id, f.alice.id]);
+}, 120_000);
+
 it("merges in a review repository when its declared checks cannot be read, and shows the checks computed now", async () => {
   const f = await repository();
   const { pull } = await passedPull(f);

@@ -553,7 +553,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          JOIN users AS merger ON merger.id = operation.actor_user_id
          WHERE operation.kind = 'merge_worktree' AND operation.state = 'completed'
            AND json_extract(operation.payload_json, '$.worktreeId') IN (SELECT value FROM json_each(?))
-         ORDER BY operation.updated_at`
+         ORDER BY (json_extract(operation.payload_json, '$.landed') = 1), operation.updated_at`
       )
       .all(JSON.stringify(worktreeIds)) as unknown as Array<PublicUser & { readonly worktreeId: string }>;
     return new Map(rows.map(({ worktreeId, ...merger }) => [worktreeId, merger]));
@@ -592,7 +592,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          FROM operations
          WHERE kind = 'merge_worktree' AND json_extract(payload_json, '$.worktreeId') = ?
            AND json_extract(payload_json, '$.contentKey') IS NOT NULL
-         ORDER BY created_at DESC, id DESC
+         ORDER BY (json_extract(payload_json, '$.landed') = 1) DESC, created_at DESC, id DESC
          LIMIT 1`
       )
       .get(worktreeId) as { key: string } | undefined;

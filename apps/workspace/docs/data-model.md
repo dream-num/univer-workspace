@@ -571,8 +571,9 @@ Operation 也不写。不要求检查的仓库里，记录算不出来时（例�
 先看到合入落地：SDK 调用返回 `merging` 或 `merged` 之后（包括崩溃后的重试），Operation 在 payload 里写 `landed: true`，条件是
 这个 Worktree 还没有别的 merge Operation 写过 `landed`。SQLite 用一条带 `NOT EXISTS` 的 `UPDATE`，PostgreSQL 在
 serializable 事务里执行它，两个同时的认领只有一个成功。每个 Operation 都在激活和移入 Trash 之前认领，所以第一个
-认领发生在这次合入移入任何文件之前，认领者的记录又写在它调用 SDK 之前。已合入的 pull request 读带 `landed` 的
-Operation 的记录，不比较任何副本的时钟。报告人的名字和头像取现在的，返回 `atMerge: true`；之后文件进 Trash、
+认领发生在这次合入移入任何文件之前，认领者的记录又写在它某一次调用 SDK 之前：崩溃后重试的 Operation 带着它在更早
+一次尝试里写的记录认领。已合入的 pull request 读带 `landed` 的 Operation 的记录，合入者（`mergedBy`）也是这个
+Operation 的 actor，不比较任何副本的时钟；没有 `landed` 的旧 Operation 仍取最后完成的那个。报告人的名字和头像取现在的，返回 `atMerge: true`；之后文件进 Trash、
 报告人被移除或降级都不改变它。没有这样的记录时（这个字段出现之前合入的，或落地的 Operation 没有写记录）按现在的
 权限计算，返回 `atMerge: false`，不回填。没有合入的 pull request 返回 `atMerge: null`。
 
