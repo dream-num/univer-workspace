@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -219,6 +219,18 @@ test('delegate keeps the tab of a verifier that did not stop, and refuses a seco
   const later = verbs(calls().slice(n));
   assert.ok(later.includes('tab create'), 'a verifier that is gone no longer holds the run');
   assert.ok(!later.includes('pane close'));
+});
+
+test('delegate keeps the tab and exits 1 when the verifier stops while a story it started still runs', (t) => {
+  const { run, v, calls } = fixture(t);
+  const story = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)', join(dirname(helper), 'story.mjs'), repo, run, 'http://127.0.0.1:1', '', 'verify-test', 'model-x', '--as', 'b3', 'mp12-b3', 'mcp', 'prompt'], { stdio: 'ignore' });
+  t.after(() => story.kill());
+  const stopped = v(['delegate', 'link-sharing', 'LS1'], { VERIFY_UVW_VERIFIER: spec });
+  assert.equal(stopped.status, 1);
+  assert.match(stopped.stderr, new RegExp(`^ *${story.pid} .*story\\.mjs .* mp12-b3 mcp prompt$`, 'm'), stopped.stderr);
+  assert.match(stopped.stderr, /stopped while the stories above still run; the tab stays open.*herdr pane close w9:pB/);
+  assert.ok(!verbs(calls()).includes('pane close'), 'closing the tab would kill the story');
+  assert.ok(!existsSync(join(run, 'evidence/test-link-sharing-pb.transcript.md')));
 });
 
 test('delegate names each verifier agent after its run and feature within herdr agent-name rules', (t) => {

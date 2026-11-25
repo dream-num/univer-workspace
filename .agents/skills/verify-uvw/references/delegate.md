@@ -57,18 +57,26 @@ so run it in the background when your harness can.
 | The verifier | `delegate` |
 | --- | --- |
 | stops | saves its transcript to `evidence/<agent>.transcript.md`, closes the tab, prints `$V journeys` and exits with its code |
+| stops while a `$V story` of this run still runs | prints each such story process, keeps the tab open and exits 1 |
 | waits for approval | keeps the tab open and exits 1 |
 | still works after 60 minutes, or herdr fails | prints the visible screen, keeps the tab open and exits 1 |
+
+The brief tells the verifier to run every command in the foreground until it exits, and to give a story a 40-minute
+shell timeout. A verifier can still put a command in the background and stop, as opencode's shell tool invites when a
+command outlives its timeout. opencode promises to resume the verifier when the command ends, but closing the tab
+kills both, so `delegate` checks for a running story first. It sees only stories, because other commands do not name
+the run in their arguments.
 
 The transcript is the verifier's session as its agent recorded it. It holds the verifier's messages and each command
 it ran, with the command's exit code and the first 40 lines of its output, and run secrets are redacted. `delegate`
 reads opencode and codex sessions. For another agent kind, or when it finds no session that began with the brief, it
 prints a warning and saves the verifier's screen to `evidence/<agent>.screen.txt` instead.
 
-When the tab stays open, answer in it or wait with `herdr agent wait <agent>`. Then run `$V journeys` and
-`herdr pane close <pane>` yourself, which closes the tab with its only pane. The verdicts in the journal decide the
-result, not the transcript. A verifier that stopped on a provider error leaves journeys `MISSING`, so `delegate` exits
-1 with `INCOMPLETE`. Then do step 4 as usual, and open the evidence before you repeat a verdict.
+When the tab stays open, answer in it, or wait with `herdr agent wait <agent>`. After a running story, wait until it
+ends and the verifier stops again. Then run `$V journeys` and `herdr pane close <pane>` yourself, which closes the tab
+with its only pane. The verdicts in the journal decide the result, not the transcript. A verifier that stopped on a
+provider error leaves journeys `MISSING`, so `delegate` exits 1 with `INCOMPLETE`. Then do step 4 as usual, and open
+the evidence before you repeat a verdict.
 
 A run drives one verifier at a time, because it has one browser and its features see each other's data. `delegate`
 refuses while an earlier verifier of the run still lives. To verify in parallel, start more runs as in
