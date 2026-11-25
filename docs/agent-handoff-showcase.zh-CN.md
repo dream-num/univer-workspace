@@ -56,7 +56,7 @@ sequenceDiagram
 
 | 决定                    | 谁，在哪里                                           | Agent 能不能做                                             |
 | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
-| 让 Agent 不用账号开始   | 人在 MCP 登录页点 **以访客 Agent 继续**              | Agent 也可以自己运行 `uvw auth guest`                      |
+| 让 Agent 不用账号开始   | 人的电脑上的 MCP 客户端不需要任何人。其他 MCP 客户端在登录页显示 **以访客 Agent 继续** | Agent 也可以自己运行 `uvw auth guest`                      |
 | 认领 Agent              | 打开认领链接的人，在浏览器里                         | 不能                                                       |
 | 审阅并合入 Pull request | 作者或认领人，在 Team Space 里还有能编辑的成员，在浏览器里或用 `uvw pr merge` | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
 | 打开链接分享            | 文件的所有者，在浏览器里或用 `uvw share`             | Agent 可以分享自己的文件。你的 AI 助手通过 MCP 不能        |
@@ -87,9 +87,11 @@ Doc 或 Slide 用 `inspect`，并把 `target` 设为 `document` 或 `presentatio
 
 **从未用过 Workspace 的 Agent 得到自己的名字和空间，创建文件，并返回一个说明谁能打开的链接。**
 
+你电脑上的 MCP 客户端（例如 Claude Code）打开的浏览器没有登录 Workspace 时，客户端直接得到一个访客 Agent，没有任何页面。这样的客户端在 loopback 地址上接收回调，授权码只会交给这台电脑上的程序，访客 Agent 又碰不到任何人的数据，所以没有什么需要人批准。浏览器保持未登录。其他 MCP 客户端打开登录页，页面提供 **以访客 Agent 继续**：
+
 ![MCP 客户端打开的登录页，左边是"以访客 Agent 继续"卡片，右边是账号登录表单](images/agent-handoff/guest-agent-card.zh-CN.png)
 
-MCP 客户端登录时，登录页提供 **以访客 Agent 继续**。访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。Agent 在 Pull request 里工作，合入后分享文件：
+访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。没有页面时，人只能从 Agent 那里知道它，也就是 `share` 和 `claim` 返回的认领链接。Agent 在 Pull request 里工作，合入后分享文件：
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }

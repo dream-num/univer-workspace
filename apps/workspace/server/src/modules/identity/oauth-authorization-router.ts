@@ -3,10 +3,11 @@ import { randomBytes } from "node:crypto";
 import { parse as parseQuery } from "node:querystring";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
-import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord } from "./access-tokens.js";
+import { recordLoopEvent } from "../../middleware/loop-metrics.js";
+import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord, type OAuthGrantRecord } from "./access-tokens.js";
 import { deriveDisplayName } from "./display-name.js";
 import type { IdentityModule } from "./identity.service.js";
-import type { User } from "./identity.types.js";
+import type { AgentCreation, User } from "./identity.types.js";
 import {
   authorizeRedirectTarget,
   defaultOAuthScope,
@@ -19,11 +20,13 @@ import {
   requireOAuthCodeChallenge,
   validateRegisteredRedirectUri,
   PKCE_CHALLENGE_PATTERN,
+  type AuthorizationSubject,
   type IssuedAuthorization,
   type OAuthClient,
   type OAuthClientConfig,
 } from "./oauth-clients.js";
 import {
+  isLoopbackRedirectUri,
   matchRegisteredRedirectUri,
   parseClientRegistration,
   parseMcpScopes,
@@ -53,13 +56,13 @@ export function createOAuthAuthorizationRouter(options: {
   readonly oauthClients: OAuthClientConfig | null;
   readonly authorizationStore: Map<string, IssuedAuthorization>;
   readonly mcpOAuth?: McpOAuthConfig | null;
-  readonly resolveClientMetadata: (clientId: CimdClientId, userId: string) => Promise<CimdClient>;
+  readonly resolveClientMetadata: ResolveClientMetadata;
 }): Router {
   const router = Router();
   const mcp = options.mcpOAuth ?? null;
   // Codes already redeemed by MCP clients, kept until they would have expired: RFC 6749 section 4.1.2
   // asks that a replayed code revoke the grant it produced.
-  const redeemedCodes = new Map<string, { readonly grantId: Promise<string | null>; readonly userId: string; readonly expiresAt: number }>();
+  const redeemedCodes = new Map<string, { readonly grant: Promise<OAuthGrantRecord | null>; readonly expiresAt: number }>();
   router.use(json({ limit: "1mb" }));
   router.use(urlencoded({ extended: false, limit: "1mb" }));
   const clients = new Map<string, OAuthClient>();
@@ -69,10 +72,11 @@ export function createOAuthAuthorizationRouter(options: {
   }
 
   router.get("/authorize", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
+    if (!session.authenticated && session.guestAuthEnabled && isLoopbackRedirectUri(request.query.redirect_uri) && await authorizeGuest(request, response)) return;
     const authorizationRequest = await resolveAuthorizationRequest(request, response);
     if (authorizationRequest === null) return;
 
-    const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
       response.redirect(
         `/login?returnTo=${encodeURIComponent(
@@ -89,7 +93,7 @@ export function createOAuthAuthorizationRouter(options: {
     }
 
     response.redirect(
-      issueAuthorization(options, authorizationRequest, session.user)
+      issueAuthorization(options, authorizationRequest, { kind: "user", user: session.user })
     );
   });
 
@@ -160,7 +164,7 @@ export function createOAuthAuthorizationRouter(options: {
       response.redirect(303, authorizationErrorTarget(authorizationRequest.redirectUri, authorizationRequest.state, "access_denied", undefined, authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined));
       return;
     }
-    response.redirect(303, issueAuthorization(options, authorizationRequest, session.user));
+    response.redirect(303, issueAuthorization(options, authorizationRequest, { kind: "user", user: session.user }));
   });
 
   router.post("/token", async (request, response) => {
@@ -198,7 +202,7 @@ export function createOAuthAuthorizationRouter(options: {
         "authorization code is invalid."
       );
     }
-    const user = requireOAuthAuthorization(authorization, {
+    const subject = requireOAuthAuthorization(authorization, {
       code,
       clientId: client.clientId,
       redirectUri,
@@ -206,6 +210,8 @@ export function createOAuthAuthorizationRouter(options: {
       now: Date.now(),
     });
     options.authorizationStore.delete(code);
+    if (subject.kind !== "user") throw new ApplicationError("INVALID_GRANT", 400, "authorization code is invalid.");
+    const user = subject.user;
 
     if (scopeIncludesSession(authorization.scope)) {
       const issued = await options.identity.issueSession(user, "agent");
@@ -256,6 +262,23 @@ export function createOAuthAuthorizationRouter(options: {
       await options.accessTokens.revokeClientGrant(body.token, source.kind === "cimd" ? source.clientId : source.client.clientId);
       response.status(200).end();
     });
+  }
+
+  /**
+   * With no session, a loopback MCP client gets a code for a new guest agent and no page: a guest grants nobody's
+   * data, and the code goes to a program on the browser's own machine. Returns false for a client this does not cover.
+   */
+  async function authorizeGuest(request: Request, response: Response): Promise<boolean> {
+    const source = mcp === null ? null : await resolveClientSource(request.query.client_id, clients, options.accessTokens, mcp);
+    if (mcp === null || source === null || source.kind === "static") return false;
+    // Checking a metadata-document client fetches it, so first refuse a source that could not create a guest.
+    await options.identity.assertAgentCreationAllowed(request.ip);
+    const client = await resolveAnonymousClient(options.resolveClientMetadata, source, request.ip);
+    const parsed = parseMcpAuthorizationRequest(mcp, client, request.query);
+    response.redirect("errorRedirect" in parsed
+      ? parsed.errorRedirect
+      : issueAuthorization(options, parsed, { kind: "guest", agent: { label: undefined, clientName: client.clientName, originIp: request.ip } }));
+    return true;
   }
 
   async function resolveAuthorizationRequest(request: Request, response: Response): Promise<AuthorizationRequest | null> {
@@ -344,8 +367,8 @@ export function createOAuthAuthorizationRouter(options: {
     const replayed = redeemedCodes.get(code);
     if (replayed !== undefined) {
       redeemedCodes.delete(code);
-      const grantId = await replayed.grantId;
-      if (grantId) await options.accessTokens.revokeGrant(replayed.userId, grantId);
+      const grant = await replayed.grant;
+      if (grant) await options.accessTokens.revokeGrant(grant.userId, grant.id);
       fail(400, "invalid_grant", "The authorization code was already used; the tokens it produced are revoked.");
       return;
     }
@@ -356,9 +379,9 @@ export function createOAuthAuthorizationRouter(options: {
     }
     // One attempt per code: a failed redemption does not leave the code usable.
     options.authorizationStore.delete(code);
-    let user: User;
+    let subject: AuthorizationSubject;
     try {
-      user = requireOAuthAuthorization(authorization, {
+      subject = requireOAuthAuthorization(authorization, {
         code,
         clientId,
         redirectUri: URL.canParse(rawRedirectUri) ? new URL(rawRedirectUri).toString() : rawRedirectUri,
@@ -373,19 +396,29 @@ export function createOAuthAuthorizationRouter(options: {
       fail(400, "invalid_grant", "resource does not match the authorization request.");
       return;
     }
-    const issuing = options.accessTokens.issueGrant({
-      userId: user.id,
-      clientId,
-      scopes: authorization.scope.split(" "),
-      resource: authorization.resource,
-    });
+    const grantRequest = { clientId, scopes: authorization.scope.split(" "), resource: authorization.resource };
+    const issuing = (subject.kind === "user" ? Promise.resolve(subject.user) : createGuestAgent(subject.agent))
+      .then((user) => options.accessTokens.issueGrant({ ...grantRequest, userId: user.id }));
     // A concurrent replay must wait for issuance before revoking the resulting grant.
     redeemedCodes.set(code, {
-      grantId: issuing.then((issued) => issued.grant.id, () => null),
-      userId: user.id,
+      grant: issuing.then((issued) => issued.grant, () => null),
       expiresAt: authorization.expiresAt,
     });
-    sendGrant(response, await issuing);
+    let issued: IssuedGrant;
+    try {
+      issued = await issuing;
+    } catch (error) {
+      if (!(error instanceof ApplicationError && error.code === "AGENT_CREATE_RATE_LIMITED")) throw error;
+      fail(429, "temporarily_unavailable", error.message);
+      return;
+    }
+    sendGrant(response, issued);
+  }
+
+  async function createGuestAgent(agent: AgentCreation): Promise<User> {
+    const { user } = await options.identity.createAgent(agent);
+    recordLoopEvent("workspace.guest_agent", { entry: "auth_token" }, { user_id: user.id });
+    return user;
   }
 
   async function exchangeToken(request: Request, response: Response): Promise<void> {
@@ -457,7 +490,7 @@ export function createGuestAuthorizationCheck(options: {
   readonly accessTokens: AccessTokenService;
   readonly oauthClients: OAuthClientConfig | null;
   readonly mcpOAuth: McpOAuthConfig | null;
-  readonly resolveClientMetadata: (clientId: CimdClientId, requester: string, kind: "anonymous") => Promise<CimdClient>;
+  readonly resolveClientMetadata: ResolveClientMetadata;
 }): (query: string, sourceIp: string | undefined) => Promise<string | null> {
   const clients = new Map((options.oauthClients?.clients ?? []).map((client) => [client.clientId, client]));
   const mcp = options.mcpOAuth;
@@ -470,28 +503,35 @@ export function createGuestAuthorizationCheck(options: {
       return null;
     }
     if (mcp === null || source === null) throw unavailableClient(clientId);
-    let client: OAuthClientRecord | CimdClient;
-    if (source.kind === "cimd") {
-      try {
-        // Keyed by source, as `/authorize` keys it by User: one metadata fetch in flight per requester.
-        client = await options.resolveClientMetadata(source.clientId, sourceIp ?? "", "anonymous");
-      } catch (error) {
-        if (error instanceof ClientMetadataFetchRefusedError) {
-          throw error.reason === "busy"
-            ? new ApplicationError("CLIENT_METADATA_BUSY", 503, "This Workspace is busy checking client metadata. Try again in a few seconds.", "oauthAuthorization", FETCH_TIMEOUT_SECONDS)
-            : new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Too many client metadata checks came from this address. Try again later.");
-        }
-        if (!(error instanceof ClientMetadataDocumentError)) throw error;
-        // The caller is anonymous, so the cause stays in the fetch log.
-        throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", error.temporary ? 503 : 400, "The client's metadata document could not be checked.", "oauthAuthorization");
-      }
-    } else {
-      client = source.client;
-    }
+    const client = await resolveAnonymousClient(options.resolveClientMetadata, source, sourceIp);
     const parsed = parseMcpAuthorizationRequest(mcp, client, values);
     if ("errorRedirect" in parsed) throw new ApplicationError("INVALID_INPUT", 400, parsed.message, "oauthAuthorization");
     return client.clientName;
   };
+}
+
+type ResolveClientMetadata = (clientId: CimdClientId, requester: string, kind?: "anonymous") => Promise<CimdClient>;
+
+/** The client of a request with no session, so a metadata fetch is attributed to its source address. */
+async function resolveAnonymousClient(
+  resolveClientMetadata: ResolveClientMetadata,
+  source: Exclude<ClientSource, { readonly kind: "static" }>,
+  sourceIp: string | undefined,
+): Promise<OAuthClientRecord | CimdClient> {
+  if (source.kind === "dcr") return source.client;
+  try {
+    // Keyed by source, as a signed-in `/authorize` keys it by User: one metadata fetch in flight per requester.
+    return await resolveClientMetadata(source.clientId, sourceIp ?? "", "anonymous");
+  } catch (error) {
+    if (error instanceof ClientMetadataFetchRefusedError) {
+      throw error.reason === "busy"
+        ? new ApplicationError("CLIENT_METADATA_BUSY", 503, "This Workspace is busy checking client metadata. Try again in a few seconds.", "oauthAuthorization", FETCH_TIMEOUT_SECONDS)
+        : new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Too many client metadata checks came from this address. Try again later.");
+    }
+    if (!(error instanceof ClientMetadataDocumentError)) throw error;
+    // The caller is anonymous, so the cause stays in the fetch log.
+    throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", error.temporary ? 503 : 400, "The client's metadata document could not be checked.", "oauthAuthorization");
+  }
 }
 
 /**
@@ -745,7 +785,7 @@ function issueAuthorization(
     readonly authorizationStore: Map<string, IssuedAuthorization>;
   },
   authorizationRequest: AuthorizationRequest,
-  user: User
+  subject: AuthorizationSubject
 ): string {
   const now = Date.now();
   for (const [code, pending] of options.authorizationStore) {
@@ -757,7 +797,7 @@ function issueAuthorization(
     authorizationRequest.codeChallenge,
     authorizationRequest.redirectUri,
     scope,
-    user,
+    subject,
     now,
     authorizationRequest.kind === "mcp" ? authorizationRequest.resource : undefined,
   );

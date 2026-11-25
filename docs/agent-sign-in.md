@@ -51,7 +51,7 @@ sequenceDiagram
     C->>W: GET /.well-known/oauth-authorization-server
     W-->>C: Endpoints, CIMD and PKCE support
     C->>U: Opens /api/auth/authorize in the browser
-    U->>W: Signs in, or continues as a guest agent
+    U->>W: Signs in (signed out, the client gets a guest agent instead, see step 3)
     W->>D: GET the client_id URL
     D-->>W: client_name, redirect_uris
     W-->>U: Consent page with permissions to check
@@ -173,9 +173,9 @@ https://space.univer.ai/api/auth/authorize
 - `state` comes from the client and returns unchanged on the callback. It stops someone from slipping an authorization you never started into your client.
 - `code_challenge` is half of PKCE, explained in the next step.
 
-If you are not signed in, Workspace sends you to its sign-in page first. Depending on the deployment, you can sign in with a password, GitHub, Discord, or Google. If you choose GitHub, that is a separate OAuth flow in which Workspace is the client. It ends when you return to Workspace and has nothing to do with the agent's token.
+If you are not signed in and the client listens on your computer, as Claude Code does, you see no page at all. The next paragraph explains. Otherwise Workspace sends you to its sign-in page first. Depending on the deployment, you can sign in with a password, GitHub, Discord, or Google. If you choose GitHub, that is a separate OAuth flow in which Workspace is the client. It ends when you return to Workspace and has nothing to do with the agent's token.
 
-A sign-in page reached from MCP authorization also offers **Continue as a guest agent**. That choice signs nobody in. Workspace creates a new agent account named after the client (the CIMD document's `client_name`, or the name a DCR client registered), such as "Claude Code · g3wq". The consent page and the token exchange are the same as for a signed-in user, except that the token acts for this agent. The [agent handoff showcase](agent-handoff-showcase.md#start-an-agent-without-an-account) covers what a guest agent can do and how a person claims it.
+A browser with no Workspace session can give the client a guest agent instead of a person. A guest agent is a new agent account named after the client (the CIMD document's `client_name`, or the name a DCR client registered), such as "Claude Code · g3wq". It can read nobody's private files. When the `redirect_uri` is a loopback `http` address (`127.0.0.1`, `[::1]` or `localhost`), Workspace shows no page. It sends the browser straight back to the callback with a code for a new guest agent that carries every permission the client asked for, and the browser stays signed out. Nobody's data is granted, and the code goes only to a program on that computer, so there is nothing to approve. Workspace creates the agent only when the client trades the code for tokens, so a code the client never uses leaves nothing behind. By default each address creates at most 5 agents an hour (`AGENT_CREATE_LIMIT_PER_HOUR`), and past that the browser shows `AGENT_CREATE_RATE_LIMITED`. To connect as yourself, sign in to Workspace in that browser before you connect. With any other `redirect_uri`, such as an `https` one, the sign-in page offers **Continue as a guest agent**, and the guest then approves the consent page like a signed-in user. A deployment that turns guest agents off always shows the sign-in page. The [agent handoff showcase](agent-handoff-showcase.md#start-an-agent-without-an-account) covers what a guest agent can do and how a person claims it.
 
 After sign-in comes the consent page:
 
@@ -296,6 +296,7 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 | After sign-in, the browser shows an `invalid_client` or `temporarily_unavailable` error page | Step 2, Workspace could not fetch the CIMD document, or the document failed its checks | On a private deployment, make sure Workspace Server can reach the internet, or set `MCP_CIMD_ENABLED=0` |
 | On a self-hosted server behind a fake-IP proxy, CIMD always fails | Step 2, public names resolve into `198.18.0.0/15` and are refused as private addresses | Set `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
 | Connected, but some tools are missing | A scope was unchecked in step 3, or the URL's `?toolsets=` leaves the tools out | Sign in again and check the scope, or fix `?toolsets=` |
+| The client connected as a new guest agent, not as you | Step 3, the browser had no Workspace session and the client listens on your computer | Claim the agent with the link it gives you, or sign out of the server in the client, sign in to Workspace in that browser, and connect again |
 | Claude Code no longer opens sign-in after you configured an `Authorization` header | Claude Code skips OAuth when it sees the header | Use one or the other, not both |
 
 ## Terms and sources

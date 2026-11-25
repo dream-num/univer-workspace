@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { User } from "./identity.types.js";
+import type { AgentCreation, User } from "./identity.types.js";
 
 const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
@@ -37,9 +37,17 @@ export interface IssuedAuthorization {
   readonly scope: string;
   /** Set for dynamically registered MCP clients: the RFC 8707 resource the code is bound to. */
   readonly resource?: string;
-  readonly user: User;
+  readonly subject: AuthorizationSubject;
   readonly expiresAt: number;
 }
+
+/**
+ * Who a code acts for: a signed-in User, or a guest agent that redeeming the code creates, so a code
+ * nobody redeems leaves no agent behind.
+ */
+export type AuthorizationSubject =
+  | { readonly kind: "user"; readonly user: User }
+  | { readonly kind: "guest"; readonly agent: AgentCreation };
 
 export function requireOAuthState(value: unknown): string {
   if (typeof value !== "string" || !STATE_PATTERN.test(value)) {
@@ -153,7 +161,7 @@ export function issueOAuthAuthorizationCode(
   codeChallenge: string,
   redirectUri: string,
   scope: string,
-  user: User,
+  subject: AuthorizationSubject,
   now: number = Date.now(),
   resource?: string,
 ): IssuedAuthorization {
@@ -164,7 +172,7 @@ export function issueOAuthAuthorizationCode(
     clientId,
     scope,
     ...(resource === undefined ? {} : { resource }),
-    user,
+    subject,
     expiresAt: now + CODE_TTL_MS,
   };
 }
@@ -178,7 +186,7 @@ export function requireOAuthAuthorization(
     readonly codeVerifier: string;
     readonly now: number;
   }
-): User {
+): AuthorizationSubject {
   if (input.now >= authorization.expiresAt) {
     throw new ApplicationError("INVALID_GRANT", 400, "authorization code expired.");
   }
@@ -196,7 +204,7 @@ export function requireOAuthAuthorization(
   if (input.code !== authorization.code) {
     throw new ApplicationError("INVALID_GRANT", 400, "authorization code is invalid.");
   }
-  return authorization.user;
+  return authorization.subject;
 }
 
 export function authorizeRedirectTarget(

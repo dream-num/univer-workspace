@@ -32,7 +32,7 @@ const loopEvents = {
   "workspace.guest_agent": {
     metric: "workspace_guest_agents_created_total",
     help: "Guest agents created",
-    labels: { entry: ["api_agents", "auth_guest"] },
+    labels: { entry: ["api_agents", "auth_guest", "auth_token"] },
     fields: ["user_id"],
   },
 } as const;
