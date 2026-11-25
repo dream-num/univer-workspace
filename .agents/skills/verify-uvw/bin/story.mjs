@@ -282,7 +282,7 @@ async function signInThroughGuestCard({ origin, session, home, evidence, opencod
     browser('screenshot', join(evidence, 'oauth-1-guest-agent-card.png'));
     browser('find', 'role', 'button', 'click', '--name', 'Continue as a guest agent');
     browser('wait', '1500');
-    if (browser('get', 'text', 'body').includes('Too many guest agents')) throw new Error('guest agent creation is limited to 5 per hour per source IP on this instance');
+    if (browser('get', 'text', 'body').includes('Too many guest agents')) throw new Error(process.env.VERIFY_UVW_AGENT_LIMIT_REASON);
     browser('wait', '--text', 'Connect an AI assistant');
     browser('screenshot', join(evidence, 'oauth-2-consent.png'));
     browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');

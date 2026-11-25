@@ -52,8 +52,9 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 Preconditions:
 
 - Baseline run with `$V user`.
-- Workspace creates at most 5 agents per hour per source IP per instance. Each `uvw auth guest`,
-  `$V mcp-oauth login --guest` and `$V principal` counts.
+- Each `uvw auth guest`, `$V mcp-oauth login --guest` and `$V principal` creates an agent. `up` raises the limit on
+  agent creations per source IP per hour from the server's default of 5 to 100; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5`
+  before `up` to run with the default ([agent principals](../references/stories.md)).
 - `$V uvw` holds the run user's session and `uvw auth guest` refuses while a session is stored
   (`workspace-session-exists`), so drive the guest from its own home with the source-built CLI:
   `G=$VERIFY_UVW_ROOT/$VERIFY_UVW_RUN/home-guest; gu(){ env UNIVER_HOME=$G node apps/cli/dist/main.js "$@"; }`
