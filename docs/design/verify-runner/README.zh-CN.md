@@ -1,6 +1,6 @@
 # verify-runner：在容器里由独立 agent 执行 verify-uvw journey
 
-> 状态：原型结论与方案草案，尚未实施。日期 2026-11-23。
+> 状态：已在 #558 至 #587 中实施。实施推翻了本文的几项决定：由 runner 而不是 agent 启动实例；verdict 取自 journal，而不是 `RESULT:` 行；recipe 增加了 journey 标题和元数据。从 #591 起，runner 改为 opt-in，host mode 是默认方式。runner 的现状以 `.agents/skills/verify-uvw/runner/README.md` 为准。日期 2026-11-24。
 > 本文记录设计依据、实测数据和已拍板的决定。执行顺序、文件清单和验收标准见[实施计划](plan.zh-CN.md)。两者不一致时，以实施计划为准。要推翻第 3 节的任何一条，先改第 3 节，再改正文。
 > 标注“实测”的数字来自 2026-11-23 的一次性原型。原型运行在 Apple Silicon Mac 的 OrbStack 上，容器是 linux/arm64。原型代码没有提交，位置见附录 A。
 > verify-uvw 今天没有的命令、环境变量和文件名，本文提到时都是提议，不是现状。

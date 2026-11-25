@@ -15,7 +15,7 @@ starts the gateway, executor and renderer:
 | Start mode | Where it runs | What `up` does |
 | --- | --- | --- |
 | `image`, the default | On macOS with Docker Desktop or OrbStack. `up` refuses any other engine. | Builds `apps/mcp/Dockerfile` from the working tree and starts the roles with `apps/mcp/docker/compose.verify.yml`. |
-| `dist` | Only in [the runner](../SKILL.md#run-journeys-in-the-runner), whose image sets it. Elsewhere `up` refuses before it starts anything, because `VERIFY_UVW_RUNNER` is not `1`. | Starts `node dist/main.js` in `apps/mcp` once per role, as your own processes on loopback ports that it picks and saves in `run.env`. `apps/mcp/dist` must be newer than `apps/mcp/src` (`pnpm --filter '@univerjs/univer-workspace-mcp...' build`); `up` does not build it. The renderer uses the Chromium at `UNIVER_RENDER_BROWSER`. |
+| `dist` | Only in [the runner](../runner/README.md), whose image sets it. Elsewhere `up` refuses before it starts anything, because `VERIFY_UVW_RUNNER` is not `1`. | Starts `node dist/main.js` in `apps/mcp` once per role, as your own processes on loopback ports that it picks and saves in `run.env`. `apps/mcp/dist` must be newer than `apps/mcp/src` (`pnpm --filter '@univerjs/univer-workspace-mcp...' build`); `up` does not build it. The renderer uses the Chromium at `UNIVER_RENDER_BROWSER`. |
 
 `dist` checks what the roles do, not how they are packaged: it has no image, container, internal network or
 published port. Journeys that check those, or that call `docker`, are marked `(host only)`. Each role writes

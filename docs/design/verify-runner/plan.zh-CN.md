@@ -1,6 +1,6 @@
 # verify-runner 实施计划
 
-> 状态：可交接执行。日期 2026-11-23。
+> 状态：已在 #558 至 #587 中实施。实施推翻了本文的几项决定：由 runner 而不是 agent 启动实例；verdict 取自 journal，而不是 `RESULT:` 行；recipe 增加了 journey 标题和元数据。从 #591 起，runner 改为 opt-in，host mode 是默认方式。runner 的现状以 `.agents/skills/verify-uvw/runner/README.md` 为准。日期 2026-11-24。
 > 设计依据、实测数据和决定的来由见 [README.zh-CN.md](README.zh-CN.md)。本文只写执行顺序、文件清单、关键细节和验收标准。
 > 两份文档不一致时，以本文为准，并在同一个 PR 里修正 README。
 

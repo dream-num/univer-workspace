@@ -61,7 +61,7 @@ keeps the journey `agent`. The helper runs blocks this way:
   code and the redacted end of that output. A journey stops after 600 s.
 
 An H1, or a journey heading, that ends in ` (host only)` cannot run in
-[the runner](../SKILL.md#run-journeys-in-the-runner). The runner refuses a marked feature, leaves a
+[the runner](../runner/README.md). The runner refuses a marked feature, leaves a
 marked journey out of its task, and lists both for a host run. The host flow ignores the marker.
 
 ## Features

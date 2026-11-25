@@ -1,6 +1,6 @@
 ---
 name: verify-uvw
-description: Verify Univer Workspace changes end to end in a disposable local instance, covering the web app and server (apps/workspace), the uvw CLI (apps/cli), the MCP gateway, the browser Agent and real-model stories. Starts an isolated server and web app with a throwaway user, drives them with agent-browser and the source-built uvw, records evidence, and tears down without touching the developer's own instance, .data/ files or ~/.univer-workspace-cli. Use when you need to prove a Workspace, CLI or MCP change works in the real app, not just in tests. Runs journeys in disposable Linux containers by default (mode:runner), or on this machine (mode:host).
+description: Verify Univer Workspace changes end to end in a disposable local instance, covering the web app and server (apps/workspace), the uvw CLI (apps/cli), the MCP gateway, the browser Agent and real-model stories. Starts an isolated server and web app with a throwaway user, drives them with agent-browser and the source-built uvw, records evidence, and tears down without touching the developer's own instance, .data/ files or ~/.univer-workspace-cli. Use when you need to prove a Workspace, CLI or MCP change works in the real app, not just in tests.
 ---
 
 # verify-uvw
@@ -22,9 +22,6 @@ $V journeys <feature> [journey-id|mode...]   # the journeys to verify, by mode; 
 $V verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note]   # record one journey's verdict in this run
 $V run-journeys [--again] <feature> [journey-id|mode...]   # run the blocks of "Run: helper." journeys as written; record their checks
 $V brief <feature> [journey-id|mode...]   # print the brief for an agent that drives this run
-$V runner <feature[:ID|mode,...]>...      # run journeys in disposable Linux containers, no instance of yours
-$V runner --no-model <feature[:ID|mode,...]>...   # the same, with only the helper's journeys and no key
-$V runner --check [feature[:ID|mode,...]...]   # can these run in runner mode here? starts nothing
 $V down      # stop what this run started; delete data; keep evidence + logs
 ```
 
@@ -51,32 +48,9 @@ feature file as the recipe. Read more only for the mode you need:
 | Browser Agent mock model | `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help`, then AS1 in [Browser Agent skills](features/agent-skills.md) |
 | HTML View style thumbnails, after changing a built-in template | `node .agents/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --help` |
 
-## Choose runner or host
-
-Journeys run in one of two modes. A request can name one first, as in
-`/verify-uvw mode:host check link sharing after my change`.
-
-| Mode | Who drives the journeys | Where the instance runs | Read |
-| --- | --- | --- | --- |
-| `runner`, the default | A new Claude Code session for each task | In a disposable Linux container | [Run journeys in the runner](#run-journeys-in-the-runner) |
-| `host` | You, or a subagent you brief | On this machine | [Launch](#launch) through [Hand the driving to another agent](#hand-the-driving-to-another-agent) |
-
-First pick the features and journeys from [the index](features/README.md). Behavior no journey covers needs
-`host`, because the runner follows recipes and does not design checks. When the request names no mode, run
-`$V runner --check <feature[:ID,ID]>...` with the rest and act on what it prints:
-
-- A `host` line: that feature or those journeys are marked `(host only)`. Run them in `host` mode, whatever else
-  the check says, and decide the rest of the request by the lines below. The runner skips them.
-- Exit `5` or `3` with a `FAIL` line: the key is missing or refused, or Docker is missing. Use `host`, and tell the
-  user in one sentence what runner mode needs. For a refused key, quote the `FAIL` line: it names the key's source
-  and fingerprint and the API's answer.
-- A `todo  image` line: the runner image for the current `runner/Dockerfile` is not built yet. Ask the user once
-  whether to build it now, giving the time and size from that line, or to use `host`.
-- Otherwise use `runner`.
-
-With `mode:runner`, `(host only)` work still runs in `host` mode; name it to the user, then run it there. Run
-`$V runner` for the rest. It builds a missing image without asking. A missing or refused key, or missing Docker,
-is different: tell the user and offer `host` rather than switching on your own.
+The verify runner is opt-in. It runs journeys in disposable Linux containers and sends their material to an
+outside model API. Use it only when the user asks for it, as in `/verify-uvw mode:runner check issues`, or when
+their own configuration outside this repository says so. Read [runner/README.md](runner/README.md) first.
 
 ## Launch
 
@@ -221,81 +195,10 @@ subagent, give it the journey and keep your own turns for choosing what to verif
 5. Stop the instance yourself with `$V down`, then repeat from step 2 for the feature's next mode.
 
 Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
-design checks. This section is `host` mode ([Choose runner or host](#choose-runner-or-host)), and it names no
-model, harness or host for the verifier. The developer chooses the model in their own
+design checks. This section names no model, harness or host for the verifier. The developer chooses the model in their own
 configuration, outside this repository, and the harness default applies otherwise. The subagent runs where
 `up` ran, because the instance listens only on `127.0.0.1`. On the host, MCP mode and `uvw` stories need
 macOS.
-
-## Run journeys in the runner
-
-`$V runner` gives each task to Claude Code in a disposable Linux container. A spec is a feature, or a feature
-with some of its journeys or modes, and each mode it selects becomes one task:
-
-```bash
-$V runner link-sharing:LS1,LS2,LS3,LS4 auth   # two tasks
-$V runner sheet-lens pull-requests:mcp         # four tasks: sheet-lens, sheet-lens-mcp, sheet-lens-mcp-same-origin, pull-requests
-$V runner --jobs 3 --keep issues auth create-document
-```
-
-A task's id is its feature. When a spec spans modes, each mode but `default` adds `-<mode>`, and a repeat adds `-2`
-and so on. The id is also the task's run id.
-
-- The runner image is the one exception to "names no model". It ships Claude Code pointed at DeepSeek's
-  Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high, and opencode on
-  `deepseek/deepseek-flash#high` (`VERIFY_UVW_OPENCODE_MODEL`) for the MCP journeys.
-- It needs Docker and `DEEPSEEK_API_KEY`, from the environment or from a `DEEPSEEK_API_KEY=` line in the
-  repository's `.env`. The environment wins. The key reaches each task only as a `docker exec` environment
-  variable, never the image or a file.
-- `--check` and every batch name where the key came from and its sha256 fingerprint (8 hex characters, never the
-  key), then send one request for 1 token to the endpoint and model the image uses. A refused key, such as `401` or
-  `402 Insufficient Balance`, or an endpoint that does not answer gets a `FAIL` line with the HTTP status and the
-  API's message, and exit `5` before any image build or container. The batch header and `summary.md` name the key
-  the same way.
-- It tests your working tree as it is. Tracked changes and untracked files go into a snapshot commit that no
-  ref points at, and your index, status and refs stay as they were.
-- It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
-  builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
-  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, and loads
-  the login page in the run's browser. Runners take turns at this prepare, because instances that start at once
-  slow each other down. Then the task runs `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code session the brief that
-  `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief says the instance is already running
-  in the journeys' mode, and that the helper already ran its journeys, whose checks the session reads and judges.
-  When the prepare fails, no session starts, the task is `infra-error`, and `summary.md` quotes the `FAIL` lines of
-  its `prepare.log`.
-- `--no-model` stops each task after `run-journeys`, so it needs no key, starts no session and judges nothing.
-  `summary.md` then counts each task's checks that held, broke, were blocked or did not run, and the journeys the
-  agent drives, and lists every check that did not hold. It exits `1` when one did not hold, `4` when a task
-  failed in the runner or leaked, `3` when a task is host only, else `0`.
-- A task expects a verdict for each journey it selects, from the journey headings of its feature file. A journey
-  marked `(host only)` under [the feature contract](features/README.md#feature-entry-contract) does not run here,
-  and neither does a marked feature. The runner lists them in `summary.md` for a host run.
-- MCP features run here in the `dist` start mode of [MCP mode](references/mcp-mode.md#start), which starts the
-  gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
-  `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
-  journeys that call `docker` or `agent-up`, and the whole MCP security feature, are marked `(host only)`.
-- Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
-  `summary.md`, and for each task `prepare.log`, `report.md` (its evidence paths open on the host), `transcript.jsonl`,
-  `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs` and `run.env`.
-- At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
-  holds each expected journey's verdict and note, `MISSING` when it has none, and a result: `INCOMPLETE` when any
-  journey is `MISSING`, else `PASS` when every journey is `PASS`, else `ISSUES`. `summary.md` counts the
-  verdicts per task, and its Checks column the helper's checks, and lists every journey that is not `PASS` with its
-  note and its broken check. The report is prose for you, and the runner reads no verdict from it.
-- Evidence never stays in a container. `task.sh` sets `VERIFY_UVW_EVIDENCE_ROOT` to the task's `runs/`, and
-  `up` then makes each run's `evidence/` and `logs/` links into it, so files reach the host as they are written.
-  That covers runs a recipe starts under its own `VERIFY_UVW_ROOT`, and a batch stopped by Ctrl-C or a failed
-  container keeps everything written so far. `data/`, `home/` and `user.pw` stay in the container.
-- Treat a report as a claim, as in the previous section. Open the evidence before you repeat a `PASS` or a
-  `FAIL`.
-- Exit codes: `0` when every task finished with a verdict for each expected journey, findings included, `3` when
-  Docker is missing or a task is host only, `4` when a task is `INCOMPLETE`, timed out, failed in the runner or
-  leaked a secret (it wins over `3`), and `5` when the key is missing or refused. A task whose session ended on an `API Error: …` from the endpoint failed in the runner
-  (`infra-error`), and `summary.md` lists that error. A task leaks a secret when its output holds the key. Its
-  files stay for you to delete. `summary.md` also lists every `secret-check` file with a `FAIL` line, without
-  changing the status. The transcript holds recipe code with the same shapes, so read those lines before you
-  share the files.
-- The runner removes its containers at the end and on Ctrl-C. `--keep` leaves them for `docker exec`.
 
 ## Cleanup
 

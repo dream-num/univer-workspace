@@ -1,0 +1,101 @@
+# Verify runner
+
+`$V runner` runs verify-uvw journeys in disposable Linux containers. Each task goes to a new Claude Code session
+in a container, and no instance of yours starts. The runner is opt-in. Host mode in [SKILL.md](../SKILL.md) is
+the default. Use the runner only when the user asks for it, for example with `mode:runner`, or when their own
+configuration outside this repository says so.
+
+The runner costs more than a host run:
+
+- It needs Docker and a `DEEPSEEK_API_KEY`. Every task that starts a session spends money on DeepSeek's API.
+- It builds an image of about 4 GB from `runner/Dockerfile` the first time, and again after each change to that file.
+- It starts up to 3 containers at once. Together they use all but 2 of the CPU cores that Docker reports.
+- It sends data off this machine. Each session sends the brief, the recipes, command output, screenshots and any
+  repository file the verifier reads to DeepSeek's API.
+
+## Check before you start
+
+Pick the features and journeys from [the index](../features/README.md). Behavior no journey covers needs host
+mode, because the runner follows recipes and does not design checks. Then run
+`$V runner --check <feature[:ID,ID]>...` with the rest and act on what it prints:
+
+- A `host` line means that feature or those journeys are marked `(host only)`. The runner skips them. Tell the
+  user, then run them in host mode as [SKILL.md](../SKILL.md) describes.
+- Exit `5` or `3` with a `FAIL` line means the key is missing or refused, or Docker is missing. Tell the user in
+  one sentence what the runner needs, and offer host mode. Do not switch on your own. For a refused key, quote the
+  `FAIL` line. It names the key's source and fingerprint and the API's answer.
+- A `todo  image` line means the image for the current `runner/Dockerfile` is not built yet. The next batch
+  builds it without asking, in the time and size that line gives.
+
+## Run a batch
+
+A spec is a feature, or a feature with some of its journeys or modes. Each mode it selects becomes one task:
+
+```bash
+$V runner link-sharing:LS1,LS2,LS3,LS4 auth   # two tasks
+$V runner sheet-lens pull-requests:mcp         # four tasks: sheet-lens, sheet-lens-mcp, sheet-lens-mcp-same-origin, pull-requests
+$V runner --jobs 3 --keep issues auth create-document
+$V runner --no-model mcp-space-files           # only the helper's journeys, no key
+```
+
+A task's id is its feature. When a spec spans modes, each mode but `default` adds `-<mode>`, and a repeat adds `-2`
+and so on. The id is also the task's run id.
+
+- The host flow in [SKILL.md](../SKILL.md) names no model. The runner does. Its image ships Claude Code pointed at
+  DeepSeek's Anthropic-compatible endpoint, with every model slot on deepseek-flash at effort high, and opencode on
+  `deepseek/deepseek-flash#high` (`VERIFY_UVW_OPENCODE_MODEL`) for the MCP journeys.
+- The key comes from the environment or from a `DEEPSEEK_API_KEY=` line in the repository's `.env`. The
+  environment wins. The key reaches each task only as a `docker exec` environment variable, never the image or a
+  file.
+- `--check` and every batch name where the key came from and its sha256 fingerprint (8 hex characters, never the
+  key), then send one request for 1 token to the endpoint and model the image uses. A refused key, such as `401` or
+  `402 Insufficient Balance`, or an endpoint that does not answer gets a `FAIL` line with the HTTP status and the
+  API's message, and exit `5` before any image build or container. The batch header and `summary.md` name the key
+  the same way.
+- It tests your working tree as it is. Tracked changes and untracked files go into a snapshot commit that no
+  ref points at, and your index, status and refs stay as they were.
+- It starts up to 3 runners (`--jobs`, default the task count up to 3). Each runner installs the snapshot and
+  builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
+  task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, and loads
+  the login page in the run's browser. Runners take turns at this prepare, because instances that start at once
+  slow each other down. Then the task runs `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code
+  session the brief that `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief says the
+  instance is already running in the journeys' mode, and that the helper already ran its journeys, whose checks
+  the session reads and judges. When the prepare fails, no session starts, the task is `infra-error`, and
+  `summary.md` quotes the `FAIL` lines of its `prepare.log`.
+- `--no-model` stops each task after `run-journeys`, so it needs no key, starts no session and judges nothing.
+  `summary.md` then counts each task's checks that held, broke, were blocked or did not run, and the journeys the
+  agent drives, and lists every check that did not hold. It exits `1` when one did not hold, `4` when a task
+  failed in the runner or leaked, `3` when a task is host only, else `0`.
+- A task expects a verdict for each journey it selects, from the journey headings of its feature file. A journey
+  marked `(host only)` under [the feature contract](../features/README.md#feature-entry-contract) does not run in
+  the runner, and neither does a marked feature. Those still run on the host. The runner lists them in
+  `summary.md` with the `$V up --for` command for each.
+- MCP features run in the runner in the `dist` start mode of [MCP mode](../references/mcp-mode.md#start), which
+  starts the gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
+  `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
+  journeys that call `docker` or `agent-up`, and the whole MCP security feature, are marked `(host only)`.
+- Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
+  `summary.md`, and for each task `prepare.log`, `report.md` (its evidence paths open on the host),
+  `transcript.jsonl`, `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs`
+  and `run.env`.
+- At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
+  holds each expected journey's verdict and note, `MISSING` when it has none, and a result. The result is
+  `INCOMPLETE` when any journey is `MISSING`, else `PASS` when every journey is `PASS`, else `ISSUES`. `summary.md`
+  counts the verdicts per task, and its Checks column the helper's checks, and lists every journey that is not
+  `PASS` with its note and its broken check. The report is prose for you, and the runner reads no verdict from it.
+- Evidence never stays in a container. `task.sh` sets `VERIFY_UVW_EVIDENCE_ROOT` to the task's `runs/`, and
+  `up` then makes each run's `evidence/` and `logs/` links into it, so files reach the host as they are written.
+  That covers runs a recipe starts under its own `VERIFY_UVW_ROOT`, and a batch stopped by Ctrl-C or a failed
+  container keeps everything written so far. `data/`, `home/` and `user.pw` stay in the container.
+- Treat a report as a claim, as in
+  [Hand the driving to another agent](../SKILL.md#hand-the-driving-to-another-agent). Open the evidence before you
+  repeat a `PASS` or a `FAIL`.
+- Exit codes are `0` when every task finished with a verdict for each expected journey, findings included, `3` when
+  Docker is missing or a task is host only, `4` when a task is `INCOMPLETE`, timed out, failed in the runner or
+  leaked a secret (it wins over `3`), and `5` when the key is missing or refused. A task whose session ended on an
+  `API Error: …` from the endpoint failed in the runner (`infra-error`), and `summary.md` lists that error. A task
+  leaks a secret when its output holds the key. Its files stay for you to delete. `summary.md` also lists every
+  `secret-check` file with a `FAIL` line, without changing the status. The transcript holds recipe code with the
+  same shapes, so read those lines before you share the files.
+- The runner removes its containers at the end and on Ctrl-C. `--keep` leaves them for `docker exec`.

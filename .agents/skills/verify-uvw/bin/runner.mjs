@@ -234,7 +234,7 @@ function expanded(specs) {
   try { return expand(specs, loadFeatures()); } catch (error) { return fail(2, error.message); }
 }
 
-// What a batch needs, checked without starting anything. SKILL.md chooses between runner and host mode from it.
+// What a batch needs, checked without starting anything. runner/README.md says how to act on it.
 async function check(specs) {
   const found = readKey();
   const docker = capture('docker', ['info', '--format', '{{.NCPU}}']);
@@ -269,7 +269,7 @@ async function main() {
   const { key } = found;
   const keyText = model ? keyName(found) : 'no model and no key';
   const info = capture('docker', ['info', '--format', '{{.NCPU}}']);
-  if (info.status !== 0) fail(3, 'docker is not available; run the journeys in host mode (SKILL.md, "Choose runner or host")');
+  if (info.status !== 0) fail(3, 'docker is not available; run the journeys in host mode (SKILL.md)');
 
   if (!queue.length) {
     console.error(`verify-uvw runner: every task runs only on the host:\n${host.map((h) => `  $V up --for ${[h.feature, ...h.selectors].join(' ')}`).join('\n')}`);
