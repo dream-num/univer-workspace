@@ -73,6 +73,8 @@ export type OwnedResourceRow = ResolvedNodeRow & ResourceMappingRow;
 
 export interface AccessRepository {
   findResourceByUnitId(unitId: string): Promise<ResourceMappingRow | null>;
+  /** Whether the Unit's file exists outside Trash, whoever asks. */
+  unitOutsideTrash(unitId: string): Promise<boolean>;
   findResource(resourceId: string): Promise<ResourceMappingRow | null>;
   findRequester(userId: string): Promise<Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">>;
   countOwnedFiles(userId: string, operationId: string | null): Promise<number>;

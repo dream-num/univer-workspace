@@ -222,6 +222,17 @@ export class PostgresAccessRepository implements AccessRepository {
     );
   }
 
+  async unitOutsideTrash(unitId: string): Promise<boolean> {
+    return (await this._database
+      .prepare(
+        `SELECT 1 FROM univer_resources AS univer
+           JOIN resources AS resource ON resource.id = univer.resource_id
+           JOIN nodes AS node ON node.id = resource.node_id
+           WHERE univer.unit_id = ? AND node.trash_batch_id IS NULL`,
+      )
+      .get(unitId)) !== undefined;
+  }
+
   async findResource(resourceId: string): Promise<ResourceMappingRow | null> {
     return await this.readResourceRow(resourceId);
   }

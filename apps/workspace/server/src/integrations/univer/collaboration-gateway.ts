@@ -455,10 +455,6 @@ export function createCollaborationGateway(options: {
         response.status(404).json({ message: "Worktree Unit not found." });
         return;
       }
-      // Review does not require reading removed files, so a removed file's Trunk copy may be in Trash or gone.
-      if (unit.source === "trunk" && !(await access.resolveUnitContent(userId, unit.unitId))?.capabilities.openContent) {
-        throw new ApplicationError("CONFLICT", 409, "This file is in Trash or no longer readable, so there is nothing to compare.");
-      }
       response.json(
         await createWorkspaceUnitComparison({
           service,
@@ -473,7 +469,7 @@ export function createCollaborationGateway(options: {
           change: unit.change,
           baseMode,
           view,
-        })
+        }).catch((error: unknown) => comparisonRefused(error, access, unit.unitId))
       );
     }
   );
@@ -611,6 +607,15 @@ async function requireWorktreeProtocolAccess(
       "Cannot access this Worktree Unit."
     );
   }
+}
+
+// Review does not require reading removed files, so a removed file's Trunk copy may be in Trash or gone.
+async function comparisonRefused(error: unknown, access: AccessResolver, unitId: string): Promise<never> {
+  if (!(error instanceof CollabError) || error.code !== "PERMISSION_DENIED") throw error;
+  if (!(await access.unitOutsideTrash(unitId))) {
+    throw new ApplicationError("CONFLICT", 409, "This file is in Trash or deleted, so there is nothing to compare.");
+  }
+  throw new ApplicationError("FORBIDDEN", 403, "You cannot open this file.");
 }
 
 async function requireUnitAccess(
