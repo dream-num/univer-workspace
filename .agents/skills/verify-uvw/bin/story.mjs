@@ -27,7 +27,7 @@ export function parseStory(argv) {
   }
   const [label, client, prompt] = rest;
   if (rest.length !== 3 || !/^[A-Za-z0-9._-]{1,64}$/.test(label) || !['mcp', 'uvw', 'codex'].includes(client) || !prompt) throw new Error('Invalid label, client or prompt');
-  if (oauth && (client !== 'mcp' || as === 'human')) throw new Error('--oauth signs opencode in through the guest agent card; it needs mcp and a named identity');
+  if (oauth && (client !== 'mcp' || as === 'human')) throw new Error('--oauth signs opencode in as a new guest agent; it needs mcp and a named identity');
   return { as, oauth, label, client, prompt, ...(model ? { model } : {}) };
 }
 
@@ -149,7 +149,7 @@ async function main() {
   if (client === 'uvw' && !existsSync('/usr/bin/sandbox-exec')) fail('a uvw story sandboxes its shell with macOS sandbox-exec, which this machine does not have');
   const secret = name => existsSync(join(run, 'home', name)) ? readFileSync(join(run, 'home', name), 'utf8').trim() : undefined;
   const bearer = client === 'uvw' || oauth ? undefined : secret(as === 'human' ? 'mcp-token' : `principals/${as}.token`);
-  if (client !== 'uvw' && !oauth && !bearer) fail(as === 'human' ? 'no PAT for the run user; run: verify-uvw user' : `no principal ${as}; run: verify-uvw principal ${as}${client === 'mcp' ? ", or pass --oauth to sign opencode in through the guest agent card" : ''}`);
+  if (client !== 'uvw' && !oauth && !bearer) fail(as === 'human' ? 'no PAT for the run user; run: verify-uvw user' : `no principal ${as}; run: verify-uvw principal ${as}${client === 'mcp' ? ", or pass --oauth to sign opencode in as a new guest agent" : ''}`);
   if (oauth && secret(`principals/${as}.token`)) fail(`${as} is a principal with a token; give the OAuth guest another name`);
   if (client === 'uvw' && as === 'human' && !username) fail('no user; run: verify-uvw user');
 
@@ -216,7 +216,7 @@ async function main() {
   const clean = text => redact(text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''), runSecrets(run));
   const signedIn = join(run, 'home/stories', `mcp-${as}.oauth`);
   if (oauth && !existsSync(signedIn)) {
-    try { await signInThroughGuestCard({ origin, session: `verify-uvw-${basename(run)}-story-${as}`, home, evidence, opencode, env }); }
+    try { await signInAsGuest({ origin, session: `verify-uvw-${basename(run)}-story-${as}`, home, evidence, opencode, env }); }
     catch (error) { fail(`${clean(error.message)}; evidence ${evidence}`); }
     writeFileSync(signedIn, '');
   }
@@ -236,7 +236,7 @@ async function main() {
   writeFileSync(join(evidence, 'answer.txt'), answer);
   writeFileSync(join(evidence, 'trajectory.txt'), `${lines.join('\n')}\n\n=== final answer ===\n${answer}\n`);
   const meta = {
-    label, client, identity: as, auth: client === 'uvw' ? (as === 'human' ? 'uvw session of the run user' : 'uvw with the origin configured; the identity signs in itself') : oauth ? 'opencode OAuth through the guest agent card' : as === 'human' ? 'PAT of the run user' : 'PAT of the agent principal',
+    label, client, identity: as, auth: client === 'uvw' ? (as === 'human' ? 'uvw session of the run user' : 'uvw with the origin configured; the identity signs in itself') : oauth ? 'opencode OAuth as a new guest agent, with no page' : as === 'human' ? 'PAT of the run user' : 'PAT of the agent principal',
     model, ...(client === 'codex' ? { effort, codex: spawnSync('codex', ['--version'], { env, encoding: 'utf8' }).stdout.trim() } : {
       opencode: opencode(['--version']).stdout.trim(),
       model_credential: credential.file ? `opencode export of ${credential.integration}` : `shell variables ${Object.keys(credential.vars).join(', ')}`,
@@ -248,8 +248,8 @@ async function main() {
   process.exitCode = result.status === 0 ? 0 : 1;
 }
 
-/** opencode's own `mcp auth`, as a user would run it, with the browser taking the guest agent card. */
-async function signInThroughGuestCard({ origin, session, home, evidence, opencode, env }) {
+/** opencode's own `mcp auth`, as a user would run it, in a signed-out browser that gets a guest agent's code with no page. */
+async function signInAsGuest({ origin, session, home, evidence, opencode, env }) {
   const browser = (...a) => {
     // Arguments carry the authorize URL with its state, so a failure names only the subcommand.
     try { return execFileSync('agent-browser', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000, env: { ...process.env, AGENT_BROWSER_SESSION: session } }); }
@@ -276,17 +276,10 @@ async function signInThroughGuestCard({ origin, session, home, evidence, opencod
     browser('open', `${origin}/login`);
     browser('storage', 'local', 'set', 'univer-workspace-language', 'en-US');
     browser('open', url);
-    browser('wait', '--text', 'Continue as a guest agent');
-    browser('screenshot', join(evidence, 'oauth-1-guest-agent-card.png'));
-    browser('find', 'role', 'button', 'click', '--name', 'Continue as a guest agent');
-    browser('wait', '1500');
-    if (browser('get', 'text', 'body').includes('hourly limit for guest agent requests')) throw new Error(`the guest card says this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`);
-    browser('wait', '--text', 'Connect an AI assistant');
-    browser('screenshot', join(evidence, 'oauth-2-consent.png'));
-    browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
+    if (browser('get', 'text', 'body').includes('AGENT_CREATE_RATE_LIMITED')) throw new Error(`authorize says this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`);
     browser('wait', '--url', 'http://127.0.0.1:*/callback?*');
     const callback = new URL(browser('get', 'url').trim());
-    writeFileSync(join(evidence, 'oauth-3-callback.json'), `${JSON.stringify({ client_id: new URL(url).searchParams.get('client_id'), code_present: callback.searchParams.has('code'), iss: callback.searchParams.get('iss'), scope: callback.searchParams.get('scope'), error: callback.searchParams.get('error') }, null, 2)}\n`);
+    writeFileSync(join(evidence, 'oauth-callback.json'), `${JSON.stringify({ client_id: new URL(url).searchParams.get('client_id'), code_present: callback.searchParams.has('code'), iss: callback.searchParams.get('iss'), scope: callback.searchParams.get('scope'), error: callback.searchParams.get('error') }, null, 2)}\n`);
     await Promise.race([exited, sleep(60000, undefined, { ref: false })]);
   } finally {
     try { browser('close'); } catch {}

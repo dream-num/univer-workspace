@@ -18,9 +18,9 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH3 switches to `Command line (uvw)`: the prompt installs `univer-workspace-cli`, sets the origin, runs
   `uvw auth guest`, then `uvw read A1:J50 --unit <link> --trunk`. `Copy prompt` shows
   `Prompt copied. Paste it into your agent.`
-- AH4 creates a guest agent. An MCP client reaching the sign-in page through OAuth sees the card
-  `Give the agent its own space` with `Continue as a guest agent`; the guest is named after the OAuth client plus
-  a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
+- AH4 creates a guest agent. An MCP client whose callback is not loopback reaches the sign-in page through OAuth
+  and sees the card `Give the agent its own space` with `Continue as a guest agent`; the guest is named after the
+  OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
   and repository `<username>/personal`.
 - AH5 mints a claim link: MCP `claim` (unclaimed agents only, listed after `share`), `uvw claim`, and the
   `claimUrl` and `claimHint` that `share` returns for an unclaimed owner. A link works once, within 10 minutes.
@@ -37,13 +37,16 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH10 lets the claimer decide the agent's pull requests: `uvw pr list -R <agent>/personal` and MCP `pr_list`
   work, merge works, and `pr create` in the agent's Space is refused. After the claim, `share` no longer prints
   an expiry or a claim link.
+- AH11 gives an MCP client on the person's computer a guest agent with no page. A browser with no session that
+  opens authorize for a client with a loopback callback goes straight back to it with a code and gets no cookie.
+  The code's token acts for a new guest agent named after the client, which can mint its claim link with `claim`.
 - MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
 
 - Open a viewer-linked file you do not own, signed out or as another user, open `More actions` in the visitor bar
   and click `Hand to my agent`.
-- An agent runs `uvw auth guest`, or connects an MCP client and picks `Continue as a guest agent`, then calls
+- An agent runs `uvw auth guest`, or connects an MCP client from a browser that is not signed in, then calls
   `claim` or `uvw claim` and gives you the link.
 - Open the claim link in your browser, sign in, and click `Claim agent`. Manage agents from Account > `My agents`.
 
@@ -52,7 +55,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 Preconditions:
 
 - Baseline run with `$V user`.
-- Each `uvw auth guest`, `$V mcp-oauth login --guest` and `$V principal` creates an agent. `up` raises the limit on
+- Each `uvw auth guest`, `$V mcp-oauth login --guest` or `--guest-card` and `$V principal` creates an agent. `up` raises the limit on
   agent creations per source IP per hour from the server's default of 5 to 100; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5`
   before `up` to run with the default ([agent principals](../references/stories.md)).
 - `$V uvw` holds the run user's session and `uvw auth guest` refuses while a session is stored
@@ -113,10 +116,45 @@ used claim URL sees `This agent has already been claimed.`; `$ORIGIN/claim/not-a
 
 Mode: mcp.
 
-`$V mcp-oauth login g1 --guest` saves
+`$V mcp-oauth login g1 --guest-card` registers a callback that is not loopback, saves
 `g1-guest-card.png` and leaves the run browser signed in as the guest. `$V mcp --auth oauth g1-whoami whoami`
 names it `verify-uvw g1 · <suffix>`. `$V mcp --auth oauth g1-claim claim '{}'` returns the link; opening it in
 the run browser shows `Sign out and continue`. Click it, sign in as the run user, and claim.
+
+### HO10. A loopback MCP client from a signed-out browser (AH11)
+
+Mode: mcp-same-origin. Run: helper.
+
+The client registers a loopback callback. Authorize answers it with a redirect, and redeeming the code creates the
+guest. A code nobody redeems creates nothing, so the first request below only reads the redirect. The headers stay
+in `home/` because they carry the code.
+
+```bash
+CB=http://127.0.0.1:61234/callback; H="$RUN/home/ho10-authorize.headers"; S=$(openssl rand -hex 16)
+curl --fail-with-body -sS -o "$RUN/home/ho10-client.json" -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
+  -d "{\"client_name\":\"verify-uvw ho10 curl\",\"redirect_uris\":[\"$CB\"]}"
+curl -sS -o /dev/null -D "$H" -G "$ORIGIN/api/auth/authorize" --data-urlencode response_type=code \
+  --data-urlencode "client_id=$(jq -r .client_id "$RUN/home/ho10-client.json")" --data-urlencode "redirect_uri=$CB" \
+  --data-urlencode "state=$S" --data-urlencode "resource=$MCP_URL" \
+  --data-urlencode code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM --data-urlencode code_challenge_method=S256
+head -1 "$H" | grep -q ' 302'
+grep -q -i "^location: $CB?code=[A-Za-z0-9_-]\{32\}&iss=.*&state=$S&scope=" "$H"
+test "$(grep -c -i '^set-cookie:' "$H")" = 0
+rm "$H"
+$V mcp-oauth login ho10 --guest
+jq -e '.page == "none" and .browser_signed_in_after == false and .callback_scope == "read write publish worktree:merge" and .token.status == 200' "$EVIDENCE/ho10.json"
+$V mcp --auth oauth ho10-whoami whoami
+jq -e '(.subject.name | test("^verify-uvw ho10 · [a-z0-9]{4}$")) and .budget != null' "$EVIDENCE/ho10-whoami.out"
+$V mcp-oauth exchange ho10-exchange oauth
+jq -e '.body.user.kind == "agent"' "$EVIDENCE/ho10-exchange.json"
+$V mcp --auth oauth ho10-claim claim '{}' > /dev/null   # stdout would put the claim code in the run log
+jq -e '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}$")' "$EVIDENCE/ho10-claim.out"
+perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "$EVIDENCE"/ho10-claim.*
+```
+
+Pass when authorize answers `302` to the loopback callback with a code and no `Set-Cookie`, the scripted client gets
+its token with no page and leaves the browser with no session, `whoami` names the guest after the client with an
+agent's budget, the token exchange names a User of kind `agent`, and `claim` returns a claim link.
 
 ### MH1. Unclaimed agent
 
