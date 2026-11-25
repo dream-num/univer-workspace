@@ -15,6 +15,8 @@ const inputSchema = z.object({
 export const blobUploadTool: ToolDefinition = {
   name: "blob_upload",
   toolset: "files",
+  // As for space_node: an agent publishes .agents/checks.md, which must be a Blob.
+  agentToolsets: ["core", "files"],
   scope: "publish",
   title: "Publish an uploaded file",
   description:

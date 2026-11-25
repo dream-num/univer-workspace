@@ -50,7 +50,7 @@ Exceptions:
 
 Toolsets:
 
-- admin: `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write`, `space_node`, `label_list`, `label_write`, `pr_discard`, `pr_revert`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, core also lists `repo_create`, `repo_edit` and both member tools.
+- admin: `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write`, `space_node`, `label_list`, `label_write`, `pr_discard`, `pr_revert`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, core also lists `repo_create`, `repo_edit`, both member tools, `space_node` and `blob_upload`.
 - files: `blob_get`, `blob_upload`, `blob_download`, `blob_replace`, `asset_download`, `compile_markdown`, `export_markdown`, `compile_svg`, `compile_typst`, `print_pdf`, `lint`.
 
 Unavailable operations:
@@ -324,6 +324,9 @@ each, on trunk when a file is `behind`, and report it with `pr_check`. `pr_view`
 lists them; a result counts while the content is unchanged and its reporter may merge.
 In a repository that requires checks, report every declared check, then merge. If
 `pr_merge` refuses one for changing `.agents/`, give the user its link to merge.
+To require checks in a repository you own, put `checks.md` in a root `.agents`
+folder (`space_node`, then `file_upload_create` with purpose blob and
+`blob_upload`), then set `landing` to checks with `repo_edit`.
 `share` works only on files in a Personal Space. For a Team repository, return the
 pull request link instead.
 An agent's `share` url also says, in `access`, who can open it. While unclaimed, it also gives the user the `claimUrl` from `share`, or

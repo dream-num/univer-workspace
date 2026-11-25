@@ -39,7 +39,8 @@ and every minute, retaining each replica's last known response on refresh failur
 succeeds no executor operations are available. Protocol-incompatible replicas are excluded from routing;
 visible tools use the intersection of compatible replicas' operations, in registry order.
 Instructions follow each connection's visible tools and direct callers to `?toolsets=files` for available
-file capabilities outside their selected toolsets.
+file capabilities missing from their list. With `space_node`, `blob_upload` and `repo_edit` listed, they say how to declare
+checks in `.agents/checks.md` of a repository the caller owns and turn on `landing` `checks`.
 The granted scopes choose the merge workflow. A connection that has `worktree:merge` and `pr_merge` in its list is told
 to mark the verified pull request ready, merge it, and give the user the pull request link, or for an agent's file in its
 Personal Space the `share` link. Link Sharing applies only to Personal Space files, so an agent in a Team repository gives
@@ -320,8 +321,10 @@ Docker Desktop without changing those identities.
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
 The principal kind also selects tools. The token exchange and `/api/session` report it.
-An agent's `core` also lists `repo_create`, `repo_edit`, `repo_member_list` and `repo_member_write`, at the end, so the one connection
-its host configures can set up a repository the agent owns. A person gets them only with `admin`.
+An agent's `core` also lists `blob_upload`, `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write` and `space_node`, at the
+end, so the one connection its host configures can set up a repository the agent owns and declare its checks in `.agents/checks.md`.
+A person gets them only with `files` or `admin`. The server still refuses an agent's Trunk writes in a repository that requires checks
+and that it does not own.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.
@@ -535,7 +538,7 @@ Long resources retain cursor paging. Repeat `repo`, `name` and `resource` with t
 Oversized full results return `workspace-result-too-large` and require individual resource reads.
 The MCP `core` maps shared operation names to tools and explains uploads and download links.
 If a named tool is absent from the connection's tool list, that step is unavailable; tell the user
-instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`, except the four an agent also gets in `core`.
+instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`, except the five an agent also gets in `core`.
 
 The server `instructions` carry the `core` Skill's workflow rules for clients without Skill support (ChatGPT,
 WorkBuddy): find the file, open a pull request, write, read back to verify, then mark ready and merge, or hand the

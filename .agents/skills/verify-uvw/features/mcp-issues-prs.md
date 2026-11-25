@@ -59,6 +59,9 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
   `.agents/checks.md` are refused with `AGENT_NOT_ALLOWED`. It merges once both checks pass, but not a pull request
   that changes `.agents/checks.md`, which the run user merges. The run user merges with no results, and in `review`
   the agent merges without them.
+- MP18 has a claimed agent declare two checks in its own repository and turn on `landing` `checks` on the default
+  connection, with no `toolsets`. Its Editor agent's merge is refused with `CHECKS_REQUIRED` until both checks pass,
+  and its `space_node` and `blob_upload` on that Trunk are refused with `AGENT_NOT_ALLOWED`.
 
 ## How to get to it (user POV)
 
@@ -69,7 +72,8 @@ its work calls `search` for the Issues assigned to it and the pull requests wait
 `whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
 `unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, and MI16 calls `pr_revert` and drives `uvw pr revert`. MP17 also calls `space_node`, `claim`,
 `fork_create` and `fork_view` as an agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`,
-the last two as that agent. A person judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses
+the last two as that agent. MP18 calls `space_node`, `file_upload_create`, `blob_upload`, `repo_edit` and
+`repo_member_write` as an agent on the default connection. A person judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses
 `uvw space node trash` and the repository's `Trash` page.
 
 ## Driving it with agent-browser and uvw
@@ -1339,6 +1343,85 @@ result names only the other check; G's merge after both succeeds; G's pull reque
 has both checks passed, `capabilities.merge` false and a `pr_merge` refused naming `.agents/`, and O's merge of it
 leaves Trunk's file with G's note; O's merge with no results succeeds; and after `--landing review` G merges without
 results, leaving Trunk with every row.
+
+### MP18. An agent declares checks in its own repository on the default connection
+
+A claimed agent A creates a repository R, declares two checks in `.agents/checks.md` and turns on `landing` `checks`,
+all on the default connection. A adds a claimed agent B as an Editor. B's merge without results is refused with
+`CHECKS_REQUIRED` naming both checks, and succeeds once B reports both. B's `space_node` and `blob_upload` on R's
+Trunk are refused with `AGENT_NOT_ALLOWED`. No call below passes `--toolsets`. MP18 uses two `principal`s, which count
+toward the 5 agents per hour.
+
+```bash
+$V principal decl-a mpd-a
+$V principal decl-b mpd-b
+$V mcp --as decl-a mpd-claim-a claim '{}'
+$V mcp --as decl-b mpd-claim-b claim '{}'
+```
+
+Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says, and wait 35 s for the gateway's cache. Then A sets up R:
+
+```bash
+A=$(jq -r .agent.username "$EVIDENCE/principal-decl-a.json"); B=$(jq -r .agent.username "$EVIDENCE/principal-decl-b.json")
+R="$A/declared-checks"; KEY=$(uuidgen | tr -d -)
+$V mcp-tools --as decl-a mpd-a-tools
+jq -e 'map(.name) | (index("space_node") != null) and (index("blob_upload") != null) and (index("file_upload_create") != null)' "$EVIDENCE/mpd-a-tools.out"
+$V mcp-instructions --as decl-a mpd-a-instructions
+jq -e '.instructions | contains("To make a repository you own require checks, declare them on its trunk")' "$EVIDENCE/mpd-a-instructions.out"
+$V mcp --as decl-a mpd-repo repo_create '{"slug":"declared-checks","name":"Declared checks"}'
+$V mcp --as decl-a mpd-folder space_node "{\"action\":\"create\",\"repo\":\"$R\",\"name\":\".agents\"}"
+printf '# Checks\n\n## totals-match\nB2 reads a number.\n\n## header-unchanged\nRow 1 reads Region, Total.\n' > "$EVIDENCE/mpd-checks.md"
+$V mcp --as decl-a mpd-reserve file_upload_create "$(jq -nc --argjson size "$(wc -c < "$EVIDENCE/mpd-checks.md" | tr -d ' ')" '{purpose:"blob",file_name:"checks.md",size:$size,media_type:"text/markdown"}')"
+node .agents/skills/verify-uvw/bin/mcp-file.mjs put "$EVIDENCE/mpd-reserve.out" "$EVIDENCE/mpd-checks.md"
+$V mcp --as decl-a mpd-checks blob_upload "$(jq -nc --arg u "$(jq -r .upload.upload_id "$EVIDENCE/mpd-reserve.out")" --arg r "$R" --arg p "$(jq -r .node.nodeId "$EVIDENCE/mpd-folder.out")" --arg k "mp18-checks-$KEY" '{upload_id:$u,space:$r,parent:$p,name:"checks.md",idempotency_key:$k}')"
+jq -e '.upload.name == "checks.md" and .upload.availability == "ready"' "$EVIDENCE/mpd-checks.out"
+$V mcp --as decl-a mpd-landing repo_edit "{\"repo\":\"$R\",\"landing\":\"checks\"}"
+jq -e '.landing == "checks"' "$EVIDENCE/mpd-landing.out"
+$V mcp --as decl-a mpd-member repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$B\",\"role\":\"editor\"}"
+```
+
+B proposes a Sheet and tries to merge it with no results, then reports both checks and merges:
+
+```bash
+$V mcp --as decl-b mpd-b-pr pr_create "{\"repo\":\"$R\",\"title\":\"Sales\"}"
+W=$(jq -r .id "$EVIDENCE/mpd-b-pr.out"); N=$(jq -r .number "$EVIDENCE/mpd-b-pr.out")
+$V mcp --as decl-b mpd-b-unit unit_create "{\"worktree\":\"$W\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"Sales\"}"
+U=$(jq -r .unit.unitId "$EVIDENCE/mpd-b-unit.out")
+$V mcp --as decl-b mpd-b-exec execute "$(jq -nc --arg w "$W" --arg u "$U" '{worktree:$w,unit:$u,code:"univerAPI.getActiveWorkbook().getActiveSheet().getRange(\"A1:B2\").setValues([[\"Region\",\"Total\"],[\"North\",40]]);"}')"
+$V mcp --as decl-b mpd-b-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N\"}"
+$V mcp --as decl-b mpd-b-refused pr_merge "{\"repo\":\"$R\",\"number\":\"$N\"}"
+test $? -eq 1
+jq -e '.code == "CHECKS_REQUIRED" and .detail.status == 403 and (.message | contains("totals-match (missing), header-unchanged (missing)"))' "$EVIDENCE/mpd-b-refused.out"
+for name in totals-match header-unchanged; do
+  $V mcp --as decl-b "mpd-b-$name" pr_check "{\"repo\":\"$R\",\"number\":\"$N\",\"name\":\"$name\",\"state\":\"passed\",\"summary\":\"Read on the draft.\"}"
+done
+$V mcp --as decl-b mpd-b-view pr_view "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '[.checks[] | {name, declared, state}] == [{name:"totals-match",declared:true,state:"passed"},{name:"header-unchanged",declared:true,state:"passed"}]' "$EVIDENCE/mpd-b-view.out"
+$V mcp --as decl-b mpd-b-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N\"}"
+jq -e '.state == "merged"' "$EVIDENCE/mpd-b-merge.out"
+$V cli mpd-trunk inspect range A1:B2 --trunk --unit "$U" --worksheet index:1 --json
+jq -e '[.. | objects | select(has("v")) | .v] == ["Region","Total","North",40]' "$EVIDENCE/mpd-trunk.out"
+```
+
+B tries to write R's Trunk outside a merge:
+
+```bash
+$V mcp --as decl-b mpd-b-node space_node "{\"action\":\"create\",\"repo\":\"$R\",\"name\":\"Drafts\"}"
+test $? -eq 1
+printf 'notes\n' > "$EVIDENCE/mpd-b-notes.md"
+$V mcp --as decl-b mpd-b-reserve file_upload_create '{"purpose":"blob","file_name":"notes.md","size":6,"media_type":"text/markdown"}'
+node .agents/skills/verify-uvw/bin/mcp-file.mjs put "$EVIDENCE/mpd-b-reserve.out" "$EVIDENCE/mpd-b-notes.md"
+$V mcp --as decl-b mpd-b-upload blob_upload "$(jq -nc --arg u "$(jq -r .upload.upload_id "$EVIDENCE/mpd-b-reserve.out")" --arg r "$R" --arg k "mp18-notes-$KEY" '{upload_id:$u,space:$r,name:"notes.md",idempotency_key:$k}')"
+test $? -eq 1
+jq -s -e 'map(.code) == ["AGENT_NOT_ALLOWED", "AGENT_NOT_ALLOWED"]' "$EVIDENCE/mpd-b-node.out" "$EVIDENCE/mpd-b-upload.out"
+```
+
+Pass when A's default tool list has `space_node`, `blob_upload` and `file_upload_create` and its instructions say how to
+declare checks; A creates `.agents` and a ready `checks.md` and sets `landing` to `checks` with no `toolsets`; B's first
+`pr_merge` exits 1 with `CHECKS_REQUIRED` naming both checks as missing; after B reports both, `pr_view` lists them
+declared and `passed`, the merge succeeds and Trunk reads Region, Total, North, 40; and B's `space_node` and
+`blob_upload` on R exit 1 with `AGENT_NOT_ALLOWED`.
 
 ### MI16. Revert an Issue's merged pull requests
 

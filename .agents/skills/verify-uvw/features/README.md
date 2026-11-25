@@ -104,7 +104,8 @@ keeps the journey `agent`. The helper runs blocks this way:
   open pull request. MP17 requires checks before an agent merges: a claimed agent's merge is refused with the check
   names over MCP, uvw and the browser, its browser opens Trunk read-only, its direct changes to `.agents/checks.md`
   are refused, a pull request of its that changes `.agents/` is refused and a person merges it, and a person is not
-  gated.
+  gated. MP18 has an agent declare checks in its own repository on the default connection, gate its Editor agent's
+  merge on them, and refuse that agent's Trunk writes.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,

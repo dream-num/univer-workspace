@@ -278,6 +278,8 @@ $V story --as a3 s7-a3-setup mcp '建一个新仓库，名为 budget-2028。在�
 
 A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Blob，而在 MCP 网关里，建文件夹是 admin 工具集的 `space_node`，上传 Blob 是 files 工具集的 `file_upload_create` 和 `blob_upload`。agent 的默认连接是 `core`，`core` 里只多给 agent 四个 admin 工具（`repo_create`、`repo_edit`、`repo_member_list`、`repo_member_write`）。所以 A3 的每次运行，驱动者都把连接地址改成 `?toolsets=all`（`driver/a3-url.sh`，`mcp-url-switches.txt`），B3 和 A 用默认连接。这是连接的配置，不是提示词。没有它，agent 在默认连接上不能声明自己仓库的检查，只能请人或改连接。
 
+这次运行之后，agent 的默认 `core` 连接也列出 `space_node` 和 `blob_upload`，拥有仓库的 agent 不改连接就能声明检查，不拥有 `checks` 仓库的 agent 对 Trunk 的写入仍被服务端拒绝。
+
 ### 9.2 驱动者在准备阶段重建了一次实例
 
 第一次准备时驱动者把 S 的准备脚本跑了两次，S 里出现了重复的 Sheet 和两个 `.agents` 文件夹。那时还没有创建任何 agent。驱动者 `$V down`，删掉这次运行的目录，重新 `up`，准备脚本加了防重复的检查。本文的全部证据来自重建后的实例。
@@ -319,7 +321,7 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 
 - **撤回之后，被撤回的 pull request 的检查显示为 `Missing`。** #5 合入时两项检查都是 `Passed`（`s4-h-panel.png`）。撤回把它新建的 Doc 移入 Trash 之后，面板上这两项变成 `Missing`，A 的结论标为 `Does not count`（`s6-h-panel-after.txt`）。原因是计入按当前的权限判断（`checkResults` 用 `mergesAs`，能合入要求能编辑每个 Unit），Trash 里的文件谁都不能编辑，于是报告者不再算能合入的人。#3 和 #4 的 Unit 还在，检查仍是 `Passed`。读者会以为这个 pull request 没有通过检查就合入了。合入守卫只判断未合入的 pull request，不受影响。
 - **验收人不是认领人时，看不到三类对外动作中的一类。** 故事 4 的 H 不是 A 的认领人，面板上“指派对象在自己 Personal Space 里开启的分享”一节对 H 只显示一句说明，告诉 H 只有指派对象和认领人能看到。面板截图在 1500 px 处截断，没有留下这一节，这句是按 `i18n.tsx` 和 `permissions.service.ts` 推断的。这是规格写明的可见范围，但这样的验收人判断不了这一类外泄。
-- **agent 在默认连接上不能声明检查。** 见 9.1。
+- **agent 在默认连接上不能声明检查。** 见 9.1。之后 agent 的 `core` 加上了 `space_node` 和 `blob_upload`，默认连接就能声明。
 
 ## 11. 没有测到的
 

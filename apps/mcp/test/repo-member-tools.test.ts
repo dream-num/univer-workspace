@@ -122,7 +122,7 @@ describe("repository member tools", () => {
 
   it.each([true, false])("lists repo_create, repo_edit and the member tools on an agent's default connection (claimed: %s)", async (claimed) => {
     session = { ...agentA, kind: "agent", claimed };
-    expect((await names()).slice(-4)).toEqual(memberTools);
+    expect((await names()).filter((name) => memberTools.includes(name))).toEqual(memberTools);
     expect((await names("?toolsets=admin")).filter((name) => memberTools.includes(name))).toEqual(memberTools);
   });
 

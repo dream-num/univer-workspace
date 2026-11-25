@@ -108,6 +108,9 @@ export function buildServerInstructions(
     ...(finishes && has("pr_check")
       ? ["In a repository that requires checks, report every declared check with pr_check, then merge. If pr_merge refuses one for changing .agents/, give the user its link to merge."]
       : []),
+    ...(has("space_node") && has("file_upload_create") && has("blob_upload") && has("repo_edit")
+      ? ["To make a repository you own require checks, declare them on its trunk: create a folder named .agents at the repository root with space_node, reserve an upload with file_upload_create and purpose blob, PUT a checks.md file to its upload_url with one \"## <name>\" heading per check followed by what to verify, publish it into that folder with blob_upload, then call repo_edit with landing checks."]
+      : []),
     ...(has("pr_revert")
       ? ["Revert merged work with pr_revert only when the user asks: read its plan, then apply. A blocked file stays as it is; give the user the link to overwrite it in the browser."]
       : []),
@@ -123,26 +126,31 @@ export function buildServerInstructions(
           "Read skill://univer-workspace/core/SKILL.md first, or call skills_read with name core when the client cannot read resources. The core Skill explains workflows and operation bindings; then load the matching domain Skill.",
         ]
       : []),
-    "When a tool named in a Skill is not in this connection's tool list, that step is not available here; tell the user instead of guessing. Admin tools appear only when the connection URL selects ?toolsets=admin (alone or with other toolsets) or ?toolsets=all.",
+    "When a tool named in a Skill is not in this connection's tool list, that step is not available here; tell the user instead of guessing. Admin tools missing from that list appear only when the connection URL selects ?toolsets=admin (alone or with other toolsets) or ?toolsets=all.",
     `Creating tools take an idempotency_key. ${IDEMPOTENCY_KEY_DESCRIPTION} When a result is too large, repeat the call with the cursor it returned, or narrow the request.`,
   ];
-  if (!selected.some((tool) => tool.toolset === "files")) {
-    const available = new Set(
-      tools.filter((tool) => toolAvailable(tool, operations)).map((tool) => tool.name),
+  const available = new Set(
+    tools.filter((tool) => toolAvailable(tool, operations)).map((tool) => tool.name),
+  );
+  const capabilities = [
+    { tools: ["print_pdf"], label: "PDF" },
+    { tools: ["compile_markdown", "export_markdown"], label: "Markdown" },
+    { tools: ["compile_typst"], label: "Typst" },
+    { tools: ["compile_svg"], label: "SVG" },
+    { tools: ["blob_upload", "blob_download", "blob_get", "blob_replace"], label: "Blob" },
+  ].filter((capability) => capability.tools.some((name) => available.has(name) && !has(name)));
+  const unlisted = capabilities.filter(({ tools }) => !tools.some(has)).map(({ label }) => label);
+  // An agent's core lists blob_upload alone, so name the Blob tools it still lacks instead of all Blob work.
+  const partly = capabilities
+    .filter(({ tools }) => tools.some(has))
+    .flatMap(({ tools }) => tools.filter((name) => available.has(name) && !has(name)));
+  const missing = [
+    ...(unlisted.length ? [`${unlisted.join(", ")} work`] : []),
+    ...(partly.length ? [`the tools ${partly.join(", ")}`] : []),
+  ];
+  if (missing.length)
+    instructions.push(
+      `${missing.join(", and ")} ${partly.length ? "need" : "needs"} ?toolsets=files (alone or with other toolsets), or ?toolsets=all.`,
     );
-    const capabilities = [
-      { tools: ["print_pdf"], label: "PDF" },
-      { tools: ["compile_markdown", "export_markdown"], label: "Markdown" },
-      { tools: ["compile_typst"], label: "Typst" },
-      { tools: ["compile_svg"], label: "SVG" },
-      { tools: ["blob_upload", "blob_download", "blob_get", "blob_replace"], label: "Blob" },
-    ]
-      .filter((capability) => capability.tools.some((name) => available.has(name)))
-      .map(({ label }) => label);
-    if (capabilities.length)
-      instructions.push(
-        `${capabilities.join(", ")} work needs ?toolsets=files (alone or with other toolsets), or ?toolsets=all.`,
-      );
-  }
   return instructions.join("\n\n");
 }
