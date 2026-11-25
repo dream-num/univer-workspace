@@ -309,7 +309,7 @@ A6.4 要 A3 在自己的仓库里声明检查。`.agents/checks.md` 必须是 Bl
 - 期限验收任务的饥饿只在期望上有界。
 - 合入进行中切换 `landing`，不会重新判断这次合入。
 - 不在根目录的 `.agents` 文件夹不受守卫。
-- 受 `checks` 限制的 admin agent 仍能修改 `proposals`。
+- 受 `checks` 限制的 admin agent 仍能修改 `proposals`。之后定为有意的设计：`landing` 只限制合入和对 Trunk 的写入，不限制仓库的其他管理，见规格 6.7。
 - 恢复之后，已打开的编辑器在刷新前仍显示旧内容。
 - uvw daemon 打开的 Doc 在恢复之后报告一次 `COLLABORATION_PROTOCOL_ERROR`。
 - CI 里 vitest 的 “Worker exited unexpectedly” 崩溃仍会出现。
