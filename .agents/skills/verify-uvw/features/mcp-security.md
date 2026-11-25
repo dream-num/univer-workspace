@@ -75,6 +75,16 @@ implementation tests that ship with the fix PRs; the script rejects them in `--o
 Pass condition for the program: every implemented check reports `contained`, and MG1 and MG3 pass in the implementation tests. A fix PR
 turns its checks to `contained` and records the rerun.
 
+Each journey's verdict follows from its probe result:
+
+| Result | Verdict | Note |
+|---|---|---|
+| `contained` | `PASS` | None needed. |
+| `exposed` | `FAIL` | Say whether the check's baseline row below also records `exposed`. A matching row makes it a known gap, not `DRIFT`. |
+| `inconclusive` | `BLOCKED` | The probe's reason from its evidence file. |
+
+A result that differs from the check's baseline row, `exposed` or `contained`, is a change. Name it first in the report.
+
 Baseline of the reserved checks, from code at `main` 26c1b69d (not a probe):
 
 - MG1: `workspaceContentRuntimeWorker` receives `credential` in `WorkspaceContentWorkerInit` (`packages/client-core/src/content-worker.ts:23`) and
