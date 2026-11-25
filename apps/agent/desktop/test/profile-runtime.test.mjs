@@ -5,7 +5,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { selectProfileRuntime } from '../src/profile-runtime.cjs';
-import { makeProfilePortable } from '../scripts/portable-profile.mjs';
+import { makeProfilePortable, readBootstrapDshVersions, writeProfileWorkspace } from '../scripts/portable-profile.mjs';
+
+test('initial profile install sees the versions from the frozen bootstrap', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'uwa profile pins '));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const bootstrap = join(root, 'bootstrap');
+  const profile = join(root, 'profile');
+  const expected = { '@deepseek-ai/cordis': '4.0.4', '@deepseek-ai/dsh-scope': '0.1.5-rc.3' };
+  for (const [name, version] of Object.entries(expected)) {
+    const installed = join(bootstrap, 'node_modules', name);
+    await mkdir(installed, { recursive: true });
+    await writeFile(join(installed, 'package.json'), JSON.stringify({ name, version }));
+  }
+  await mkdir(profile);
+  await writeProfileWorkspace(profile, await readBootstrapDshVersions(bootstrap));
+  assert.deepEqual(
+    JSON.parse(execSync('pnpm config get overrides --json', { cwd: profile, encoding: 'utf8', timeout: 15000 })),
+    expected,
+  );
+});
 
 test('portable profile removes build-machine paths from both manifest and lock', async t => {
   const root = await mkdtemp(join(tmpdir(), 'uwa portable '));
