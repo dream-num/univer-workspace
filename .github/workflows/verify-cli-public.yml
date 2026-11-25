@@ -1,0 +1,49 @@
+name: Verify public Workspace CLI package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact released version (for example, 0.7.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: release
+        name: Read the trusted release receipt
+        uses: dream-num/release-actions/resolve-npm-source-run@b840ad9168664f134149ab82c3bb2655bf6b6024
+        with:
+          repository: dream-num/univer-workspace
+          workflow: release-cli-manual.yml
+          version: ${{ inputs.version }}
+          token: ${{ github.token }}
+          producer: >-
+            {"repository":"dream-num/univer-workspace",
+             "workflow":".github/workflows/release-cli-manual.yml","event":"workflow_dispatch",
+             "ref":"refs/tags/","tagPrefix":"v","versionPackage":"univer-workspace-cli",
+             "prepareJob":"prepare","publishJob":"publish",
+             "packages":[{"name":"univer-workspace-cli","tag":"latest"}]}
+      - id: verify
+        name: Verify exact public package bytes
+        uses: dream-num/release-actions/check-npm-public@b840ad9168664f134149ab82c3bb2655bf6b6024
+        with:
+          package: univer-workspace-cli
+          version: ${{ steps.release.outputs.version }}
+          integrity: ${{ fromJSON(steps.release.outputs.batch).packages[0].integrity }}
+          verify-tarball: 'true'
+      - name: Require an exact match
+        if: steps.verify.outputs.status != 'visible_match'
+        run: |
+          echo "::error::The released version is not visible with the expected bytes on public npm."
+          exit 1
