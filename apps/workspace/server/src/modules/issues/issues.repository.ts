@@ -49,7 +49,8 @@ export interface VerdictRow {
 export interface TimelineRow {
   readonly type: "comment" | "event" | "verdict";
   readonly id: string;
-  readonly actor_user_id: string;
+  /** Null only for a verdict its acceptance deadline recorded. */
+  readonly actor_user_id: string | null;
   readonly body: string | null;
   readonly kind: IssueEventKind | IssueVerdictKind | null;
   readonly payload_json: string | null;
@@ -121,6 +122,13 @@ export interface IssueDetail {
   readonly summary: IssueSummaryData;
   readonly references: ReadonlyArray<{ nodeId: string; node: NodeAccess | null }>;
   readonly acceptance: VerdictRow | null;
+  /** When the Space's deadline accepts this submitted Issue; null when nothing will. */
+  readonly acceptAt: number | null;
+}
+
+export interface DueIssue {
+  readonly id: string;
+  readonly accept_at: number;
 }
 
 export interface RecordVerdict {
@@ -145,6 +153,10 @@ export interface IssuesRepository {
   createIssue(input: CreateIssue): Promise<IssueDetail>;
   updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
   recordVerdict(input: RecordVerdict): Promise<IssueDetail>;
+  /** Submitted Issues whose acceptance deadline passed by `now`, in deadline then ID order, after `after`. */
+  listDueIssues(now: number, after: DueIssue, limit: number): Promise<DueIssue[]>;
+  /** Accepts the Issue by deadline in one transaction if it is still due at `now`, and returns its Space ID. */
+  acceptDueIssue(issueId: string, now: number): Promise<string | null>;
   findIssue(spaceId: string, number: number): Promise<IssueRow | null>;
   issueDetail(userId: string, spaceId: string, number: number): Promise<IssueDetail>;
   listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]>;

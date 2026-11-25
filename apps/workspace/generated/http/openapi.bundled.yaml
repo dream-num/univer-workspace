@@ -5085,9 +5085,12 @@ components:
             - slug
             - fullName
             - proposals
+            - acceptAfterHours
           properties:
             proposals:
               $ref: '#/components/schemas/SpaceProposals'
+            acceptAfterHours:
+              $ref: '#/components/schemas/SpaceAcceptAfterHours'
             slug:
               type:
                 - string
@@ -5508,6 +5511,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
+          description: Who closed the Issue; `null` while it is open and when the Space's acceptance deadline closed it.
         closedAt:
           type:
             - string
@@ -7506,6 +7510,7 @@ components:
           type: string
           format: date-time
         actor:
+          description: Who opened or closed the Issue; `null` for a close by the Space's acceptance deadline.
           oneOf:
             - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
@@ -7567,6 +7572,17 @@ components:
         one else's. Moving back to `members`, or turning `publicRead` off, freezes such a proposer's drafts,
         while a ready proposal stays for the members to review, merge or discard. Personal Spaces report
         `members`.
+    SpaceAcceptAfterHours:
+      type:
+        - integer
+        - 'null'
+      minimum: 1
+      maximum: 720
+      description: |
+        Hours after an Issue is submitted for acceptance at which the server accepts it and closes it as
+        completed, unless someone sends it back first. A send-back stops the clock and the next submission
+        restarts it. Such an acceptance has no actor. `null`, the default, turns it off. Personal Spaces
+        report `null`.
     SpaceAffiliation:
       type: string
       enum:
@@ -7729,6 +7745,9 @@ components:
         proposals:
           $ref: '#/components/schemas/SpaceProposals'
           description: Team Spaces only. The owner or an admin may change it.
+        acceptAfterHours:
+          $ref: '#/components/schemas/SpaceAcceptAfterHours'
+          description: Team Spaces only. The owner or an admin may change it. `72` is the suggested value when turning it on.
         description:
           type: string
           maxLength: 350
@@ -9038,6 +9057,7 @@ components:
         - actor
         - body
         - createdAt
+        - deadline
       properties:
         kind:
           $ref: '#/components/schemas/IssueVerdictKind'
@@ -9045,12 +9065,19 @@ components:
           oneOf:
             - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
+          description: Who recorded the verdict; `null` for an `accepted` verdict the Space's acceptance deadline recorded.
         body:
           type: string
           description: Markdown. What was done, checked and assumed for `submitted`; the reason for `sent_back`.
         createdAt:
           type: string
           format: date-time
+        deadline:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: 'When the Space''s acceptance deadline accepts this Issue unless someone sends it back first: `acceptAfterHours` after the later of its latest submission and its last reopen. `null` unless the Issue is open and submitted and the Space has a deadline.'
     IssueReference:
       type: object
       additionalProperties: false
@@ -9247,7 +9274,12 @@ components:
         kind:
           $ref: '#/components/schemas/IssueEventKind'
         actor:
-          $ref: '#/components/schemas/PublicUser'
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: 'null'
+          description: |
+            `null` only for an `accepted` verdict the Space's acceptance deadline recorded. That acceptance closes
+            the Issue as completed without a `closed` event.
         payload:
           type: object
           additionalProperties: true

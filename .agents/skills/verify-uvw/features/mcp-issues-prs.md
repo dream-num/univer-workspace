@@ -25,6 +25,9 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MI14 has a claimed Editor agent and a claimed Viewer agent each report both declared checks on their own pull request
   linked to one Issue. After both merge, the acceptance panel shows the Editor's results counting and the Viewer's as
   not counting, and once `.agents/checks.md` is in Trash, says the repository declares no checks.
+- MI15 turns on an acceptance deadline with `repo_edit`, lets the server accept a submitted Issue by deadline with no
+  actor while a sent-back one stays open, restarts the clock on a reopen, reads it back in MCP, uvw and the browser,
+  shows the settings notice before a change that accepts overdue Issues, and turns the deadline off.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -53,8 +56,8 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `issue_comment`, `issue_set_state`, `issue_verdict`, `pr_create`, `pr_view`, `pr_list`, `pr_edit`, `pr_ready`, `pr_check`,
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
-`whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, and MI14 calls
-`unit_add`, `execute`, `pr_check` and `pr_merge`. A person
+`whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
+`unit_add`, `execute`, `pr_check` and `pr_merge`, and MI15 calls `repo_edit`. A person
 judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses `uvw space node trash` and the
 repository's `Trash` page.
 
@@ -501,6 +504,108 @@ declares no checks in .agents/checks.md.` and lists both reported names as `Not 
 Pass when every command exits as shown, both `jq` checks hold, the first screenshots label A's results as counting and
 V's as `Does not count` under the right pull request, the narrow page has no horizontal scroll, and the last screenshot
 says the repository declares no checks.
+
+### MI15. Accept an Issue by deadline
+
+The run user O turns on a 72-hour acceptance deadline with `repo_edit`, opens three Issues assigned to O, submits two
+with uvw and sends the second back. One step stands in for three days: it moves those Issues' verdicts 73 hours back in
+the run's product SQLite, because the server takes the time only from its clock. It is setup, the only kind of database
+write in this file, and proves nothing by itself. Within a minute the server accepts the first Issue by deadline, closes
+it as completed with no actor, and leaves the sent-back one open. A fourth Issue is submitted, closed as not planned and
+reopened: with its verdict moved back it stays open, because the reopen restarted the clock, and it is accepted once the
+reopen is moved back too. Then O turns the deadline off in the browser, and a third submission moved back the same way
+stays open. MI15 creates no agent.
+
+```bash
+R="$O/issue-deadline"
+DB="/tmp/verify-uvw/$VERIFY_UVW_RUN/data/univer-workspace.sqlite"
+age() { sqlite3 -cmd ".timeout 5000" "$DB" "UPDATE issue_verdicts SET created_at = created_at - 73 * 3600000 WHERE issue_id = (SELECT id FROM issues WHERE space_id = '$T' AND number = $1)"; }
+age_reopen() { sqlite3 -cmd ".timeout 5000" "$DB" "UPDATE issue_events SET created_at = created_at - 73 * 3600000 WHERE kind = 'reopened' AND issue_id = (SELECT id FROM issues WHERE space_id = '$T' AND number = $1)"; }
+hours_left() { jq -r '.acceptance.deadline | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 - now | . / 3600 | floor' "$EVIDENCE/$1.out"; }
+$V cli mid-repo repo create issue-deadline --name "Issue deadline" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mid-repo.out")
+$V mcp --toolsets all mid-on repo_edit "{\"repo\":\"$R\",\"acceptAfterHours\":72}"
+jq -e '.acceptAfterHours == 72' "$EVIDENCE/mid-on.out"
+$V cli mid-repo-view repo view "$R"
+grep -q 'accept after: 72 hours' "$EVIDENCE/mid-repo-view.out"
+$V cli mid-due issue create -R "$R" -t "Count the West rows" -a "$O" --json number
+$V cli mid-back issue create -R "$R" -t "Count the East rows" -a "$O" --json number
+$V cli mid-later issue create -R "$R" -t "Count the North rows" -a "$O" --json number
+N1=$(jq -r .number "$EVIDENCE/mid-due.out"); N2=$(jq -r .number "$EVIDENCE/mid-back.out"); N3=$(jq -r .number "$EVIDENCE/mid-later.out")
+$V cli mid-submit-1 issue submit "$N1" -R "$R" -b "Counted 12 rows."
+$V cli mid-submit-2 issue submit "$N2" -R "$R" -b "Counted 9 rows."
+$V cli mid-send-back issue send-back "$N2" -R "$R" -b "East has 10 rows."
+$V cli mid-waiting issue view "$N1" -R "$R" --json acceptance
+test "$(hours_left mid-waiting)" -eq 71
+$V cli mid-waiting-text issue view "$N1" -R "$R"
+grep -q 'accepted by deadline: .* unless sent back' "$EVIDENCE/mid-waiting-text.out"
+```
+
+In the run browser, signed in as O, open `$ORIGIN/spaces/$T/issues/$N1`. The sidebar's `Acceptance` reads
+`Submitted for acceptance` and `Accepted automatically <date> unless sent back`, about three days ahead. Screenshot it as
+`mid-deadline.png`. Then:
+
+```bash
+age "$N1"; age "$N2"
+for i in $(seq 1 18); do $V uvw issue view "$N1" -R "$R" --json state | jq -e '.state == "closed"' >/dev/null && break; sleep 5; done
+$V cli mid-accepted issue view "$N1" -R "$R" -c --json state,stateReason,closedBy,acceptance,timeline
+jq -e '.state == "closed" and .stateReason == "completed" and .closedBy == null and .acceptance.kind == "accepted" and .acceptance.actor == null' "$EVIDENCE/mid-accepted.out"
+jq -e --arg o "$O" '[.timeline[] | select(.type == "event" and .kind != "assigned") | [.kind, .actor.username]] == [["submitted", $o], ["accepted", null]]' "$EVIDENCE/mid-accepted.out"
+$V cli mid-accepted-text issue view "$N1" -R "$R"
+grep -q 'acceptance: accepted by deadline' "$EVIDENCE/mid-accepted-text.out"
+$V mcp mid-mcp issue_view "{\"repo\":\"$R\",\"number\":\"$N1\"}"
+jq -e '.state == "closed" and .closedBy == null and .acceptance.kind == "accepted" and .acceptance.actor == null' "$EVIDENCE/mid-mcp.out"
+$V cli mid-still-back issue view "$N2" -R "$R" --json state,acceptance
+jq -e '.state == "open" and .acceptance.kind == "sent_back" and .acceptance.deadline == null' "$EVIDENCE/mid-still-back.out"
+$V cli mid-reopen issue create -R "$R" -t "Count the South rows" -a "$O" --json number
+N4=$(jq -r .number "$EVIDENCE/mid-reopen.out")
+$V cli mid-submit-4 issue submit "$N4" -R "$R" -b "Counted 5 rows."
+age "$N4"
+$V cli mid-close-4 issue close "$N4" -R "$R" -r "not planned"
+$V cli mid-reopen-4 issue reopen "$N4" -R "$R"
+sleep 70
+$V mcp mid-reopened issue_view "{\"repo\":\"$R\",\"number\":\"$N4\"}"
+jq -e '.state == "open" and .acceptance.kind == "submitted"' "$EVIDENCE/mid-reopened.out"
+test "$(hours_left mid-reopened)" -eq 71
+age_reopen "$N4"
+for i in $(seq 1 18); do $V uvw issue view "$N4" -R "$R" --json state | jq -e '.state == "closed"' >/dev/null && break; sleep 5; done
+$V cli mid-reopen-accepted issue view "$N4" -R "$R" --json state,stateReason,closedBy,acceptance
+jq -e '.state == "closed" and .stateReason == "completed" and .closedBy == null and .acceptance.actor == null' "$EVIDENCE/mid-reopen-accepted.out"
+```
+
+Pin `univer-workspace-layout-theme` to `repository` and reload the Issue page. The sidebar's `Acceptance` reads
+`Accepted by deadline`, and the timeline ends with `Accepted by deadline, since nobody sent it back` and no one's
+`closed` line: screenshot `mid-accepted.png`. Open `$ORIGIN/spaces/$T/issues?state=closed`, where the row reads
+`#<N1> accepted by deadline` and a date, and screenshot `mid-list.png`. Open `$ORIGIN/spaces/$T` and screenshot the
+`Recent activity`, whose newest line reads `Acceptance deadline accepted Issue #<N4>` and which also lists
+`Acceptance deadline accepted Issue #<N1>`, as `mid-activity.png`.
+
+Open `$ORIGIN/spaces/$T/settings`. Under `Acceptance deadline` the checkbox is on with `72` `hours after submission`.
+Type `48` in the hours field without saving. The line above the hint reads `Saving accepts, within a minute, every
+submitted Issue whose clock already passed 48 hours.` Click the checkbox to turn it off. The line now reads `Turning this
+on accepts, within a minute, every submitted Issue whose clock already passed 72 hours.` Screenshot the section as
+`mid-settings-off.png`, and at 390 × 844 check that `document.documentElement.scrollWidth` is 390 and screenshot it as
+`mid-settings-off-390.png`. Then:
+
+```bash
+$V cli mid-off repo view "$R" --json acceptAfterHours
+jq -e '.acceptAfterHours == null' "$EVIDENCE/mid-off.out"
+$V cli mid-submit-3 issue submit "$N3" -R "$R" -b "Counted 7 rows."
+age "$N3"
+sleep 70
+$V cli mid-off-open issue view "$N3" -R "$R" --json state,acceptance
+jq -e '.state == "open" and .acceptance.kind == "submitted"' "$EVIDENCE/mid-off-open.out"
+```
+
+Open `$ORIGIN/spaces/$T/issues/$N3`. Its sidebar reads `Submitted for acceptance` with no `Accepted automatically` line:
+screenshot `mid-off.png`.
+
+Pass when every command exits as shown: the deadline turns on over MCP and `repo view` prints it, uvw prints the first
+Issue's deadline 71 hours ahead, the first Issue closes as completed within 90 s of `age` with a null `closedBy`, a null
+acceptance actor and no `closed` event in uvw and MCP, uvw prints `accepted by deadline`, the screenshots name no one as
+its closer, the sent-back Issue stays open, the reopened fourth Issue stays submitted with its deadline 71 hours ahead
+and closes within 90 s of `age_reopen`, the settings notice names the hours before each change, the browser turns the
+deadline off, and the third Issue then stays submitted.
 
 ### MP1. Pull request create
 

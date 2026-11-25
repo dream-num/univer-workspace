@@ -26,6 +26,7 @@ import type {
   IssueUpdate,
   RecordVerdict,
   VerdictRow,
+  DueIssue,
 } from "../../../modules/issues/issues.repository.js";
 
 const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
@@ -35,6 +36,18 @@ const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
 const participantSql = `(${ownsSpaceSql("spaces.owner_user_id", "?")} OR (
   NOT ${ownerSuspendedSql("spaces.owner_user_id")}
   AND EXISTS (SELECT 1 FROM space_members WHERE space_id = spaces.id AND user_id = ?)))`;
+
+/** When the Space's deadline accepts each open, submitted Issue. The job and the Issue view both read it. */
+const PENDING_SQL = `SELECT issues.id, issues.space_id, verdict.created_at AS submitted_at,
+    MAX(verdict.created_at, COALESCE((
+      SELECT MAX(created_at) FROM issue_events WHERE issue_id = issues.id AND kind = 'reopened'), 0)
+    ) + spaces.accept_after_hours * 3600000 AS accept_at
+  FROM issues
+  JOIN spaces ON spaces.id = issues.space_id
+  JOIN issue_verdicts AS verdict ON verdict.id = (
+    SELECT id FROM issue_verdicts WHERE issue_id = issues.id ORDER BY created_at DESC, id DESC LIMIT 1)
+  WHERE issues.state = 'open' AND verdict.kind = 'submitted' AND spaces.accept_after_hours IS NOT NULL
+    AND NOT ${ownerSuspendedSql("spaces.owner_user_id")}`;
 
 export class SqliteIssuesRepository implements IssuesRepository {
   constructor(
@@ -108,6 +121,28 @@ export class SqliteIssuesRepository implements IssuesRepository {
     });
   }
 
+  async listDueIssues(now: number, after: DueIssue, limit: number): Promise<DueIssue[]> {
+    return this._all(
+      `SELECT id, accept_at FROM (${PENDING_SQL}) WHERE accept_at <= ? AND (accept_at, id) > (?, ?) ORDER BY accept_at, id LIMIT ?`,
+      now, after.accept_at, after.id, limit,
+    ) as unknown as DueIssue[];
+  }
+
+  async acceptDueIssue(issueId: string, now: number): Promise<string | null> {
+    return this._database.transaction(() => {
+      const row = this._get(`SELECT * FROM (${PENDING_SQL} AND issues.id = ?) WHERE accept_at <= ?`, issueId, now) as
+        { space_id: string; submitted_at: number } | undefined;
+      if (!row) return null;
+      const at = Math.max(now, row.submitted_at + 1);
+      this._run(
+        "INSERT INTO issue_verdicts (id, issue_id, kind, actor_user_id, body, created_at) VALUES (?, ?, 'accepted', NULL, '', ?)",
+        randomUUID(), issueId, at,
+      );
+      this.setIssueState(issueId, "closed", "completed", null, at);
+      return row.space_id;
+    });
+  }
+
   private readLatestVerdict(issueId: string): VerdictRow | null {
     return (this._get(
       "SELECT id, kind, actor_user_id, body, created_at FROM issue_verdicts WHERE issue_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
@@ -133,7 +168,11 @@ export class SqliteIssuesRepository implements IssuesRepository {
     const references = this.readReferenceNodeIds(row.id).map((nodeId) => ({
       nodeId, node: this.access.readNodeAccess(userId, nodeId),
     }));
-    return { row, space, summary: this.readSummaryData([row]), references, acceptance: this.readLatestVerdict(row.id) };
+    const pending = this._get(`SELECT accept_at FROM (${PENDING_SQL} AND issues.id = ?)`, row.id) as { accept_at: number } | undefined;
+    return {
+      row, space, summary: this.readSummaryData([row]), references,
+      acceptance: this.readLatestVerdict(row.id), acceptAt: pending?.accept_at ?? null,
+    };
   }
 
   async listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]> {

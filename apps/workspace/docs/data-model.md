@@ -213,8 +213,10 @@ Trunk 或合并；它只看见自己的 Team Worktree。设置改回 `members` �
 ready 的提议仍留给成员审阅、合并或放弃。非成员在一个 Team Space 至多有 3 个未处理（`processed_at IS NULL`）的
 Team Worktree，计数与插入在同一事务内，超出返回 `403 FORBIDDEN`。
 
-`accept_after_hours`（V31，`INTEGER`，可空，CHECK 大于 0）预留给按期限自动验收：`NULL` 表示关闭。目前只有这一列，
-没有读取它的任务，也没有设置它的界面或接口；新库和迁移后的已有行都是 `NULL`。
+`accept_after_hours`（V31，`INTEGER`，可空，CHECK 大于 0）是 Team Space 的验收期限：`NULL`（默认，新库和迁移后的
+已有行都是）表示关闭；开启时，提交（`submitted`）或重新打开之后这么多小时内无人退回的 Issue 由期限验收，见 `issue_verdicts`。
+只有 owner 与 admin 能经 `PATCH /api/spaces/{spaceId}` 的 `acceptAfterHours` 修改，服务层只接受 1–720 的整数或
+`null`，开启时建议取 72。Personal Space 恒为 `NULL`。
 
 `slug`（V12，`TEXT COLLATE NOCASE`，可空）是 Team Space 在 owner 名下的短名，规则为
 `[A-Za-z0-9._-]`、1–100 字符、首字符为字母或数字，不区分大小写，`(owner_user_id, slug)` 唯一
@@ -571,7 +573,7 @@ Issue 只属于 Team Space，不保存 snapshot、changeset 或 revision。Team 
 | `space_id`, `number` | 复合唯一；`number` 是 Space 内递增的 `#N`，在创建事务内取 Issue 与 Team Worktree 编号的最大值再加 1（二者共用序列）|
 | `title`, `body` | 标题（1–256 字符）与 Markdown 正文（≤ 65 536 字符） |
 | `state`, `state_reason` | `open` 时原因为空；`closed` 时为 `completed | not_planned`，由表级 CHECK 保证 |
-| `author_user_id`, `closed_by_user_id`, `closed_at` | 作者与关闭信息 |
+| `author_user_id`, `closed_by_user_id`, `closed_at` | 作者与关闭信息；已关闭的 Issue 只在由验收期限关闭时 `closed_by_user_id` 为 `NULL` |
 | `created_at`, `updated_at` | 评论、事件和关系变更都会刷新 `updated_at` |
 | `created_via` | V16，可空 `TEXT`；复制创建 Session 的 `write_source`（`browser` 或 `agent`），`NULL` 表示未知；无默认值，不回填 |
 
@@ -594,7 +596,7 @@ V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue �
 | `id` | 随机主键 |
 | `issue_id` | 所属 Issue，`ON DELETE CASCADE` |
 | `kind` | `submitted | accepted | sent_back | reverted`；目前只写入前三种 |
-| `actor_user_id` | 给出 Verdict 的 User；CHECK 只允许 `accepted` 为 `NULL`，目前总有值 |
+| `actor_user_id` | 给出 Verdict 的 User；CHECK 只允许 `accepted` 为 `NULL`，只有期限验收写 `NULL` |
 | `body` | Markdown；`submitted` 是做了什么、查了什么、假设了什么，`sent_back` 是退回原因，`accepted` 可为空 |
 | `operation_id` | CHECK 只允许 `reverted` 非空，目前总为 `NULL` |
 | `created_at` | 毫秒时间；同一 Issue 内每条都晚于上一条 |
@@ -605,8 +607,25 @@ V31 新增。Verdict 是 Issue 验收流程中的一条只追加记录，Issue �
 `sent_back`。`accepted` 在同一事务里走已有关闭路径，以 `completed` 关闭 Issue，写 `closed` 事件，活动流照旧显示
 `issue-closed`。已关闭的 Issue 拒绝 Verdict（`409 ISSUE_CLOSED`），重复提交返回 `409 ISSUE_ALREADY_SUBMITTED`，
 未提交时验收或退回返回 `409 ISSUE_NOT_SUBMITTED`，无权返回 `403 FORBIDDEN`。与最新一条同 `kind`、同 actor、同
-`body` 的请求不写入，直接返回当前 Issue。每条 Verdict 都更新 `issues` 行，PostgreSQL 的 SERIALIZABLE 事务因此让
-并发 Verdict 冲突并重试，重试读到胜者：两个并发验收只关闭一次、只记一条。
+`body` 的请求，只要 Issue 仍是那条 Verdict 留下的状态（`accepted` 是以 `completed` 关闭，其余是开放），就不写入，
+直接返回当前 Issue；否则按上面的规则处理，例如验收后重新打开的 Issue 再收到同样的验收返回 `409 ISSUE_NOT_SUBMITTED`。
+每条 Verdict 都更新 `issues` 行，PostgreSQL 的 SERIALIZABLE 事务因此让并发 Verdict 冲突并重试，重试读到胜者：
+两个并发验收只关闭一次、只记一条。
+
+期限验收由每个副本的 `server/src/jobs/issue-acceptance.ts` 每分钟执行一轮，每轮最多验收 25 个 Issue。期限是最新
+`submitted` 的 `created_at` 与最后一条 `reopened` 事件的 `created_at` 中较晚者加上 `accept_after_hours` 小时，
+只对开放、最新 Verdict 是 `submitted`、所在 Space 的 `accept_after_hours` 非空且 owner 未被暂停的 Issue 存在。两个
+repository 各用一条 SQL 计算它：任务用它找到期的 Issue，Issue 详情用它返回 `acceptance.deadline`，所以页面、uvw 与
+MCP 显示的时间就是任务使用的时间。任务按期限和 id 的顺序取期限不晚于本副本当前时间的 Issue，逐个在一个事务里重新确认
+同一条件，然后写一条 `actor_user_id`
+为 `NULL`、`body` 为空的 `accepted`，并以 `completed` 关闭 Issue，`closed_by_user_id` 为 `NULL`。它不写 `closed`
+事件：时间线里这条无 actor 的 `accepted` 就是关闭记录，活动流显示 actor 为 `null` 的 `issue-closed`。退回让最新一条
+不再是 `submitted`，计时停止；再次提交从新的 `created_at` 重新计时；提交后被关闭再重新打开的 Issue 从重新打开时
+重新计时；关闭设置后不再验收；开启设置或调小小时数后，已超过新期限的 Issue 在下一轮被验收。某个 Issue 的事务失败只记日志，
+不中止本轮，也不占用 25 个的名额：任务按期限顺序越过它继续取后面的 Issue，所以持续失败的 Issue 每轮各重试一次，不会挡住
+其他 Issue。期限按副本的系统时钟比较，
+副本之间的时钟偏差使验收提前或推迟同样的量；以小时计的期限下，秒级偏差可以忽略。多个副本同时执行时，事务内的重新
+确认和对 `issues` 行的更新让 PostgreSQL 只放行一个，另一个重试后不再匹配：每个 Issue 只记一条验收、只关闭一次。
 
 ### `issue_labels` 与 `issue_label_links`
 

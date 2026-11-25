@@ -18,6 +18,8 @@ export interface WorkspaceSpace {
   readonly publicRead?: boolean;
   /** Who besides its members may fork the Team Space and propose; it applies only while `publicRead` is true. */
   readonly proposals?: WorkspaceSpaceProposals;
+  /** Hours after a submission at which an Issue nobody sent back is accepted; null when off. */
+  readonly acceptAfterHours?: number | null;
   readonly slug?: string | null;
   /** What the caller may do in the Space, on full Space views from a server that reports every one of them. */
   readonly capabilities?: WorkspaceSpaceCapabilities;
@@ -213,6 +215,9 @@ export function parseSpace(value: unknown): WorkspaceSpace {
     ...(typeof value["publicRead"] === "boolean" ? { publicRead: value["publicRead"] } : {}),
     ...(SPACE_PROPOSALS.includes(value["proposals"] as WorkspaceSpaceProposals)
       ? { proposals: value["proposals"] as WorkspaceSpaceProposals }
+      : {}),
+    ...(value["acceptAfterHours"] === null || Number.isSafeInteger(value["acceptAfterHours"])
+      ? { acceptAfterHours: value["acceptAfterHours"] as number | null }
       : {}),
     ...(value["slug"] === null || typeof value["slug"] === "string" ? { slug: value["slug"] } : {}),
     ...(hasCapabilities

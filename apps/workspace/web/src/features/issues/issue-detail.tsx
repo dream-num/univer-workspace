@@ -632,12 +632,16 @@ function EventLine({ event }: { readonly event: TimelineEvent }) {
   const { language, t } = useI18n();
   const payload = event.payload;
   const notPlanned = event.kind === "closed" && payload["reason"] === "not_planned";
-  const key = notPlanned ? "issueEventClosedNotPlanned" : EVENT_MESSAGES[event.kind];
+  const key = notPlanned
+    ? "issueEventClosedNotPlanned"
+    : event.actor === null
+      ? "issueEventAcceptedByDeadline"
+      : EVENT_MESSAGES[event.kind];
   const strong = (value: string) => (
     <strong className="font-semibold text-foreground">{value || "?"}</strong>
   );
   const nodes: Record<string, ReactNode> = {
-    actor: strong(event.actor.displayName),
+    actor: strong(event.actor?.displayName ?? ""),
     from: strong(text(payload["from"])),
     to: strong(text(payload["to"])),
     label: <IssueLabelChip name={text(payload["name"])} color={text(payload["color"])} />,
@@ -689,7 +693,9 @@ function IssueSidebar({
   readonly onEdit: (kind: "labels" | "assignees" | "references") => void;
   readonly className?: string;
 }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
+  const acceptance = issue.acceptance;
+  const deadline = acceptance?.deadline ? new Date(acceptance.deadline) : null;
   const triage = issue.capabilities.triage;
   return (
     <aside
@@ -715,10 +721,30 @@ function IssueSidebar({
       </SidebarSection>
       <SidebarSection title={t("issueAcceptance")}>
         <Muted>
-          <span data-issue-acceptance={issue.acceptance?.kind ?? "none"}>
-            {t(issue.acceptance ? ACCEPTANCE_LABELS[issue.acceptance.kind] : "issueNotSubmitted")}
+          <span data-issue-acceptance={acceptance?.kind ?? "none"}>
+            {t(
+              !acceptance
+                ? "issueNotSubmitted"
+                : acceptance.kind === "accepted" && acceptance.actor === null
+                  ? "issueAcceptanceAcceptedByDeadline"
+                  : ACCEPTANCE_LABELS[acceptance.kind],
+            )}
           </span>
         </Muted>
+        {deadline ? (
+          <Muted>
+            <time data-issue-acceptance-deadline dateTime={deadline.toISOString()}>
+              {t("issueAcceptanceDeadline", {
+                date: deadline.toLocaleString(language, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              })}
+            </time>
+          </Muted>
+        ) : null}
       </SidebarSection>
       <SidebarSection title={t("issueLabels")} onEdit={triage ? () => onEdit("labels") : undefined}>
         {issue.labels.length ? (

@@ -26,6 +26,7 @@ import type {
   IssueUpdate,
   RecordVerdict,
   VerdictRow,
+  DueIssue,
 } from "../../../modules/issues/issues.repository.js";
 
 const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
@@ -35,6 +36,18 @@ const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
 const participantSql = `(${ownsSpaceSql("spaces.owner_user_id", "?")} OR (
   NOT ${ownerSuspendedSql("spaces.owner_user_id")}
   AND EXISTS (SELECT 1 FROM space_members WHERE space_id = spaces.id AND user_id = ?)))`;
+
+/** When the Space's deadline accepts each open, submitted Issue. The job and the Issue view both read it. */
+const PENDING_SQL = `SELECT issues.id, issues.space_id, verdict.created_at AS submitted_at,
+    GREATEST(verdict.created_at, (
+      SELECT MAX(created_at) FROM issue_events WHERE issue_id = issues.id AND kind = 'reopened')
+    ) + spaces.accept_after_hours * 3600000::bigint AS accept_at
+  FROM issues
+  JOIN spaces ON spaces.id = issues.space_id
+  JOIN issue_verdicts AS verdict ON verdict.id = (
+    SELECT id FROM issue_verdicts WHERE issue_id = issues.id ORDER BY created_at DESC, id DESC LIMIT 1)
+  WHERE issues.state = 'open' AND verdict.kind = 'submitted' AND spaces.accept_after_hours IS NOT NULL
+    AND NOT ${ownerSuspendedSql("spaces.owner_user_id")}`;
 
 export class PostgresIssuesRepository implements IssuesRepository {
   constructor(
@@ -108,6 +121,30 @@ export class PostgresIssuesRepository implements IssuesRepository {
     });
   }
 
+  async listDueIssues(now: number, after: DueIssue, limit: number): Promise<DueIssue[]> {
+    return await this._all(
+      `SELECT id, accept_at FROM (${PENDING_SQL}) AS pending
+        WHERE accept_at <= ? AND (accept_at, id) > (?, ?) ORDER BY accept_at, id LIMIT ?`,
+      now, after.accept_at, after.id, limit,
+    ) as DueIssue[];
+  }
+
+  async acceptDueIssue(issueId: string, now: number): Promise<string | null> {
+    // Serializable isolation makes a concurrent verdict or another replica's pass on this Issue retry and find it no longer due.
+    return await this._database.transaction(async () => {
+      const row = await this._get(`SELECT * FROM (${PENDING_SQL} AND issues.id = ?) AS pending WHERE accept_at <= ?`, issueId, now) as
+        { space_id: string; submitted_at: number } | undefined;
+      if (!row) return null;
+      const at = Math.max(now, row.submitted_at + 1);
+      await this._run(
+        "INSERT INTO issue_verdicts (id, issue_id, kind, actor_user_id, body, created_at) VALUES (?, ?, 'accepted', NULL, '', ?)",
+        randomUUID(), issueId, at,
+      );
+      await this.setIssueState(issueId, "closed", "completed", null, at);
+      return row.space_id;
+    });
+  }
+
   private async readLatestVerdict(issueId: string): Promise<VerdictRow | null> {
     return (await this._get(
       "SELECT id, kind, actor_user_id, body, created_at FROM issue_verdicts WHERE issue_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
@@ -133,7 +170,12 @@ export class PostgresIssuesRepository implements IssuesRepository {
     const references = await Promise.all((await this.readReferenceNodeIds(row.id)).map(async (nodeId) => ({
       nodeId, node: await this.access.readNodeAccess(userId, nodeId),
     })));
-    return { row, space, summary: await this.readSummaryData([row]), references, acceptance: await this.readLatestVerdict(row.id) };
+    const pending = await this._get(`SELECT accept_at FROM (${PENDING_SQL} AND issues.id = ?) AS pending`, row.id) as
+      { accept_at: number } | undefined;
+    return {
+      row, space, summary: await this.readSummaryData([row]), references,
+      acceptance: await this.readLatestVerdict(row.id), acceptAt: pending?.accept_at ?? null,
+    };
   }
 
   async listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]> {

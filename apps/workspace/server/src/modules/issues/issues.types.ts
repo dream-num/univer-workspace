@@ -90,6 +90,8 @@ export interface IssueAcceptanceView {
   readonly actor: PublicUser | null;
   readonly body: string;
   readonly createdAt: string;
+  /** When the Space's deadline accepts this submitted Issue unless someone sends it back; null when nothing will. */
+  readonly deadline: string | null;
 }
 
 export interface IssuePullRequestView {
@@ -131,7 +133,8 @@ export type IssueTimelineItem =
       readonly type: "event";
       readonly id: string;
       readonly kind: IssueEventKind | IssueVerdictKind;
-      readonly actor: PublicUser;
+      /** Null for an acceptance by the Space's deadline. */
+      readonly actor: PublicUser | null;
       readonly payload: Readonly<Record<string, unknown>>;
       readonly createdAt: string;
     };
@@ -197,6 +200,7 @@ export interface IssuesModule {
   verdict(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueView>;
   /** Who may read content now, as each current assignee set it after its latest assignment. */
   accessChanges(userId: string, spaceId: string, number: unknown): Promise<AccessChanges>;
+  acceptDue(now: number, limit: number): Promise<number>;
   updateComment(userId: string, commentId: string, input: unknown): Promise<IssueCommentView>;
   deleteComment(userId: string, commentId: string): Promise<void>;
   listLabels(userId: string, spaceId: string): Promise<{ readonly labels: readonly IssueLabelUsageView[] }>;

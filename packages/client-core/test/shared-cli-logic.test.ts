@@ -153,6 +153,7 @@ describe("repoEditPatch", () => {
   it("maps visibility to publicRead and keeps an empty description", () => {
     expect(repoEditPatch({ visibility: "public" })).toEqual({ publicRead: true });
     expect(repoEditPatch({ proposals: "accountable" })).toEqual({ proposals: "accountable" });
+    expect(repoEditPatch({ acceptAfterHours: null })).toEqual({ acceptAfterHours: null });
     expect(repoEditPatch({ visibility: "private", description: "", slug: "s", name: "N" })).toEqual({
       name: "N",
       description: "",
@@ -170,7 +171,7 @@ describe("repoEditPatch", () => {
     );
     expect(() => repoEditPatch({})).toThrowError(
       expect.objectContaining({
-        message: "Nothing to change: pass name, description, visibility, proposals or slug.",
+        message: "Nothing to change: pass name, description, visibility, proposals, acceptAfterHours or slug.",
       }),
     );
     expect(() => repoEditPatch({ slug: "s" }, ["name", "description", "visibility"])).toThrowError(

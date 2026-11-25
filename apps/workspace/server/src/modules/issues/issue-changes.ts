@@ -59,7 +59,10 @@ export function planVerdict(input: {
   readonly now: number;
 }): { readonly createdAt: number } | null {
   const { issue, latest, space, kind } = input;
-  if (latest?.kind === kind && latest.actor_user_id === input.userId && latest.body === input.body) return null;
+  const unchanged = kind === "accepted"
+    ? issue.state === "closed" && issue.state_reason === "completed"
+    : issue.state === "open";
+  if (unchanged && latest?.kind === kind && latest.actor_user_id === input.userId && latest.body === input.body) return null;
   const allowed = kind === "submitted"
     ? space.member && input.assignee
     : space.member && (issue.author_user_id === input.userId || space.capabilities.triageIssues);

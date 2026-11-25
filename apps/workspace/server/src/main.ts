@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import { openProductDatabase, type ProductDatabase } from "./db/index.js";
 import { startOperationRecovery, type OperationRecovery } from "./jobs/operation-recovery.js";
 import { startBlobMaintenance } from "./jobs/blob-maintenance.js";
+import { startIssueAcceptance } from "./jobs/issue-acceptance.js";
 import { shutdownServer } from "./server-lifecycle.js";
 import { logger } from "./logging/logger.js";
 import { beginStartupStage, startupStage, startupStageAsync } from "./logging/startup.js";
@@ -54,6 +55,7 @@ async function serve(product: ProductDatabase, collaboration: CollaborationDatab
       skillDrafts: application.skillDrafts,
       univerAssets: application.univerAssets,
     }));
+    jobs.push(startIssueAcceptance(application.issues));
     application.attachWebSocket(server);
 
     const logListen = beginStartupStage("server.listen");

@@ -82,7 +82,7 @@ export function nodeMoveParent(
 }
 
 export const REPO_DESCRIPTION_MAX = 350;
-export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "proposals", "slug"] as const;
+export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "proposals", "acceptAfterHours", "slug"] as const;
 export type RepoEditField = (typeof REPO_EDIT_FIELDS)[number];
 
 /** Creates a Team Space repository: the name defaults to the slug and the description is a second call. */
@@ -126,6 +126,7 @@ export async function createRepo(
 /** The Space update for a repository edit; `accepted` names the fields the caller offers, for the empty-edit message. */
 export function repoEditPatch(
   input: {
+    readonly acceptAfterHours?: number | null;
     readonly description?: string;
     readonly name?: string;
     readonly proposals?: WorkspaceSpaceProposals;
@@ -134,7 +135,14 @@ export function repoEditPatch(
   },
   accepted: readonly RepoEditField[] = REPO_EDIT_FIELDS,
   name: ParameterName = plainName,
-): { description?: string; name?: string; proposals?: WorkspaceSpaceProposals; publicRead?: boolean; slug?: string } {
+): {
+  acceptAfterHours?: number | null;
+  description?: string;
+  name?: string;
+  proposals?: WorkspaceSpaceProposals;
+  publicRead?: boolean;
+  slug?: string;
+} {
   if (accepted.every((field) => input[field] === undefined)) {
     throw workspaceError(
       "workspace-argument-invalid",
@@ -146,6 +154,7 @@ export function repoEditPatch(
     ...(input.description === undefined ? {} : { description: input.description }),
     ...(input.visibility === undefined ? {} : { publicRead: input.visibility === "public" }),
     ...(input.proposals === undefined ? {} : { proposals: input.proposals }),
+    ...(input.acceptAfterHours === undefined ? {} : { acceptAfterHours: input.acceptAfterHours }),
     ...(input.slug === undefined ? {} : { slug: input.slug }),
   };
 }
@@ -244,6 +253,7 @@ export class WorkspaceSpaceFeature {
   public async update(
     spaceId: string,
     input: {
+      readonly acceptAfterHours?: number | null;
       readonly description?: string;
       readonly name?: string;
       readonly proposals?: WorkspaceSpaceProposals;

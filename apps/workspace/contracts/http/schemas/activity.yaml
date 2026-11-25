@@ -80,6 +80,7 @@ IssueActivityEvent:
     kind: { type: string, enum: [issue-opened, issue-closed] }
     at: { type: string, format: date-time }
     actor:
+      description: Who opened or closed the Issue; `null` for a close by the Space's acceptance deadline.
       oneOf: [{ $ref: ./identity.yaml#/PublicUser }, { type: "null" }]
     writeSource:
       $ref: ./identity.yaml#/WriteSource

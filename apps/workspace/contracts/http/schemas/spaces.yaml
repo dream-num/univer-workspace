@@ -64,10 +64,12 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName, proposals]
+      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName, proposals, acceptAfterHours]
       properties:
         proposals:
           $ref: "#/SpaceProposals"
+        acceptAfterHours:
+          $ref: "#/SpaceAcceptAfterHours"
         slug:
           type: [string, "null"]
           description: URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed.
@@ -120,6 +122,16 @@ SpaceProposals:
     while a ready proposal stays for the members to review, merge or discard. Personal Spaces report
     `members`.
 
+SpaceAcceptAfterHours:
+  type: [integer, "null"]
+  minimum: 1
+  maximum: 720
+  description: |
+    Hours after an Issue is submitted for acceptance at which the server accepts it and closes it as
+    completed, unless someone sends it back first. A send-back stops the clock and the next submission
+    restarts it. Such an acceptance has no actor. `null`, the default, turns it off. Personal Spaces
+    report `null`.
+
 SpaceSlug:
   type: string
   minLength: 1
@@ -163,6 +175,9 @@ PatchSpace:
     proposals:
       $ref: "#/SpaceProposals"
       description: Team Spaces only. The owner or an admin may change it.
+    acceptAfterHours:
+      $ref: "#/SpaceAcceptAfterHours"
+      description: Team Spaces only. The owner or an admin may change it. `72` is the suggested value when turning it on.
     description:
       type: string
       maxLength: 350

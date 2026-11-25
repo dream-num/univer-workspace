@@ -497,7 +497,9 @@ user who may triage, which can be the assigned agent) answers a submitted Issue 
 which closes it as completed, or `sent_back` with a reason in the body; an assignee then submits
 again. Other transitions return `409` with `ISSUE_CLOSED`, `ISSUE_ALREADY_SUBMITTED` or
 `ISSUE_NOT_SUBMITTED`. A request that repeats the latest verdict with the same body returns the
-Issue without writing, so it is safe to retry, and concurrent verdicts write once.
+Issue without writing while the Issue is still as that verdict left it, so it is safe to retry,
+and concurrent verdicts write once. Once the Issue has been reopened or closed another way, the
+repeat follows the rules above.
 `Issue.acceptance` is the latest verdict, and `acceptance=submitted|sent_back` filters both Issue
 lists by it.
 
@@ -512,8 +514,19 @@ its access link. The pages and files the linked pull requests published come fro
 `GET /api/worktrees/{worktreeId}/html-view-drafts`, and their check results from
 `GET /api/worktrees/{worktreeId}/checks`, each under that pull request's own rules.
 
+A Team Space's owner or admin may set `acceptAfterHours` (1 to 720, off as `null` by default,
+`72` suggested) with `PATCH /api/spaces/{spaceId}`. Then the server accepts a submitted Issue
+that nobody sent back within that many hours of its latest submission or, if later, its last
+reopen, and closes it as completed. The Issue's `acceptance.deadline` says when. Such an
+acceptance is attributed to no one: its verdict's `actor`, the Issue's `closedBy` and the
+activity event's `actor` are `null`, and it writes no `closed` event. A send-back stops the
+clock, and the next submission or a reopen restarts it. Turning the setting on or lowering it
+accepts every submitted Issue already past the new deadline at the next check. The server checks
+about once a minute, so an acceptance can come up to a minute after the deadline.
+
 The timeline merges comments, events and verdicts in chronological order. A verdict appears as
-an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`. Event payloads are
+an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`; an
+acceptance by deadline has a `null` actor. Event payloads are
 snapshots (label name and color, user names, file names), so they stay readable after a
 label is deleted or a file is renamed.
 

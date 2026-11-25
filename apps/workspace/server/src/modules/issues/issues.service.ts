@@ -2,11 +2,13 @@ import { forbidden, invalid, notFound } from "./issues.errors.js";
 import { randomUUID } from "node:crypto";
 import { checkCommentWrite, checkCreateRelations, requireIssueSpace } from "./issue-changes.js";
 import { writeSourceView } from "../identity/index.js";
+import { logger } from "../../logging/logger.js";
 import type { AccessResolver, NodeAccess, SpaceAccess } from "../access/index.js";
 import type { AccessChanges, PublicUser } from "../permissions/index.js";
 import type {
   IssuesRepository,
   IssueDetail,
+  DueIssue,
   IssueSummaryData,
   LabelFields,
   CommentRow,
@@ -101,7 +103,7 @@ export function createIssuesModule(options: {
     };
   }
 
-  async function acceptanceView(verdict: VerdictRow | null): Promise<IssueAcceptanceView | null> {
+  async function acceptanceView(verdict: VerdictRow | null, acceptAt: number | null): Promise<IssueAcceptanceView | null> {
     if (!verdict) return null;
     const actor = verdict.actor_user_id;
     return {
@@ -109,10 +111,11 @@ export function createIssuesModule(options: {
       actor: actor === null ? null : user(await repository.users([actor]), actor),
       body: verdict.body,
       createdAt: iso(verdict.created_at),
+      deadline: acceptAt === null ? null : iso(acceptAt),
     };
   }
 
-  async function issueView(userId: string, { row, space, summary, references, acceptance }: IssueDetail): Promise<IssueView> {
+  async function issueView(userId: string, { row, space, summary, references, acceptance, acceptAt }: IssueDetail): Promise<IssueView> {
     const editable = space.member && (row.author_user_id === userId || space.capabilities.triageIssues);
     return {
       ...summaryView(row, summary),
@@ -125,7 +128,7 @@ export function createIssuesModule(options: {
         comment: space.member,
       },
       pullRequests: await options.pullRequests?.(userId, row.id) ?? [],
-      acceptance: await acceptanceView(acceptance),
+      acceptance: await acceptanceView(acceptance, acceptAt),
     };
   }
 
@@ -244,15 +247,16 @@ export function createIssuesModule(options: {
       const rows = await repository.timeline(issue.id, cursor, limit + 1);
       const hasNext = rows.length > limit;
       const visible = hasNext ? rows.slice(0, limit) : rows;
-      const users = await repository.users(visible.map((row) => row.actor_user_id));
+      const users = await repository.users(visible.flatMap((row) => row.actor_user_id === null ? [] : [row.actor_user_id]));
       const items = visible.map((row): IssueTimelineItem =>
         row.type === "comment"
           ? {
-              type: "comment", id: row.id, author: user(users, row.actor_user_id), body: row.body ?? "",
+              type: "comment", id: row.id, author: user(users, row.actor_user_id!), body: row.body ?? "",
               createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
             }
           : {
-              type: "event", id: row.id, kind: row.kind as IssueEventKind | IssueVerdictKind, actor: user(users, row.actor_user_id),
+              type: "event", id: row.id, kind: row.kind as IssueEventKind | IssueVerdictKind,
+              actor: row.actor_user_id === null ? null : user(users, row.actor_user_id),
               payload: row.type === "verdict" ? { body: row.body ?? "" } : JSON.parse(row.payload_json ?? "{}") as Record<string, unknown>,
               createdAt: iso(row.created_at),
             });
@@ -296,6 +300,31 @@ export function createIssuesModule(options: {
       const issue = await requireIssue(spaceId, number);
       const assignments = await repository.assignments(issue.id);
       return options.accessChanges(userId, spaceId, assignments.map((row) => ({ userId: row.user_id, since: row.assigned_at })));
+    },
+
+    async acceptDue(time, limit) {
+      const spaceIds = new Set<string>();
+      let accepted = 0;
+      let after: DueIssue = { id: "", accept_at: 0 };
+      // A failed Issue is passed over, not counted, so failures cannot fill the limit and stall the Issues behind them.
+      while (accepted < limit) {
+        const due = await repository.listDueIssues(time, after, limit - accepted);
+        if (!due.length) break;
+        for (const issue of due) {
+          try {
+            const spaceId = await repository.acceptDueIssue(issue.id, time);
+            if (spaceId) {
+              accepted++;
+              spaceIds.add(spaceId);
+            }
+          } catch (error) {
+            logger.error({ err: error, issueId: issue.id }, "Issue was not accepted by deadline");
+          }
+        }
+        after = due.at(-1)!;
+      }
+      for (const spaceId of spaceIds) await notify(spaceId);
+      return accepted;
     },
 
     async updateComment(userId, commentId, input) {

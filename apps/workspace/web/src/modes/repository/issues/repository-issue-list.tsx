@@ -135,7 +135,13 @@ function RepositoryIssueRow({ issue, showSpace }: { readonly issue: IssueSummary
           </div>
           <div className="rd-issue-meta">
             {showSpace ? <span>{issue.space.name}</span> : null}
-            <span><ActorAvatar actor={actorOf(closed ? issue.closedBy ?? issue.author : issue.author, closed ? "unknown" : issue.createdVia)} size="sm" /> {closed ? t("repositoryIssueClosedBy", { number: issue.number, date: formatRelativeDate(closed, language), name: (issue.closedBy ?? issue.author).displayName }) : t("repositoryIssueOpenedBy", { number: issue.number, date: formatRelativeDate(issue.createdAt, language), name: issue.author.displayName })}</span>
+            {!closed ? (
+              <span><ActorAvatar actor={actorOf(issue.author, issue.createdVia)} size="sm" /> {t("repositoryIssueOpenedBy", { number: issue.number, date: formatRelativeDate(issue.createdAt, language), name: issue.author.displayName })}</span>
+            ) : issue.closedBy ? (
+              <span><ActorAvatar actor={actorOf(issue.closedBy, "unknown")} size="sm" /> {t("repositoryIssueClosedBy", { number: issue.number, date: formatRelativeDate(closed, language), name: issue.closedBy.displayName })}</span>
+            ) : (
+              <span>{t("repositoryIssueClosedByDeadline", { number: issue.number, date: formatRelativeDate(closed, language) })}</span>
+            )}
           </div>
         </div>
         <div className="rd-issue-right">

@@ -31,7 +31,7 @@ function render(content: ReactNode) {
   clients.push(client);
   client.setQueryData(["agent-sessions", "user-a"], items);
   client.setQueryData(spaceQueryOptions("repo").queryKey, {
-    id: "repo", type: "team", name: "Finance", publicRead: false, proposals: "members", slug: "finance", fullName: "user/finance", description: "",
+    id: "repo", type: "team", name: "Finance", publicRead: false, proposals: "members", acceptAfterHours: null, slug: "finance", fullName: "user/finance", description: "",
     owner: { id: "user-a", username: "user" }, affiliation: "owner", accessRole: "owner",
     capabilities: { browseRoot: true, createAtRoot: true, renameSpace: true, manageMembers: true, viewTrash: true, createIssue: true, triageIssues: true, manageIssueLabels: true, propose: true },
   });

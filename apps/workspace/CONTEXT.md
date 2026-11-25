@@ -135,7 +135,9 @@ _Avoid_: Task link
 
 **Verdict**:
 One step of handing an Issue over: an assignee submits it, and whoever may close it accepts
-or sends it back with a reason. Verdicts are only appended; each has an actor, a body, and a time.
+or sends it back with a reason. In a Team Space with an acceptance deadline, a submission nobody
+sends back in time is accepted by deadline, a Verdict with no actor. Verdicts are only appended;
+each has a body and a time, and every one but an acceptance by deadline has an actor.
 _Avoid_: Review, Approval
 
 **Acceptance**:

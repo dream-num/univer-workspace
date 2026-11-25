@@ -18,20 +18,28 @@ import {
   table,
   type JsonFieldsOption,
 } from "../../command.js";
+import { workspaceError } from "../../errors.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 export const REPO_JSON_FIELDS = [
   "id", "name", "type", "accessRole", "affiliation", "description", "fullName", "owner", "publicRead", "slug",
-  "proposals", "capabilities",
+  "proposals", "acceptAfterHours", "capabilities",
 ] as const satisfies readonly (keyof WorkspaceSpace)[];
 
 const MEMBER_JSON_FIELDS = ["user", "role", "grantedBy", "createdAt", "updatedAt"] as const satisfies
   readonly (keyof WorkspaceTeamMember)[];
 
-const flag = (parameter: string) => `--${parameter}`;
+const flag = (parameter: string) => `--${parameter.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 const PROPOSALS_HELP =
   "who besides members may fork and propose while it is public: members, accountable (any person or claimed agent) or anyone";
 const proposalsOf = (value: string) => oneOf(value, SPACE_PROPOSALS, "--proposals");
+const hoursOf = (value: string): number | null => {
+  if (value === "off") return null;
+  if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 720) {
+    throw workspaceError("workspace-argument-invalid", "--accept-after-hours must be off or a whole number of hours from 1 to 720.");
+  }
+  return Number(value);
+};
 
 export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
   const root = new Command("repo").description(
@@ -82,6 +90,9 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
           `${nameOf(space)}  (${space.name})`,
           `${visibility(space)} ${space.type ?? "space"}, your role: ${space.accessRole ?? "unknown"}, ${space.starCount} stars`,
           ...(space.type === "team" && space.proposals !== undefined ? [`proposals: ${space.proposals}`] : []),
+          ...(space.type === "team" && space.acceptAfterHours !== undefined
+            ? [`accept after: ${space.acceptAfterHours === null ? "off" : `${String(space.acceptAfterHours)} hours`}`]
+            : []),
           `id: ${space.id}`,
           ...(space.description ? ["", space.description] : []),
         ].join("\n"),
@@ -119,17 +130,28 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     );
 
   const edit = new Command("edit")
-    .description("Change a repository's display name, description, visibility or proposals setting")
+    .description("Change a repository's display name, description, visibility, proposals setting or acceptance deadline")
     .argument("[ref]", "owner/slug, unique bare slug from repo list, Space ID or URL (default: $UVW_REPO)")
     .option("--name <name>")
     .option("--description <text>", "plain text; an empty string clears it")
     .option("--visibility <visibility>", "public or private")
     .option("--proposals <who>", PROPOSALS_HELP)
+    .option(
+      "--accept-after-hours <n|off>",
+      "accept a submitted Issue nobody sent back after n hours (1 to 720, 72 is typical), or off; turning it on or " +
+        "lowering it accepts every submitted Issue already past the new deadline within a minute",
+    )
     .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
         ref: string | undefined,
-        options: JsonFieldsOption & { description?: string; name?: string; proposals?: string; visibility?: string },
+        options: JsonFieldsOption & {
+          acceptAfterHours?: string;
+          description?: string;
+          name?: string;
+          proposals?: string;
+          visibility?: string;
+        },
       ) => {
         const space = await executeCommand(edit, async () => {
           const patch = repoEditPatch(
@@ -140,8 +162,9 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
                 ? {}
                 : { visibility: oneOf(options.visibility, ["public", "private"], "--visibility") }),
               ...(options.proposals === undefined ? {} : { proposals: proposalsOf(options.proposals) }),
+              ...(options.acceptAfterHours === undefined ? {} : { acceptAfterHours: hoursOf(options.acceptAfterHours) }),
             },
-            ["name", "description", "visibility", "proposals"],
+            ["name", "description", "visibility", "proposals", "acceptAfterHours"],
             flag,
           );
           const { spaceId } = await context.repo(ref);

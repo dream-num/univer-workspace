@@ -12,7 +12,7 @@ describe("Space detail route loading", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(mySpacesQueryOptions.queryKey, { spaces: [] });
     const space = {
-      id: "public", affiliation: "none", publicRead: true, proposals: "members", type: "team", name: "Public",
+      id: "public", affiliation: "none", publicRead: true, proposals: "members", acceptAfterHours: null, type: "team", name: "Public",
       slug: "public", fullName: "other/public", description: "", accessRole: "viewer",
       owner: { id: "other", username: "other" },
       capabilities: {

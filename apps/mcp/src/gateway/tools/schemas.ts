@@ -21,6 +21,11 @@ export const repoSchema = z.object({
   owner: z.object({ id: z.string(), username: z.string() }).optional(),
   publicRead: z.boolean().optional(),
   proposals: proposalsSchema.optional(),
+  acceptAfterHours: z
+    .number()
+    .nullable()
+    .optional()
+    .describe("Hours after a submission at which an Issue nobody sent back is accepted by deadline; null when off."),
   slug: z.string().nullable().optional(),
   capabilities: z
     .record(z.string(), z.boolean())
@@ -103,9 +108,17 @@ export const issueSchema = z.object({
     )
     .describe("Pull requests linked to this Issue that you may see, newest first."),
   acceptance: z
-    .object({ kind: z.string(), actor: issueUserSchema.nullable(), body: z.string(), createdAt: z.string() })
+    .object({
+      kind: z.string(),
+      actor: issueUserSchema.nullable(),
+      body: z.string(),
+      createdAt: z.string(),
+      deadline: z.string().nullable().describe("When the repository's deadline accepts this submitted Issue unless it is sent back, or null."),
+    })
     .nullable()
-    .describe("Latest verdict (submitted, accepted or sent_back) with its body, or null if never submitted."),
+    .describe(
+      "Latest verdict (submitted, accepted or sent_back) with its body, or null if never submitted. A null actor means the repository's deadline accepted it.",
+    ),
   url: z.url(),
 });
 export const issueCommentSchema = z.object({
@@ -119,7 +132,7 @@ export const issueCommentSchema = z.object({
 export const issueTimelineItemSchema = z.union([
   issueCommentSchema,
   z.object({
-    actor: issueUserSchema,
+    actor: issueUserSchema.nullable().describe("Null for an acceptance by the repository's deadline."),
     createdAt: z.string(),
     id: z.string(),
     kind: z.string(),

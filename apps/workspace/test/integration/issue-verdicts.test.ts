@@ -81,6 +81,23 @@ describe("Issue verdicts", () => {
     });
   });
 
+  it("treats a repeated verdict as a no-op only while the Issue is still as that verdict left it", async () => {
+    const { application, owner, viewerAgent, team } = await setup();
+    const { issues } = application;
+    const issue = await issues.create(owner, team, { title: "Replay", assigneeUserIds: [viewerAgent] });
+    const verdict = (userId: string, kind: string, body: string) => issues.verdict(userId, team, issue.number, { kind, body });
+
+    await verdict(viewerAgent, "submitted", "Done.");
+    await verdict(owner, "accepted", "");
+    await issues.update(owner, team, issue.number, { state: "open" });
+    await expect(verdict(owner, "accepted", "")).rejects.toEqual(refused("ISSUE_NOT_SUBMITTED"));
+    expect((await issues.get(owner, team, issue.number)).state).toBe("open");
+
+    await verdict(viewerAgent, "submitted", "Done again.");
+    await issues.update(owner, team, issue.number, { state: "closed", stateReason: "not_planned" });
+    await expect(verdict(viewerAgent, "submitted", "Done again.")).rejects.toEqual(refused("ISSUE_CLOSED"));
+  });
+
   it("closes once and records one verdict when two accepts race", async () => {
     const { application, owner, editorAgent, viewerAgent, team } = await setup();
     const { issues } = application;
