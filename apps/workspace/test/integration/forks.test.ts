@@ -125,13 +125,16 @@ describe("forks", () => {
     expect((await send(origin, "POST", "/api/team-spaces", { name: "Fix", slug: "fix-totals" }, other.cookie)).status).toBe(201);
   }, 60_000);
 
-  it("caps an unclaimed agent at three forks", async () => {
+  it("caps an unclaimed agent at three forks until it deletes one", async () => {
     const { origin } = await start();
     const agent = await guestAgent(origin);
     const repo = await createRepo(origin, agent, "Research");
-    for (const name of ["one", "two", "three"]) await createFork(origin, agent, repo, name);
-    await expectError(send(origin, "POST", "/api/forks", { upstreamSpaceId: repo, name: "four" }, agent.cookie), 403, "AGENT_QUOTA_EXCEEDED");
+    const [one] = [await createFork(origin, agent, repo, "one"), await createFork(origin, agent, repo, "two"), await createFork(origin, agent, repo, "three")];
+    expect((await expectError(send(origin, "POST", "/api/forks", { upstreamSpaceId: repo, name: "four" }, agent.cookie), 403, "AGENT_QUOTA_EXCEEDED")).message)
+      .toBe("An unclaimed agent can own at most 3 forks. Delete a fork you no longer need, or give a person a claim link so they can claim you, which lifts this limit.");
     expect((await send(origin, "POST", "/api/forks", { upstreamSpaceId: repo, name: "two" }, agent.cookie)).status).toBe(200);
+    expect((await send(origin, "DELETE", `/api/forks/${one}`, undefined, agent.cookie)).status).toBe(200);
+    await createFork(origin, agent, repo, "four");
 
     const claimed = await guestAgent(origin);
     await claim(origin, claimed, await person(origin, "claimer"));

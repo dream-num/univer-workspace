@@ -1,12 +1,12 @@
 import {
   issueUrl,
+  requireForkUpstream,
   resolveItemTarget,
   resolveRepoOrFork,
   WorkspaceForkFeature,
   WorkspaceIssueFeature,
   WorkspaceSpaceFeature,
   workspaceError,
-  type WorkspaceFork,
   type WorkspaceIssueSummary,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
@@ -48,14 +48,7 @@ export async function resolveRepo(context: ToolContext, repo: string): Promise<s
 
 export async function resolveRepoOrUpstream(context: ToolContext, repo: string): Promise<string> {
   const resolved = await resolveRepoOrForkInput(context, repo);
-  return "fork" in resolved ? upstreamOf(resolved.fork).id : resolved.spaceId;
-}
-
-export function upstreamOf(fork: WorkspaceFork) {
-  if (fork.upstream !== null) return fork.upstream;
-  throw workspaceError("workspace-not-found", `You can no longer read the upstream of fork ${fork.fullName}.`, {
-    fork: fork.fullName,
-  });
+  return "fork" in resolved ? requireForkUpstream(resolved.fork).id : resolved.spaceId;
 }
 
 export async function resolveIssue(

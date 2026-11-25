@@ -35,7 +35,7 @@ export const htmlViewReadTool: ToolDefinition = {
     if (worktree !== undefined && resource === undefined)
       throw workspaceError("workspace-argument-invalid", "Pass worktree with resource, not with draft.");
     const worktreeId = worktree === undefined || !isForkAddress(worktree)
-      ? worktree : (await forkFeature(context).get(worktree)).worktree?.id;
+      ? worktree : (await forkFeature(context).readWorktree(worktree))?.id;
     const pending = worktreeId === undefined || resource === undefined ? undefined : await pendingPageDraft(context, worktreeId, resource);
     const draftId = draft ?? pending?.id;
     if (draftId !== undefined) {

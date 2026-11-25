@@ -67,6 +67,7 @@ export {
 } from "./pull-request.js";
 export {
   isForkAddress,
+  requireForkUpstream,
   resolveRepoOrFork,
   WorkspaceForkFeature,
   type WorkspaceFork,

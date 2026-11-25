@@ -318,7 +318,7 @@ describe("HTML View commands", () => {
     }));
     let output = "";
     const fork = (worktree: { id: string } | null) => ({ fullName: "agent/fix", upstream: { fullName: "hana/team" }, worktree });
-    const forks = { get: vi.fn(async (reference: string) => fork(reference === "agent/clean" ? null : { id: "wt-fork" })) };
+    const forks = { readWorktree: vi.fn(async (reference: string) => fork(reference === "agent/clean" ? null : { id: "wt-fork" }).worktree) };
     const context = {
       repoOrFork: vi.fn(async (reference: string) => reference === "agent/fix" ? { fork: fork({ id: "wt-fork" }) } : { spaceId: reference }),
     };

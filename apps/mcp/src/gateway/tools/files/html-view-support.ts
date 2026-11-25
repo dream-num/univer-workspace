@@ -55,7 +55,7 @@ export async function htmlViewWorktree(
       throw workspaceError("workspace-argument-invalid", "Provide worktree or repo with pr, not both.");
     if (!isForkAddress(input.worktree)) return { sourceWorktreeId: input.worktree };
     const forks = forkFeature(context);
-    const worktree = save ? await forks.openWorktree(input.worktree) : (await forks.get(input.worktree)).worktree;
+    const worktree = save ? await forks.openWorktree(input.worktree) : await forks.readWorktree(input.worktree);
     return worktree === null ? {} : { sourceWorktreeId: worktree.id };
   }
   if (input.pr === undefined) return {};

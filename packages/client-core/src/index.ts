@@ -102,6 +102,7 @@ export {
 } from "./space-model.js";
 export {
   isForkAddress,
+  requireForkUpstream,
   resolveRepoOrFork,
   WorkspaceForkFeature,
   type WorkspaceFork,

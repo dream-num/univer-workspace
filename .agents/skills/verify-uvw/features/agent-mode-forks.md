@@ -24,9 +24,10 @@ a fork changes nothing upstream, and its pull requests stay there.
   it, each file's result is recorded, and the fork is `clean`.
 - FK6 deletes a fork whose second pull request is ready. The upstream's files and Trunk do not change, the merged
   pull request keeps its history, and the ready one stays an ordinary pull request the owner merges.
-- FK7 removes the agent from the repository. Through its fork it can no longer browse, read or write anything of
-  the upstream, nor reach its open pull request by ID. Once the repository is public with `proposals` `members`, it
-  reads through the fork again and every write is refused.
+- FK7 removes the agent from the repository. Through its fork it can no longer browse, list, read or write anything
+  of the upstream, nor reach its open pull request by ID, and each refusal is one `FORBIDDEN` that names the fork and
+  the way out. Once the repository is public with `proposals` `members`, it reads through the fork again and every
+  write through the fork, by address or by ID, gets the same refusal.
 - FK8 drives `uvw fork create`, `list`, `view` and `delete` as a person, whose write through the fork opens a pull
   request that stays after the delete.
 
@@ -329,16 +330,17 @@ b2 fk-cut-read-unchanged "$F2" "$EAST"
 test $? -eq 1
 put fk-cut-write "$F2" "$NORTH" 50
 test $? -eq 1
-for label in fk-cut-browse fk-cut-read-changed fk-cut-read-unchanged fk-cut-write; do
-  jq -e --arg f "$F2" '.code == "workspace-not-found" and .message == "You can no longer read the upstream of fork \($f)."' "$EVIDENCE/$label.out"
-done
 $V mcp --as forker fk-cut-units unit_list "{\"worktree\":\"$F2\"}"
-jq -e '.units == []' "$EVIDENCE/fk-cut-units.out"
+test $? -eq 1
 b2 fk-cut-read-id "$W2" "$NORTH"
 test $? -eq 1
 put fk-cut-write-id "$W2" "$NORTH" 50
 test $? -eq 1
-jq -e -s 'all(.[]; .code == "WORKSPACE_UNIT_NOT_FOUND")' "$EVIDENCE/fk-cut-read-id.out" "$EVIDENCE/fk-cut-write-id.out"
+CUT="You no longer have the access that fork $F2 needs to its upstream. Ask the upstream's owner to give you access again, or delete the fork with fork_delete (uvw fork delete in the CLI)."
+cut_off(){ jq -e --arg m "$CUT" --arg f "$F2" '.code == "FORBIDDEN" and .message == $m and .detail.fork == $f' "$EVIDENCE/$1.out"; }
+for label in fk-cut-browse fk-cut-read-changed fk-cut-read-unchanged fk-cut-write fk-cut-units fk-cut-read-id fk-cut-write-id; do
+  cut_off "$label"
+done
 ```
 
 O then makes S public with `proposals` `members`, which lets anyone read it and only Space Members propose. A reads
@@ -354,25 +356,26 @@ b2 fk-public-read "$F2" "$NORTH"
 jq -e --arg w "$W2" '.scope.worktreeId == $w and .json.cells[0].value == 43' "$EVIDENCE/fk-public-read.out"
 put fk-public-write "$F2" "$NORTH" 50
 test $? -eq 1
-jq -e '.code == "FORBIDDEN" and .detail.status == 403' "$EVIDENCE/fk-public-write.out"
 put fk-public-write-new "$F2" "$EAST" 50
 test $? -eq 1
-jq -e '.code == "FORBIDDEN" and .detail.status == 403' "$EVIDENCE/fk-public-write-new.out"
 put fk-public-write-id "$W2" "$NORTH" 50
 test $? -eq 1
-jq -e '.code == "WORKSPACE_RUNTIME_CONFLICT"' "$EVIDENCE/fk-public-write-id.out"
+for label in fk-public-write fk-public-write-new fk-public-write-id; do
+  cut_off "$label"
+done
 $V mcp --as forker fk-public-ready pr_ready "{\"repo\":\"$S\",\"number\":$P2}"
 test $? -eq 1
 jq -e '.code == "FORBIDDEN"' "$EVIDENCE/fk-public-ready.out"
 ```
 
 Pass when, while S is private, the fork still exists for A with `upstream` null and its pull request with no
-`review` or `addUnit`, and browsing, reading a file the fork changed or one it did not, and writing through the fork
-each exit 1 with `You can no longer read the upstream of fork <A>/race.`, the fork lists no files, and reading and
-writing by the pull request's Worktree ID exit 1 with `WORKSPACE_UNIT_NOT_FOUND`. Once S is public with `members`,
+`review` or `addUnit`, and browsing, listing the fork's files, reading a file the fork changed or one it did not,
+writing through the fork, and reading and writing by the pull request's Worktree ID each exit 1 with `FORBIDDEN`,
+`detail.fork` `<A>/race` and the message `You no longer have the access that fork <A>/race needs to its upstream.`
+followed by the way out, asking the upstream's owner for access or `fork_delete`. Once S is public with `members`,
 A, now with no affiliation and no `propose`, browses all four Nodes and reads its own North `43` through the fork
-again, while writing a file in the pull request or a new one through the fork exits 1 with `FORBIDDEN` and status
-403, writing by Worktree ID exits 1 with `WORKSPACE_RUNTIME_CONFLICT`, and `pr_ready` exits 1 with `FORBIDDEN`.
+again, while writing a file in the pull request or a new one through the fork, and writing by Worktree ID, each exit
+1 with that same refusal, and `pr_ready` exits 1 with `FORBIDDEN`.
 
 ### FK8. uvw creates, lists, views and deletes a fork
 
@@ -422,4 +425,4 @@ after which the fork is not found and not listed, and pull request N is still a 
 - FK4 starts both first writes together but cannot make the server interleave them. It checks the end state, one
   pull request that holds both files.
 - After losing a private upstream, `fork_view` still names the fork's open pull request, which its author keeps as a
-  summary with no rights, and `unit_list` on the fork lists nothing.
+  summary with no rights.

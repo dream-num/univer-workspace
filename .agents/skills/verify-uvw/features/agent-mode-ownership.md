@@ -164,7 +164,7 @@ test $? -eq 1
 jq -s -e 'map(.code) == ["NOT_FOUND", "NOT_FOUND"]' "$EVIDENCE/ao3-b-view.out" "$EVIDENCE/ao3-b-browse.out"
 $V mcp --as ao-b ao3-b-outline outline "{\"unit\":\"$U\",\"trunk\":true}"
 test $? -eq 1
-jq -e '.message == "Cannot read this unit."' "$EVIDENCE/ao3-b-outline.out"
+jq -e '.code == "PERMISSION_DENIED" and .message == "Cannot read this unit."' "$EVIDENCE/ao3-b-outline.out"
 curl -sS -b "$PH/cookies" -o /dev/null -w '%{http_code}\n' "$ORIGIN/api/spaces/$S" > "$EVIDENCE/ao3-p-view.status"
 grep -qx 404 "$EVIDENCE/ao3-p-view.status"
 $V cli ao3-o-view repo view "$S" --json fullName,accessRole
@@ -172,7 +172,7 @@ jq -e '.fullName == "'"$R"'" and .accessRole == "owner"' "$EVIDENCE/ao3-o-view.o
 ```
 
 Pass when B browses R and outlines the Sheet before the stop; after it, B's `repo_view` and `space_browse` exit 1 with
-`NOT_FOUND`, its `outline` exits 1 with `Cannot read this unit.`, P's read answers 404, and O still views R as its
+`NOT_FOUND`, its `outline` exits 1 with `PERMISSION_DENIED` and `Cannot read this unit.`, P's read answers 404, and O still views R as its
 owner.
 
 ## Gotchas

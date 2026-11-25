@@ -180,14 +180,14 @@ done
 jq -s -e 'map(.fullName) == ["'"$Q/q1"'", "'"$Q/q2"'", "'"$Q/q3"'"]' "$EVIDENCE"/ce2-repo-[123].out
 $V mcp --as ce-quota ce2-repo-4 repo_create '{"slug":"q4"}'
 test $? -eq 1
-jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 Team Spaces."' "$EVIDENCE/ce2-repo-4.out"
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-repo-4.out"
 for n in 1 2 3; do
   $V mcp --as ce-quota "ce2-fork-$n" fork_create "{\"repo\":\"$Q/q1\",\"name\":\"f$n\"}" || break
 done
 jq -s -e 'map(.fullName) == ["'"$Q/f1"'", "'"$Q/f2"'", "'"$Q/f3"'"]' "$EVIDENCE"/ce2-fork-[123].out
 $V mcp --as ce-quota ce2-fork-4 fork_create "{\"repo\":\"$Q/q1\",\"name\":\"f4\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 forks."' "$EVIDENCE/ce2-fork-4.out"
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 forks. Delete a fork you no longer need, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-fork-4.out"
 $V mcp --as ce-quota ce2-fork-delete fork_delete "{\"fork\":\"$Q/f1\"}"
 $V mcp --as ce-quota ce2-fork-4-freed fork_create "{\"repo\":\"$Q/q1\",\"name\":\"f4\"}"
 jq -e '.fullName == "'"$Q/f4"'"' "$EVIDENCE/ce2-fork-4-freed.out"
@@ -209,7 +209,7 @@ $V mcp --as ce-quota ce2-over-pr pr_create "{\"repo\":\"$Q/q2\",\"title\":\"ce2-
 W=$(jq -r .id "$EVIDENCE/ce2-over-pr.out")
 $V mcp --as ce-quota ce2-over-1 unit_create "{\"worktree\":\"$W\",\"space\":\"$Q/q2\",\"type\":\"sheet\",\"name\":\"ce2-over-1\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can keep at most 20 files."' "$EVIDENCE/ce2-over-1.out"
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can keep at most 20 files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-over-1.out"
 $V mcp --as ce-quota ce2-trash space_node "{\"action\":\"trash\",\"node\":\"$(jq -r .unit.nodeId "$EVIDENCE/ce2-personal-1.out")\"}"
 $V mcp --as ce-quota ce2-over-freed unit_create "{\"worktree\":\"$W\",\"space\":\"$Q/q2\",\"type\":\"sheet\",\"name\":\"ce2-over-1\"}"
 jq -e '.unit.change == "added"' "$EVIDENCE/ce2-over-freed.out"

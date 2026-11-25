@@ -6,7 +6,7 @@ import type { WorkspaceHtmlViewFeature } from "./html-view.js";
 
 export function createHtmlViewCommand(
   feature: Pick<WorkspaceHtmlViewFeature, "validate" | "create">,
-  forks: Pick<WorkspaceForkFeature, "get">,
+  forks: Pick<WorkspaceForkFeature, "readWorktree">,
   context: Pick<RepoContext, "repoOrFork">,
 ): Command {
   const root = new Command("html-view").description(
@@ -26,7 +26,7 @@ export function createHtmlViewCommand(
         await executeCommand(validate, async () => {
           const worktree = options.worktree === undefined || !isForkAddress(options.worktree)
             ? options.worktree
-            : (await forks.get(options.worktree)).worktree?.id;
+            : (await forks.readWorktree(options.worktree))?.id;
           return await feature.validate(options.file, worktree);
         }),
       );

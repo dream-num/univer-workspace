@@ -228,6 +228,20 @@ describe("Workspace HTTP transport", () => {
     });
   });
 
+  it("names a Collaboration protocol error code", async () => {
+    const http = new WorkspaceHttp({
+      cookie: "session=x",
+      fetcher: async () => Response.json({ error: { code: 3, message: "Cannot read this unit." } }, { status: 403 }),
+      origin: "https://workspace.test",
+      role: "client",
+    });
+    await expect(http.json("/universer-api/snapshot/2/unit/u1/rev/0")).rejects.toMatchObject({
+      code: "PERMISSION_DENIED",
+      detail: { path: "/universer-api/snapshot/2/unit/u1/rev/0", status: 403 },
+      message: "Cannot read this unit.",
+    });
+  });
+
   it("distinguishes interrupted, invalid JSON and non-object response bodies", async () => {
     const responses = [
       new Response(

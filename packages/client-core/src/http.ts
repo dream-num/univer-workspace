@@ -1,3 +1,4 @@
+import { ErrorCode } from "@univerjs/protocol";
 import { workspaceError } from "./errors.js";
 
 export interface WorkspaceHttpOptions {
@@ -125,10 +126,14 @@ export class WorkspaceHttp {
     if (!response.ok) {
       const body = await readOptionalJson(response);
       const error = isRecord(body?.["error"]) ? body["error"] : undefined;
+      const code = error?.["code"];
+      // Collaboration routes answer with the protocol's numeric ErrorCode; its name reads like every other code.
       throw workspaceError(
-        typeof error?.["code"] === "string" || typeof error?.["code"] === "number"
-          ? String(error["code"])
-          : `HTTP_${String(response.status)}`,
+        typeof code === "string"
+          ? code
+          : typeof code === "number"
+            ? (ErrorCode[code] ?? String(code))
+            : `HTTP_${String(response.status)}`,
         typeof error?.["message"] === "string"
           ? error["message"]
           : `Workspace request failed with HTTP ${String(response.status)}.`,

@@ -12,6 +12,8 @@ const NON_MEMBER_MAX_OPEN_PROPOSALS = 3;
 const AGENT_MAX_OPEN_WORKTREES = 10;
 const AGENT_MAX_MERGES = 50;
 export const AGENT_MERGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+// Every unclaimed-agent ceiling forbids only `agent_unclaimed`, so a claim lifts each of them.
+const CLAIM_LIFTS = "or give a person a claim link so they can claim you, which lifts this limit.";
 
 /** An agent's open Worktrees, those still being created included, the merges it started within the window, and what the action adds. */
 export interface BudgetUse {
@@ -67,12 +69,12 @@ export function landsByChecks(principal: PrincipalCategory, { landing, owns }: C
 const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   createTeamSpace: {
     code: "AGENT_QUOTA_EXCEEDED",
-    message: `An unclaimed agent can own at most ${UNCLAIMED_AGENT_MAX_TEAM_SPACES} Team Spaces.`,
+    message: `An unclaimed agent can own at most ${UNCLAIMED_AGENT_MAX_TEAM_SPACES} Team Spaces. Work in one you already own, ${CLAIM_LIFTS}`,
     forbids: (principal, { held }) => principal === "agent_unclaimed" && held >= UNCLAIMED_AGENT_MAX_TEAM_SPACES,
   },
   createFork: {
     code: "AGENT_QUOTA_EXCEEDED",
-    message: `An unclaimed agent can own at most ${UNCLAIMED_AGENT_MAX_FORKS} forks.`,
+    message: `An unclaimed agent can own at most ${UNCLAIMED_AGENT_MAX_FORKS} forks. Delete a fork you no longer need, ${CLAIM_LIFTS}`,
     forbids: (principal, { held }) => principal === "agent_unclaimed" && held >= UNCLAIMED_AGENT_MAX_FORKS,
   },
   // A Space's `proposals` setting can admit readers who hold no role there, so it cannot vouch for their volume.
@@ -123,13 +125,13 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   },
   createFiles: {
     code: "AGENT_QUOTA_EXCEEDED",
-    message: `An unclaimed agent can keep at most ${UNCLAIMED_AGENT_MAX_FILES} files.`,
+    message: `An unclaimed agent can keep at most ${UNCLAIMED_AGENT_MAX_FILES} files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, ${CLAIM_LIFTS}`,
     forbids: (principal, { held, adding }) =>
       principal === "agent_unclaimed" && held + adding > UNCLAIMED_AGENT_MAX_FILES,
   },
   storeFile: {
     code: "AGENT_QUOTA_EXCEEDED",
-    message: `An unclaimed agent can store files of at most ${UNCLAIMED_AGENT_MAX_FILE_BYTES} bytes.`,
+    message: `An unclaimed agent can store files of at most ${UNCLAIMED_AGENT_MAX_FILE_BYTES} bytes. Store a smaller file, ${CLAIM_LIFTS}`,
     forbids: (principal, { byteSize }) =>
       principal === "agent_unclaimed" && byteSize > UNCLAIMED_AGENT_MAX_FILE_BYTES,
   },
