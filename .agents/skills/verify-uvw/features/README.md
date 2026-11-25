@@ -64,6 +64,13 @@ keeps the journey `agent`. The helper runs blocks this way:
 - Each journey's output goes to `evidence/<ID>.run.log`, and each broken check records its markdown line, exit
   code and the redacted end of that output. A journey stops after 600 s.
 
+## Agent Mode
+
+Agent Mode keeps people out of an agent's task between the grant at the start and the merge at the end. Its journeys
+are in the five `agent-mode-*` files and in parts of `pull-requests`, `agent-handoff`, `mcp-blobs-office` and
+`mcp-html-view`. [references/agent-mode.md](../references/agent-mode.md) maps the spec to them, says how to run all of
+them, and lists what no journey covers yet.
+
 ## Features
 
 - [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded
@@ -97,8 +104,8 @@ keeps the journey `agent`. The helper runs blocks this way:
   no one, with a reopen restarting the clock.
 - [Agent Mode: judge and undo an agent's task](./agent-mode-acceptance.md): MI13 judges four merged pull requests, one
   of which deletes a file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its
-  claimer and not to a member who may not accept. MI14 shows each linked pull request's check results there, counting
-  or not, and says when the repository declares none. MI17 shows that sharing to an acceptor who did not claim the
+  claimer and not to a member who may not accept. MI14 shows each linked pull request's check results there as they
+  stood at merge, counting or not, and says on an open pull request when the repository declares none. MI17 shows that sharing to an acceptor who did not claim the
   agent by name only. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every pull
   request's files in the panel with the file the revert moved to Trash noted and its checks as they stood at merge,
   leaves a file someone edited after the merge blocked until a person overwrites it, and has an agent revert with

@@ -47,6 +47,7 @@ feature file as the recipe. Read more only for the mode you need:
 | --- | --- |
 | MCP gateway, renderer, Workspace Agent (`VERIFY_UVW_MCP=1`, `agent-up`) | [references/mcp-mode.md](references/mcp-mode.md) |
 | Agent principals and real-model stories (`principal`, `story`) | [references/stories.md](references/stories.md) |
+| Agent Mode: which journeys cover the spec, how to run all of them, and what has none | [references/agent-mode.md](references/agent-mode.md) |
 | Hand journeys to your own verifier agent through herdr (`verifier`, `delegate`) | [references/delegate.md](references/delegate.md) |
 | Browser Agent mock model | `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help`, then AS1 in [Browser Agent skills](features/agent-skills.md) |
 | HTML View style thumbnails, after changing a built-in template | `node .agents/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --help` |
