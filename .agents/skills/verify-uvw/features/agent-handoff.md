@@ -135,7 +135,8 @@ then `repo_create`, `repo_edit`, `repo_member_list` and `repo_member_write`, whi
 its own repository. A person's default list has 47 and no `claim`. The instructions say the agent
 `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
 `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
-`principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
+`principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text, and
+`$V secret-check` fails on it and prints the command that replaces it.
 
 ### MH2. Claimed agent
 
@@ -178,7 +179,8 @@ after its pull request merges.
 ## Gotchas
 
 - The claim code is a one-time credential. Evidence files from `mcp ... claim`, `share` and `uvw claim` contain it
-  in plain text; `secret-check` does not look for it. Replace `/claim/<code>` in saved evidence after use.
+  in plain text. After use, run `$V secret-check`: it fails on each `/claim/<code>` and prints the `perl` command
+  that replaces the codes.
 - Claim codes live in server memory: a restart drops them. Each `claim`, and each `share` by an unclaimed owner,
   mints a new one.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.

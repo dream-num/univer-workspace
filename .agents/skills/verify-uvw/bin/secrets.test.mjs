@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -87,5 +88,36 @@ test('run secrets cover the human, the principals, the model credential and stor
     assert.equal(failed.status, 1);
     assert.deepEqual(failed.stdout.trim().split('\n').sort(), ['FAIL  leak.txt: a secret of this run', 'FAIL  story/answer.txt: Workspace token']);
     assert.doesNotMatch(failed.stdout + failed.stderr, /uvw_pat_|model-refresh/);
+  } finally { rmSync(run, { recursive: true, force: true }); }
+});
+
+test('a claim code fails the check and stays readable for the recipe, and the printed command redacts it', () => {
+  const code = randomBytes(16).toString('base64url');
+  const url = `http://127.0.0.1:5993/claim/${code}`;
+  for (const text of [url, `{"claimUrl": "${url}", "expiresAt": "2026-11-24T10:00:00Z"}`, `Claim link: ${url}\n`]) {
+    assert.deepEqual(findSecrets(text), ['claim code'], text);
+    assert.equal(redact(text), text);
+  }
+  for (const text of ['/claim/<code>', '/claim/<redacted>', '/claim/[REDACTED]', '$ORIGIN/claim/not-a-real-code', '/claim/:code', `/claim/${code}x`]) {
+    assert.deepEqual(findSecrets(text), [], text);
+  }
+
+  const run = mkdtempSync(join(tmpdir(), 'verify-uvw-claim-'));
+  const check = () => spawnSync(process.execPath, [fileURLToPath(new URL('./secrets.mjs', import.meta.url)), 'check', run, join(run, 'evidence')], { encoding: 'utf8' });
+  try {
+    mkdirSync(join(run, 'evidence'));
+    const out = `{\n  "claimUrl": "${url}",\n  "expiresAt": "2026-11-24T10:00:00Z"\n}\n`;
+    writeFileSync(join(run, 'evidence/mh-bot1-claim.out'), out);
+    writeFileSync(join(run, "evidence/it's claimed.txt"), `opened ${url} and $ORIGIN/claim/not-a-real-code\n`);
+    const failed = check();
+    assert.equal(failed.status, 1);
+    const lines = failed.stdout.trim().split('\n');
+    assert.deepEqual(lines.slice(0, 2).sort(), ["FAIL  it's claimed.txt: claim code", 'FAIL  mh-bot1-claim.out: claim code']);
+    assert.equal(lines[2], 'Once the claim link has been used, redact its code with:');
+    assert.doesNotMatch(failed.stdout, new RegExp(code));
+    assert.equal(spawnSync('sh', ['-c', lines[3]], { encoding: 'utf8' }).status, 0, lines[3]);
+    assert.equal(check().status, 0, check().stdout);
+    assert.equal(readFileSync(join(run, 'evidence/mh-bot1-claim.out'), 'utf8'), out.replace(code, '[REDACTED]'));
+    assert.equal(readFileSync(join(run, "evidence/it's claimed.txt"), 'utf8'), 'opened http://127.0.0.1:5993/claim/[REDACTED] and $ORIGIN/claim/not-a-real-code\n');
   } finally { rmSync(run, { recursive: true, force: true }); }
 });

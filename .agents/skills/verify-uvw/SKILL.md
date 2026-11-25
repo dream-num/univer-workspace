@@ -17,7 +17,7 @@ $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
-$V secret-check [directory]    # fail when evidence holds a token or a session cookie
+$V secret-check [directory]    # fail when evidence holds a token, a session cookie or a claim code
 $V journeys <feature> [journey-id|mode...]   # the journeys to verify, by mode; after up, which have a verdict
 $V verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note]   # record one journey's verdict in this run
 $V run-journeys [--again] <feature> [journey-id|mode...]   # run the blocks of "Run: helper." journeys as written; record their checks
