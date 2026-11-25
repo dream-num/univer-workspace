@@ -1,8 +1,8 @@
 # Hand journeys to your own verifier
 
 `$V delegate` hands a brief to a verifier: another agent, on the model the developer chose, in a
-[herdr](https://herdr.dev) pane beside yours. Its tokens go to that agent's account. You still choose the journeys,
-start and stop the instance, and judge the evidence, as in
+[herdr](https://herdr.dev) tab of its own. Its tokens go to that agent's account. You still choose the
+journeys, start and stop the instance, and judge the evidence, as in
 [Hand the driving to another agent](../SKILL.md#hand-the-driving-to-another-agent). `verifier` and `delegate` need
 your own agent to run inside a herdr pane (`HERDR_ENV=1`).
 
@@ -31,15 +31,15 @@ when they ask to set one up, change it, or test it again, such as after they upg
    codex --dangerously-bypass-approvals-and-sandbox -m <model> -c model_reasoning_effort=<effort>
    ```
 
-4. Run `$V verifier '<spec>'`. It starts the verifier in a pane, asks it to write a file with one shell command,
-   prints the bottom of its screen and closes the pane. It saves the spec only when the file was written and herdr
-   saw the agent stop. The file is `~/.config/verify-uvw/verifier` (under `$XDG_CONFIG_HOME` when set), mode 0600,
-   because a value may hold an API key. Before it saves, a `transcript:` line names the test's session in the
-   agent's own record, which is where `delegate` reads the transcript. When it says `unavailable`, `delegate` saves
-   the verifier's screen instead. That line never fails the test. Show the developer the screen so they confirm the
-   model. The test cannot, because an agent may run on another model without an error, as opencode does when the
-   named one does not exist. When the test fails, the screen says why, such as an approval prompt or a provider
-   error, and any saved spec stays as it was.
+4. Run `$V verifier '<spec>'`. It starts the verifier in a tab named `vu:setup`, asks it to write a
+   file with one shell command, prints the bottom of its screen and closes the tab. It saves the spec only when the
+   file was written and herdr saw the agent stop. The file is `~/.config/verify-uvw/verifier` (under
+   `$XDG_CONFIG_HOME` when set), mode 0600, because a value may hold an API key. Before it saves, a `transcript:` line
+   names the test's session in the agent's own record, which is where `delegate` reads the transcript. When it says
+   `unavailable`, `delegate` saves the verifier's screen instead. That line never fails the test. Show the developer
+   the screen so they confirm the model. The test cannot, because an agent may run on another model without an error,
+   as opencode does when the named one does not exist. When the test fails, the screen says why, such as an approval
+   prompt or a provider error, and any saved spec stays as it was.
 
 From then on `$V doctor` and `$V verifier` print the verifier, with the names of its variables but never their
 values, and delegating is the default. The developer can ask for a subagent for one task, set
@@ -48,24 +48,27 @@ values, and delegating is the default. The developer can ask for a subagent for 
 ## Delegate
 
 Run `$V delegate <feature> [journey-id|mode...]` in step 3, after `up`, `user`, `doctor` and any `run-journeys`, with
-the selection you would pass to `brief`. It opens a pane beside yours, starts the verifier, sends it `$V brief`
-unchanged and waits up to 60 minutes for it to stop, so run it in the background when your harness can.
+the selection you would pass to `brief`. It opens a tab named `vu:<run>` without moving your focus and starts the
+verifier there as agent `<run>-<feature>-<pane>`, so your tab's layout stays as it is and herdr's sidebar shows which
+run each verifier drives. `vu:` marks a verify-uvw verifier tab, and a run has one at a time. The developer can click
+the tab to watch the verifier. It sends the verifier `$V brief` unchanged and waits up to 60 minutes for it to stop,
+so run it in the background when your harness can.
 
 | The verifier | `delegate` |
 | --- | --- |
-| stops | saves its transcript to `evidence/<agent>.transcript.md`, closes the pane, prints `$V journeys` and exits with its code |
-| waits for approval | keeps the pane open and exits 1 |
-| still works after 60 minutes, or herdr fails | prints the visible screen, keeps the pane open and exits 1 |
+| stops | saves its transcript to `evidence/<agent>.transcript.md`, closes the tab, prints `$V journeys` and exits with its code |
+| waits for approval | keeps the tab open and exits 1 |
+| still works after 60 minutes, or herdr fails | prints the visible screen, keeps the tab open and exits 1 |
 
 The transcript is the verifier's session as its agent recorded it. It holds the verifier's messages and each command
 it ran, with the command's exit code and the first 40 lines of its output, and run secrets are redacted. `delegate`
 reads opencode and codex sessions. For another agent kind, or when it finds no session that began with the brief, it
 prints a warning and saves the verifier's screen to `evidence/<agent>.screen.txt` instead.
 
-When the pane stays open, answer in it or wait with `herdr agent wait <agent>`. Then run `$V journeys` and
-`herdr pane close <pane>` yourself. The verdicts in the journal decide the result, not the transcript. A verifier that
-stopped on a provider error leaves journeys `MISSING`, so `delegate` exits 1 with `INCOMPLETE`. Then do step 4 as
-usual, and open the evidence before you repeat a verdict.
+When the tab stays open, answer in it or wait with `herdr agent wait <agent>`. Then run `$V journeys` and
+`herdr pane close <pane>` yourself, which closes the tab with its only pane. The verdicts in the journal decide the
+result, not the transcript. A verifier that stopped on a provider error leaves journeys `MISSING`, so `delegate` exits
+1 with `INCOMPLETE`. Then do step 4 as usual, and open the evidence before you repeat a verdict.
 
 A run drives one verifier at a time, because it has one browser and its features see each other's data. `delegate`
 refuses while an earlier verifier of the run still lives. To verify in parallel, start more runs as in

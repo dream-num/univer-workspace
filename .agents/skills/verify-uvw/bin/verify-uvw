@@ -816,14 +816,20 @@ verifier_status() {
   echo "$line"
 }
 
-# Splits a pane beside this one with the spec's env, and sets PANE and the name of the agent it will hold.
-verifier_pane() {
-  local split=(herdr pane split --current --direction right --cwd "$REPO" --no-focus) pair out
-  for pair in ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"}; do split+=(--env "$pair"); done
-  out="$("${split[@]}")" || die "herdr could not split a pane"
-  PANE="$(node -p 'JSON.parse(process.argv[1]).result.pane.pane_id' "$out")"
-  # herdr refuses agent names with capitals, which pane ids such as w9:pB have.
-  AGENT="$(tr '[:upper:]' '[:lower:]' <<<"vu-${PANE//:/-}")"
+# Opens a tab with the spec's env, without moving focus, and sets PANE and AGENT. The tab label is vu:<run> and the
+# agent name starts with the run because herdr's sidebar cuts both to about 12 characters. The pane suffix keeps names
+# unique, as the run lock and the evidence file names need.
+verifier_pane() { # tab-label name-stem
+  local tab=(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$REPO" --label "$1" --no-focus) pair out ids
+  for pair in ${VERIFIER_ENV[@]+"${VERIFIER_ENV[@]}"}; do tab+=(--env "$pair"); done
+  out="$("${tab[@]}")" || die "herdr could not open a tab"
+  # herdr agent names match [a-z][a-z0-9_-]{0,31}.
+  ids="$(node -e '
+    const pane = JSON.parse(process.argv[1]).result.root_pane.pane_id, local = pane.split(":").pop().toLowerCase();
+    let stem = process.argv[2].toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+    if (!/^[a-z]/.test(stem)) stem = `v${stem}`;
+    console.log(pane, `${stem.slice(0, 31 - local.length).replace(/[-_]+$/, "")}-${local}`);' "$out" "$2")"
+  PANE="${ids% *}" AGENT="${ids#* }"
 }
 
 verifier_start() {
@@ -865,7 +871,7 @@ cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec 
   trap 'rm -rf "$SMOKE"; [[ -z "$PANE" ]] || herdr pane close "$PANE" >/dev/null 2>&1 || true' EXIT
   local status reason="" file since prompt="Run this shell command, then stop: printf ok > $SMOKE/smoke" transcript
   since="$(($(date +%s) * 1000))"
-  verifier_pane
+  verifier_pane vu:setup setup
   verifier_start || die "herdr could not start $VERIFIER_KIND in pane $PANE"
   status="$(prompt_verifier "$prompt" 300000)"
   herdr agent read "$AGENT" --source visible --lines 30 2>/dev/null | grep -v '^[[:space:]]*$' || true
@@ -893,10 +899,10 @@ cmd_verifier() { # ['<spec>'|off]: show the verifier delegate uses; test a spec 
 
 cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the developer's verifier in a herdr pane, then print coverage
   [[ $# -ge 1 ]] || die "usage: verify-uvw delegate <feature> [journey-id|mode...]"
-  [[ "${HERDR_ENV:-}" == 1 ]] || die "delegate opens a herdr pane beside yours; run your agent inside a herdr pane, or hand \$V brief to a subagent"
+  [[ "${HERDR_ENV:-}" == 1 ]] || die "delegate opens a herdr tab; run your agent inside a herdr pane, or hand \$V brief to a subagent"
   load_verifier || die "no verifier; set one up with \$V verifier '<spec>', see .agents/skills/verify-uvw/references/delegate.md#set-up"
   load_run
-  local brief held status lock="$RUN/delegate.agent" since transcript reason
+  local brief held status lock="$RUN/delegate.agent" since transcript reason label="vu:$RUN_ID"
   # Command substitution drops trailing newlines, and the x keeps the brief byte for byte.
   brief="$(cmd_brief "$@" && echo x)" || exit $?
   brief="${brief%x}"
@@ -905,13 +911,12 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
     die "verifier $held still drives run $RUN_ID; a run takes one verifier at a time"
   fi
   since="$(($(date +%s) * 1000))"
-  verifier_pane
+  verifier_pane "$label" "$RUN_ID-$1"
   # shortcut: the check above sees a verifier only once herdr has started it, so a second delegate in those seconds
   # starts too; take a real lock if orchestrators ever share a run.
   echo "$AGENT" >"$lock"
-  herdr pane rename "$PANE" verify "$RUN_ID" "$1" >/dev/null 2>&1 || true
   verifier_start || { herdr pane close "$PANE" >/dev/null 2>&1 || true; die "herdr could not start $VERIFIER_KIND in pane $PANE"; }
-  echo "verifier $AGENT in pane $PANE: $(verifier_display)"
+  echo "verifier $AGENT in tab \"$label\" (pane $PANE): $(verifier_display)"
   status="$(prompt_verifier "$brief" 3600000)"
   case "$status" in
     idle|done)
@@ -925,10 +930,10 @@ cmd_delegate() { # feature [journey-id|mode...]: hand this run's brief to the de
       herdr pane close "$PANE" >/dev/null || echo "warning: cannot close pane $PANE; close it yourself" >&2
       cmd_journeys "$@" ;;
     blocked)
-      die "verifier $AGENT waits for approval in pane $PANE; answer it there, or configure it to run commands without asking. Then run \$V journeys $* and herdr pane close $PANE" ;;
+      die "verifier $AGENT waits for approval in tab \"$label\"; answer it there, or configure it to run commands without asking. Then run \$V journeys $* and herdr pane close $PANE" ;;
     *)
       herdr agent read "$AGENT" --source visible --lines 40 >&2 || true
-      die "verifier $AGENT in pane $PANE did not stop ($status); wait with herdr agent wait $AGENT, then run \$V journeys $* and herdr pane close $PANE" ;;
+      die "verifier $AGENT in tab \"$label\" did not stop ($status); wait with herdr agent wait $AGENT, then run \$V journeys $* and herdr pane close $PANE" ;;
   esac
 }
 
