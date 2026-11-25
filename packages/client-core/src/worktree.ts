@@ -169,7 +169,7 @@ export class WorkspaceWorktreeFeature {
   /**
    * Leaves out every file that is in Trash or permanently deleted, which no merge can write, so the other files can
    * merge. Those files stay as they are. The server takes this only on a draft, so a ready pull request goes back to
-   * draft and is marked ready again.
+   * draft and is marked ready again, even when a removal fails.
    */
   public async leaveOutTrashed(worktreeId: string): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
@@ -180,14 +180,17 @@ export class WorkspaceWorktreeFeature {
     if (!trashed.length) return worktree;
     const ready = worktree.state === "ready";
     if (ready) await this.transition(id, "reopen");
-    const http = await this.authenticatedHttp();
-    for (const unit of trashed) {
-      await http.json(
-        `/api/worktrees/${encodeURIComponent(id)}/units/${encodeURIComponent(unit.unitId)}/removal`,
-        { body: { removed: true }, method: "POST" },
-      );
+    try {
+      const http = await this.authenticatedHttp();
+      for (const unit of trashed) {
+        await http.json(
+          `/api/worktrees/${encodeURIComponent(id)}/units/${encodeURIComponent(unit.unitId)}/removal`,
+          { body: { removed: true }, method: "POST" },
+        );
+      }
+    } finally {
+      if (ready) await this.transition(id, "ready");
     }
-    if (ready) await this.transition(id, "ready");
     return await this.get(id);
   }
 

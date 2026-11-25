@@ -445,7 +445,8 @@
           A request that could get both gets `PAGE_REVIEW_REQUIRED`, which a newer review cannot clear outside the
           browser. `FILES_IN_TRASH`: the pull request still changes a file that is in Trash or deleted, which no merge
           writes. Every reader who may review it gets this, whatever else keeps them from merging. The message names those files,
-          and its author leaves each one out with the Unit removal intent before anyone merges. Nothing changes.
+          counts those the reader cannot see without their names or states, and says that its author can leave each one out with
+          the Unit removal intent before anyone merges. Nothing changes.
         content:
           application/json:
             schema:

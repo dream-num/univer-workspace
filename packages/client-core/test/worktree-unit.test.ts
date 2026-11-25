@@ -300,6 +300,36 @@ describe("Workspace Worktree model and workflow", () => {
     expect(calls, "nothing is left to leave out").toEqual([]);
   });
 
+  it("puts a ready pull request back to ready when leaving a file out fails, and a retry finishes the rest", async () => {
+    let state: WorkspaceWorktreeState = "ready";
+    let failOld = true;
+    const files = [
+      rawUnit({ unitId: "summary", name: "Summary", change: "modified", fileState: "inTrash" }),
+      rawUnit({ unitId: "old", name: "Old", change: "modified", fileState: "deleted" }),
+    ];
+    const feature = worktrees(async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "POST") {
+        if (path.endsWith("/reopen")) state = "draft";
+        if (path.endsWith("/ready")) state = "ready";
+        const removed = /\/units\/([^/]+)\/removal$/.exec(path)?.[1];
+        if (removed === "old" && failOld) {
+          failOld = false;
+          return Response.json({ error: { code: "INTERNAL_ERROR", message: "Try again." } }, { status: 500 });
+        }
+        if (removed) files.find((file) => file.unitId === removed)!.change = "deleted";
+        if (!removed) return Response.json({ worktree: rawWorktree("wt-1", state) });
+      }
+      return Response.json({ worktree: rawWorktree("wt-1", state, files) });
+    });
+
+    await expect(feature.leaveOutTrashed("wt-1")).rejects.toThrow();
+    expect(state, "the failure leaves no stranded draft").toBe("ready");
+    const retried = await feature.leaveOutTrashed("wt-1");
+    expect([retried.state, ...retried.units.map((unit) => unit.change)]).toEqual(["ready", "deleted", "deleted"]);
+  });
+
   it.each([
     ["ready", "draft", "ready", false],
     ["reopen", "ready", "draft", false],

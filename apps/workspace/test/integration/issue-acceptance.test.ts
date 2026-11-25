@@ -222,6 +222,12 @@ describe("the Issue acceptance panel's data", () => {
     };
 
     expect(await observe(author), "Old is live and Added is in Trash").toEqual(unseen);
+    const open = async (unitId: string, mode: string) => (await fetch(`${origin}/api/worktrees/${pull}/units/${unitId}/open`, {
+      method: "POST", headers: { cookie: author.cookie, "content-type": "application/json" }, body: JSON.stringify({ mode }),
+    })).status;
+    for (const unitId of [removed.unitId, added.unitId]) {
+      for (const mode of ["draft", "mergePreview", "trunk"]) expect(await open(unitId, mode), `${mode} of a file the reader cannot open`).toBe(404);
+    }
     const ownerView = await observe(owner);
     expect(ownerView.units.map(({ name, fileState }) => [name, fileState])).toEqual([["Old", "live"], ["Added", "inTrash"]]);
     expect(ownerView.compared[1]).toBe(409);
@@ -383,6 +389,20 @@ describe("an open pull request whose file moved to Trash", () => {
     expect((await f.application.trash.list(f.owner.id, f.team, {})).items.map((item) => item.id), "Summary stays where the person put it").toEqual([batch.id]);
     const plan = await f.application.reverts.plan(f.owner.id, true, { kind: "pullRequest", worktreeId: f.pull });
     expect(plan.items.map((item) => item.unitId), "the pull request did not remove Summary, so a revert leaves it").toEqual([f.north.unitId]);
+  }, 60_000);
+
+  it("refuses the merge without naming the files its reader cannot see", async () => {
+    const f = await openTask();
+    await f.application.trash.trashNode(f.owner.id, f.north.nodeId);
+    await f.application.trash.trashNode(f.owner.id, f.summary.nodeId);
+    await f.application.permissions.removeTeamMember(f.owner.id, f.team, f.author.id);
+
+    const merge = await fetch(`${f.origin}/api/worktrees/${f.pull}/merge`, {
+      method: "POST", headers: { cookie: f.author.cookie, "idempotency-key": randomUUID() },
+    });
+    const { error } = (await merge.json()) as { error: { code: string; message: string } };
+    expect([merge.status, error.code]).toEqual([409, "FILES_IN_TRASH"]);
+    expect(error.message).toMatch(/^No one can merge changes to files that are no longer in the repository: 2 files you cannot open\. /u);
   }, 60_000);
 
   it("still hides an open pull request from its author once a live file in it is unreadable", async () => {

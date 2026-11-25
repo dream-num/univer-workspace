@@ -16,7 +16,7 @@ const inputSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      "true leaves out every file whose fileState is inTrash or deleted, which pr_merge refuses to merge, so the other files can merge. Those files stay as they are, and this pull request's changes to them are not merged. A ready pull request goes back to draft for this and is marked ready again. Author only.",
+      "true leaves out every file whose fileState is inTrash or deleted, which pr_merge refuses to merge, so the other files can merge. Those files stay as they are, and this pull request's changes to them are not merged. A ready pull request goes back to draft for this and is marked ready again. In a repository that requires checks, its content changes, so report every check again before pr_merge. Author only.",
     ),
 });
 export const prEditTool: ToolDefinition = {

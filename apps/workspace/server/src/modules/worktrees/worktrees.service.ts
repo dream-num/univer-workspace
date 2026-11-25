@@ -4,7 +4,7 @@ import { logger } from "../../logging/logger.js";
 import type { PublishedPage } from "../html-view-drafts/drafts.types.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { writeSourceView, type WriteSource } from "../identity/index.js";
-import type { TrashModule } from "../trash/index.js";
+import type { TrashModule, TrashRepository } from "../trash/index.js";
 import {
   landsByChecks,
   trunkEditorMode,
@@ -102,6 +102,7 @@ export function createWorktreesModule(options: {
   readonly access: AccessResolver;
   readonly backend: WorktreeBackend;
   readonly trash: Pick<TrashModule, "trashNodeOnce">;
+  readonly trashBatches: Pick<TrashRepository, "findBatch">;
   readonly publishMergedAssets: (
     worktreeId: string,
     unitIds: readonly string[]
@@ -424,8 +425,8 @@ export function createWorktreesModule(options: {
           units.push({ ...base, change: { kind: "modified", trunkRevision: result.trunkRevision } });
         } else if (result.status === "removed") {
           const removalBatchId = await options.repository.removalBatchId(worktreeId, unit.unitID);
-          // A file left out while someone else's Trash Batch held it was not moved by this pull request.
-          if (row.existing_trash_batch_id === null || row.existing_trash_batch_id === removalBatchId) {
+          // A batch leaves Trash only with its file, so a file still there without this batch was left out, not moved.
+          if (row.existing_name === null || await options.trashBatches.findBatch(removalBatchId) !== null) {
             units.push({ ...base, change: { kind: "removed", removalBatchId } });
           }
         }
@@ -910,7 +911,7 @@ export function createWorktreesModule(options: {
       const value = await context(userId, worktreeId);
       const unit = requireMappedUnit(value, unitId);
       if (
-        unit.fileState !== null &&
+        hasFile(unit) &&
         !(await options.access.resolveResource(userId, unit.resourceId))?.capabilities.openContent
       ) {
         throw notFound();
@@ -1024,7 +1025,7 @@ export function createWorktreesModule(options: {
         !(await options.repository.mergers([worktreeId])).has(worktreeId);
       if (!value.capabilities.merge && existing?.state !== "completed" && !finishes && !recordsApplied) {
         if (value.facts.changesGoneFiles && value.state === "ready" && value.capabilities.review) {
-          throw filesInTrash(value.units.filter((unit) => unit.change !== "deleted" && (unit.fileState === "inTrash" || unit.fileState === "deleted")));
+          throw filesInTrash(value.units.filter((unit) => hasFile(unit) && unit.change !== "deleted" && unit.fileState !== "live"));
         }
         if (value.checksGate?.blocked) throw checksRequired(value.checksGate.blocked);
         if (!value.facts.authorOrClaimer && !value.facts.shared) throw onlyAuthorMerges(value.row);
@@ -1093,10 +1094,11 @@ export function createWorktreesModule(options: {
               ? options.backend.getWorktree(worktreeId, userId)
               : options.backend.merge(worktreeId, userId, checkedDraft),
           );
+          const unitRows = await options.repository.units(worktreeId);
           const mergedUnitIds = await activateSuccessfulUnits(
             userId,
             value.row,
-            await options.repository.units(worktreeId),
+            unitRows,
             data.units,
             options.repository,
             now()
@@ -1105,14 +1107,15 @@ export function createWorktreesModule(options: {
           if (data.status === "merged") {
             for (const unit of data.units) {
               if (unit.mergeResult?.status !== "removed") continue;
-              const mapped = requireMappedUnit(value, unit.unitID);
-              if (mapped.source === "worktree") {
+              const row = unitRows.find((candidate) => candidate.unit_id === unit.unitID);
+              if (!row) throw notFound();
+              if (row.source === "worktree") {
                 await options.repository.markLocalUnitDiscarded(worktreeId, unit.unitID, now());
-              } else if (mapped.fileState === "live") {
-                if (mapped.nodeId === null) throw notFound();
+              } else if (!leftTrunk(row)) {
+                if (row.node_id === null) throw notFound();
                 await options.trash.trashNodeOnce(
                   userId,
-                  mapped.nodeId,
+                  row.node_id,
                   await options.repository.removalBatchId(worktreeId, unit.unitID),
                 );
               }
@@ -1200,7 +1203,7 @@ export function createWorktreesModule(options: {
           const unit = requireMappedUnit(value, input.unitId);
           if (input.write && unit.change === "deleted") return false;
           if (
-            (unit.source === "trunk" || unit.activationState === "completed") &&
+            hasFile(unit) &&
             !(await options.access.resolveResource(input.userId, unit.resourceId))?.capabilities.openContent
           )
             return false;
@@ -1463,6 +1466,11 @@ function fileState(row: WorktreeUnitRow): WorktreeUnitFileState | null {
   if (row.source === "worktree" && row.activated_at === null) return null;
   if (row.existing_name === null) return "deleted";
   return row.existing_trash_batch_id === null ? "live" : "inTrash";
+}
+
+/** Whether a Unit has a file, so that a null `fileState` means its reader cannot see where the file is. */
+function hasFile(unit: WorktreeUnit): boolean {
+  return unit.source === "trunk" || unit.activationState === "completed";
 }
 
 function leftTrunk(row: WorktreeUnitRow): boolean {
