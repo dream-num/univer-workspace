@@ -6,9 +6,15 @@ and their pass conditions start at [MCP gateway](../features/mcp.md), and each t
 
 ## Start
 
-On macOS with Docker Desktop or OrbStack, opt in with `VERIFY_UVW_MCP=1 $V up`. `up` refuses any other
-engine. It builds `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
-port 3930 (`VERIFY_UVW_MCP_PORT`). Without the opt-in, every command keeps its default-mode behavior.
+Journeys that declare `Mode: mcp.` or `Mode: mcp-same-origin.` ([the feature contract](../features/README.md#feature-entry-contract))
+get it from `$V up --for <feature> [journey-id|mode...]`, which sets `VERIFY_UVW_MCP` and
+`VERIFY_UVW_MCP_SAME_ORIGIN`. Without journeys, opt in with `VERIFY_UVW_MCP=1 $V up`. The gateway listens on
+loopback port 3930 (`VERIFY_UVW_MCP_PORT`). Without the opt-in, every command keeps its default-mode behavior.
+MCP mode runs on macOS with Docker Desktop or OrbStack, and `up` refuses any other engine. It builds
+`apps/mcp/Dockerfile` from the working tree and starts the gateway, executor and renderer with
+`apps/mcp/docker/compose.verify.yml`. The other start mode, `VERIFY_UVW_MCP_FROM=dist`, runs only inside
+[the runner](../runner/README.md#the-dist-start-mode).
+
 Keep `VERIFY_UVW_SERVER_PORT` off the Fetch standard's blocked ports, such as 4045 and 6000. The gateway's `fetch`
 refuses them with `bad port`, and `doctor` then says the container cannot reach the host Workspace.
 
@@ -19,11 +25,11 @@ These variables are read at `up` and saved in `run.env`:
 | `VERIFY_UVW_MCP_EXECUTORS=2` | Adds a second executor, for MX13. |
 | `VERIFY_UVW_MCP_RENDERER=0` | No renderer container and no `MCP_RENDERER_URL`. Doctor checks it is absent. `renderer-call` and `renderer-restart` refuse. |
 | `VERIFY_UVW_MCP_PRODUCTION=1` | `NODE_ENV=production` and no `MCP_DEV_SESSION_PASSTHROUGH`. Gateway and executor start with the placeholder allowlist `verify-uvw-pending-user`, which the first `user` replaces with the run user's ID. |
-| `VERIFY_UVW_MCP_SAME_ORIGIN=1` | Serves the gateway at `http://127.0.0.1:<web port>/mcp` through Vite, as production does. Use it when a browser page calls `/mcp`, such as the Agents module. The gateway's own port then answers 403 on `/mcp` and serves only `healthz`, `readyz`, `metrics` and the protected-resource metadata. |
+| `VERIFY_UVW_MCP_SAME_ORIGIN=1` | Serves the gateway at `http://127.0.0.1:<web port>/mcp` through Vite, as production does. The `mcp-same-origin` mode sets it, for journeys where a browser page calls `/mcp`, such as the Agents module. `run.env` records it as `MCP_SAME_ORIGIN`. The gateway's own port then answers 403 on `/mcp` and serves only `healthz`, `readyz`, `metrics` and the protected-resource metadata. |
 | `VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` | Builds the image from another checkout, such as a clean `git worktree` at `origin/main` that reuses the cached install layer. Its `apps/mcp`, `packages/client-core` and `apps/cli/skill-data` must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data` is empty). Doctor checks the image against that checkout's source digest. |
 | `VERIFY_UVW_AGENT_PORT=<port>` | Registers the Workspace Agent's OAuth client for `agent-up`. See [Workspace Agent](#workspace-agent). |
 | `EXECUTOR_MAX_WORKERS`, `EXECUTOR_IDLE_TTL_MS` | Size the executor pool (defaults 4 and 60000 ms), for both executors. They do not change product defaults. |
-| `MCP_SYNC_BUDGET_MS=1` | Turns long Office and Typst calls into jobs. See [Typst job verification](../features/mcp-executor.md#typst-job-verification). |
+| `MCP_SYNC_BUDGET_MS=1` | Turns long Office and Typst calls into jobs. See [Typst job verification](../features/mcp-executor.md#mt2-typst-job-verification). |
 | `MCP_CIMD_ENABLED=0` | Passes through to the Workspace server. Unset means enabled. |
 
 With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the server for MCP OAuth. When
@@ -32,7 +38,7 @@ With MCP enabled, `up` also sets `MCP_RESOURCE_URLS` and `PUBLIC_ORIGIN` on the 
 
 Which mode a journey needs:
 
-- Run [MB](../features/mcp-production.md#mb-deployment-and-per-account-tools) with `VERIFY_UVW_MCP_RENDERER=0` and
+- Run [MB](../features/mcp-production.md#mb1-deployment-and-per-account-tools) with `VERIFY_UVW_MCP_RENDERER=0` and
   `VERIFY_UVW_MCP_PRODUCTION=1`.
 - Journeys that use `--auth dev`, MA5 and the session-based second-user client of MF4 need development
   mode, which is the default.
@@ -40,7 +46,8 @@ Which mode a journey needs:
   authentication.
 - M7, MR9 onward, screenshot checks and the renderer benchmark need the renderer.
 
-To restart the same run for MO3, run `down`, then `up --reuse` with the same run id and ports. Reuse
+To restart the same run for MO3 or MT2, run `down`, then `up --reuse --for <feature> <journey-id>` with the same run id
+and ports. Reuse
 requires that `down` already removed `data/` and `home/`. It creates fresh data and credentials, keeps evidence,
 and replaces logs, so save what you need from the logs first. Run `user` again after each restart.
 
@@ -48,10 +55,13 @@ and replaces logs, so save what you need from the logs first. Run `user` again a
 
 `$V user` also creates an MCP session, a fresh opencode directory and a personal access token (PAT). The
 gateway exchanges the PAT with Workspace (confidential client `univer-workspace-mcp-gateway`, whose
-secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. `$V env`
-exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL`. Sessions,
-opencode config, the executor and renderer tokens, and the metrics token stay under `home/` with
-credential files at mode 0600.
+secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. In MCP mode
+`$V env` adds `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL` to the
+default exports, which include `RUN`, `ORIGIN` and `EVIDENCE`. `MCP_OPENCODE_MODEL` is
+`console-deepseek/deepseek-flash#high` unless `VERIFY_UVW_OPENCODE_MODEL` names another model, whose provider
+reads its own key, such as `DEEPSEEK_API_KEY` for `deepseek/deepseek-flash#high`. MO1 imports the OpenCode
+Console credential only for a `console-` model. Sessions, opencode config, the executor and renderer tokens, and
+the metrics token stay under `home/` with credential files at mode 0600.
 
 ## Commands
 

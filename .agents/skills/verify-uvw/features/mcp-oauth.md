@@ -18,8 +18,9 @@ opens the Workspace consent page in the browser; after `Allow` it calls the gate
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. Every journey here signs in through the run's browser with agent-browser, MO1 also needs opencode,
 and MO3 needs outbound HTTPS. MO2 uses the Team Space:
@@ -55,6 +56,8 @@ OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 removes its temporary project and credentials even if an assertion fails.
 
 ### MO2. Scripted OAuth: scope withheld, refresh and revocation
+
+Run: helper.
 
 Run with a full-scope default PAT, which `user` creates and each journey in
 [PAT sign-in](mcp-auth.md) restores. MO1 proves a real client; this drives the same endpoints from `verify-uvw mcp-oauth`, so it needs no model and can
@@ -180,18 +183,13 @@ redeemed without `resource` return 200 and the token works through the gateway; 
 
 ### MO3. HTTPS Client ID Metadata Documents
 
-Requires outbound HTTPS and the baseline
-`up`, `user`, `doctor` with MCP enabled. Run before MO1/MO2 because step 5 starts fresh data.
-Every helper call must use the explicit run ID when another verification run is active.
+Requires outbound HTTPS. Run before MO1/MO2 because step 5 starts fresh data.
 The helper detects fake-IP DNS at `up`; it never exempts loopback or link-local addresses.
 
 1. Discover support.
 
 ```bash
-export VERIFY_UVW_RUN=cimd VERIFY_UVW_MCP=1 VERIFY_UVW_SERVER_PORT=3924 VERIFY_UVW_WEB_PORT=5977 VERIFY_UVW_MCP_PORT=3934
-V=.agents/skills/verify-uvw/bin/verify-uvw
-eval "$(VERIFY_UVW_RUN=cimd $V env)"
-RUN=/tmp/verify-uvw/cimd
+eval "$($V env)"
 curl -fsS "$ORIGIN/.well-known/oauth-authorization-server" > "$EVIDENCE/mcp-cimd-discovery.json"
 jq -e --arg issuer "$ORIGIN" '.issuer == $issuer and .client_id_metadata_document_supported == true and .authorization_response_iss_parameter_supported == true' "$EVIDENCE/mcp-cimd-discovery.json"
 ```
@@ -203,14 +201,14 @@ MCP use, refresh and revocation. No DCR request is made by `login --client-id`.
 
 ```bash
 CLAUDE_CLIENT=https://claude.ai/oauth/claude-code-client-metadata
-VERIFY_UVW_RUN=cimd $V mcp-oauth login mcp-cimd-login --client-id "$CLAUDE_CLIENT"
+$V mcp-oauth login mcp-cimd-login --client-id "$CLAUDE_CLIENT"
 jq -e --arg issuer "$ORIGIN" --arg client "$CLAUDE_CLIENT" '.client_id == $client and .client_name == "Claude Code (claude.ai)" and .callback_code_present and .callback_state_matches and .callback_iss == $issuer and .token.status == 200' "$EVIDENCE/mcp-cimd-login.json"
-VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-whoami whoami
+$V mcp --auth oauth mcp-cimd-whoami whoami
 jq -e --arg client "$CLAUDE_CLIENT" '.client_id == $client and .auth_kind == "oauth" and .outcome == "ok"' "$EVIDENCE/mcp-cimd-whoami.event.json"
-VERIFY_UVW_RUN=cimd $V mcp-oauth refresh mcp-cimd-refresh
-VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-refreshed repo_list
-VERIFY_UVW_RUN=cimd $V mcp-oauth revoke mcp-cimd-revoke
-if VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-revoked repo_list; then false; else test $? -eq 4; fi
+$V mcp-oauth refresh mcp-cimd-refresh
+$V mcp --auth oauth mcp-cimd-refreshed repo_list
+$V mcp-oauth revoke mcp-cimd-revoke
+if $V mcp --auth oauth mcp-cimd-revoked repo_list; then false; else test $? -eq 4; fi
 jq -e '.status == 401' "$EVIDENCE/mcp-cimd-revoked.out"
 ```
 
@@ -223,7 +221,7 @@ Tokens, codes and state stay out of evidence.
 must not prevent authorization.
 
 ```bash
-VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" vscode
+node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" vscode
 ```
 
 Pass when `mcp-cimd-vscode.json` records 200 and the consent text includes `vscode.dev`,
@@ -239,7 +237,7 @@ system-resolved `localhost` to exercise the same connection-level DNS refusal wi
 changing host DNS or introducing a test-only server resolver.
 
 ```bash
-VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" reject
+node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" reject
 ```
 
 Pass when every `mcp-cimd-reject-*.json` records 400 with no Location and the corresponding
@@ -252,16 +250,16 @@ a run already torn down; evidence survives, data and credentials are fresh. Keep
 shell alive throughout all `up` calls so its services survive between tool calls.
 
 ```bash
-VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-enabled-down.txt"
-MCP_CIMD_ENABLED=0 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-disabled-up.txt"
-VERIFY_UVW_RUN=cimd $V user
-VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" disabled
-VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-disabled-down.txt"
-MCP_CIMD_ENABLED=1 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-restored-up.txt"
-VERIFY_UVW_RUN=cimd $V user
-VERIFY_UVW_RUN=cimd $V doctor | tee "$EVIDENCE/mcp-cimd-restored-doctor.txt"
+$V down | tee "$EVIDENCE/mcp-cimd-enabled-down.txt"
+MCP_CIMD_ENABLED=0 $V up --reuse --for mcp-oauth MO3 | tee "$EVIDENCE/mcp-cimd-disabled-up.txt"
+$V user
+node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" disabled
+$V down | tee "$EVIDENCE/mcp-cimd-disabled-down.txt"
+MCP_CIMD_ENABLED=1 $V up --reuse --for mcp-oauth MO3 | tee "$EVIDENCE/mcp-cimd-restored-up.txt"
+$V user
+$V doctor | tee "$EVIDENCE/mcp-cimd-restored-doctor.txt"
 # The restored run has a new home/ and opencode directory; refresh the exported paths before later journeys.
-eval "$(VERIFY_UVW_RUN=cimd $V env)"
+eval "$($V env)"
 ```
 
 Pass when `mcp-cimd-disabled.json` has no CIMD support flag, retains the issuer-response
@@ -270,6 +268,8 @@ Both teardown transcripts say `ok    MCP resources removed`; restored doctor has
 The optional real Claude Code `/mcp` login is supplementary and not required by MO3.
 
 ### MO4. Cursor's private-use callback
+
+Run: helper.
 
 Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
 next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only

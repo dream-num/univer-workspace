@@ -34,6 +34,8 @@ Preconditions:
 - Baseline run with `$V user` done. `O=verify-$VERIFY_UVW_RUN`, `R=$O/personal`.
 - Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 
+### PR1. Open, fill, ready and merge a pull request
+
 - **Open PR.** Run `$V cli pr-create pr create -R $R -t "Verify sales sheet" --json`.
   Exit `0`, and the output has `state: "draft"`, `number` (`P`), and `id` (Worktree ID, `W`). `number` is `1`
   only when this user has no earlier Worktree; `$V doctor` in MCP mode and `seed-sheets.mjs` each create one.
@@ -44,13 +46,23 @@ Preconditions:
   The output has `committed: true`, a `revision`, and `value` equal to the written grid.
 - **Ready.** Run `$V cli pr-ready pr ready $P -R $R --json state`. Output: `{"state": "ready"}`.
 - **Merge.** Run `$V cli pr-merge pr merge $P -R $R --json`. Output: `state: "merged"`.
+
+### PR2. Trunk readback and browser view
+
 - **Trunk readback.** Run `$V cli pr-trunk-readback inspect range A1:B2 --unit $U --trunk --worksheet index:1`.
   Output: `Sheet 1!A1:B2` with `"Region" "Total"` / `"North" "42"`.
 - **Browser view.** Sign the browser in as the baseline user (see [auth](./auth.md)), run
   `agent-browser open "$ORIGIN/nodes/$N"`, `agent-browser wait canvas`, `agent-browser wait 4000`,
   then `agent-browser screenshot "$EVIDENCE/pr-trunk-readback.png"`. The sidebar lists
   `Sales` under `Personal Space`, and the grid shows Region/Total and North/42.
-- **Rerun.** Run `$V cli pr-merge-again pr merge $P -R $R --json`. Exit `0`, `state: "merged"`.
+
+### PR3. Rerun
+
+Run `$V cli pr-merge-again pr merge $P -R $R --json`. Exit `0`, `state: "merged"`.
+
+### PR4. Propose as a reader of a Team Space
+
+Mode: mcp.
 
 Proposals and merge rights (`pr-propose-read-only`, `pr-merge-rights`, `pr-merge-states`) need a Team Space
 that someone else holds, where the run user can only read:
@@ -72,42 +84,74 @@ that someone else holds, where the run user can only read:
 - **Propose.** As the run user, `$V cli pp-create pr create -R <H>/team-pr -t "Proposal" --json` has
   `state: "draft"`, `kind: "team"`, `visibility: "private"`. `$V cli pp-add unit add --worktree $W --resource $RES --json`
   has `unit.source: "trunk"`, and `$V cli pp-execute execute --worktree $W --unit $U --json -e '<code>'` has
-  `committed: true`. `uh inspect range A1:B2 --unit $U --trunk --worksheet index:1` still shows H's values.
+  `committed: true`. `$V cli pp-new unit create --worktree $W --space <H>/team-pr --type sheet --name Proposed --json`
+  adds a new file to the proposal; keep its `unit.nodeId` as `PN`.
+  `uh inspect range A1:B2 --unit $U --trunk --worksheet index:1` still shows H's values.
   `$V cli pp-ready pr ready $P -R <H>/team-pr --json state,visibility` prints
   `{"state": "ready", "visibility": "space"}`: marking it ready shares it, because its author cannot merge it.
-- **Propose through MCP.** In [MCP mode](../references/mcp-mode.md), `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
-  then `unit_add` (`worktree`, `resource`), `unit_create` (`worktree`, `space`, `type`, `name`), `execute`
-  (`worktree`, `unit`, `code`) and `pr_ready` (`repo`, `number`) succeed the same way, and `pr_ready` returns
-  `visibility: "space"`. `$V mcp pp-mcp-merge pr_merge '{"repo":"<H>/team-pr","number":<n>}'` exits `1`
-  with `code: "FORBIDDEN"` and the message below.
-- **Refusals.** The run user's `pr merge $P -R <H>/team-pr --json` exits `1` with
-  `FORBIDDEN: You cannot merge this pull request without edit access to every file and folder it changes.`
-  (status 403). Its direct writes to Trunk are refused with status 403 too: `space node create <H>/team-pr --name X`
-  and `space node rename $N --name X` with `FORBIDDEN: The current user cannot perform this action.`, and
-  `space node trash $N` and `blob upload --file <file> --space $T` with `FORBIDDEN: This action is not allowed.`
-  Through MCP, `$V mcp --toolsets all <label> space_node` with `action` `create`, `rename` and `trash` returns the
-  same codes. `execute` has no Trunk form: it always takes a `worktree`.
-- **Editor merges.** `ue pr list -R <H>/team-pr --json number,state,visibility,creator` lists the proposal as
-  `ready` and `space` with the run user as `creator`. `ue pr merge $P -R <H>/team-pr --json state` prints
-  `{"state": "merged"}`. H's `inspect --trunk` now shows the proposed values, and `uh space browse <H>/team-pr --json`
-  lists a file the proposal created. With H's cookie, `GET $ORIGIN/api/spaces/$T/activity?timeZone=UTC` has
-  `pull-opened` by the run user and `pull-merged` by E for that pull request. The run user's
-  `space node trash <node of the file they proposed>` is still refused.
-- **Browser.** A second member with read access (register one and add it as `viewer`) opens
-  `$ORIGIN/spaces/$T/pulls/$P` on a ready proposal: the review panel reads
-  `Merging this pull request needs edit access to every file it changes.` and has no merge button. In E's
-  session the panel has `Confirm merge`; click it, confirm `Merge this task?`, and the page says `Merged`.
-  Screenshot both. The panel sits below the fold, so scroll it into view first.
-- **Private (`pr-merge-rights`).** E opens a pull request, adds a file and runs `ue pr ready`: it prints
-  `{"state": "ready", "visibility": "private"}`, because E can merge it. The run user's `pr view` exits `1` with
-  status 404. `uh pr merge $P -R <H>/team-pr --json` exits `1` with
-  `FORBIDDEN: Only the author, <E display name> (@<E>), can merge this pull request.` (status 403), and H's browser
-  panel reads `Only the author, <E display name>, can merge this pull request.` beside `Continue editing` and
-  `Discard changes`, with no merge button. After `ue pr edit $P -R <H>/team-pr --visibility space --json visibility`,
-  `uh pr merge` prints `{"state": "merged"}`.
-- **States.** The run user's `pr merge` on that merged pull request prints
-  `workspace-lifecycle-invalid: Pull request #<n> is already merged.` A draft PR's merge prints
-  `workspace-lifecycle-invalid: Cannot merge pull request #<n> while it is draft.`
+
+### PR5. Propose through MCP
+
+Mode: mcp.
+
+As the run user, `$V mcp pp-mcp-create pr_create '{"repo":"<H>/team-pr","title":"Proposal"}'`,
+then `unit_add` (`worktree`, `resource`), `unit_create` (`worktree`, `space`, `type`, `name`), `execute`
+(`worktree`, `unit`, `code`) and `pr_ready` (`repo`, `number`) succeed the same way, and `pr_ready` returns
+`visibility: "space"`. `$V mcp pp-mcp-merge pr_merge '{"repo":"<H>/team-pr","number":<n>}'` exits `1`
+with `code: "FORBIDDEN"` and the message below.
+
+### PR6. Refusals
+
+Mode: mcp.
+
+The run user's `pr merge $P -R <H>/team-pr --json` exits `1` with
+`FORBIDDEN: You cannot merge this pull request without edit access to every file and folder it changes.`
+(status 403). Its direct writes to Trunk are refused with status 403 too: `space node create <H>/team-pr --name X`
+and `space node rename $N --name X` with `FORBIDDEN: The current user cannot perform this action.`, and
+`space node trash $N` and `blob upload --file <file> --space $T` with `FORBIDDEN: This action is not allowed.`
+Through MCP, `$V mcp --toolsets all <label> space_node` with `action` `create`, `rename` and `trash` returns the
+same codes. `execute` has no Trunk form: it always takes a `worktree`.
+
+### PR7. Editor merges
+
+Mode: mcp.
+
+`ue pr list -R <H>/team-pr --json number,state,visibility,creator` lists the proposal as
+`ready` and `space` with the run user as `creator`. `ue pr merge $P -R <H>/team-pr --json state` prints
+`{"state": "merged"}`. H's `inspect --trunk` now shows the proposed values, and `uh space browse <H>/team-pr --json`
+lists `Proposed`, the file the proposal created. With H's cookie, `GET $ORIGIN/api/spaces/$T/activity?timeZone=UTC` has
+`pull-opened` by the run user and `pull-merged` by E for that pull request. The run user's
+`space node trash $PN` is still refused.
+
+### PR8. Browser
+
+Mode: mcp.
+
+A second member with read access (register one and add it as `viewer`) opens
+`$ORIGIN/spaces/$T/pulls/$P` on a ready proposal: the review panel reads
+`Merging this pull request needs edit access to every file it changes.` and has no merge button. In E's
+session the panel has `Confirm merge`; click it, confirm `Merge this task?`, and the page says `Merged`.
+Screenshot both. The panel sits below the fold, so scroll it into view first.
+
+### PR9. Private (`pr-merge-rights`)
+
+Mode: mcp.
+
+E opens a pull request, adds a file and runs `ue pr ready`: it prints
+`{"state": "ready", "visibility": "private"}`, because E can merge it. The run user's `pr view` exits `1` with
+status 404. `uh pr merge $P -R <H>/team-pr --json` exits `1` with
+`FORBIDDEN: Only the author, <E display name> (@<E>), can merge this pull request.` (status 403), and H's browser
+panel reads `Only the author, <E display name>, can merge this pull request.` beside `Continue editing` and
+`Discard changes`, with no merge button. After `ue pr edit $P -R <H>/team-pr --visibility space --json visibility`,
+`uh pr merge` prints `{"state": "merged"}`.
+
+### PR10. States
+
+Mode: mcp.
+
+The run user's `pr merge` on that merged pull request prints
+`workspace-lifecycle-invalid: Pull request #<n> is already merged.` A draft PR's merge prints
+`workspace-lifecycle-invalid: Cannot merge pull request #<n> while it is draft.`
 
 ## Gotchas
 

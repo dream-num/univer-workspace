@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -10,7 +10,8 @@ ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
 
 BIN="$REPO/.agents/skills/verify-uvw/bin"
 MCP_CALL="$BIN/mcp-call.mjs"
-OPENCODE_MODEL='console-deepseek/deepseek-flash#high'
+MCP_PROCESSES="$REPO/.agents/skills/verify-uvw/runner/mcp-processes.mjs"
+OPENCODE_MODEL="${VERIFY_UVW_OPENCODE_MODEL:-console-deepseek/deepseek-flash#high}"
 MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core apps/cli/skill-data)
 
 die() { echo "verify-uvw: $*" >&2; exit 1; }
@@ -77,6 +78,7 @@ mcp_digest() {
 }
 
 mcp_compose() {
+  [[ "${MCP_FROM:-image}" != dist ]] || { mcp_processes "$@"; return; }
   local executor_urls="http://executor:3000" profiles="" mode_env=()
   [[ "${MCP_RENDERER:-1}" != 1 ]] || { profiles=renderer; mode_env+=("MCP_RENDERER_URL=http://renderer:3000" "MCP_RENDERER_TOKEN=$(cat "$RUN/home/renderer-token" 2>/dev/null || echo removed)"); }
   if [[ "${MCP_PRODUCTION:-0}" == 1 ]]; then
@@ -101,14 +103,45 @@ mcp_compose() {
     docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
 }
 
+# The compose commands verify-uvw uses, served by runner/mcp-processes.mjs when the roles run as local processes.
+mcp_processes() {
+  local verb="$1" role roles=()
+  shift
+  case "$verb" in
+    ps) node "$MCP_PROCESSES" pid "$RUN" "${@: -1}"; return ;;
+    exec) [[ "$1" != -T ]] || shift; role="$1"; shift; node "$MCP_PROCESSES" exec "$RUN" "$role" -- "$@"; return ;;
+  esac
+  while [[ $# -gt 0 ]]; do
+    case "$1" in --wait-timeout) shift ;; -*) ;; *) roles+=("$1") ;; esac
+    shift
+  done
+  case "$verb" in
+    logs) node "$MCP_PROCESSES" logs "$RUN" ${roles[@]+"${roles[@]}"} ;;
+    up) node "$MCP_PROCESSES" start "$RUN" ${roles[@]+"${roles[@]}"} ;;
+    *) die "the dist start mode has no compose $verb" ;;
+  esac
+}
+
 mcp_client() {
   node "$MCP_CALL" --repo "$REPO" --run "$RUN" --url "$MCP_URL" \
-    --project "$MCP_PROJECT" --image "$MCP_IMAGE" --origin "$ORIGIN" --server-port "$SERVER_PORT" "$@"
+    --project "${MCP_PROJECT:-}" --image "${MCP_IMAGE:-}" --origin "$ORIGIN" --server-port "$SERVER_PORT" "$@"
+}
+
+mcp_tokens() {
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/metrics-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/executor-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/renderer-token")
 }
 
 mcp_up() {
   load_run
   mkdir -m 700 "$RUN/staging"
+  if [[ "${MCP_FROM:-image}" == dist ]]; then
+    mcp_tokens
+    node "$MCP_PROCESSES" ports "$RUN" >>"$RUN/run.env" || die "cannot choose MCP role ports; run: verify-uvw down"
+    node "$MCP_PROCESSES" start "$RUN" || die "MCP roles not ready; see $RUN/logs/mcp-*.log and run: verify-uvw down"
+    return
+  fi
   docker run --rm -v "$RUN/staging:/staging" --entrypoint sh node:24-bookworm-slim -c 'chown 1000:1000 /staging && chmod 700 /staging' >"$RUN/logs/staging-setup.log" 2>&1
   local digest
   digest="$(mcp_digest)"
@@ -121,47 +154,27 @@ mcp_up() {
   MCP_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$MCP_IMAGE")"
   printf 'MCP_IMAGE_ID=%s\n' "$MCP_IMAGE_ID" >>"$RUN/run.env"
   node -e 'const fs=require("node:fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.image_id=process.argv[2];fs.writeFileSync(p,JSON.stringify(v,null,2)+"\n")' "$RUN/mcp-build.json" "$MCP_IMAGE_ID"
-  (umask 077 && openssl rand -hex 24 >"$RUN/home/metrics-token")
-  (umask 077 && openssl rand -hex 24 >"$RUN/home/executor-token")
-  (umask 077 && openssl rand -hex 24 >"$RUN/home/renderer-token")
+  mcp_tokens
   mcp_compose up -d --wait --wait-timeout 60 \
     || die "MCP gateway not ready; see compose logs and run: verify-uvw down"
   wait_http "http://127.0.0.1:$MCP_PORT/healthz" 60 || die "MCP healthz failed; run: verify-uvw down"
 }
 
 mcp_doctor() {
-  local renderer_cid
-  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "${MCP_EXECUTORS:-1}" "${MCP_PRODUCTION:-0}" "${MCP_RENDERER:-1}" || bad "MCP executor checks failed"
+  local renderer_cid from="${MCP_FROM:-image}" transport="http://host.docker.internal:$SERVER_PORT"
+  [[ "$from" == image ]] || transport="http://127.0.0.1:$SERVER_PORT"
+  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "${MCP_PROJECT:-}" "${MCP_IMAGE:-}" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "${MCP_EXECUTORS:-1}" "${MCP_PRODUCTION:-0}" "${MCP_RENDERER:-1}" "$from" "$transport" || bad "MCP executor checks failed"
   if [[ "${MCP_RENDERER:-1}" == 1 ]]; then
-    node "$REPO/.agents/skills/verify-uvw/bin/renderer-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP renderer checks failed"
+    node "$REPO/.agents/skills/verify-uvw/bin/renderer-doctor.mjs" "$REPO" "$RUN" "${MCP_PROJECT:-}" "${MCP_IMAGE:-}" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "$from" "$transport" || bad "MCP renderer checks failed"
   elif renderer_cid="$(mcp_compose ps -aq renderer)" && [[ -z "$renderer_cid" ]]; then
     ok "MCP renderer disabled; renderer checks skipped and no renderer container exists"
   else bad "MCP renderer disabled but container exists"; fi
   if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
     ok "MCP staging directory is private and owned by the gateway uid"
   else bad "MCP staging directory is missing or unsafe"; fi
-  local engine digest cid inspect mapping gateway_logs who auth=dev
+  local gateway_logs who auth=dev
   [[ "${MCP_PRODUCTION:-0}" != 1 ]] || auth=pat
-  if engine="$(node "$BIN/mcp-engine.mjs")"; then
-    ok "MCP container engine is $engine"
-  else bad "MCP needs macOS Docker Desktop or OrbStack; found $engine"; fi
-  if digest="$(mcp_digest)" && node -e 'const fs=require("node:fs");process.exit(JSON.parse(fs.readFileSync(process.argv[1])).source_digest===process.argv[2]?0:1)' "$RUN/mcp-build.json" "$digest" 2>/dev/null; then
-    ok "MCP image matches build inputs"
-  else bad "MCP image is stale or build record missing: down, then up"; fi
-  if cid="$(mcp_compose ps -q gateway 2>/dev/null)" && [[ -n "$cid" ]] && inspect="$(docker inspect "$cid" 2>/dev/null)"; then
-    if node -e 'const c=JSON.parse(process.argv[1])[0];process.exit(c.State.Running&&c.State.Health?.Status==="healthy"&&c.Image===process.argv[2]?0:1)' "$inspect" "${MCP_IMAGE_ID:-}"; then
-      ok "MCP gateway is healthy and uses this run's image"
-    else bad "MCP gateway state or image mismatch: down, then up"; fi
-    if node -e 'const e=JSON.parse(process.argv[1])[0].Config.Env;process.exit(e.includes("WORKSPACE_ORIGIN="+process.argv[2])&&e.includes("WORKSPACE_TRANSPORT_URL=http://host.docker.internal:"+process.argv[3])?0:1)' "$inspect" "$ORIGIN" "$SERVER_PORT"; then
-      ok "MCP identity origin and Workspace transport match this run"
-    else bad "MCP configuration drift: down, then up"; fi
-  else
-    bad "MCP cannot inspect gateway: down, then up"
-    bad "MCP cannot verify container configuration: down, then up"
-  fi
-  if mapping="$(mcp_compose port gateway 3000 2>/dev/null)" && [[ "$mapping" == "127.0.0.1:$MCP_PORT" ]] && curl -fsS -o /dev/null "http://127.0.0.1:$MCP_PORT/healthz"; then
-    ok "MCP loopback port mapping and healthz match this run"
-  else bad "MCP port is occupied or mapped incorrectly"; fi
+  if [[ "$from" == dist ]]; then mcp_doctor_processes; else mcp_doctor_containers; fi
   if mcp_compose exec -T gateway node -e 'fetch(process.env.WORKSPACE_TRANSPORT_URL+"/api/session").then(r=>process.exit(r.status===200?0:1),()=>process.exit(1))' >/dev/null 2>&1; then
     ok "MCP container reaches this run's Workspace"
   else bad "MCP container cannot reach host Workspace; see local-verification section 2.1"; fi
@@ -189,6 +202,41 @@ mcp_doctor() {
       ok "Workspace server logs contain no PAT or gateway client secret"
     else bad "MCP cannot verify Workspace server logs are free of PAT and gateway client secret; blocking defect"; fi
   fi
+}
+
+# The image and its containers, which the dist start mode does not have.
+mcp_doctor_containers() {
+  local engine digest cid inspect mapping
+  if engine="$(node "$BIN/mcp-engine.mjs")"; then
+    ok "MCP container engine is $engine"
+  else bad "MCP needs macOS Docker Desktop or OrbStack; found $engine"; fi
+  if digest="$(mcp_digest)" && node -e 'const fs=require("node:fs");process.exit(JSON.parse(fs.readFileSync(process.argv[1])).source_digest===process.argv[2]?0:1)' "$RUN/mcp-build.json" "$digest" 2>/dev/null; then
+    ok "MCP image matches build inputs"
+  else bad "MCP image is stale or build record missing: down, then up"; fi
+  if cid="$(mcp_compose ps -q gateway 2>/dev/null)" && [[ -n "$cid" ]] && inspect="$(docker inspect "$cid" 2>/dev/null)"; then
+    if node -e 'const c=JSON.parse(process.argv[1])[0];process.exit(c.State.Running&&c.State.Health?.Status==="healthy"&&c.Image===process.argv[2]?0:1)' "$inspect" "${MCP_IMAGE_ID:-}"; then
+      ok "MCP gateway is healthy and uses this run's image"
+    else bad "MCP gateway state or image mismatch: down, then up"; fi
+    if node -e 'const e=JSON.parse(process.argv[1])[0].Config.Env;process.exit(e.includes("WORKSPACE_ORIGIN="+process.argv[2])&&e.includes("WORKSPACE_TRANSPORT_URL=http://host.docker.internal:"+process.argv[3])?0:1)' "$inspect" "$ORIGIN" "$SERVER_PORT"; then
+      ok "MCP identity origin and Workspace transport match this run"
+    else bad "MCP configuration drift: down, then up"; fi
+  else
+    bad "MCP cannot inspect gateway: down, then up"
+    bad "MCP cannot verify container configuration: down, then up"
+  fi
+  if mapping="$(mcp_compose port gateway 3000 2>/dev/null)" && [[ "$mapping" == "127.0.0.1:$MCP_PORT" ]] && curl -fsS -o /dev/null "http://127.0.0.1:$MCP_PORT/healthz"; then
+    ok "MCP loopback port mapping and healthz match this run"
+  else bad "MCP port is occupied or mapped incorrectly"; fi
+}
+
+mcp_doctor_processes() {
+  local check pid
+  for check in "container engine" "image digest" "gateway container health and image" "container identity origin and Workspace transport" "loopback port mapping"; do
+    echo "skip  MCP $check: dist start mode has no container"
+  done
+  if pid="$(mcp_compose ps -q gateway)" && [[ -n "$pid" && "$(listener_pid "$MCP_PORT")" == "$pid" ]] && curl -fsS -o /dev/null "http://127.0.0.1:$MCP_PORT/healthz"; then
+    ok "MCP gateway port $MCP_PORT is owned by this run's gateway (pid $pid) and healthz answers"
+  else bad "MCP gateway port $MCP_PORT is not owned by this run's gateway, or healthz fails: down, then up"; fi
 }
 
 mcp_user() {
@@ -246,6 +294,15 @@ JS
 }
 
 mcp_down() {
+  if [[ "${MCP_FROM:-image}" == dist ]]; then
+    local clean=1
+    # The roles already write logs/mcp-<role>.log, so stopping them keeps their logs.
+    node "$MCP_PROCESSES" stop "$RUN" || clean=0
+    rm -rf "$RUN/staging"
+    [[ ! -e "$RUN/staging" ]] || { clean=0; echo "warning: staging directory remains" >&2; }
+    [[ "$clean" != 1 ]] || echo "ok    MCP resources removed"
+    return
+  fi
   mcp_compose logs --no-color --timestamps gateway >"$RUN/logs/mcp-gateway.log" 2>&1 || echo "warning: cannot save MCP logs" >&2
   mcp_compose logs --no-color --timestamps executor executor-b >"$RUN/logs/mcp-executor.log" 2>&1 || echo "warning: cannot save executor logs" >&2
   mcp_compose logs --no-color --timestamps renderer >"$RUN/logs/mcp-renderer.log" 2>&1 || echo "warning: cannot save renderer logs" >&2
@@ -484,8 +541,25 @@ cmd_agent_down() {
   fi
 }
 
+mcp_dist_fresh() {
+  [[ -f "$REPO/apps/mcp/dist/main.js" && -z "$(find "$REPO/apps/mcp/src" -newer "$REPO/apps/mcp/dist/main.js" -type f -print -quit)" ]]
+}
+
 cmd_up() {
-  [[ $# == 0 || ( $# == 1 && "$1" == --reuse ) ]] || die "usage: verify-uvw up [--reuse]"
+  local usage="usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]]" reuse="" mode_env line
+  [[ "${1:-}" != --reuse ]] || { reuse=1; shift; }
+  if [[ "${1:-}" == --for ]]; then
+    shift
+    [[ $# -ge 1 ]] || die "$usage"
+    # The journeys' declared mode wins over these flags in the caller's environment.
+    mode_env="$(node "$BIN/journeys.mjs" up-env "$@")" || exit $?
+    while IFS= read -r line; do export "$line"; done <<<"$mode_env"
+    set --
+  fi
+  [[ $# == 0 ]] || die "$usage"
+  local mcp_from="${VERIFY_UVW_MCP_FROM:-image}"
+  [[ "$mcp_from" == image || "$mcp_from" == dist ]] || die "VERIFY_UVW_MCP_FROM must be image or dist"
+  [[ "$mcp_from" == image || "${VERIFY_UVW_RUNNER:-0}" == 1 ]] || die "the dist start mode runs only inside the verify runner"
   deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
   cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
   local server_port="${VERIFY_UVW_SERVER_PORT:-3920}" web_port="${VERIFY_UVW_WEB_PORT:-5973}"
@@ -501,13 +575,17 @@ cmd_up() {
   if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
     mcp_enabled=1
     [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "MCP run id must match ^[a-z0-9][a-z0-9_-]*$; choose VERIFY_UVW_RUN"
-    engine="$(node "$BIN/mcp-engine.mjs")" || die "MCP verification requires macOS Docker Desktop or OrbStack; found $engine"
+    if [[ "$mcp_from" == image ]]; then
+      engine="$(node "$BIN/mcp-engine.mjs")" || die "MCP verification requires macOS Docker Desktop or OrbStack; found $engine"
+    else
+      mcp_dist_fresh || die "MCP build is stale; run: pnpm --filter '@univerjs/univer-workspace-mcp...' build"
+    fi
     [[ "$mcp_port" =~ ^[0-9]+$ && "$mcp_port" -ge 1 && "$mcp_port" -le 65535 ]] || die "choose VERIFY_UVW_MCP_PORT between 1 and 65535"
     [[ "$mcp_port" != "$server_port" && "$mcp_port" != "$web_port" && -z "$(listener_pid "$mcp_port")" ]] || die "MCP port $mcp_port is occupied; choose VERIFY_UVW_MCP_PORT"
   fi
   local run="$ROOT/$id"
   if [[ -e "$run" ]]; then
-    [[ "${1:-}" == --reuse && -f "$run/run.env" && ! -d "$run/data" && ! -d "$run/home" ]] \
+    [[ -n "$reuse" && -f "$run/run.env" && ! -d "$run/data" && ! -d "$run/home" ]] \
       || die "$run already exists; down first, then up --reuse to retain evidence"
     [[ ! -f "$run/user.env" ]] || unlink "$run/user.env"
   fi
@@ -516,7 +594,15 @@ cmd_up() {
     [[ "$agent_port" =~ ^[0-9]+$ && "$agent_port" -ge 1 && "$agent_port" -le 65535 ]] || die "choose VERIFY_UVW_AGENT_PORT between 1 and 65535"
     [[ "$agent_port" != "$server_port" && "$agent_port" != "$web_port" && ( "$mcp_enabled" != 1 || "$agent_port" != "$mcp_port" ) && -z "$(listener_pid "$agent_port")" ]] || die "Agent port $agent_port is occupied or shared with this run"
   fi
-  mkdir -p "$run"/{data,home,logs,evidence}
+  mkdir -p "$run"/{data,home}
+  # The verify runner points this at a host mount, so evidence and logs leave its container as they are written.
+  if [[ -n "${VERIFY_UVW_EVIDENCE_ROOT:-}" ]]; then
+    local kept="$VERIFY_UVW_EVIDENCE_ROOT/$id" d
+    mkdir -p "$kept"/{logs,evidence}
+    for d in logs evidence; do [[ -e "$run/$d" ]] || ln -s "$kept/$d" "$run/$d"; done
+  else
+    mkdir -p "$run"/{logs,evidence}
+  fi
   (umask 077 && openssl rand -hex 24 >"$run/home/workspace-metrics-token")
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
@@ -561,11 +647,15 @@ GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
 EOF
   printf 'MCP_ENABLED=%s\n' "$mcp_enabled" >>"$run/run.env"
   if [[ "$mcp_enabled" == 1 ]]; then
-    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
+    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SAME_ORIGIN=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${VERIFY_UVW_MCP_SAME_ORIGIN:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
     [[ ! -f "$run/executor-allowed-user-ids" ]] || unlink "$run/executor-allowed-user-ids"
     [[ "${VERIFY_UVW_MCP_PRODUCTION:-0}" != 1 ]] || printf 'verify-uvw-pending-user\n' >"$run/executor-allowed-user-ids"
     [[ -z "${VERIFY_UVW_MCP_BUILD_CONTEXT:-}" ]] || printf 'MCP_BUILD_CONTEXT=%s\n' "$(cd "$VERIFY_UVW_MCP_BUILD_CONTEXT" && pwd)" >>"$run/run.env"
-    printf 'MCP_PORT=%s\nMCP_PUBLIC_URL=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$mcp_public_url" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
+    if [[ "$mcp_from" == dist ]]; then
+      printf 'MCP_FROM=dist\nMCP_PORT=%s\nMCP_PUBLIC_URL=%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$mcp_public_url" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
+    else
+      printf 'MCP_PORT=%s\nMCP_PUBLIC_URL=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$mcp_public_url" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
+    fi
   fi
   ln -sfn "$run" "$ROOT/current"
   UNIVER_HOME="$run/home" node "$CLI_MAIN" config set workspace.origin "http://127.0.0.1:$web_port" >/dev/null \
@@ -658,6 +748,7 @@ cmd_env() {
   load_run
   cat <<EOF
 export VERIFY_UVW_RUN=$RUN_ID
+export RUN=$RUN
 export UNIVER_HOME=$UNIVER_HOME
 export AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION
 export ORIGIN=$ORIGIN
@@ -666,8 +757,8 @@ EOF
   if [[ "${MCP_ENABLED:-0}" == 1 ]]; then
     cat <<EOF
 export MCP_URL=$MCP_URL
-export MCP_PROJECT=$MCP_PROJECT
-export MCP_IMAGE=$MCP_IMAGE
+export MCP_PROJECT=${MCP_PROJECT:-}
+export MCP_IMAGE=${MCP_IMAGE:-}
 export MCP_OPENCODE_DIR=$(cat "$RUN/home/opencode-dir" 2>/dev/null || true)
 export MCP_OPENCODE_MODEL=$OPENCODE_MODEL
 # opencode: (cd "\$MCP_OPENCODE_DIR" && opencode run --format json -m "\$MCP_OPENCODE_MODEL" "<prompt>" < /dev/null)
@@ -675,26 +766,28 @@ EOF
   fi
 }
 
-cmd_brief() { # feature [journey-id...]: the text to hand an agent that drives this run
-  [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id...]"
+cmd_brief() { # feature [journey-id|mode...]: the text to hand an agent that drives a run, from journeys.mjs
+  [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id|mode...]"
   load_run
-  local feature="$1"; shift
-  [[ -f "$BIN/../features/$feature.md" ]] || die "no .agents/skills/verify-uvw/features/$feature.md"
-  local steps="every step" ids="$*"
-  [[ -z "$ids" ]] || steps="${ids// /, } as written, and skip its other steps"
-  cat <<EOF
-Follow a written recipe against a Univer Workspace instance that is already running, and report what happened.
+  exec node "$BIN/journeys.mjs" brief --repo "$REPO" --root "$ROOT" --run-id "$RUN_ID" "$@"
+}
 
-Work from $REPO. Start every shell command with this line. It selects the instance:
+cmd_journeys() { # feature [journey-id|mode...]: the plan before up, this run's coverage after; exit 1 while it is INCOMPLETE
+  local run
+  if run="$(run_dir 2>/dev/null)"; then exec node "$BIN/journeys.mjs" list --run "$run" "$@"; fi
+  exec node "$BIN/journeys.mjs" list "$@"
+}
 
-export VERIFY_UVW_ROOT=$ROOT VERIFY_UVW_RUN=$RUN_ID; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "\$(\$V env)"
+cmd_verdict() { # journey-id PASS|FAIL|DRIFT|BLOCKED [note]: append this run's verdict for one journey
+  local run
+  run="$(run_dir)"
+  exec node "$BIN/journeys.mjs" verdict --run "$run" "$@"
+}
 
-1. Read the Drive and Evidence sections of .agents/skills/verify-uvw/SKILL.md, then .agents/skills/verify-uvw/features/README.md.
-2. Follow .agents/skills/verify-uvw/features/$feature.md. Set up its preconditions, then run $steps.
-3. Reply with one line per step, \`<step>: PASS\` or \`<step>: FAIL\`. After each line give the values you read from the command output and the evidence files, not the values the recipe expects. End with \`RESULT: PASS\` when every step matched the recipe, and with \`RESULT: ISSUES\` when any step did not.
-
-Do not run \`up\`, \`down\` or \`user\`. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next step.
-EOF
+cmd_run_journeys() { # [--again] feature [journey-id|mode...]: run the helper journeys' blocks as written and record their checks
+  local run
+  run="$(run_dir)"
+  exec node "$BIN/journeys.mjs" run --run "$run" "$@"
 }
 
 cmd_metrics() { # the Workspace server's /metrics; the token goes through stdin, never argv
@@ -741,7 +834,8 @@ cmd_down() {
   done
   stop_pid "$SERVER_PID" "server/src/main.ts"
   stop_pid "$WEB_PID" "vite.js"
-  rm -rf "$RUN/data" "$RUN/home" "$RUN/user.pw"
+  # journeys/ holds the recipe variables run-journeys carries between journeys, passwords included.
+  rm -rf "$RUN/data" "$RUN/home" "$RUN/user.pw" "$RUN/journeys"
   [[ "$(readlink "$ROOT/current" 2>/dev/null)" != "$RUN" ]] || rm -f "$ROOT/current"
   echo "stopped run $RUN_ID; kept $RUN/evidence and $RUN/logs"
 }
@@ -756,6 +850,9 @@ case "${1:-}" in
   open-anon) shift; cmd_open_anon "$@" ;;
   env) shift; cmd_env "$@" ;;
   brief) shift; cmd_brief "$@" ;;
+  journeys) shift; cmd_journeys "$@" ;;
+  verdict) shift; cmd_verdict "$@" ;;
+  run-journeys) shift; cmd_run_journeys "$@" ;;
   metrics) shift; cmd_metrics "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;

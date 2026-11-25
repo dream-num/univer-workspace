@@ -26,33 +26,50 @@ Preconditions:
 - Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 - No file named `Verify Budget` exists.
 
-- **Open the New menu.** Run `agent-browser find role button click --name "New Create a document to start collaborating"`.
-  A menu lists `Document`, `Spreadsheet`, `Presentation`, `Board`, `Base`, `PDF`, `Group`. The sidebar `New`
-  menu lists `Document`, `Sheet`, `Slides`, `Board`, `Base`, `PDF`, `Upload file` and `Folder`.
-- **Choose and name.** Run `agent-browser find role menuitem click --name "Spreadsheet"`,
-  then `agent-browser find label "Document name" fill "Verify Budget"`, then
-  `agent-browser find role button click --name "Create" --exact`. The URL becomes
-  `$ORIGIN/nodes/<nodeId>`, the heading reads `Verify Budget`, and the sidebar lists it.
-- **Wait for the editor.** Run `agent-browser wait canvas`, then `agent-browser wait 3000`.
-  The `Start`/`Insert`/`Formulas` ribbon is visible and A1 is selected.
+### CD1. Open the New menu
+
+Run `agent-browser find role button click --name "New Create a document to start collaborating"`.
+A menu lists `Document`, `Spreadsheet`, `Presentation`, `Board`, `Base`, `PDF`, `Group`. The sidebar `New`
+menu lists `Document`, `Sheet`, `Slides`, `Board`, `Base`, `PDF`, `Upload file` and `Folder`.
+
+### CD2. Choose and name
+
+Run `agent-browser find role menuitem click --name "Spreadsheet"`,
+then `agent-browser find label "Document name" fill "Verify Budget"`, then
+`agent-browser find role button click --name "Create" --exact`. The URL becomes
+`$ORIGIN/nodes/<nodeId>`, the heading reads `Verify Budget`, and the sidebar lists it.
+
+### CD3. Wait for the editor
+
+Run `agent-browser wait canvas`, then `agent-browser wait 3000`.
+The `Start`/`Insert`/`Formulas` ribbon is visible and A1 is selected.
+
+### CD4. Edit cells and persist
+
 - **Edit cells.** Run `agent-browser keyboard type "Rent"`, `agent-browser press Tab`,
   `agent-browser keyboard type "1200"`, `agent-browser press Enter`, then
   `agent-browser wait 2000` so the changeset syncs.
 - **Persist.** Run `agent-browser reload`, `agent-browser wait canvas`, `agent-browser wait 4000`,
   then `agent-browser screenshot "$EVIDENCE/doc-edit-sheet-reload.png"`. A1 shows `Rent` and
   B1 shows `1200`.
-- **CLI readback.** Run `$V cli doc-find space find "Verify Budget" --space "verify-$VERIFY_UVW_RUN/personal" --json`
-  and take `nodes[0].resource.unitId`. Then run
-  `$V cli doc-readback-cli inspect range A1:B1 --unit <unitId> --trunk --worksheet index:1`.
-  Output shows `"Rent"	"1200"`.
-- **Sidebar entry.** Run this after the Sheet steps: it leaves the browser on the new Slides page.
-  Run `agent-browser find role button click --name "New" --exact --nth 0`,
-  then `agent-browser find role menuitem click --name "Slides"`. A dialog `Create Slides` has
-  a `File name` textbox (default `Untitled Slides`). Run
-  `agent-browser find label "File name" fill "Sidebar Slides"` and
-  `agent-browser find role button click --name "Create" --exact`. The URL becomes `$ORIGIN/nodes/<nodeId>`, a
-  `File created` toast shows, and `$V cli doc-new-sidebar-find space find "Sidebar Slides" --space "verify-$VERIFY_UVW_RUN/personal" --json`
-  returns a node with `unitType: "slide"` and `path: "/Sidebar Slides"`.
+
+### CD5. CLI readback
+
+Run `$V cli doc-find space find "Verify Budget" --space "verify-$VERIFY_UVW_RUN/personal" --json`
+and take `nodes[0].resource.unitId`. Then run
+`$V cli doc-readback-cli inspect range A1:B1 --unit <unitId> --trunk --worksheet index:1`.
+Output shows `"Rent"	"1200"`.
+
+### CD6. Sidebar entry
+
+Run this after the Sheet steps: it leaves the browser on the new Slides page.
+Run `agent-browser find role button click --name "New" --exact --nth 0`,
+then `agent-browser find role menuitem click --name "Slides"`. A dialog `Create Slides` has
+a `File name` textbox (default `Untitled Slides`). Run
+`agent-browser find label "File name" fill "Sidebar Slides"` and
+`agent-browser find role button click --name "Create" --exact`. The URL becomes `$ORIGIN/nodes/<nodeId>`, a
+`File created` toast shows, and `$V cli doc-new-sidebar-find space find "Sidebar Slides" --space "verify-$VERIFY_UVW_RUN/personal" --json`
+returns a node with `unitType: "slide"` and `path: "/Sidebar Slides"`.
 
 ## Gotchas
 

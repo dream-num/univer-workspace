@@ -30,8 +30,9 @@ operations exist in `uvw`.
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
@@ -43,6 +44,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 ```
 
 ### MS1. Seed files
+
+Run: helper.
 
 A folder, an uploaded file and a merged sheet in the Team Space from the setup above.
 
@@ -68,6 +71,8 @@ reuse `T`, `FOLDER`, `BLOB`, `O` and the Team Space ID.
 
 ### MS2. Space browse
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets all mcp-space-browse space_browse "{\"repo\":\"$O/verify-team\"}"
 $V cli mcp-space-browse-cli space browse "$O/verify-team" --json
@@ -92,6 +97,8 @@ fails in both with the same code (`workspace-argument-invalid`).
 
 ### MS3. Space find
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets all mcp-space-find space_find "{\"repo\":\"$O/verify-team\",\"query\":\"budget\"}"
 $V cli mcp-space-find-cli space find budget --space "$O/verify-team" --json
@@ -104,6 +111,8 @@ Pass when both exit 0, the diff is empty, exactly the `Budget` sheet is found, a
 carries the Team Space ID.
 
 ### MS4. Repository create, edit and rename
+
+Run: helper.
 
 ```bash
 $V mcp --toolsets all mcp-repo-new repo_create '{"slug":"mcp-admin","name":"MCP Admin","description":"Created by MCP"}'
@@ -154,6 +163,8 @@ resolves; events carry the new Space ID.
 
 ### MS5. Labels
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets all mcp-label-list label_list "{\"repo\":\"$O/verify-team\"}"
 $V cli mcp-label-list-cli label list -R "$O/verify-team" --json
@@ -183,6 +194,8 @@ view of it, the deleted label is gone from the CLI list, `create` without `color
 
 ### MS6. Unit create in a pull request, and unit list
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets all mcp-ms-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"MCP units\"}"
 WB=$(jq -r '.id' "$EVIDENCE/mcp-ms-pr.out")
@@ -209,6 +222,8 @@ Space ID (the first from the `space` argument, the second from the Worktree).
 
 ### MS7. Unit add of an existing file
 
+Run: helper.
+
 ```bash
 RES=$(jq -r '.nodes[0].resource.resourceId' "$EVIDENCE/mcp-space-find.out")
 $V cli mcp-ms-add-pr pr create -R "$O/verify-team" -t "Add existing" --json
@@ -227,6 +242,8 @@ Resource ID from MS3, added to its own pull request `AN` (discarded in MS10).
 
 ### MS8. Blob get
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets files mcp-blob-get blob_get "{\"resource\":\"$BLOB\"}"
 $V cli mcp-blob-get-cli blob get "$BLOB" --json
@@ -239,6 +256,8 @@ Pass when both exit 0, the results are equal without `node.url`, the Blob is 9 b
 records the `files` toolset and the Team Space ID.
 
 ### MS9. Node create, rename, move and trash
+
+Run: helper.
 
 ```bash
 $V mcp --toolsets all mcp-node-create space_node "{\"action\":\"create\",\"repo\":\"$O/verify-team\",\"name\":\"Reports\",\"parent\":\"$FOLDER\"}"
@@ -273,6 +292,8 @@ code, the trashed Node leaves the CLI browse, and each event carries the Team Sp
 
 ### MS10. Merge and discard
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets all mcp-ms-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$NB\"}"
 $V mcp --toolsets all mcp-pr-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NB\"}"
@@ -301,6 +322,8 @@ without `url`, the merged Unit appears in the Space as `Forecast`, merging a sec
 succeeds in MCP and CLI and returns the same merged pull request, and the events carry the Team Space ID.
 
 ### MS11. End-to-end product journey
+
+Run: helper.
 
 An agent files an Issue, opens a pull request, adds a sheet and hands it over.
 
@@ -341,6 +364,8 @@ hands the `PR_URL` to the user and does not merge.
 
 ### MC1. Resource registries
 
+Run: helper.
+
 ```bash
 $V mcp --toolsets all mcp-res-registries resources_registries '{}'
 $V cli mcp-res-registries-cli resources registries --json
@@ -353,6 +378,8 @@ Pass when both exit 0, the diff is empty and the event is `ok` without a reposit
 nothing for this call: it reads the catalog manifest from `@univerjs-pro/cli-assets`.
 
 ### MC2. Resource find
+
+Run: helper.
 
 ```bash
 $V mcp --toolsets all mcp-res-find resources_find '{"query":"arrow","registry":"example-openmoji-color","limit":3}'
@@ -369,6 +396,8 @@ jq -e '.limit == 30' "$EVIDENCE/mcp-res-find-default.out"
 Pass when every command exits 0, both diffs are empty, the first call returns three resources of one registry, and the default limit is 30.
 
 ### MC3. Resource export
+
+Run: helper.
 
 ```bash
 H1=$(jq -r '.resources[0].handle' "$EVIDENCE/mcp-res-find.out")
@@ -394,6 +423,8 @@ Pass when every command exits 0, the MCP text of each SVG equals the file the CL
 (`MCP_RESOURCE_CACHE_DIRECTORY`, default under the container's temporary directory); it needs network access to the catalog hosts.
 
 ### MC4. Resource errors
+
+Run: helper.
 
 ```bash
 $V mcp --toolsets all mcp-res-export-bad resources_export "{\"handles\":[\"bad\",\"$H1\",\"example-openmoji-color/zzzz\"]}"

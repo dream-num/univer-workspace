@@ -21,13 +21,15 @@ the opencode client and cleanup. Each tool family has its own `mcp-*.md` file in
 ## How to get to it (user POV)
 
 Use `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root on macOS
-Docker Desktop or OrbStack. Start with `VERIFY_UVW_MCP=1 $V up`, then `$V user`. The gateway
+Docker Desktop or OrbStack. Start with `$V up --for mcp`, then `$V user`. The gateway
 publishes `http://127.0.0.1:3930/mcp`. Parallel runs need their own root and all three
 ports. `eval "$($V env)"` provides the MCP URL and the isolated opencode directory.
 [MCP mode](../references/mcp-mode.md) lists the `up` variables, the `mcp` commands and their evidence
 and exit codes.
 
 ## Driving it with agent-browser and uvw
+
+Mode: mcp.
 
 Use Bash for these commands. Prerequisites are the baseline CLI build and dependencies,
 Docker Desktop or OrbStack, `jq`, and opencode for M11. Each MCP call
@@ -36,19 +38,23 @@ M4 creates the Team Space `verify-team` that the other MCP files reuse.
 
 ### M1. Environment
 
+Run: helper.
+
 ```bash
-VERIFY_UVW_MCP=1 $V up
-$V user
 eval "$($V env)"
 RUN="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN"
 $V doctor > "$EVIDENCE/mcp-doctor.txt"
 echo $? > "$EVIDENCE/mcp-doctor.exit"
+test "$(cat "$EVIDENCE/mcp-doctor.exit")" = 0
+grep FAIL "$EVIDENCE/mcp-doctor.txt"; test $? -eq 1
 ```
 
 Pass when doctor exits 0, has no `FAIL` lines, and prints an `ok` for every MCP check
 in [local verification section 6.2](../../../../docs/design/workspace-mcp/local-verification.zh-CN.md).
 
 ### M2. Identity, new protocol
+
+Run: helper.
 
 ```bash
 $V mcp mcp-whoami whoami
@@ -63,6 +69,8 @@ Pass when both commands exit 0, subjects match, identity origin equals `$ORIGIN`
 
 ### M3. Identity, old protocol
 
+Run: helper.
+
 ```bash
 $V mcp --protocol 2025-11-25 mcp-whoami-legacy whoami
 jq -e '.protocolVersion == "2025-11-25"' "$EVIDENCE/mcp-whoami-legacy.result.json"
@@ -74,6 +82,8 @@ Pass when the command exits 0, the result records 2025-11-25, identity matches M
 and the event has a null client name.
 
 ### M4. Repository list
+
+Run: helper.
 
 Create a Team Space as in [Issues](issues.md).
 
@@ -90,6 +100,8 @@ Pass when commands exit 0, the diff is empty, and the list includes Personal and
 
 ### M5. Repository details
 
+Run: helper.
+
 ```bash
 for slug in personal verify-team; do
   $V mcp "mcp-repo-$slug" repo_view "{\"repo\":\"$O/$slug\"}"
@@ -102,6 +114,8 @@ Pass when both tools and both CLI calls exit 0, and both diffs are empty. Put th
 repository before `--json`, which otherwise consumes it as a field list.
 
 ### M6. Tool failure
+
+Run: helper.
 
 ```bash
 $V mcp mcp-repo-missing repo_view "{\"repo\":\"$O/no-such-repo\"}"
@@ -118,6 +132,8 @@ and the event records `tool_error` with the same code.
 
 ### M7. Tool lists
 
+Run: helper.
+
 Needs the renderer; MB1 checks the lists of a run without one.
 
 ```bash
@@ -128,7 +144,7 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","pr_merge","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
+CORE='["whoami","repo_list","repo_view","fork_create","fork_list","fork_view","fork_delete","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","pr_merge","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
 ADMIN='["repo_create","repo_edit","repo_member_list","repo_member_write","label_list","label_write","space_node","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
@@ -139,12 +155,12 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|repo_member_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|share|unit_(add|create)|file_upload_create|skill_draft_create|blob_upload|html_view_save|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(repo_edit|repo_member_write|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|fork_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|repo_member_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(fork_create|issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|share|unit_(add|create)|file_upload_create|skill_draft_create|blob_upload|html_view_save|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(fork_delete|repo_edit|repo_member_write|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:43]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:47]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.[] | select(.name == "pr_discard") | .description | contains("Unless the user explicitly asked")' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.[] | select(.name == "pr_merge") | .description | contains("The server instructions say when to merge")' "$EVIDENCE/mcp-tools-core.out"
@@ -155,13 +171,15 @@ jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.pro
 
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
-destructive: `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard`, `blob_replace`); the core list equals the
-first 43 tools of `all`; the immediate-effect descriptions, the leave-to-the-user `pr_discard` description and the
+destructive: `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard`, `blob_replace`); the core list equals the
+first 47 tools of `all`; the immediate-effect descriptions, the leave-to-the-user `pr_discard` description and the
 `pr_merge` description that defers to the server instructions are present; no tool description
 names `uvw`; the 12 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 ### M8. Authentication
+
+Run: helper.
 
 ```bash
 for protocol in 2026-07-28 2025-11-25; do
@@ -179,6 +197,8 @@ No usage event is expected because authentication rejects the handshake.
 
 ### M9. Origin check
 
+Run: helper.
+
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' -H 'Origin: http://evil.example' \
   -H "Authorization: Bearer $(cat "$RUN/home/mcp-session")" -X POST "$MCP_URL" > "$EVIDENCE/mcp-origin.txt"
@@ -188,6 +208,8 @@ test "$(cat "$EVIDENCE/mcp-origin.txt")" = 403
 Pass when the response is 403.
 
 ### M10. Production refusal
+
+Run: helper.
 
 ```bash
 cid=$(docker run -d --network none --label "com.docker.compose.project=$MCP_PROJECT" \

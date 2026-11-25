@@ -25,8 +25,9 @@ owner reviews the draft at `/drafts/<id>` in the browser. A reviewer opens the p
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
@@ -35,6 +36,8 @@ O=verify-$VERIFY_UVW_RUN
 ```
 
 ### MHV1. HTML View validation parity over a populated trunk Sheet
+
+Run: helper.
 
 ```bash
 $V mcp mh-repo repo_view "{\"repo\":\"$O/personal\"}"
@@ -59,6 +62,8 @@ Pass when the Sheet is merged with data and MCP and CLI validation results match
 
 ### MHV2. Missing HTML View source parity
 
+Run: helper.
+
 ```bash
 printf '<output data-univer-cell-text="missing-html-sheet:missing:A1"></output>\n' > "$EVIDENCE/mh-missing.univer.html"
 $V mcp mh-missing html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html,dryRun:true}')"
@@ -73,6 +78,8 @@ jq -e --arg code "$MH_CODE" '.outcome == "tool_error" and .error_code == $code' 
 Pass when both clients preserve the same missing-source code.
 
 ### MHV3. Save, retry, revise and read back the pending HTML View draft
+
+Run: helper.
 
 ```bash
 MH_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" --arg space "$MH_SPACE" --arg key "html-view-$VERIFY_UVW_RUN-$MH_U" '{html:$html,space:$space,name:"Regional totals",idempotency_key:$key}')
@@ -103,6 +110,8 @@ and revising by draft creates a new pending draft and supersedes the old one. Th
 return the revised HTML byte for byte without an ETag. All calls pass the helper's usage-event checks.
 
 ### MHV4. Preview, publish and read back the revised HTML View
+
+Run: helper.
 
 ```bash
 agent-browser open "$ORIGIN/login"
@@ -361,7 +370,7 @@ $V mcp --as pagebot mpa-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mpa-claim.out` in the run browser and click `Claim agent`, then replace the code in
-`mpa-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. The agent then works alone:
+`mpa-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. The agent then works alone:
 
 ```bash
 curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PUT -H 'content-type: application/json' -d '{"role":"editor"}' "$ORIGIN/api/team-spaces/$T/members/$BOT"
@@ -402,7 +411,7 @@ $V mcp --as pagefork mfp-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mfp-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
-code in `mfp-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Then H adds A
+code in `mfp-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then H adds A
 as a Viewer and E as an Editor, and puts a Sheet with North `42` in B2 on Trunk and a page bound to it, with the
 commands of MHV8 on `$H/fork-pages`, from `uh pr create` to `PN` and `PR`:
 

@@ -39,47 +39,71 @@ Preconditions:
 - A Sheet `Verify Budget` with `Rent`/`1200` in A1:B1, created as in [create-document](./create-document.md).
   `N` is its Node ID: `nodes[0].nodeId` from `$V cli doc-find space find "Verify Budget" --space "verify-$VERIFY_UVW_RUN/personal" --json`.
 
-- **LS1. Show.** Run `$V cli share-show share "$N" --json`. Output has `url: "$ORIGIN/nodes/$N"`,
-  `name: "Verify Budget"`, `link: "off"`, `owner.username: "verify-<run-id>"` and an `access` sentence:
-  `Only people with access to the repository can open the link. Only if the user asks, run …--link viewer…`.
-  Without `--json`, the second line is `Link Sharing: off.` followed by that sentence. With `--link editor` it
-  says signed-in people can edit and an agent can edit only after a person claims it.
-- **LS2. Viewer link.** Run `$V cli share-viewer share "$N" --link viewer --json` (`link: "viewer"`), then
-  `$V open-anon share-anon-viewer "$ORIGIN/nodes/$N"`. `share-anon-viewer.node-status` reports `200`, and
-  `share-anon-viewer.png` shows the grid with `Rent`/`1200`, `Read only` and `Sign up`/`Sign in` in the header,
-  and the bar with `By Verify <run-id>` and `More actions`.
-- **LS3. Off.** Run `$V cli share-off share "$N" --link off --json` (`link: "off"`), then
-  `$V open-anon share-anon-off "$ORIGIN/nodes/$N"`. `share-anon-off.node-status` reports `404`, and the page
-  text reads `Unable to open this resource`.
-- **LS4. Browser dialog.** Run `agent-browser open "$ORIGIN/nodes/$N"`, `agent-browser wait canvas`, then
-  `agent-browser find role button click --name Share --exact`. The dialog `Share “Verify Budget”` shows
-  `Link access is off`, a switch `Enable link sharing` (unchecked), and a disabled `Copy link`. Run
-  `agent-browser find role switch click --name 'Enable link sharing'`. A `Link sharing updated.` toast shows,
-  the switch becomes `Disable link sharing` (checked), and `Copy link` is enabled. Screenshot
-  `$EVIDENCE/share-dialog-on.png`. Read back with `$V cli share-after-web share "$N" --json` (`link: "viewer"`)
-  and `$V open-anon share-anon-web "$ORIGIN/nodes/$N"` (`200`). Finish with
-  `$V cli share-cleanup share "$N" --link off --json`.
-- **LS5. Remix.** Set the link to `viewer`. Signed in: register a second user (see
-  [pull requests](./pull-requests.md)), sign them in in a separate agent-browser session, open `$ORIGIN/nodes/$N`,
-  and pick `More actions` > `Remix` (`find role button click --name "More actions" --exact`, then
-  `find role menuitem click --name Remix --exact`). The browser moves to the copy's `/nodes/<id>`, the toast reads
-  `Copied to your space. Your edits change only your copy.`, the second user's `space find "Verify Budget"` finds
-  `/Verify Budget`, and `curl -s "$ORIGIN/api/nodes/$N" | jq .copyCount` is `1`. The owner's `Share` dialog shows
-  `1 copy`. Signed out: in a fresh session, pick `More actions` > `Remix`. The dialog `Remix this file` offers the
-  same MCP and uvw prompts as `Hand to my agent` and a link `Sign up free`, which opens
-  `/login?mode=register&returnTo=/nodes/<N>?copy=<key>`. Register there; the browser lands on a new copy and
-  `copyCount` is `2`.
-- **LS6. Link preview.** With the link `viewer`, `curl -s "http://127.0.0.1:<server port>/nodes/$N"` returns the
-  app shell with `<title>Verify Budget · Univer Workspace</title>`, `og:title`, `og:description`
-  (`Shared from Univer Workspace`; `Accept-Language: zh-CN` gives `分享自 Univer Workspace`), `og:type`,
-  `og:site_name`, and headers `Vary: Accept-Language` and `Cache-Control: public, max-age=0`. Without
-  `PUBLIC_ORIGIN` it ends with `twitter:card` `summary`; in an MCP run (`PUBLIC_ORIGIN` is the web origin) it adds
-  `og:url`, `og:image` `$ORIGIN/link-preview/sheet.png` (1200×630, alt `Univer Workspace spreadsheet`),
-  `twitter:image` and `twitter:card` `summary_large_image`. With the link `off` there are no `og:` tags.
-- **LS7. Public Space.** With the file link `off`, run
-  `$V cli ls-public repo edit "verify-$VERIFY_UVW_RUN/personal" --visibility public --json` (`publicRead: true`).
-  `$V open-anon ls-public "$ORIGIN/nodes/$N"` reports `200`. Set it back with `--visibility private`; the same
-  visit reports `404`.
+### LS1. Show
+
+Run `$V cli share-show share "$N" --json`. Output has `url: "$ORIGIN/nodes/$N"`,
+`name: "Verify Budget"`, `link: "off"`, `owner.username: "verify-<run-id>"` and an `access` sentence:
+`Only people with access to the repository can open the link. Only if the user asks, run …--link viewer…`.
+Without `--json`, the second line is `Link Sharing: off.` followed by that sentence. With `--link editor` it
+says signed-in people can edit and an agent can edit only after a person claims it.
+
+### LS2. Viewer link
+
+Run `$V cli share-viewer share "$N" --link viewer --json` (`link: "viewer"`), then
+`$V open-anon share-anon-viewer "$ORIGIN/nodes/$N"`. `share-anon-viewer.node-status` reports `200`, and
+`share-anon-viewer.png` shows the grid with `Rent`/`1200`, `Read only` and `Sign up`/`Sign in` in the header,
+and the bar with `By Verify <run-id>` and `More actions`.
+
+### LS3. Off
+
+Run `$V cli share-off share "$N" --link off --json` (`link: "off"`), then
+`$V open-anon share-anon-off "$ORIGIN/nodes/$N"`. `share-anon-off.node-status` reports `404`, and the page
+text reads `Unable to open this resource`.
+
+### LS4. Browser dialog
+
+Run `agent-browser open "$ORIGIN/nodes/$N"`, `agent-browser wait canvas`, then
+`agent-browser find role button click --name Share --exact`. The dialog `Share “Verify Budget”` shows
+`Link access is off`, a switch `Enable link sharing` (unchecked), and a disabled `Copy link`. Run
+`agent-browser find role switch click --name 'Enable link sharing'`. A `Link sharing updated.` toast shows,
+the switch becomes `Disable link sharing` (checked), and `Copy link` is enabled. Screenshot
+`$EVIDENCE/share-dialog-on.png`. Read back with `$V cli share-after-web share "$N" --json` (`link: "viewer"`)
+and `$V open-anon share-anon-web "$ORIGIN/nodes/$N"` (`200`). Finish with
+`$V cli share-cleanup share "$N" --link off --json`.
+
+### LS5. Remix
+
+Set the link to `viewer`. Signed in: register a second user (see
+[pull requests](./pull-requests.md)), sign them in in a separate agent-browser session, open `$ORIGIN/nodes/$N`,
+and pick `More actions` > `Remix` (`find role button click --name "More actions" --exact`, then
+`find role menuitem click --name Remix --exact`). The browser moves to the copy's `/nodes/<id>`, the toast reads
+`Copied to your space. Your edits change only your copy.`, the second user's `space find "Verify Budget"` finds
+`/Verify Budget`, and `curl -s "$ORIGIN/api/nodes/$N" | jq .copyCount` is `1`. The owner's `Share` dialog shows
+`1 copy`. Signed out: in a fresh session, pick `More actions` > `Remix`. The dialog `Remix this file` offers the
+same MCP and uvw prompts as `Hand to my agent` and a link `Sign up free`, which opens
+`/login?mode=register&returnTo=/nodes/<N>?copy=<key>`. Register there; the browser lands on a new copy and
+`copyCount` is `2`.
+
+### LS6. Link preview
+
+Needs: web-build.
+
+The server serves link previews from `apps/workspace/dist/public` only when it exists at
+`up`. With the link `viewer`,
+`curl -s "http://127.0.0.1:<server port>/nodes/$N"` returns the app shell with
+`<title>Verify Budget · Univer Workspace</title>`, `og:title`, `og:description` (`Shared from Univer Workspace`;
+`Accept-Language: zh-CN` gives `分享自 Univer Workspace`), `og:type`, `og:site_name`, and headers
+`Vary: Accept-Language` and `Cache-Control: public, max-age=0`. Without
+`PUBLIC_ORIGIN` it ends with `twitter:card` `summary`; in an MCP run (`PUBLIC_ORIGIN` is the web origin) it adds
+`og:url`, `og:image` `$ORIGIN/link-preview/sheet.png` (1200×630, alt `Univer Workspace spreadsheet`),
+`twitter:image` and `twitter:card` `summary_large_image`. With the link `off` there are no `og:` tags.
+
+### LS7. Public Space
+
+With the file link `off`, run
+`$V cli ls-public repo edit "verify-$VERIFY_UVW_RUN/personal" --visibility public --json` (`publicRead: true`).
+`$V open-anon ls-public "$ORIGIN/nodes/$N"` reports `200`. Set it back with `--visibility private`; the same
+visit reports `404`.
 
 ## Gotchas
 
@@ -101,6 +125,6 @@ Preconditions:
 - `Save my version` on a page in trial mode copies the page and the Sheets it binds; see HV6-HV7 in
   [HTML View](./html-view.md).
 - Making a Space public needs an interactive session. A uvw password login or the browser may; an MCP PAT or
-  OAuth session gets `INTERACTIVE_SESSION_REQUIRED` and an unclaimed agent `AGENT_NOT_ALLOWED` ([MH4 in agent handoff](./agent-handoff.md#mh-agent-principals-claims-and-public-spaces)).
+  OAuth session gets `INTERACTIVE_SESSION_REQUIRED` and an unclaimed agent `AGENT_NOT_ALLOWED` ([MH4 in agent handoff](./agent-handoff.md#mh4-public-spaces)).
 - A malformed JSON body to the share API answers `400` with `INVALID_INPUT`
   (`The request body is not valid JSON.`).

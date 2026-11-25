@@ -26,8 +26,9 @@ An MCP client connected to `$MCP_URL` calls `execute` and `inspect` from the def
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MX4 signs the run browser in itself. MX13 needs `VERIFY_UVW_MCP_EXECUTORS=2` at `up`.
 
@@ -36,6 +37,8 @@ O=verify-$VERIFY_UVW_RUN
 ```
 
 ### MX1. Executor write and readback
+
+Run: helper.
 
 ```bash
 $V mcp mx-repo repo_view "{\"repo\":\"$O/personal\"}"
@@ -61,6 +64,8 @@ and the cold/warm events identify a Sheet and one committed revision.
 
 ### MX2. Ready Worktree error
 
+Run: helper.
+
 ```bash
 $V mcp mx-ready pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$MX_W\"}"
 $V mcp mx-ready-execute execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,code:"return 1"}')"
@@ -71,6 +76,8 @@ jq -e '.code == "workspace-worktree-not-editable" and .detail.state == "ready"' 
 Pass when the error preserves `detail.state` and does not execute code.
 
 ### MX3. Stopped executor
+
+Run: helper.
 
 ```bash
 MX_CONTAINER=$(docker ps -q --filter "label=com.docker.compose.project=$MCP_PROJECT" --filter label=com.docker.compose.service=executor)
@@ -88,6 +95,8 @@ Pass when the gateway returns `workspace-executor-unavailable` and the executor 
 
 ### MX4. Browser proof
 
+Run: helper.
+
 ```bash
 agent-browser open "$ORIGIN/login"
 agent-browser storage local set univer-workspace-language en-US
@@ -100,13 +109,17 @@ if agent-browser get url | grep -q '/login'; then
   agent-browser wait --url '**/home'
 fi
 agent-browser open "$(jq -r '.unit.url' "$EVIDENCE/mx-unit.out")"
-agent-browser wait 3000
+# The Sheet renders inside the review panel's same-origin iframe.
+agent-browser wait --fn "Boolean(document.querySelector('iframe')?.contentDocument?.querySelector('canvas'))"
+agent-browser wait 4000
 agent-browser screenshot "$EVIDENCE/mx-pull-request.png"
 ```
 
 Pass when the screenshot shows Region, Total, North and 42 in the pull request's Sheet.
 
 ### MX5. Script errors match CLI text
+
+Run: helper.
 
 Run right after MX3: its executor restart makes this call `cold_start`.
 
@@ -125,6 +138,8 @@ Pass when MCP returns the explicit script code and the CLI's exact bare message.
 
 ### MX6. Large committed values do not repeat writes
 
+Run: helper.
+
 ```bash
 MX_LARGE='const cell = workbook.getActiveSheet().getRange("D1"); const n = Number(cell.getValue() || 0); cell.setValue(n + 1); return "x".repeat(150000);'
 $V mcp mx-large-before execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,code:"return Number(workbook.getActiveSheet().getRange(\"D1\").getValue() || 0);"}')"
@@ -138,6 +153,8 @@ Pass when the Sheet counter advances exactly once and the committed result has n
 Credential replacement near expiry is covered by automated Client Core and MCP worker tests.
 
 ### MX16. Inspect input errors in MCP words
+
+Run: helper.
 
 ```bash
 mx_inspect() { $V mcp "mx-inspect-$1" inspect "$(jq -c --arg worktree "$MX_W" --arg unit "$MX_U" '. + {worktree:$worktree,unit:$unit}' <<< "$2")"; test $? -eq 1; }
@@ -158,6 +175,8 @@ records the tool error. The CLI keeps its own wording for the same input.
 
 ### MX11. Stale worker session
 
+Run: helper.
+
 Two PATs share one user and one warm worker. Revoke A, recover B, and reject A.
 
 ```bash
@@ -167,6 +186,8 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
 Pass when B succeeds with one auth rerun and A receives HTTP 401. Evidence is `resilience-auth.json`.
 
 ### MX12. Concurrent revision conflict
+
+Run: helper.
 
 Resolve two writes concurrently against one Unit.
 
@@ -178,6 +199,8 @@ Pass when both writes commit on consecutive revisions, at most one revision reru
 Evidence is `resilience-revision.json`.
 
 ### MX13. Two executor replicas
+
+Run: helper.
 
 Opt in at launch with `VERIFY_UVW_MCP_EXECUTORS=2`. The default run skips this journey.
 
@@ -191,6 +214,8 @@ The journey restarts stopped containers. Evidence is `resilience-replicas.json`.
 
 ### MX14. Stale worker session on HTML View validation
 
+Run: helper.
+
 Merge a data Sheet, validate a bound HTML View with A, revoke A,
 and validate with B. Then revoke B and call the executor with a 4-second deadline using the dev session, which leaves no time for a rerun.
 
@@ -202,6 +227,8 @@ Pass when B succeeds with one auth rerun, the no-rerun call returns a retryable 
 `auth_error`, the next executor call succeeds on the replaced worker, and the primary bearer still works. Evidence is `resilience-html-auth.json`.
 
 ### MX15. Parallel writes and reads during writes
+
+Run: helper.
 
 Five parallel `execute` calls on one Unit, then an `inspect` loop during eight sequential writes.
 
@@ -223,6 +250,8 @@ Latency includes MCP connection, queue wait, the tool call, and client close on 
 
 ### MT1. Typst bundle compilation and retry-safe Doc creation
 
+Run: helper.
+
 ```bash
 node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst
 ```
@@ -234,6 +263,8 @@ its content, and a same-key retry returns the same single Unit. All MCP calls go
 
 ### MV1. SVG compilation and Slide content commit
 
+Run: helper.
+
 ```bash
 node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg
 ```
@@ -242,10 +273,10 @@ Pass when estimated SVG compilation matches the CLI, retains its estimation lint
 of a new Slide, and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There
 is no SVG retry key; an unknown write outcome requires inspection before another apply.
 
-### Typst job verification
+### MT2. Typst job verification
 
 After the default-budget journeys, run `down` and start a fresh stack with
-`MCP_SYNC_BUDGET_MS=1 VERIFY_UVW_MCP=1 $V up`, then `user` and `doctor`.
+`MCP_SYNC_BUDGET_MS=1 $V up --reuse --for mcp-executor MT2`, then `user` and `doctor`.
 Keep those commands and the journey in the same long-lived shell.
 
 ```bash
@@ -256,7 +287,7 @@ node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst-jobs
 Pass when apply returns a running job, `job_get` returns the committed Doc,
 the same-key retry returns that job or its original result, and `unit_list`
 has exactly one new Unit. Inspect the native Doc to read back its text.
-Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.
+Evidence uses `mcp-typst-job-*`.
 
 ## Gotchas
 

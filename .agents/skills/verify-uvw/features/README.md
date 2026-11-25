@@ -7,8 +7,9 @@ as the recipe.
 ## Baseline preconditions
 
 - `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root.
-- `$V up`, `$V user`, and a `$V doctor` with no `FAIL` lines. The run serves web at
-  `http://127.0.0.1:5973` and the server at `:3920`, from a fresh `data/` directory.
+- `$V up --for <feature> [journey-id|mode...]`, `$V user`, and a `$V doctor` with no `FAIL` lines. The run serves
+  web at `http://127.0.0.1:5973` and the server at `:3920`, from a fresh `data/` directory, in the mode its
+  journeys declare.
 - The baseline user is `verify-<run-id>`, display name `Verify <run-id>`. Its password is
   in `/tmp/verify-uvw/<run-id>/user.pw`, and it owns `verify-<run-id>/personal` with no
   files. No Team Spaces, PRs or Issues exist. In MCP mode, `doctor` adds an `Executor doctor`
@@ -21,6 +22,46 @@ as the recipe.
 Each feature file starts with an H1 and one paragraph of user-visible behavior, then exactly
 four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 `Driving it with agent-browser and uvw`, `Gotchas`.
+
+Under `Driving it with agent-browser and uvw`, every `###` heading is a journey:
+`### <ID>. <Title>`. The ID is a capital letter, then capital letters and digits, and ends in a number,
+as in `MS5`, `SLC10` or `TR2-1`. No two journeys in `features/` share an ID. Text before the first
+journey is setup for all of them. A journey's text ends in its pass condition. A verifier records one
+verdict for each journey it runs (the Evidence section of [the skill](../SKILL.md#evidence)).
+`bin/journeys.mjs` is the only reader of this structure, and its test parses every file here.
+
+A journey runs on an instance in one mode: `default`, `mcp` with the MCP gateway, or `mcp-same-origin` with the
+gateway also at the web origin. It can also need something built before `up`: `web-build` is the server's own
+web build, for link previews. A recipe declares both in a one-line paragraph, such as `Mode: mcp.` or
+`Mode: mcp-same-origin. Needs: web-build.`. As the first paragraph under `Driving it with agent-browser and uvw`,
+the line covers every journey of the feature. As the first paragraph under a journey heading, it covers that
+journey: its mode replaces the feature's, and its needs add to them. A journey with no mode is `default`. A
+`Mode:`, `Needs:` or `Run:` line anywhere else, or an unknown value, fails the parser test. `$V up --for` starts the
+instance and checks the needs, so a recipe never starts, stops or restarts the instance for its mode. Only a
+journey that needs another instance shape, such as production MCP or a restart with other server settings, does
+that in its own text.
+
+A journey's own line can also say that the helper runs it: `Run: helper.`, after its mode and needs. `Run:` has no
+other value and no feature scope, because a wrong runner fails silently: the helper would run only the blocks of a
+journey whose real check is in a browser or a model's reply. The parser test fails on `Run: agent.` and on a `Run:`
+line under `Driving it with agent-browser and uvw`, so every journey without the line, including one added to a
+feature later, is an `agent` journey: a verifier follows its text. `$V run-journeys <feature>` runs the `bash`
+blocks of `helper` journeys itself, exactly as written, and records their checks in the run's journal.
+Mark a journey `helper` only when its blocks hold every step a machine can check. Its text then keeps only what
+needs eyes or judgment, such as "open the PNG and look". A step that is only in prose, such as killing a process,
+keeps the journey `agent`. The helper runs blocks this way:
+
+- Each journey runs in its own `bash`, from the repository root, after `eval "$($V env)"`, with stdin closed and
+  without errexit or pipefail. Setup runs first, and a broken setup blocks every journey.
+- A command that fails outside a condition (`if`, `while`, `&&`, `||`) is a broken check, unless the next command
+  reads `$?`. So a command that must fail is followed by `test $? -eq 1`. A failure inside a function or a loop
+  counts, and in a pipeline only the last command's does.
+- `!`, `[[ ]]`, `(( ))` and `( )` fail the parser test in a `helper` journey, because bash does not trap their
+  failure everywhere. Write `command; test $? -eq 1`, `test` and `{ ...; }`.
+- Variables and functions carry from setup and earlier `helper` journeys of the same mode, so running one journey
+  first runs those that have not run. A `helper` journey never needs an `agent` journey's state.
+- Each journey's output goes to `evidence/<ID>.run.log`, and each broken check records its markdown line, exit
+  code and the redacted end of that output. A journey stops after 600 s.
 
 ## Features
 
@@ -42,7 +83,7 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   recent and pages views.
 - [Issues](./issues.md): Team Space repo creation, Issue open via uvw, comment and close
   in the browser, timeline readback via uvw.
-- [MCP gateway](./mcp.md): M1-M12 start the Docker gateway and cover both protocols, identity, repository
+- [MCP gateway](./mcp.md): M1-M12 start the MCP gateway and cover both protocols, identity, repository
   parity, tool lists, credential, Origin and production refusals, opencode, and cleanup. Every other `mcp-*`
   file runs in this MCP mode.
 - [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull

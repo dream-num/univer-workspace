@@ -128,7 +128,9 @@ if (record) {
   const parse = line => { try { return JSON.parse(line); } catch { return undefined; } };
   try {
     const tokenPath = join(internal.run, 'home/metrics-token');
-    gateway = execFileSync('docker', ['compose', '-p', internal.project, '-f', join(internal.repo, 'apps/mcp/docker/compose.verify.yml'),
+    // The dist start mode runs each role as a local process that writes logs/mcp-<role>.log.
+    const dist = /^MCP_FROM=dist$/m.test(readFileSync(join(internal.run, 'run.env'), 'utf8'));
+    const read = () => dist ? ['gateway', 'executor', 'executor-b'].map(role => join(internal.run, 'logs', `mcp-${role}.log`)).filter(existsSync).map(path => readFileSync(path, 'utf8')).join('') : execFileSync('docker', ['compose', '-p', internal.project, '-f', join(internal.repo, 'apps/mcp/docker/compose.verify.yml'),
       'logs', '--no-color', '--no-log-prefix', 'gateway', 'executor', 'executor-b'], { encoding: 'utf8', timeout: 15000, maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(internal.run, 'staging'), VERIFY_UVW_MCP_PROJECT: internal.project, VERIFY_UVW_MCP_IMAGE: internal.image,
         VERIFY_UVW_ORIGIN: internal.origin, VERIFY_UVW_SERVER_PORT: internal['server-port'], VERIFY_UVW_MCP_PORT: url.port,
@@ -136,6 +138,14 @@ if (record) {
         VERIFY_UVW_EXECUTOR_TOKEN: readFileSync(join(internal.run, 'home/executor-token'), 'utf8').trim(),
         VERIFY_UVW_RENDERER_TOKEN: readFileSync(join(internal.run, 'home/renderer-token'), 'utf8').trim(),
         VERIFY_UVW_MCP_OAUTH_SECRET: readFileSync(join(internal.run, 'home/mcp-oauth-secret'), 'utf8').trim() } });
+    gateway = read();
+    // The gateway logs a call's usage event after it answers, so the first read can miss it.
+    const owesEvent = mode === 'call' && (code === 0 || code === 1) && !output?.job_id && result?._meta?.['univer.workspace.deduplicated'] !== true;
+    const logged = () => gateway.split('\n').some(line => line.includes('"mcp.tool_call"') && line.includes(`"${requestId}"`));
+    for (const until = Date.now() + 3000; owesEvent && !logged() && Date.now() < until;) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      gateway = read();
+    }
   } catch { errors.push('Cannot read gateway logs'); }
   try { workspace = readFileSync(join(internal.run, 'logs/server.log'), 'utf8'); }
   catch { errors.push('Cannot read Workspace logs'); }

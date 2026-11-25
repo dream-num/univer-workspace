@@ -15,10 +15,12 @@ An operator deploys the gateway with `NODE_ENV=production` and an executor allow
 
 ## Driving it with agent-browser and uvw
 
-MB starts its own production run, as written below, so do not reuse a default MCP run. The other MCP-mode
+Mode: mcp.
+
+MB1 starts its own production run, as written below, so do not reuse a default MCP run. The other MCP-mode
 rules in [MCP gateway](mcp.md) still apply.
 
-### MB. Deployment and per-account tools
+### MB1. Deployment and per-account tools
 
 Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
 
@@ -39,7 +41,7 @@ The script replaces the executor allowlist with the run user's ID through `$V mc
 
 - MB1 compares ordered `tools/list` names for `core`, `files`, `admin`, `core,files`, `core,admin`, `files,admin` and `all` with literal expected lists in the script. These are the full lists minus `screenshot`, `print_pdf` and `lint`.
 - MB2 checks instructions for all seven connections and rejects those three hidden tool names.
-- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 47 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
+- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 53 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
 - MB4 runs MX1 through MX3 above with PAT authentication. It compares MCP and CLI write/readback results, checks cold/warm usage events, verifies the Ready error, runs doctor, and stops only this run's executor to check the unavailable error. A `finally` restarts it even after a failed assertion.
 - MB5 checks `/readyz` for 200. It stops the executor, then uses `$V mcp-gateway-restart` to recreate only the gateway and clear its remembered capabilities. `/readyz` must return 503 naming the `executor` check, then 200 within ten seconds after the executor restarts. Stopping an executor after successful discovery alone does not make the gateway unready, because HTTP tools remain usable. The optional Workspace stop/restart check is recorded as not run because `verify-uvw` has no independent server restart command. A base older than `/readyz` (#276) returns 404 and records MB5 as `not_run` in `mb.json`; it does not claim readiness passed. Other unexpected statuses fail the script.
 
@@ -52,12 +54,12 @@ $V mcp-allow-users someone-else
 $V mcp-tools --toolsets all mb-star-before
 $V mcp-allow-users '*'
 $V mcp-tools --toolsets all mb-star-after
-jq -e 'map(.name) | index("execute") == null and length == 47' "$EVIDENCE/mb-star-before.out"
-jq -e 'map(.name) | index("execute") != null and length == 60' "$EVIDENCE/mb-star-after.out"
+jq -e 'map(.name) | index("execute") == null and length == 53' "$EVIDENCE/mb-star-before.out"
+jq -e 'map(.name) | index("execute") != null and length == 66' "$EVIDENCE/mb-star-after.out"
 $V doctor
 ```
 
-Pass when the run user, outside an explicit allowlist, gets the 47 non-executor tools, then all 60 renderer-less tools with
+Pass when the run user, outside an explicit allowlist, gets the 53 non-executor tools, then all 66 renderer-less tools with
 `*`, and doctor reports the allowlist matches the run. Running `$V user` again keeps `*`.
 
 ### MB6. Workspace grants
@@ -73,10 +75,10 @@ G grant "verify-$VERIFY_UVW_RUN"
 G revoke "verify-$VERIFY_UVW_RUN"
 ```
 
-Before the grant, `mcp-tools --toolsets all` lists 47 tools without `execute` and the instructions contain
+Before the grant, `mcp-tools --toolsets all` lists 53 tools without `execute` and the instructions contain
 `Editing document contents is not enabled for this account`. About 35 s after `grant` (the gateway caches the
-exchange for 30 s), the list has 63 tools with the renderer (60 without) and `execute` runs. About 35 s after
-`revoke` it is back to 47 and `execute` fails with `Tool execute not found`. No container restarts. `list`
+exchange for 30 s), the list has 69 tools with the renderer (66 without) and `execute` runs. About 35 s after
+`revoke` it is back to 53 and `execute` fails with `Tool execute not found`. No container restarts. `list`
 prints `username<TAB>id<TAB>kind<TAB>granted-at`.
 
 `VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.

@@ -36,51 +36,80 @@ Preconditions:
   `$V cli seed-pr pr create -R $O/verify-team -t "Add Sales sheet" --json` (take `id` as `W`), and
   `$V cli seed-unit unit create --worktree $W --space $S --type sheet --name Sales --json`.
 
-- **First visit.** On `$ORIGIN/home`, confirm the `Repository` radio is selected. Click
-  `Enter workspace`, then reload and confirm the chooser stays closed. To check an upgrade,
-  remove the completion marker, set the stored mode to Wiki, and reload Home. Wiki should be
-  preselected. Confirm and reload again to verify Wiki Home opens directly. A direct link to
-  a file opens the file first.
-- **Repository default.** After confirming the default on `$ORIGIN/home`,
-  `agent-browser eval 'document.documentElement.dataset.uiMode'` prints `repository`. The top bar
-  has a link `OfficeLab`, a searchbox `Find a repository…`, a `Main navigation` with `Home`,
-  `Pull requests`, `Issues` and `Recent`, and a button `Account`. The Home rail is the
-  region `Your repositories` with `Verify Team`. Run
-  `agent-browser screenshot "$EVIDENCE/mode-repository-home.png"`.
-- **Open settings.** Run `agent-browser find role button click --name "Account"`, then
-  `agent-browser find role menuitem click --name "Application settings"`. The dialog shows
-  `Workspace view` with compact `Wiki` and `Repository` preview cards. Run
-  `agent-browser screenshot "$EVIDENCE/mode-settings-open.png"`.
-- **Switch to Wiki.** Run `agent-browser click '[role=dialog] input[value=wiki]'`.
-  `agent-browser storage local get univer-workspace-layout-theme` prints `wiki`. The sidebar has a
-  `Personal Space` region and `Team Spaces`, and the header has a button `Application settings`.
-  Run `agent-browser screenshot "$EVIDENCE/mode-wiki-home.png"`.
-- **Persist.** Run `agent-browser reload` and `agent-browser wait 2000`.
-  `document.documentElement.dataset.uiMode` still prints `wiki`.
-- **Switch back.** Run `agent-browser find role button click --name "Application settings"`, then
-  `agent-browser click '[role=dialog] input[value=repository]'`. The theme key prints `repository`
-  and the `OfficeLab` link is back in the top bar.
-- **Repository directory.** Run `agent-browser open "$ORIGIN/repositories"` and `agent-browser wait 2000`.
-  The heading is `All repositories`, with `Type`, `Visibility` and `Sort` comboboxes. Run
-  `agent-browser find placeholder "Find a name or description…" fill "Verify Team"`. The URL becomes
-  `/repositories?q=Verify+Team` and the page says `1 repository found`. Screenshot
-  `$EVIDENCE/mode-repository-repositories-filter.png`.
-- **Create a repository.** Run `agent-browser find role button click --name "New repository"`.
-  A dialog `New repository` has `Repository name` and `Slug` textboxes. Run
-  `agent-browser find label "Repository name" fill "UI Created"`. `Slug` fills itself with
-  `ui-created`. Run `agent-browser find role button click --name "Create" --exact`. The URL becomes
-  `/spaces/<spaceId>`. Read it back with `$V cli mode-repo-readback repo list --json`: it lists
-  `fullName: <owner>/ui-created`, `type: team`, `name: UI Created`.
-- **Pull requests.** Run `agent-browser open "$ORIGIN/worktrees"` and `agent-browser wait 2000`.
-  The heading is `All pull requests`, with a `Search pull requests` textbox and `Open <n>` and
-  `Closed <n>` buttons. The PR is a link whose name starts with `Add Sales sheet`. Click it with
-  `agent-browser find role link click --name "Add Sales sheet"` (add the rest of the accessible name
-  from `snapshot -i` if the match is ambiguous). The URL is `/spaces/<spaceId>/pulls/<n>`, the page
-  shows `Add Sales sheet #<n>`, a `Draft` state and `Files changed`. Screenshot
-  `$EVIDENCE/mode-repository-pr-open.png`, then confirm the number with
-  `$V cli mode-repo-pr-view pr view <n> -R $O/verify-team --json`.
-- **Other views.** `agent-browser open` each of `/issues` (heading `Issues`, textbox `Search issues`,
-  `Open 1` / `Closed 0`) and `/recent` (heading `Recent`, textbox `Search by name…`), and screenshot each as `$EVIDENCE/mode-repository-<route>.png`.
+### PT1. First visit
+
+On `$ORIGIN/home`, confirm the `Repository` radio is selected. Click
+`Enter workspace`, then reload and confirm the chooser stays closed. To check an upgrade,
+remove the completion marker, set the stored mode to Wiki, and reload Home. Wiki should be
+preselected. Confirm and reload again to verify Wiki Home opens directly. A direct link to
+a file opens the file first.
+
+### PT2. Repository default
+
+After confirming the default on `$ORIGIN/home`,
+`agent-browser eval 'document.documentElement.dataset.uiMode'` prints `repository`. The top bar
+has a link `OfficeLab`, a searchbox `Find a repository…`, a `Main navigation` with `Home`,
+`Pull requests`, `Issues` and `Recent`, and a button `Account`. The Home rail is the
+region `Your repositories` with `Verify Team`. Run
+`agent-browser screenshot "$EVIDENCE/mode-repository-home.png"`.
+
+### PT3. Open settings
+
+Run `agent-browser find role button click --name "Account"`, then
+`agent-browser find role menuitem click --name "Application settings"`. The dialog shows
+`Workspace view` with compact `Wiki` and `Repository` preview cards. Run
+`agent-browser screenshot "$EVIDENCE/mode-settings-open.png"`.
+
+### PT4. Switch to Wiki
+
+Run `agent-browser click '[role=dialog] input[value=wiki]'`.
+`agent-browser storage local get univer-workspace-layout-theme` prints `wiki`. The sidebar has a
+`Personal Space` region and `Team Spaces`, and the header has a button `Application settings`.
+Run `agent-browser screenshot "$EVIDENCE/mode-wiki-home.png"`.
+
+### PT5. Persist
+
+Run `agent-browser reload` and `agent-browser wait 2000`.
+`document.documentElement.dataset.uiMode` still prints `wiki`.
+
+### PT6. Switch back
+
+Run `agent-browser find role button click --name "Application settings"`, then
+`agent-browser click '[role=dialog] input[value=repository]'`. The theme key prints `repository`
+and the `OfficeLab` link is back in the top bar.
+
+### PT7. Repository directory
+
+Run `agent-browser open "$ORIGIN/repositories"` and `agent-browser wait 2000`.
+The heading is `All repositories`, with `Type`, `Visibility` and `Sort` comboboxes. Run
+`agent-browser find placeholder "Find a name or description…" fill "Verify Team"`. The URL becomes
+`/repositories?q=Verify+Team` and the page says `1 repository found`. Screenshot
+`$EVIDENCE/mode-repository-repositories-filter.png`.
+
+### PT8. Create a repository
+
+Run `agent-browser find role button click --name "New repository"`.
+A dialog `New repository` has `Repository name` and `Slug` textboxes. Run
+`agent-browser find label "Repository name" fill "UI Created"`. `Slug` fills itself with
+`ui-created`. Run `agent-browser find role button click --name "Create" --exact`. The URL becomes
+`/spaces/<spaceId>`. Read it back with `$V cli mode-repo-readback repo list --json`: it lists
+`fullName: <owner>/ui-created`, `type: team`, `name: UI Created`.
+
+### PT9. Pull requests
+
+Run `agent-browser open "$ORIGIN/worktrees"` and `agent-browser wait 2000`.
+The heading is `All pull requests`, with a `Search pull requests` textbox and `Open <n>` and
+`Closed <n>` buttons. The PR is a link whose name starts with `Add Sales sheet`. Click it with
+`agent-browser find role link click --name "Add Sales sheet"` (add the rest of the accessible name
+from `snapshot -i` if the match is ambiguous). The URL is `/spaces/<spaceId>/pulls/<n>`, the page
+shows `Add Sales sheet #<n>`, a `Draft` state and `Files changed`. Screenshot
+`$EVIDENCE/mode-repository-pr-open.png`, then confirm the number with
+`$V cli mode-repo-pr-view pr view <n> -R $O/verify-team --json`.
+
+### PT10. Other views
+
+`agent-browser open` each of `/issues` (heading `Issues`, textbox `Search issues`,
+`Open 1` / `Closed 0`) and `/recent` (heading `Recent`, textbox `Search by name…`), and screenshot each as `$EVIDENCE/mode-repository-<route>.png`.
 
 ## Gotchas
 

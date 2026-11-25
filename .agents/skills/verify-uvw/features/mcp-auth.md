@@ -22,8 +22,9 @@ token for `$MCP_URL`. `$V user` creates the run's default PAT and `$V mcp-token`
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MA3 and MA7 use the Team Space:
 
@@ -35,6 +36,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 ```
 
 ### MA1. PAT call
+
+Run: helper.
 
 `user` created the default PAT, and every other MCP journey runs with it.
 
@@ -51,6 +54,8 @@ the call (exit 5) if the gateway log contained the PAT.
 
 ### MA2. Protected-resource metadata
 
+Run: helper.
+
 ```bash
 for path in /.well-known/oauth-protected-resource/mcp /.well-known/oauth-protected-resource; do
   curl -sS -D "$EVIDENCE/mcp-resource-metadata.headers" "${MCP_URL%/mcp}$path" > "$EVIDENCE/mcp-resource-metadata.out"
@@ -62,6 +67,8 @@ done
 Pass when both paths answer without credentials with the document and cache header.
 
 ### MA3. Read-only PAT
+
+Run: helper.
 
 ```bash
 $V mcp-token --scopes read > "$EVIDENCE/mcp-token-readonly.id"
@@ -78,6 +85,8 @@ Pass when the read call exits 0, the write call exits 1 with `workspace-scope-re
 exists. The read-only PAT is now the default for later `mcp` calls; MA4 replaces it.
 
 ### MA4. Revocation
+
+Run: helper.
 
 ```bash
 $V mcp-token > "$EVIDENCE/mcp-token-revoke.id"
@@ -101,6 +110,8 @@ next one (the exchange now answers `invalid_grant`). Use a tool that reaches Wor
 
 ### MA5. Development session
 
+Run: helper.
+
 ```bash
 $V mcp --auth dev mcp-dev-whoami whoami
 jq -e '.auth_kind == "dev" and .client_id == "dev" and .outcome == "ok"' "$EVIDENCE/mcp-dev-whoami.event.json"
@@ -109,6 +120,8 @@ jq -e '.auth_kind == "dev" and .client_id == "dev" and .outcome == "ok"' "$EVIDE
 Pass when the call exits 0 and the event records `dev`.
 
 ### MA6. PAT defaults and Browser management
+
+Run: helper.
 
 Run after MA5. A PAT gets every scope and never
 expires unless the user narrows it. The API check reads the token list with the run's session; the
@@ -156,7 +169,8 @@ agent-browser find label Name fill "browser-pat-$VERIFY_UVW_RUN"
 agent-browser screenshot "$EVIDENCE/mcp-pat-browser-form.png"
 agent-browser find role button click --name 'Create token'
 agent-browser wait --text 'Copy and save this token now'
-(umask 077 && agent-browser get value 'input[readonly], textarea' > "$RUN/home/mcp-token")
+install -m 600 /dev/null "$RUN/home/mcp-token"
+agent-browser get value 'input[readonly], textarea' > "$RUN/home/mcp-token"
 grep -q '^uvw_pat_' "$RUN/home/mcp-token"
 curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" |
   jq -r --arg name "browser-pat-$VERIFY_UVW_RUN" '.tokens[] | select(.name == $name) | .id' > "$RUN/home/mcp-token-id"
@@ -184,6 +198,8 @@ and the dialog no longer lists it. `mcp-pat-browser-revoked-whoami.observed` rec
 `whoami` still answered from the gateway's 30-second exchange cache. The last command restores a working default PAT.
 
 ### MA7. A PAT without `worktree:merge`
+
+Run: helper.
 
 ```bash
 $V mcp-token --scopes read,write,publish > "$EVIDENCE/mcp-token-nomerge.id"

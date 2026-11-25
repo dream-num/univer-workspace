@@ -20,13 +20,14 @@ equivalents are `uvw screenshot`, `uvw print-pdf`, `uvw lint` and `uvw compile-s
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. These journeys need the renderer, which `up` starts unless `VERIFY_UVW_MCP_RENDERER=0`.
 MR12 also needs opencode.
 
-### MR9 renderer role
+### MR9. renderer role
 
 The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. `screenshot`
 (MR10), `print_pdf` and `lint` (MR11) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
@@ -52,7 +53,9 @@ Pass when:
 - Killing the renderer's Chromium makes the next call return a retryable `workspace-renderer-failed` and the one after succeeds
   on a new runtime (`mcp_renderer_runtime_discards_total` 1).
 
-### MR10 screenshot tool
+### MR10. screenshot tool
+
+Run: helper.
 
 The `screenshot` tool loads the Unit in the executor, which inlines every image Asset, and sends only the unit to the renderer. A
 Worktree Unit proves the Worktree Asset read and a trunk Unit proves the trunk Asset read. Run it after MR9's `doctor` passes and
@@ -102,11 +105,13 @@ $V cli mr10-pr2 pr create -R "$O/personal" -t 'Screenshot deck' --json
 MR10_W2=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 $V cli mr10-deck unit create --worktree "$MR10_W2" --space "$MR10_SPACE" --type slide --name 'Shot deck' --json
 MR10_D=$(jq -r .unit.unitId "$EVIDENCE/mr10-deck.out")
-for n in 1 2; do (V=$(realpath "$V") && cd "$FIX/deck" && $V cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json); done
-$V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
-jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck.result.json"
-jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck.out"
-curl -fsS -D "$EVIDENCE/mr10-deck-download.headers" -o "$EVIDENCE/mr10-deck-page-01.png" "$(jq -r '.images[0].download.url' "$EVIDENCE/mr10-deck.out")"
+pushd "$FIX/deck" >/dev/null
+for n in 1 2; do "$OLDPWD/$V" cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json; done
+popd >/dev/null
+$V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck-shot screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
+jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck-shot.result.json"
+jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck-shot.out"
+curl -fsS -D "$EVIDENCE/mr10-deck-download.headers" -o "$EVIDENCE/mr10-deck-page-01.png" "$(jq -r '.images[0].download.url' "$EVIDENCE/mr10-deck-shot.out")"
 grep -i '^content-type: image/png' "$EVIDENCE/mr10-deck-download.headers"
 magick "$EVIDENCE/mr10-deck-page-01.png" -resize 40% "$EVIDENCE/mr10-deck-page-01-small.png"
 
@@ -114,6 +119,7 @@ magick "$EVIDENCE/mr10-deck-page-01.png" -resize 40% "$EVIDENCE/mr10-deck-page-0
 $V mcp mr10-badrange screenshot "$(jq -nc --arg u "$MR10_U" '{unit:$u,trunk:true,range:"ZZZ99:A1"}')"
 test $? -eq 1
 $V cli mr10-badrange-cli screenshot --trunk --unit "$MR10_U" --range ZZZ99:A1 --out "$FIX/cli-bad" --json
+test $? -eq 1
 test "$(jq -r .message "$EVIDENCE/mr10-badrange.out")" = "$(sed 's/^INVALID_INPUT: //' "$EVIDENCE/mr10-badrange-cli.err" | head -n1)"
 $V mcp mr10-baddeck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w,range:"A1"}')"
 test $? -eq 1
@@ -130,7 +136,9 @@ Pass when:
   The usage event records `render_pages` 2 and `export_bytes` above 1 MiB.
 - Both rejections exit 1 with their message and a `tool_error` event.
 
-### MR11 print_pdf and lint tools
+### MR11. print_pdf and lint tools
+
+Run: helper.
 
 Both tools load the Unit in the executor, which inlines every image Asset, and send only the unit to the renderer. A Worktree Unit proves the
 Worktree reads and a trunk Unit proves the trunk reads. Run it after MR9's `doctor` passes and use a parallel run id when another run is active.
@@ -184,6 +192,7 @@ jq -e '.tool == "print_pdf" and .unit_type == "doc" and (.repo | type) == "strin
 $V mcp --toolsets all mr11-base-pdf print_pdf "$(jq -nc --arg u "$MR11_BASE" --arg w "$MR11_W" '{unit:$u,worktree:$w}')"
 test $? -eq 1
 $V cli mr11-base-pdf-cli print-pdf "$FIX/cli-base.pdf" --worktree "$MR11_W" --unit "$MR11_BASE" --json
+test $? -eq 1
 test "$(jq -r '"\(.code): \(.message)"' "$EVIDENCE/mr11-base-pdf.out")" = "$(head -n1 "$EVIDENCE/mr11-base-pdf-cli.err")"
 # A missing scope is rejected before any render
 $V mcp --toolsets all mr11-noscope print_pdf "$(jq -nc --arg u "$MR11_DOC" '{unit:$u}')"
@@ -225,6 +234,7 @@ jq -e '.code == "workspace-argument-invalid" and .message == "Invalid page selec
 $V mcp --toolsets all mr11-lint-sheet lint "$(jq -nc --arg u "$MR11_SHEET" --arg w "$MR11_W" '{unit:$u,worktree:$w}')"
 test $? -eq 1
 $V cli mr11-lint-sheet-cli lint --worktree "$MR11_W" --unit "$MR11_SHEET" --json
+test $? -eq 1
 test "$(jq -r '"\(.code): \(.message)"' "$EVIDENCE/mr11-lint-sheet.out")" = "$(head -n1 "$EVIDENCE/mr11-lint-sheet-cli.err")"
 ```
 
@@ -242,7 +252,7 @@ Pass when:
   renderer and the CLI measure text with different Chromium builds and fonts.
 - The lint rejections exit 1 with the CLI's text, and the Sheet keeps the CLI's code `workspace-unit-layout-lint-unit-type-unsupported`.
 
-### MR12 opencode screenshot
+### MR12. opencode screenshot
 
 An agent reads a screenshot through `screenshot`, so the image must reach the model and the model must describe it correctly. The model is
 `$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). `screenshot` is a core tool, so opencode runs from
@@ -287,7 +297,7 @@ $V mcp-logs | jq -s --arg since "$since" '[.[] | select(.event == "mcp.tool_call
 jq -e 'length >= 1 and all(.[]; .outcome == "ok" and .cost.render_pages == 1 and .client_name == null)' "$EVIDENCE/mr12-opencode.event.json"
 
 # A two-page deck above 1 MiB (MR10): download links, no image part, and the model reports them
-MR12_DECK=$(jq -r .unitId "$EVIDENCE/mr10-deck.out"); MR12_DECK_W=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
+MR12_DECK=$(jq -r .unitId "$EVIDENCE/mr10-deck-shot.out"); MR12_DECK_W=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 (cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
   "Call the screenshot tool of the verify-uvw MCP server once with unit \"$MR12_DECK\" and worktree \"$MR12_DECK_W\". Report how many images came back and, for each one, its page, size in bytes, and whether the result gave a download link. Do not repeat any URL." < /dev/null) > "$EVIDENCE/mr12-opencode-deck.jsonl"
@@ -316,6 +326,8 @@ Pass when both opencode runs exit 0 and:
 
 ### MV2. Real-font SVG measurement through the renderer
 
+Run: helper.
+
 Run it after `doctor` passes, with the
 `eval "$($V env)"` variables set. The renderer launches one browser at startup. If that warm-up
 failed, the first measurement starts Chromium and can return the retryable
@@ -338,7 +350,6 @@ Pass when, for one SVG with Latin and Chinese text, left, centred and right-anch
   without overflow or clipping. Look at it.
 - The journey prints the wall time of a 55-line compile (`mcp-svg-real-50.wall-ms`, one renderer
   RPC per line, warm renderer) and the usage event stays `executor: none` with zero render cost.
-- Stop with `$V down` for the run, even on failure.
 
 ## Gotchas
 

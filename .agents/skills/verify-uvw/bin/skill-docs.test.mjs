@@ -5,8 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
-const docs = ['SKILL.md', ...['references', 'features'].flatMap((dir) =>
-  readdirSync(join(skill, dir)).filter((name) => name.endsWith('.md')).map((name) => join(dir, name)))];
+const docs = readdirSync(skill, { recursive: true }).filter((name) => name.endsWith('.md')).sort();
 
 const prose = (file) => readFileSync(file, 'utf8').split(/^```.*$/m).filter((_, i) => i % 2 === 0).join('\n');
 
@@ -38,15 +37,15 @@ test('every relative link in the skill resolves to a file and a heading', () => 
 });
 
 test('the sections that brief names exist in SKILL.md', () => {
-  const helper = readFileSync(join(skill, 'bin/verify-uvw'), 'utf8');
-  const [, first, second] = helper.match(/Read the (\w+) and (\w+) sections of \.agents\/skills\/verify-uvw\/SKILL\.md/);
+  const brief = readFileSync(join(skill, 'bin/journeys.mjs'), 'utf8');
+  const [, first, second] = brief.match(/Read the (\w+) and (\w+) sections of \.agents\/skills\/verify-uvw\/SKILL\.md/);
   const headings = anchors(join(skill, 'SKILL.md'));
   for (const name of [first, second]) assert.ok(headings.has(name.toLowerCase()), `SKILL.md has no "## ${name}"`);
 });
 
 test('every VERIFY_UVW_ variable the helper reads is documented', () => {
   const helper = readFileSync(join(skill, 'bin/verify-uvw'), 'utf8');
-  const documented = ['SKILL.md', 'references/mcp-mode.md', 'references/stories.md'].map((doc) => readFileSync(join(skill, doc), 'utf8')).join('\n');
+  const documented = docs.filter((doc) => !doc.startsWith('features/')).map((doc) => readFileSync(join(skill, doc), 'utf8')).join('\n');
   const read = new Set([...helper.matchAll(/\$\{?(VERIFY_UVW_[A-Z_]+)/g)].map(([, name]) => name));
   const missing = [...read].filter((name) => !documented.includes(name));
   assert.ok(read.has('VERIFY_UVW_MCP_SAME_ORIGIN'), 'the pattern finds the variables the helper reads');

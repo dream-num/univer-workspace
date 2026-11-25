@@ -13,3 +13,4 @@ skills-lock.json
 .gstack/
 .verification/
 AGENTS.override.md
+.env

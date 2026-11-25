@@ -10,7 +10,8 @@ import { pathToFileURL } from 'node:url';
 // Acceptance lists are literal and independent of the product registry.
 export const expectedTools = {
   'core': [
-    'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
+    'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
+    'issue_list', 'issue_view', 'issue_create', 'issue_edit',
     'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
@@ -27,7 +28,8 @@ export const expectedTools = {
     'resources_registries', 'resources_find', 'resources_export'
   ],
   'core,files': [
-    'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
+    'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
+    'issue_list', 'issue_view', 'issue_create', 'issue_edit',
     'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
@@ -37,7 +39,8 @@ export const expectedTools = {
     'compile_markdown', 'export_markdown', 'compile_typst', 'compile_svg'
   ],
   'core,admin': [
-    'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
+    'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
+    'issue_list', 'issue_view', 'issue_create', 'issue_edit',
     'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
@@ -53,7 +56,8 @@ export const expectedTools = {
     'resources_export'
   ],
   'all': [
-    'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
+    'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
+    'issue_list', 'issue_view', 'issue_create', 'issue_edit',
     'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
@@ -66,7 +70,8 @@ export const expectedTools = {
   ],
 };
 export const restrictedTools = [
-  'whoami', 'repo_list', 'repo_view', 'issue_list', 'issue_view', 'issue_create', 'issue_edit',
+  'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
+  'issue_list', 'issue_view', 'issue_create', 'issue_edit',
   'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
   'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
   'file_upload_create', 'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create',

@@ -43,10 +43,12 @@ configuration refuses to start.
 
 An agent reaches these paths through the MCP gateway (`verify-uvw mcp ... execute`, `screenshot`) with a PAT. Isolation is invisible to a
 well-behaved user, so a hostile user is simulated: the probes send scripts exactly as an agent would ([MX1](./mcp-executor.md#mx1-executor-write-and-readback)). The run needs
-Docker Desktop, the default development MCP stack with the renderer (`VERIFY_UVW_MCP=1 $V up`) and the disposable user (`$V user`).
+Docker Desktop, the default development MCP stack with the renderer (`$V up --for mcp-security`) and the disposable user (`$V user`).
 MG9 and MG11 read the renderer container. In production mode the second user is not on the executor allowlist and its calls are refused; run `$V mcp-allow-users '*'` first.
 
 ## Driving it with agent-browser and uvw
+
+Mode: mcp.
 
 No browser. From the repository root:
 
@@ -95,6 +97,42 @@ Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker
 | MG9 | contained | Neither container mounts a data or staging directory; the control sees `/staging` on the gateway. |
 | MG10 | exposed | With the allowlist set to `*`, the executor becomes healthy with session grants; the renderer becomes healthy with `--no-sandbox`. |
 | MG11 | exposed | One Chromium browser process serves both users; each call gets a context in the shared browser. |
+
+### MG2. Environment variable names
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG2.
+
+### MG4. Network reach
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG4.
+
+### MG5. Other users' processes and files
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG5.
+
+### MG6. CPU deadline and reclamation
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG6.
+
+### MG7. Memory limit and reclamation
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG7.
+
+### MG8. Worker slots under contention
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG8.
+
+### MG9. Product data mounts
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG9.
+
+### MG10. Unsafe configuration refuses to start
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG10.
+
+### MG11. Renderer browser per user
+
+Pass when `mcp-security-probes.mjs` reports `contained` for MG11.
 
 ## Gotchas
 

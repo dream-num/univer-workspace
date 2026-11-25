@@ -6,15 +6,19 @@ import { join } from 'node:path';
 import { assertLogsExclude } from './executor-doctor-checks.mjs';
 import { assertInternalOnly, assertUnreachable } from './renderer-doctor-checks.mjs';
 
-const [repo, run, project, image, imageId, origin, serverPort, mcpPort] = process.argv.slice(2);
+const [repo, run, project, image, imageId, origin, serverPort, mcpPort, from, transport] = process.argv.slice(2);
 const secret = name => readFileSync(join(run, 'home', name), 'utf8').trim();
 const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'staging'), VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
   VERIFY_UVW_METRICS_TOKEN: secret('metrics-token'), VERIFY_UVW_EXECUTOR_TOKEN: secret('executor-token'), VERIFY_UVW_RENDERER_TOKEN: secret('renderer-token'),
   VERIFY_UVW_MCP_OAUTH_SECRET: secret('mcp-oauth-secret') };
-const docker = (args, input, timeout = 25_000) => execFileSync('docker', args, { env, input, encoding: 'utf8', maxBuffer: 1 << 28, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+const capture = (file, args, input, timeout = 25_000) => execFileSync(file, args, { env, input, encoding: 'utf8', maxBuffer: 1 << 28, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+const docker = (args, input, timeout) => capture('docker', args, input, timeout);
 const compose = (args, input, timeout) => docker(['compose', '-p', project, '-f', join(repo, 'apps/mcp/docker/compose.verify.yml'), ...args], input, timeout);
-const node = (service, code, input, timeout) => compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input, timeout);
+const node = (service, code, input, timeout) => from === 'image'
+  ? compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input, timeout)
+  : capture(process.execPath, [join(repo, '.agents/skills/verify-uvw/runner/mcp-processes.mjs'), 'exec', run, service, '--', 'node', '--input-type=module', '-e', code], input, timeout);
+const skip = check => console.log(`skip  ${check}: dist start mode has no container`);
 // Prints "reached <status>" or "blocked" so the host can assert on the outcome, whatever the container's fetch error looks like.
 const probe = (service, url) => node(service, `
   const outcome = await fetch(${JSON.stringify(url)}, { signal: AbortSignal.timeout(5000) }).then(r => 'reached ' + r.status, () => 'blocked');
@@ -22,20 +26,24 @@ const probe = (service, url) => node(service, `
 `).trim();
 
 try {
-  const cid = compose(['ps', '-q', 'renderer']).trim();
-  assert(cid, 'renderer container exists');
-  const [container] = JSON.parse(docker(['inspect', cid]));
-  assert(container.State.Running && container.State.Health?.Status === 'healthy' && container.Image === imageId, 'renderer healthy on this run image');
-  assert(container.Config.Env.includes('MCP_RENDERER_TOKEN=' + secret('renderer-token')), 'renderer has this run renderer credential');
-  assert(!container.Config.Env.some(item => item.startsWith('MCP_EXECUTOR_TOKEN=')), 'renderer holds no executor credential');
-  console.log('ok    MCP renderer holds only its call-direction credential');
-  console.log('ok    MCP renderer is healthy and uses this run\'s image');
-  assert(Object.values(container.NetworkSettings.Ports ?? {}).every(value => value === null), 'renderer has no published ports');
-  console.log('ok    MCP renderer has no published port');
-  const networks = Object.keys(container.NetworkSettings.Networks);
-  const inspected = Object.fromEntries(networks.map(name => [name, JSON.parse(docker(['network', 'inspect', name]))[0]]));
-  assertInternalOnly(inspected);
-  console.log('ok    MCP renderer joins only an internal network');
+  if (from !== 'image') {
+    for (const check of ['MCP renderer call-direction credential', 'MCP renderer health and image', 'MCP renderer published ports', 'MCP renderer internal network']) skip(check);
+  } else {
+    const cid = compose(['ps', '-q', 'renderer']).trim();
+    assert(cid, 'renderer container exists');
+    const [container] = JSON.parse(docker(['inspect', cid]));
+    assert(container.State.Running && container.State.Health?.Status === 'healthy' && container.Image === imageId, 'renderer healthy on this run image');
+    assert(container.Config.Env.includes('MCP_RENDERER_TOKEN=' + secret('renderer-token')), 'renderer has this run renderer credential');
+    assert(!container.Config.Env.some(item => item.startsWith('MCP_EXECUTOR_TOKEN=')), 'renderer holds no executor credential');
+    console.log('ok    MCP renderer holds only its call-direction credential');
+    console.log('ok    MCP renderer is healthy and uses this run\'s image');
+    assert(Object.values(container.NetworkSettings.Ports ?? {}).every(value => value === null), 'renderer has no published ports');
+    console.log('ok    MCP renderer has no published port');
+    const networks = Object.keys(container.NetworkSettings.Networks);
+    const inspected = Object.fromEntries(networks.map(name => [name, JSON.parse(docker(['network', 'inspect', name]))[0]]));
+    assertInternalOnly(inspected);
+    console.log('ok    MCP renderer joins only an internal network');
+  }
 
   node('executor', `for (const authorization of ['', 'Bearer wrong', 'Bearer ' + process.env.MCP_EXECUTOR_TOKEN]) {
     const response = await fetch(new URL('/rpc/v1/measureText', process.env.MCP_RENDERER_URL), {method:'POST',headers:{authorization}});
@@ -68,16 +76,19 @@ try {
   assert(result.ok && result.output.actualWidth > 0 && result.output.lineCount === 1, 'renderer measures text in the browser');
   console.log('ok    MCP executor reaches the renderer and measures Latin and Chinese text in Chromium');
 
-  const reached = {
-    'Workspace transport': probe('renderer', `http://host.docker.internal:${serverPort}/api/session`),
-    'public internet': probe('renderer', 'https://example.com/'),
-    'gateway': probe('renderer', 'http://gateway:3000/healthz'),
-  };
-  assertUnreachable(reached);
-  writeFileSync(join(run, 'evidence/renderer-isolation.json'), JSON.stringify(reached, null, 2) + '\n');
-  console.log('ok    MCP renderer cannot reach the Workspace server, the gateway or the internet');
+  if (from !== 'image') skip('MCP renderer isolation from the Workspace server, the gateway and the internet');
+  else {
+    const reached = {
+      'Workspace transport': probe('renderer', `${transport}/api/session`),
+      'public internet': probe('renderer', 'https://example.com/'),
+      'gateway': probe('renderer', 'http://gateway:3000/healthz'),
+    };
+    assertUnreachable(reached);
+    writeFileSync(join(run, 'evidence/renderer-isolation.json'), JSON.stringify(reached, null, 2) + '\n');
+    console.log('ok    MCP renderer cannot reach the Workspace server, the gateway or the internet');
+  }
 
-  const logs = compose(['logs', '--no-color', '--no-log-prefix', 'renderer']);
+  const logs = from === 'image' ? compose(['logs', '--no-color', '--no-log-prefix', 'renderer']) : readFileSync(join(run, 'logs/mcp-renderer.log'), 'utf8');
   for (const name of ['mcp-session', 'mcp-token', 'executor-token', 'renderer-token', 'metrics-token', 'mcp-oauth-secret']) {
     try { assertLogsExclude(logs, [secret(name)]); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
   }

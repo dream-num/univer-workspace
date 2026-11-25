@@ -21,7 +21,9 @@ Open Application settings: Account > `Application settings` in Repository mode, 
 
 ## Driving it with agent-browser and uvw
 
-Use the isolated run and browser session described in [the verification index](./README.md). Start the mock provider and add it as an OpenAI-compatible model as in AS1 of [Browser Agent skills](./agent-skills.md#driving-it-with-agent-browser-and-uvw). `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help` describes the script steps and the request log. Use a unique run and allowed ports. Do not attach to another run's server.
+Mode: mcp-same-origin.
+
+Use the isolated run and browser session described in [the verification index](./README.md). The browser Agent gets its token and tools from the MCP gateway on the web origin: in a run without it, every Agent message fails with `Could not obtain agent token (HTTP 503)`. Every journey below runs on that one run. Start the mock provider and add it as an OpenAI-compatible model as in AS1 of [Browser Agent skills](./agent-skills.md#driving-it-with-agent-browser-and-uvw). `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help` describes the script steps and the request log.
 
 After a session runs, dump the recorded requests from its Vite dev session page:
 
@@ -31,16 +33,47 @@ agent-browser eval "$(cat .agents/skills/verify-uvw/bin/trajectory-dump.js)"
 
 The result has `skippedRecords` and a `records` array. Each record contains the sequence, outcome, attempts, common-prefix length, rewrite flag, and expanded request body. Compare the body string with the corresponding mock log entry's `raw` without parsing and serializing it again. A provider key pasted into a message is stored as `[redacted]`.
 
-1. **TR2-1.** Run the same two-turn script on trunk and head. The first turn calls `repo_list` then returns text; the second returns text. Leave Debug mode off on head. Capture `tr2-regression.png`. Confirm identical conversation content and layout, no tabs, and a new settings row defaulting off.
-2. **TR2-2.** Enable Debug mode in settings, reload, and open the same session in a second browser tab. Disable it in the first tab. Capture `tr2-toggle.png`. Confirm the `Conversation`/`Trajectory` tab strip disappears in the second tab without reload.
-3. **TR2-3.** Enable Debug mode after the two-turn script and select Trajectory. Capture `tr2-tree.png`. Confirm SYSTEM then two Turns, numbering starts at 1 in each Turn, tools are indented under their assistant, and each model row shows a duration and the mock's fixed `100 / 1` tokens. The dump has no usage or timing fields; compare those with **Usage & timing**.
-4. **TR2-4.** In repository scope attach a reference and send a message. Select USER, then As sent. Capture `tr2-user.png`. Compare every content part with the mock log. References and Skill catalog must be labeled within the original user content.
-5. **TR2-5.** Seed a Sheet with at least 40 rows using [seed-sheets.mjs](../bin/seed-sheets.mjs), and have the mock call `outline` on it. Select TOOL. Capture `tr2-tool.png`. Compare Arguments with the request's tool-call arguments. As sent must show the tool message, including JSON strings as trees. A node starts expanded only when it is fewer than three levels deep and at most 4 KB; other nodes start folded, and each expands on its own. MCP result must show structuredContent and the notice that it is not what the model received. Check Timing and Schema.
-6. **TR2-6.** Select the second model call and Context sent. A model row's details are `Response`, `Context sent`, `Replayed as`, `Usage & timing` and `Raw`; the stats strip above the tree counts Turns, Model calls, Tool calls, tokens, Cache hit rate, Errors, History rewrites and Parameter changes. Capture `tr2-context.png`. Only added messages are NEW. Compare input, hit and miss counts with usage. Headless agent-browser denies clipboard reads (`navigator.clipboard.readText()` and `agent-browser clipboard read` both fail), so capture the copied string instead: run `agent-browser eval 'window.__copied=null; navigator.clipboard.writeText=async t=>{window.__copied=t}'`, click Copy request JSON, read `agent-browser eval 'window.__copied'`, and compare it byte for byte with the second mock request body.
-7. **TR2-7.** Run a script with a 500 `overloaded` response followed by success, then another with enough 500 responses to exhaust retries. Send a new successful message afterward. Capture `tr2-errors.png`. Inspect Usage & timing for every attempt's HTTP status and error body. A failed call has no tool child rows. Only errors retains the failing rows and their Turn.
-8. **TR2-8.** Run a script step with `delayMs: 8000`. Stay on Trajectory and capture `tr2-live.png`. Confirm a growing bar, followed by final timing and tokens without reload. Switch to Conversation while running and append a steering message. Its first appearance in a request opens a new Turn.
-9. **TR2-9.** Search for a repository name in the recorded `repo_list` result. Capture `tr2-search.png`. Matching tool rows retain their assistant and Turn. Search an absent term and confirm the empty state. Clear search and confirm the full tree returns.
-10. **TR2-10.** Prepare IndexedDB directly: sessions live in `univer-workspace-agents-<userId>` and trajectory records in the `modelCalls` store (key `[sessionId, seq]`) of `univer-workspace-agent-trajectory-<userId>`. Create a session with messages but no trajectory records. Create a separate session with three records, where the third request changes an earlier message so its common prefix is shorter. Capture `tr2-unrecorded.png` and `tr2-rewrite.png`. Confirm the old-session notice and usable Conversation tab. Confirm one history rewrite and REWRITTEN markers beginning at the changed position in the third call's Context sent.
+### TR2-1. Unchanged conversation with Debug mode off
+
+Run the same two-turn script on trunk and head. The first turn calls `repo_list` then returns text; the second returns text. Leave Debug mode off on head. Capture `tr2-regression.png`. Confirm identical conversation content and layout, no tabs, and a new settings row defaulting off.
+
+### TR2-2. Settings switch, persistence, and cross-tab changes
+
+Enable Debug mode in settings, reload, and open the same session in a second browser tab. Disable it in the first tab. Capture `tr2-toggle.png`. Confirm the `Conversation`/`Trajectory` tab strip disappears in the second tab without reload.
+
+### TR2-3. SYSTEM, Turn and step rows, tool parentage, and timing
+
+Enable Debug mode after the two-turn script and select Trajectory. Capture `tr2-tree.png`. Confirm SYSTEM then two Turns, numbering starts at 1 in each Turn, tools are indented under their assistant, and each model row shows a duration and the mock's fixed `100 / 1` tokens. The dump has no usage, and its only timing is each attempt's `startedAt` and `endedAt`; compare the row's tokens and duration with **Usage & timing**.
+
+### TR2-4. User text and reminder sources without changing message boundaries
+
+In repository scope attach a reference and send a message. Select USER, then As sent. Capture `tr2-user.png`. Compare every content part with the mock log. References and Skill catalog must be labeled within the original user content.
+
+### TR2-5. Tool arguments, sent results, MCP results, schema, and folded JSON
+
+Seed a Sheet with at least 40 rows using [seed-sheets.mjs](../bin/seed-sheets.mjs), and have the mock call `outline` on it. Select TOOL. Capture `tr2-tool.png`. Compare Arguments with the request's tool-call arguments. As sent must show the tool message, including JSON strings as trees. A node starts expanded only when it is fewer than three levels deep and at most 4 KB; other nodes start folded, and each expands on its own. MCP result must show structuredContent and the notice that it is not what the model received. Check Timing and Schema.
+
+### TR2-6. Context sent, NEW markers, cache counts, and copying exact requests
+
+Select the second model call and Context sent. A model row's details are `Response`, `Context sent`, `Replayed as`, `Usage & timing` and `Raw`; the stats strip above the tree counts Turns, Model calls, Tool calls, tokens, Cache hit rate, Errors, History rewrites and Parameter changes. Capture `tr2-context.png`. Only added messages are NEW. Compare input, hit and miss counts with usage. Headless agent-browser denies clipboard reads (`navigator.clipboard.readText()` and `agent-browser clipboard read` both fail), so capture the copied string instead: run `agent-browser eval 'window.__copied=null; navigator.clipboard.writeText=async t=>{window.__copied=t}'`, click Copy request JSON, read `agent-browser eval 'window.__copied'`, and compare it byte for byte with the second mock request body.
+
+### TR2-7. Errors, retries, attempts, and error filtering
+
+Run a script with a 500 `overloaded` response followed by success, then another with enough 500 responses to exhaust retries. Send a new successful message afterward. Capture `tr2-errors.png`. Inspect Usage & timing for every attempt's HTTP status and error body. A failed call has no tool child rows. Only errors retains the failing rows and their Turn.
+
+### TR2-8. Running calls and returning to Conversation to steer
+
+Run a script step with `delayMs: 8000`. Stay on Trajectory and capture `tr2-live.png`. Confirm a growing bar, followed by final timing and tokens without reload. Switch to Conversation while running and append a steering message. Its first appearance in a request opens a new Turn.
+
+### TR2-9. Searching sent content and MCP results with ancestor rows retained
+
+Search for a repository name in the recorded `repo_list` result. Capture `tr2-search.png`. Matching tool rows retain their assistant and Turn. Search an absent term and confirm the empty state. Clear search and confirm the full tree returns.
+
+### TR2-10. Sessions without records and rewritten history
+
+Prepare IndexedDB directly: sessions live in `univer-workspace-agents-<userId>` and trajectory records in the `modelCalls` store (key `[sessionId, seq]`) of `univer-workspace-agent-trajectory-<userId>`. Create a session with messages but no trajectory records. Create a separate session with three records, where the third request changes an earlier message so its common prefix is shorter. Capture `tr2-unrecorded.png` and `tr2-rewrite.png`. Confirm the old-session notice and usable Conversation tab. Confirm one history rewrite and REWRITTEN markers beginning at the changed position in the third call's Context sent.
+
+### TR2-11. Performance lane
 
 For the performance lane, prepare a 40-call recorded session. Use a MutationObserver and performance.now() to measure from selecting Trajectory until every expected step row exists. Repeat ten times and compare the median with the 500 ms budget. Separately compare first-message visibility with Debug mode off on trunk and head, ten alternating runs each, against the +50 ms budget. Keep timing logs with screenshots. A component fixture alone does not establish the full-page performance budget.
 

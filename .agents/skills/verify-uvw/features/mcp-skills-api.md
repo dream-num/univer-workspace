@@ -25,12 +25,15 @@ An MCP client connected to `$MCP_URL` reads the initialize instructions, calls `
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
 ### MR1. Skills list and get fallback
+
+Run: helper.
 
 MCP serves its own `core`, `html-view-creator` and `skill-creator` and nine
 shared domain Skills.
@@ -66,6 +69,8 @@ every shared file.
 
 ### MR2. Skill resource and MCP core bindings
 
+Run: helper.
+
 ```bash
 $V mcp mcp-skills-read skills_read '{"name":"html-view","resource":"references/charts.md"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-read.out" > "$EVIDENCE/mcp-skills-read.md"
@@ -74,14 +79,16 @@ jq -e '.resources | length > 0 and all(.[]; .readCommand | startswith("Call skil
 $V mcp mcp-skills-core skills_read '{"name":"core"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-core.out" > "$EVIDENCE/mcp-skills-core.md"
 cmp "$EVIDENCE/mcp-skills-core.md" apps/mcp/skills/core/SKILL.md
-! cmp -s "$EVIDENCE/mcp-skills-core.md" apps/cli/skill-data/core/SKILL.md
-! rg -n '\buvw\b' "$EVIDENCE/mcp-skills-core.md"
+cmp -s "$EVIDENCE/mcp-skills-core.md" apps/cli/skill-data/core/SKILL.md; test $? -eq 1
+grep -nw uvw "$EVIDENCE/mcp-skills-core.md"; test $? -eq 1
 jq -e '.tool == "skills_read" and .outcome == "ok"' "$EVIDENCE/mcp-skills-read.event.json"
 ```
 
 Pass when the reference equals the shared source, read instructions name MCP calls, and MCP core equals its own source and differs from CLI core.
 
 ### MR3. API find
+
+Run: helper.
 
 The CLI `api` commands print text and have no `--json`, so the reference library (the same package the CLI loads) is the structured oracle, and the CLI text is the cross-check.
 
@@ -100,6 +107,8 @@ Pass when the result equals the library output (wrapped in `results`), the CLI t
 
 ### MR4. API show
 
+Run: helper.
+
 ```bash
 $V mcp mcp-api-show api_show '{"symbols":["FRange.setValues","ICellData.v","NoSuchSymbolAnywhere"]}'
 node -e "$REF"'console.log(JSON.stringify({results:r.show(["FRange.setValues","ICellData.v","NoSuchSymbolAnywhere"])}))' > "$EVIDENCE/mcp-api-show-oracle.json"
@@ -116,6 +125,8 @@ grep -q 'Unknown symbol: NoSuchSymbolAnywhere' "$EVIDENCE/mcp-api-show-missing-c
 Pass when the result equals the library output, an unknown symbol is a `not-found` entry and not a tool error, the CLI text shows the same class and member, and the CLI exits 1 for the unknown symbol (the gateway reports it in the result instead).
 
 ### MR5. MCP Skills extension and file resources
+
+Run: helper.
 
 ```bash
 $V mcp-skills mcp-skills-extension
@@ -148,6 +159,8 @@ Pass when the extension declares twelve static Skills, the resource entry points
 
 ### MR6. Server instructions
 
+Run: helper.
+
 ```bash
 $V mcp-instructions mcp-instructions
 $V mcp-instructions --protocol 2025-11-25 mcp-instructions-legacy
@@ -158,6 +171,8 @@ jq -e '.instructions | contains("pull request") and contains("pr_create") and co
 Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, then merge, or hand over the review link when the user asked to review) and tell the agent to generate a new idempotency key for each new operation. The default PAT holds `worktree:merge`; MA7 checks the instructions of a PAT without it.
 
 ### MR7. Truncation with cursors
+
+Run: helper.
 
 `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` resource paging is covered by the gateway tests. MR1 covers `workspace-result-too-large` with `board` full.
 
@@ -185,6 +200,8 @@ Pass when the pages are each within 100,000 characters, all but the last carry `
 
 ### MR8. Cursor guard and unknown Skill
 
+Run: helper.
+
 ```bash
 $V mcp mcp-frange-wrong api_show "$(jq -nc --arg c "$(jq -r '.cursor' "$EVIDENCE/mcp-frange-0.out")" '{symbols:["FWorkbook"],cursor:$c}')"
 test $? -eq 1
@@ -198,9 +215,11 @@ jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
 ```
 
 Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1, the reused cursor has a matching usage event, and the CLI also rejects the unknown Skill.
-### MR13 custom Skills
+### MR13. custom Skills
 
-Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
+Run: helper.
+
+Seed one Skill in each layer.
 Run MR13 after MR1 or on a fresh run: MR1 expects only the twelve built-in Skills.
 The seeder creates missing folders and uploads files recursively. Re-runs skip existing
 Blob names and never delete or replace existing data. Use a new name to seed changed bytes.
@@ -263,9 +282,10 @@ names follow the same rule at their respective paths and skip the ambiguous subt
 Dot-named nested folders and `blob upload --parent` are exercised by these uploads.
 Use a fresh run for the duplicate case because it intentionally leaves an ambiguous folder.
 
-### MR14 Skill draft authoring
+### MR14. Skill draft authoring
 
-Start a fresh MCP-enabled run, then run `user` and `doctor`.
+Run: helper.
+
 MR14 follows MR13's live custom Skill discovery path.
 
 ```bash
@@ -283,26 +303,20 @@ login HTTP endpoint to obtain the author's interactive Session. It publishes wit
 with source `user`, and `mr14-read.out` must return its exact `SKILL.md` text.
 The four draft call events must say `ok`, `executor: none`, and the destination
 Space ID, with no Skill content. `mr14-summary.json` records the asserted result.
-Run `$V down` afterward.
 
-### MR15 Import a pinned external Skill and publish after review
+### MR15. Import a pinned external Skill and publish after review
 
-Use a fresh MCP-enabled same-origin run, with live GitHub network access. Build the
-MCP image from this checkout. Check the chosen ports with `lsof` first.
+Mode: mcp-same-origin.
+
+It needs live GitHub network access.
 
 ```bash
-export VERIFY_UVW_ROOT=/tmp/verify-uvw-sb5 VERIFY_UVW_RUN=mr15
-export VERIFY_UVW_SERVER_PORT=3932 VERIFY_UVW_WEB_PORT=5982 VERIFY_UVW_MCP_PORT=3942
-export VERIFY_UVW_MCP=1 VERIFY_UVW_MCP_SAME_ORIGIN=1
-V=.agents/skills/verify-uvw/bin/verify-uvw
-$V up
-$V user
 eval "$($V env)"
 $V doctor > "$EVIDENCE/mr15-doctor.txt"
 node .agents/skills/verify-uvw/bin/mcp-skill-import.mjs
 ```
 
-Keep the launching shell alive between commands. The script reads the real pinned
+The script reads the real pinned
 `anthropics/skills` PDF Skill, creates an as-is `from` draft with one verbatim review
 quote and one fabricated quote, signs into the browser, captures the review page,
 and presses Publish on that page. It then independently checks publication through
@@ -327,7 +341,6 @@ publication. Verify `pdf` is first in the Skills rail and its `from GitHub` link
 is derived from `metadata.source` and its pinned `source-commit`. Save `mr15-rail.png` and `mr15-rail.txt`, reload and save
 `mr15-rail-reloaded.png` to check persistence. Switch the UI to Chinese and save
 `mr15-rail-zh.png` showing `来自 GitHub`. No real model credentials are required.
-Run `$V down` afterward and retain its cleanup output.
 
 ## Gotchas
 

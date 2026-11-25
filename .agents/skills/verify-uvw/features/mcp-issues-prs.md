@@ -70,8 +70,9 @@ the last two as that agent. A person judges an Issue's whole task in the `Accept
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MI1 through MI11 use the Team Space, MP1 through MP10 the Personal Space, and MP14 an agent's Personal Space:
 
@@ -83,6 +84,8 @@ $V uvw repo view "$O/verify-team" --json >/dev/null 2>&1 \
 ```
 
 ### MI1. Issue create
+
+Run: helper.
 
 Uses the Team Space from the setup above.
 
@@ -102,6 +105,8 @@ Pass when every command exits 0, the CLI view equals the MCP result without `url
 
 ### MI2. Issue view
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-view issue_view "{\"repo\":\"$O/verify-team\",\"number\":\"#$N\"}"
 $V cli mcp-issue-view-cli issue view "#$N" -R "$O/verify-team" --json
@@ -114,6 +119,8 @@ Pass when both exit 0, the diff is empty, no `timeline` key is present, and the 
 carries the Team Space ID.
 
 ### MI3. Issue view with comments
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-timeline issue_view "{\"repo\":\"$O/verify-team\",\"number\":\"$ORIGIN/spaces/$T/issues/$N\",\"comments\":true}"
@@ -129,6 +136,8 @@ given as its Browser URL, which the tool accepts in place of a number.
 
 ### MI4. Issue list
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-list issue_list "{\"repo\":\"$O/verify-team\",\"state\":\"all\",\"labels\":[\"bug\"],\"assignee\":\"@me\",\"limit\":5}"
 $V cli mcp-issue-list-cli issue list -R "$O/verify-team" -s all -l bug -a @me -L 5 --json
@@ -141,6 +150,8 @@ Pass when both exit 0, the diff is empty, every listed Issue has a `url`, and th
 carries the Team Space ID.
 
 ### MI5. Issue edit
+
+Run: helper.
 
 ```bash
 $V cli mcp-label-create-docs label create docs --color blue -R "$O/verify-team" --json
@@ -156,6 +167,8 @@ the Team Space ID.
 
 ### MI6. Issue comment
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-comment issue_comment "{\"repo\":\"$O/verify-team\",\"number\":\"$N\",\"body\":\"Confirmed by agent\"}"
 $V cli mcp-issue-comment-cli issue view "$N" -R "$O/verify-team" -c --json
@@ -168,6 +181,8 @@ Pass when both exit 0, the comment equals the last comment of the CLI timeline, 
 event carries the Team Space ID.
 
 ### MI7. Issue close as not planned
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-close issue_set_state "{\"repo\":\"$O/verify-team\",\"number\":\"$N\",\"state\":\"closed\",\"reason\":\"not_planned\",\"comment\":\"Out of scope\"}"
@@ -182,6 +197,8 @@ Pass when both exit 0, the diff is empty, the Issue is closed as `not_planned`, 
 timeline holds the "Out of scope" comment, and the event carries the Team Space ID.
 
 ### MI8. Issue reopen
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-reopen issue_set_state "{\"repo\":\"$O/verify-team\",\"number\":\"$N\",\"state\":\"open\"}"
@@ -199,6 +216,8 @@ Team Space ID, and `reason` with `state: open` fails with `workspace-argument-in
 
 ### MI9. Issue tool failure
 
+Run: helper.
+
 ```bash
 $V mcp mcp-issue-bad issue_view "{\"repo\":\"$O/verify-team\",\"number\":\"abc\"}"
 test $? -eq 1
@@ -213,6 +232,8 @@ Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr pr
 the event records `tool_error` with the same code.
 
 ### MI10. Nonexistent Issue
+
+Run: helper.
 
 A Workspace error translated end to end.
 
@@ -231,6 +252,8 @@ Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr pr
 `tool_error` with the same code.
 
 ### MI11. Invalid argument
+
+Run: helper.
 
 ```bash
 $V mcp mcp-issue-invalid issue_list "{\"repo\":\"$O/verify-team\",\"state\":\"reopened\"}"
@@ -258,7 +281,7 @@ $V mcp --as acceptor mia-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mia-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+`mia-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
 cache. Then:
 
 ```bash
@@ -344,7 +367,7 @@ $V mcp --as panel mip-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mip-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mip-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+`mip-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
 cache. Create member E in a second browser session: with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e`, pin the
 language and view as [the skill](../SKILL.md#drive) does, open `/login`, click the `Create account` mode button, fill
 `Username` with `mip-e-$VERIFY_UVW_RUN`, `Display name` and `Password`, and submit. Then:
@@ -467,7 +490,7 @@ $V mcp --as checks-v mic-claim-v claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
-[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache. Then:
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache. Then:
 
 ```bash
 A=$(jq -r .agent.username "$EVIDENCE/principal-checks-a.json"); VA=$(jq -r .agent.username "$EVIDENCE/principal-checks-v.json")
@@ -619,6 +642,8 @@ deadline off, and the third Issue then stays submitted.
 
 ### MP1. Pull request create
 
+Run: helper.
+
 Personal Space, with an idempotency key.
 
 ```bash
@@ -630,7 +655,7 @@ PN=$(jq -r '.number' "$EVIDENCE/mcp-pr-create.out")
 W=$(jq -r '.id' "$EVIDENCE/mcp-pr-create.out")
 $V mcp mcp-pr-create-again pr_create "{\"repo\":\"$O/personal\",\"title\":\"Agent change\",\"body\":\"From MCP\",\"idempotency_key\":\"$KEY\"}"
 $V cli mcp-pr-create-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-create.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-create-cli.out")
 diff <(jq -S '.' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-again.out")
 jq -e --arg origin "$ORIGIN" --arg p "$P" '.url == "\($origin)/spaces/\($p)/pulls/\(.number)" and .state == "draft" and .kind == "user"' "$EVIDENCE/mcp-pr-create.out"
 jq -e --arg repo "$P" '.tool == "pr_create" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-create.event.json"
@@ -639,17 +664,19 @@ test $? -eq 1
 jq -e '.code == "CONFLICT" and (.message | contains("Idempotency-Key"))' "$EVIDENCE/mcp-pr-create-reused.out"
 ```
 
-Pass when every command exits 0 except the reused key, the CLI view equals the MCP result without `url`, the retry
+Pass when every command exits 0 except the reused key, the CLI view equals the MCP result without `url` and `checks`, whose MCP and uvw shapes differ by design (MP15), the retry
 with the same key returns an identical pull request (same `id` and `number`), the `url` is
 the Personal Space pull request address, and the event carries the resolved Space ID. Reusing the key with a different
 title exits 1 with `CONFLICT` and creates nothing.
 
 ### MP2. Pull request view by number
 
+Run: helper.
+
 ```bash
 $V mcp mcp-pr-view pr_view "{\"repo\":\"$O/personal\",\"number\":\"#$PN\"}"
 $V cli mcp-pr-view-cli pr view "#$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-view.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-view.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-view-cli.out")
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-view.event.json"
 ```
 
@@ -657,19 +684,23 @@ Pass when both exit 0, the diff is empty, and the event carries the Personal Spa
 
 ### MP3. Pull request view by URL
 
+Run: helper.
+
 ```bash
 URL=$(jq -r '.url' "$EVIDENCE/mcp-pr-create.out")
 $V mcp mcp-pr-view-url pr_view "{\"repo\":\"$O/personal\",\"number\":\"$URL\"}"
 $V cli mcp-pr-view-url-cli pr view "$URL" --json
 diff <(jq -S '.' "$EVIDENCE/mcp-pr-view.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-url.out")
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-view-url.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-url-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-view-url.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-view-url-cli.out")
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-view-url.event.json"
 ```
 
 Pass when both exit 0, the URL result equals the number result, it equals the CLI view without
-`url`, and the event carries the Personal Space ID.
+`url` and `checks`, and the event carries the Personal Space ID.
 
 ### MP4. Pull request list
+
+Run: helper.
 
 ```bash
 $V mcp mcp-pr-list pr_list "{\"repo\":\"$O/personal\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
@@ -684,10 +715,12 @@ carries the Personal Space ID.
 
 ### MP5. Pull request edit
 
+Run: helper.
+
 ```bash
 $V mcp mcp-pr-edit pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"title\":\"Agent change v2\",\"body\":\"Edited\"}"
 $V cli mcp-pr-edit-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-edit.out") <(jq -S '.' "$EVIDENCE/mcp-pr-edit-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-edit.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-edit-cli.out")
 jq -e '.name == "Agent change v2" and .summary == "Edited"' "$EVIDENCE/mcp-pr-edit.out"
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-edit.event.json"
 $V mcp mcp-pr-edit-bad pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
@@ -700,14 +733,16 @@ Personal Space ID, and an edit without any change fails with `workspace-argument
 
 ### MP6. Pull request ready and undo
 
+Run: helper.
+
 ```bash
 $V mcp mcp-pr-ready pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
 $V cli mcp-pr-ready-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-ready.out") <(jq -S '.' "$EVIDENCE/mcp-pr-ready-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-ready.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-ready-cli.out")
 jq -e '.state == "ready"' "$EVIDENCE/mcp-pr-ready.out"
 $V mcp mcp-pr-undo pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"undo\":true}"
 $V cli mcp-pr-undo-cli pr view "$PN" -R "$O/personal" --json
-diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-undo.out") <(jq -S '.' "$EVIDENCE/mcp-pr-undo-cli.out")
+diff <(jq -S 'del(.url, .checks)' "$EVIDENCE/mcp-pr-undo.out") <(jq -S 'del(.checks)' "$EVIDENCE/mcp-pr-undo-cli.out")
 jq -e '.state == "draft"' "$EVIDENCE/mcp-pr-undo.out"
 jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-undo.event.json"
 ```
@@ -716,6 +751,8 @@ Pass when every command exits 0, both diffs are empty, the pull request is `read
 `draft` again, and the event carries the Personal Space ID.
 
 ### MP7. Search Issues
+
+Run: helper.
 
 ```bash
 $V mcp mcp-search-issues search "{\"kind\":\"issues\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
@@ -730,6 +767,8 @@ Pass when both exit 0, the diff is empty, every Issue has a `url`, and the event
 
 ### MP8. Search pull requests
 
+Run: helper.
+
 ```bash
 $V mcp mcp-search-prs search "{\"kind\":\"prs\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
 $V cli mcp-search-prs-cli search prs -s all -A @me -L 5 --json
@@ -742,6 +781,8 @@ Pass when both exit 0, the diff is empty, every pull request has a `url`, and th
 null `repo`.
 
 ### MP9. Browse
+
+Run: helper.
 
 ```bash
 $V mcp mcp-browse-repo browse "{\"repo\":\"$O/personal\"}"
@@ -763,6 +804,8 @@ Pass when every command exits 0, each MCP `{url}` equals the CLI `--json` output
 the repository, pull request and Issue addresses, and each event carries its resolved Space ID.
 
 ### MP10. Nonexistent pull request
+
+Run: helper.
 
 ```bash
 $V mcp mcp-pr-missing pr_view "{\"repo\":\"$O/personal\",\"number\":\"99999\"}"
@@ -791,7 +834,7 @@ $V mcp --as b3 mp12-claim-b3 claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as the run user, click `Claim agent`, and replace the codes as
-[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache.
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache.
 
 ```bash
 A3U=$(jq -r .agent.username "$EVIDENCE/principal-a3.json"); B3U=$(jq -r .agent.username "$EVIDENCE/principal-b3.json")
@@ -877,7 +920,7 @@ $V mcp --as linker mpl-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mpl-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Then:
+`mpl-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
 $V cli mpl-member repo member add "$A" --role viewer -R "$O/issue-link" --json
@@ -910,6 +953,8 @@ lists the pull request and its state, and the pull request header names `Serves 
 
 ### MP14. An agent's budget
 
+Run: helper.
+
 An agent principal (see [the principals reference](../references/stories.md)) opens pull requests in its own Personal
 Space until its budget of 10 is used. Creating the principal counts toward the 5 agents an hour. One creation fails
 first because the journey holds the write lock of the run's collaboration database while it runs. Collaboration then
@@ -920,7 +965,7 @@ $V principal budget mcp-budget-principal
 A=$(jq -r '.agent.username' "$EVIDENCE/principal-budget.json")
 $V mcp --as budget mcp-budget-before whoami
 jq -e '.budget == {openWorktrees: {used: 0, limit: 10}, merges: {used: 0, limit: 50}}' "$EVIDENCE/mcp-budget-before.out"
-(echo "BEGIN EXCLUSIVE;"; sleep 15; echo "COMMIT;") | sqlite3 "$(dirname "$EVIDENCE")/data/univer-collaboration.sqlite" &
+{ echo "BEGIN EXCLUSIVE;"; sleep 15; echo "COMMIT;"; } | sqlite3 "$(dirname "$EVIDENCE")/data/univer-collaboration.sqlite" &
 sleep 2
 $V mcp --as budget mcp-budget-failed pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task F\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-failed\"}"
 test $? -eq 1
@@ -988,7 +1033,7 @@ $V mcp --as checker-b mpc-claim-b claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
-[MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's cache. Register a
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache. Register a
 person E with `POST $ORIGIN/api/auth/password/register` and keep the password outside `$EVIDENCE`. Then:
 
 ```bash

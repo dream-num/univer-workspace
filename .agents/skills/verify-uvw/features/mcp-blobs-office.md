@@ -25,8 +25,9 @@ hands its `page_url` to a person who uploads in the browser. It then calls `impo
 
 ## Driving it with agent-browser and uvw
 
-Run these in an MCP-mode instance, started as in [MCP gateway](mcp.md): `VERIFY_UVW_MCP=1 $V up`,
-`$V user` and a `$V doctor` with no `FAIL` lines. Start every shell with `eval "$($V env)"`. Each `$V mcp`
+Mode: mcp.
+
+Start every shell with `eval "$($V env)"`. Each `$V mcp`
 call checks its usage event and credential leakage, and exit 5 fails the journey.
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes. MF1 reads the Team Space ID from M5's evidence and MF4 needs the Personal Space ID, so start with:
 
@@ -41,6 +42,8 @@ MX_SPACE=$(jq -r .id "$EVIDENCE/mx-repo.out")
 ```
 
 ### MF1. Stage and publish a Blob
+
+Run: helper.
 
 Uses the Team Space from the setup above.
 
@@ -67,6 +70,8 @@ Pass when upload and retry return the same Resource, CLI metadata matches, downl
 
 ### MF2. Replace a Blob with its ETag
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 printf 'replacement bytes\n' > "$EVIDENCE/mf-replacement.txt"
@@ -91,13 +96,15 @@ Pass when replacement retains identity, retries return the same result, the link
 
 ### MF3. Capability and owner boundaries, browser upload
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-page-reserve file_upload_create '{"purpose":"blob","file_name":"never-render-this-name.txt","media_type":"text/plain"}'
 MF_PAGE=$(jq -r '.upload.page_url' "$EVIDENCE/mf-page-reserve.out")
 curl -fsS -D "$EVIDENCE/mf-page.headers" "$MF_PAGE" > "$EVIDENCE/mf-page.html"
 grep -q "default-src 'none'; script-src 'nonce-" "$EVIDENCE/mf-page.headers"
-! grep -q 'never-render-this-name' "$EVIDENCE/mf-page.html"
+grep -q 'never-render-this-name' "$EVIDENCE/mf-page.html"; test $? -eq 1
 MF_WRONG=$(jq -r '.upload.upload_url | sub("token=.*"; "token=" + ("0" * 64))' "$EVIDENCE/mf-page-reserve.out")
 test "$(curl -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Length: 15' --data-binary 'gateway upload
 ' "$MF_WRONG")" = 404
@@ -142,6 +149,8 @@ Pass when the wrong token is refused, the page has a strict CSP and no supplied 
 
 ### MF4. Download a Worktree image Asset
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-asset-pr pr_create "$(jq -nc --arg repo "$O/personal" --arg key "mf-asset-pr-$MF_KEY" '{repo:$repo,title:"Asset transfer",idempotency_key:$key}')"
@@ -171,6 +180,8 @@ Pass when MCP, public upload and CLI return identical image bytes, with the down
 
 ### MF5. Pending uploads and purpose validation
 
+Run: helper.
+
 ```bash
 MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-pending-reserve file_upload_create '{"purpose":"blob","file_name":"pending.txt","size":3,"media_type":"text/plain"}'
@@ -186,6 +197,8 @@ jq -e '.code == "workspace-upload-media-type-invalid"' "$EVIDENCE/mf-invalid-pur
 Pass when a reservation cannot be published before bytes arrive and Office-purpose validation refuses plain text.
 
 ### MF6. Upload upper limit, single PUT and download capability
+
+Run: helper.
 
 ```bash
 node --input-type=module - "$EVIDENCE" <<'JS'
@@ -211,6 +224,8 @@ JS
 Pass when over-limit files leave an upload retryable, smaller files are accepted, a second successful PUT cannot overwrite bytes, and an unsigned download is refused.
 
 ### MF7. Binary XLSX and PNG round trips
+
+Run: helper.
 
 Generates a valid 50,000-row OpenXML workbook larger than 4 MiB and a PNG. Python 3 is needed for standard-library fixture generation.
 
@@ -241,6 +256,8 @@ Pass when both hashes match after PUT, publication and download, default Blob na
 
 ### MF8. Normalized binary upload paths
 
+Run: helper.
+
 Needs the MF7 PNG and the Team Space from the setup above.
 
 ```bash
@@ -263,6 +280,8 @@ shasum -a 256 "$EVIDENCE/mf-binary.png" "$EVIDENCE/mf-path-canonical.png" "$EVID
 Pass when canonical and dot-segment PUTs survive publication and download with the same SHA-256 as the original binary.
 
 ### MF9. Normalized MCP body cap
+
+Run: helper.
 
 Sends more than 4 MiB without client URL normalization.
 
@@ -299,7 +318,7 @@ $V mcp --as filefork mff-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mff-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
-code in `mff-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. H adds A as a
+code in `mff-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. H adds A as a
 Viewer and E as an Editor, uploads the files and a page, and puts a Sheet with B2 `42` on Trunk:
 
 ```bash
@@ -446,6 +465,8 @@ Before `$V down`, close E's browser session and run `uh daemon stop` and `ue dae
 
 ### MX7. Office xlsx round trip
 
+Run: helper.
+
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs xlsx
 ```
@@ -458,6 +479,8 @@ stop this journey. Do not bypass the upload route.
 
 ### MX8. Office docx round trip
 
+Run: helper.
+
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs docx
 ```
@@ -466,6 +489,8 @@ Pass with the same upload, import, inspection and export checks for a Doc contai
 using a reserved size upper bound larger than the actual file.
 
 ### MX9. Office import idempotent retry
+
+Run: helper.
 
 Repeat the same upload and key after a delay and verify the Worktree still has one imported Unit.
 
@@ -477,6 +502,8 @@ Pass when both calls directly return the same Unit ID and the Worktree Unit list
 
 ### MX10. Reused import key with a different upload
 
+Run: helper.
+
 Import one upload with a key, then a different upload with the same key. Run after MX7.
 
 ```bash
@@ -487,6 +514,8 @@ Pass when the second call fails with `workspace-idempotency-conflict`, the Workt
 and repeating the first arguments returns the original Unit ID.
 
 ### MM1. Markdown compile, native readback and block update
+
+Run: helper.
 
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-markdown-roundtrip.mjs
@@ -502,6 +531,8 @@ that random filename component. Replace one explicit block and inspect the chang
 and preserved list. Evidence uses the `mm-markdown-` prefix and includes a summary JSON.
 
 ### MM2. Markdown input errors and bounded ZIP paths
+
+Run: helper.
 
 Run after MM1.
 
