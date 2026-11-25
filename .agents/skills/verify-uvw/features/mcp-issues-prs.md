@@ -1376,7 +1376,7 @@ $V mcp --as reverter mrv-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mrv-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mrv-claim.*` as [MH](agent-handoff.md#mh-agent-principals-claims-and-public-spaces) says. Wait 35 s for the gateway's
+`mrv-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
 cache. Create E in a second browser session as MI13 does, with username `mrv-e-$VERIFY_UVW_RUN` and display name
 `Erin`. Then:
 
