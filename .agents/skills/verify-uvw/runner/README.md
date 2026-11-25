@@ -23,6 +23,9 @@ and act on what it prints:
 - A `host` line means [host-only.mjs](host-only.mjs) leaves that feature or those journeys to the host, and says
   why each cannot run in a container. The runner skips them. Tell the user, then run them in host mode as
   [SKILL.md](../SKILL.md) describes.
+- A `hint` line names MCP packaging changes that no runner result proves, as
+  [What the runner does not prove](#what-the-runner-does-not-prove) says. Tell the user, then run its commands in
+  host mode too.
 - Exit `5` or `3` with a `FAIL` line means the key is missing or refused, or Docker is missing. Tell the user in
   one sentence what the runner needs, and offer host mode. Do not switch on your own. For a refused key, quote the
   `FAIL` line. It names the key's source and fingerprint and the API's answer.
@@ -139,7 +142,11 @@ The addendum tells the session these facts, and how to kill only the renderer's 
   published port. So a runner `PASS` of [M1](../features/mcp.md#m1-environment) and
   [MR9](../features/mcp-renderer.md#mr9-renderer-role) does not cover the container shape, the image or the
   network isolation. For a change under `apps/mcp/Dockerfile`, `apps/mcp/docker/`, `apps/mcp/package.json` or
-  `apps/mcp/scripts/`, run M1, MR9 and [MCP security](../features/mcp-security.md) on the host.
+  `apps/mcp/scripts/`, run M1, MR9 and [MCP security](../features/mcp-security.md) on the host. When the tree the
+  runner tests changes one of those paths since its merge base with `origin/main`, untracked files included, and a
+  task is in an MCP mode, a line names the paths and the `$V up --for` command for each of those journeys. `--check`
+  prints it as a `hint` line, and `summary.md`, which a batch prints at its end, has it too. It changes no exit
+  code. Without a merge base, the line says that the runner skipped the comparison.
 
 ## Remove the runner
 

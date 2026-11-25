@@ -8,7 +8,7 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MODES, NEEDS, fold, loadFeatures, plan, readRuns } from '../bin/journeys.mjs';
+import { MODES, NEEDS, fold, loadFeatures, plan, readRuns, upFor } from '../bin/journeys.mjs';
 import { HOST_ONLY } from './host-only.mjs';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
@@ -18,6 +18,9 @@ const FAILED = new Set(['timeout', 'infra-error', 'secret-leak']);
 const VERDICTS = ['PASS', 'FAIL', 'DRIFT', 'BLOCKED', 'MISSING'];
 const OUTCOMES = ['held', 'broke', 'blocked', 'none'];
 const USAGE = 'usage: node .agents/skills/verify-uvw/runner/runner.mjs [--no-model] [--jobs 1|2|3] [--keep] <feature[:ID|mode,...]>... | node .agents/skills/verify-uvw/runner/runner.mjs --check [feature[:ID|mode,...]...]';
+// How MCP is packaged, which the dist start mode never runs, and the host journeys that start the image to prove it.
+const PACKAGING = /^apps\/mcp\/(?:Dockerfile$|docker\/|package\.json$|scripts\/)/;
+const PACKAGING_PROOF = [['mcp', ['M1']], ['mcp-renderer', ['MR9']], ['mcp-security', []]];
 
 export function parseArgs(argv) {
   let jobs, keep = false, check = false, model = true;
@@ -68,6 +71,19 @@ export function expand(specs, features, leftToHost = HOST_ONLY) {
     }
   }
   return { tasks, hostOnly, host };
+}
+
+// For a batch with a task in an MCP mode, the line that names the MCP packaging files in `changed` (the paths the
+// tested tree changes since its merge base with origin/main, or null without one) and the host commands that prove them.
+export function packagingHint(tasks, changed, features) {
+  if (!tasks.some((t) => MODES[t.mode].VERIFY_UVW_MCP === '1')) return null;
+  const commands = PACKAGING_PROOF.flatMap(([name, selectors]) => plan(features.get(name), selectors).partitions.map((p) => `\`${upFor(p)}\``));
+  const proof = `run ${commands.join(', ')} on the host`;
+  if (!changed) return `no merge base with origin/main, so the runner skipped its check for changes to apps/mcp/Dockerfile, apps/mcp/docker/, apps/mcp/package.json and apps/mcp/scripts/, which no runner result proves; after such a change, ${proof}`;
+  const paths = changed.filter((path) => PACKAGING.test(path));
+  if (!paths.length) return null;
+  const named = paths.length > 3 ? `${paths.slice(0, 3).join(', ')} and ${paths.length - 3} more` : paths.join(', ');
+  return `${named} changed since origin/main. The runner starts MCP from apps/mcp/dist, not from its image, so no runner result proves ${paths.length > 1 ? 'these changes' : 'this change'}; ${proof}`;
 }
 
 // What the runner adds to the host brief of a task whose run is `<root>/<task id>` in the container.
@@ -201,7 +217,7 @@ export function finish(task, dir, wallSeconds, key, { model = true } = {}) {
   return result;
 }
 
-export function summary({ batch, sha, head, image, key, jobs, dir, results, host, setup, wallSeconds, model = true }) {
+export function summary({ batch, sha, head, image, key, jobs, dir, results, host, setup, wallSeconds, model = true, hint = null }) {
   const n = (v) => (v == null ? '' : String(v));
   const tally = (r, outcome) => (r.journeys ? r.journeys.filter((j) => j.checks === outcome).length : '');
   const checked = (r) => OUTCOMES.filter((o) => tally(r, o)).map((o) => `${tally(r, o)} ${o === 'none' ? 'not run' : o}`).join(', ');
@@ -241,6 +257,7 @@ export function summary({ batch, sha, head, image, key, jobs, dir, results, host
     ...(errors.length ? ['', 'These tasks stopped on an API error:', '', ...errors] : []),
     // A transcript also holds recipe code with credential shapes, so these lines need a person, not a status.
     ...(flagged.length ? ['', 'secret-check printed FAIL lines. Read them before you share these files:', '', ...flagged] : []),
+    ...(hint ? ['', hint] : []),
     ...(host.length ? ['', 'Run these on the host, one instance each, as SKILL.md "Hand the driving to another agent" says:', '',
       ...host.map((h) => [h.feature, ...h.selectors].join(' ')).map((spec) => `- \`$V up --for ${spec}\`, then \`$V brief ${spec}\``)] : []),
     '',
@@ -251,20 +268,33 @@ const readKey = () => findKey(process.env, existsSync(join(repo, '.env')) ? read
 const imageTag = () => `uvw-verify-runner:${createHash('sha256').update(readFileSync(join(skill, 'runner/Dockerfile'))).digest('hex').slice(0, 12)}`;
 
 function expanded(specs) {
-  try { return expand(specs, loadFeatures()); } catch (error) { return fail(2, error.message); }
+  try {
+    const features = loadFeatures();
+    return { ...expand(specs, features), features };
+  } catch (error) { return fail(2, error.message); }
+}
+
+// The paths the tested tree changes since its merge base with origin/main, untracked files included as the snapshot
+// includes them, or null without a merge base.
+function changedSinceMain() {
+  const base = capture('git', ['-C', repo, 'merge-base', 'HEAD', 'origin/main']);
+  if (base.status !== 0) return null;
+  return `${git(['diff', '--name-only', '--no-renames', base.stdout.trim()])}\n${git(['ls-files', '--others', '--exclude-standard'])}`.split('\n').filter(Boolean);
 }
 
 // What a batch needs, checked without starting anything. runner/README.md says how to act on it.
 async function check(specs) {
   const found = readKey();
   const docker = capture('docker', ['info', '--format', '{{.NCPU}}']);
-  const { tasks: queue, host } = expanded(specs);
+  const { tasks: queue, host, features } = expanded(specs);
   const refused = found && await refusal(found);
   if (!found) console.log('FAIL  DEEPSEEK_API_KEY not found; set it or add a DEEPSEEK_API_KEY= line to .env');
   else console.log(refused ? `FAIL  ${keyName(found)}: ${refused}` : `ok    ${keyName(found)} works`);
   if (docker.status !== 0) console.log('FAIL  docker is not available');
   else console.log(`ok    docker answers with ${docker.stdout.trim()} CPUs`);
   for (const h of host) console.log(`host  ${h.feature}${h.selectors.length ? `:${h.selectors.join(',')}` : ''} runs only on the host (runner/host-only.mjs); run it in host mode`);
+  const hint = packagingHint(queue, changedSinceMain(), features);
+  if (hint) console.log(`hint  ${hint}`);
   const runnable = !specs.length || queue.length;
   if (docker.status === 0 && runnable) {
     const image = imageTag();
@@ -279,7 +309,7 @@ async function main() {
   try { options = parseArgs(process.argv.slice(2)); } catch (error) { fail(2, error.message); }
   if (options.check) return check(options.specs);
   const { keep, model } = options;
-  const { tasks, hostOnly, host } = expanded(options.specs);
+  const { tasks, hostOnly, host, features } = expanded(options.specs);
   const queue = [...tasks];
 
   const found = model ? readKey() : { key: null };
@@ -316,6 +346,7 @@ async function main() {
     if (spawnSync('docker', ['build', '-t', image, '-'], { input: readFileSync(join(skill, 'runner/Dockerfile')), stdio: ['pipe', log, log] }).status !== 0) fail(4, `image build failed; see ${dir}/image-build.log`);
   }
   const sha = snapshot(batch);
+  const hint = packagingHint(tasks, changedSinceMain(), features);
   const head = git(['rev-parse', 'HEAD']);
   const common = git(['rev-parse', '--path-format=absolute', '--git-common-dir']);
   console.error(`batch ${batch}: ${queue.length} task(s) on ${jobs} runner(s), snapshot ${sha}, ${keyText}; output ${dir}`);
@@ -366,7 +397,7 @@ async function main() {
   for (const t of queue) results.set(t.id, { task: t.id, mode: t.mode, status: 'infra-error', result: null, turns: null, wallSeconds: 0, usage: null });
 
   const ordered = [...tasks, ...hostOnly].map((t) => results.get(t.id));
-  const text = summary({ batch, sha, head, image, key: keyText, jobs, dir, results: ordered, host, setup, wallSeconds: seconds(started), model });
+  const text = summary({ batch, sha, head, image, key: keyText, jobs, dir, results: ordered, host, setup, wallSeconds: seconds(started), model, hint });
   writeFileSync(join(dir, 'summary.md'), text);
   process.stdout.write(text);
   if (keep) console.error(`kept containers; remove them with: docker rm -f $(docker ps -aq --filter label=uvw-verify.batch=${batch})`);

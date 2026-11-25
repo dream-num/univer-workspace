@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { loadFeatures, parseFeature, plan } from '../bin/journeys.mjs';
 import { HOST_ONLY } from './host-only.mjs';
-import { addendum, exitCode, expand, findKey, finish, parseArgs, readTranscript, serial, summary } from './runner.mjs';
+import { addendum, exitCode, expand, findKey, finish, packagingHint, parseArgs, readTranscript, serial, summary } from './runner.mjs';
 
 const transcript = readFileSync(fileURLToPath(new URL('./fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
 const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.map((j) => `### ${j}\n`).join('\n')}`;
@@ -181,6 +181,24 @@ test('runner --check names the key source and fingerprint, proves the key with o
     assert.equal(unknownId.status, 2);
     assert.match(unknownId.stderr, /no journey or mode P9 in features\/plain\.md/);
 
+    for (const [name, id] of [['mcp', 'M1'], ['mcp-renderer', 'MR9'], ['mcp-security', 'MG2']]) {
+      writeFileSync(join(skill, `features/${name}.md`), `# ${name}\n\n## Driving it with agent-browser and uvw\n\nMode: mcp.\n\n### ${id}. One\n`);
+    }
+    const git = (...args) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@localhost', '-c', 'commit.gpgsign=false', ...args]);
+    git('init', '-q');
+    git('add', '-A');
+    git('commit', '-q', '--no-verify', '-m', 'base');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    mkdirSync(join(root, 'apps/mcp'), { recursive: true });
+    writeFileSync(join(root, 'apps/mcp/package.json'), '{}\n');
+    const hinted = await check({ DEEPSEEK_API_KEY: 'good-key' }, 'mcp', 'plain:P1');
+    assert.match(hinted.stdout, /^hint {2}apps\/mcp\/package\.json changed since origin\/main\. .* on the host$/m, 'an untracked file counts, as the snapshot takes it');
+    assert.equal(hinted.stdout.match(/^hint/gm).length, 1);
+    assert.equal(hinted.status, 3, 'the hint changes no exit code');
+    assert.doesNotMatch((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'plain:P1')).stdout, /^hint/m, 'a batch with no MCP task starts no MCP role');
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+    assert.match((await check({ DEEPSEEK_API_KEY: 'good-key' }, 'mcp')).stdout, /^hint {2}no merge base with origin\/main, so the runner skipped its check /m);
+
     await new Promise((resolve) => endpoint.close(resolve));
     const unreachable = await check({ DEEPSEEK_API_KEY: 'good-key' });
     assert.equal(unreachable.status, 5);
@@ -189,6 +207,26 @@ test('runner --check names the key source and fingerprint, proves the key with o
     endpoint.close();
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('a batch with an MCP task names the MCP packaging changes the dist start mode cannot prove, and the host runs that prove them', () => {
+  const features = loadFeatures();
+  const tasks = [{ mode: 'default' }, { mode: 'mcp' }];
+  const host = 'run `$V up --for mcp M1`, `$V up --for mcp-renderer MR9`, `$V up --for mcp-security` on the host';
+  assert.equal(packagingHint([{ mode: 'default' }], ['apps/mcp/Dockerfile'], features), null, 'a batch with no MCP task starts no MCP role');
+  assert.equal(packagingHint(tasks, ['apps/mcp/src/main.ts', 'apps/mcp/Dockerfile.dev', 'apps/mcp/dockerx/a', 'apps/mcp/test/scripts/a.mjs',
+    'apps/mcp/src/package.json', 'apps/mcp-other/package.json', 'packages/x/apps/mcp/package.json', 'pnpm-lock.yaml'], features), null);
+  assert.equal(packagingHint(tasks, [], features), null);
+  for (const path of ['apps/mcp/Dockerfile', 'apps/mcp/docker/compose.verify.yml', 'apps/mcp/package.json', 'apps/mcp/scripts/assemble-skills.mjs']) {
+    const hint = packagingHint(tasks, ['README.md', path], features);
+    assert.ok(hint.startsWith(`${path} changed since origin/main. `), path);
+    assert.ok(hint.endsWith(host), path);
+  }
+  const many = packagingHint([{ mode: 'mcp-same-origin' }], ['apps/mcp/Dockerfile', 'apps/mcp/docker/a', 'apps/mcp/package.json', 'apps/mcp/scripts/a.mjs', 'apps/mcp/scripts/b.mjs'], features);
+  assert.ok(many.startsWith('apps/mcp/Dockerfile, apps/mcp/docker/a, apps/mcp/package.json and 2 more changed since origin/main. '));
+  const skipped = packagingHint(tasks, null, features);
+  assert.match(skipped, /^no merge base with origin\/main, so the runner skipped its check /);
+  assert.ok(skipped.endsWith(host));
 });
 
 test('the key comes from the environment first, then from a DEEPSEEK_API_KEY line in .env, and says which', () => {
@@ -306,6 +344,10 @@ test('summary.md lists each host-only instance with its up --for and brief comma
   const text = summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir: '/d', results: [], setup: [1], wallSeconds: 1,
     host: [{ feature: 'sheet-lens', selectors: ['SLM1'] }, { feature: 'mcp-security', selectors: [] }] });
   assert.match(text, /^- `\$V up --for sheet-lens SLM1`, then `\$V brief sheet-lens SLM1`\n- `\$V up --for mcp-security`, then `\$V brief mcp-security`$/m);
+  assert.doesNotMatch(text, /origin\/main/);
+  const hint = packagingHint([{ mode: 'mcp' }], ['apps/mcp/Dockerfile'], loadFeatures());
+  assert.ok(summary({ batch: 'b', sha: 's', head: 'h', image: 'i', key: 'k', jobs: 1, dir: '/d', results: [], setup: [1], wallSeconds: 1, host: [], hint })
+    .includes(`\n\n${hint}\n`), 'summary.md has the packaging hint on its own line');
 });
 
 test('the report, turns and usage come from the last result record, with run paths moved to the batch', () => {
