@@ -21,8 +21,8 @@ mode, because the runner follows recipes and does not design checks. From the re
 and act on what it prints:
 
 - A `host` line means [host-only.mjs](host-only.mjs) leaves that feature or those journeys to the host, and says
-  why each cannot run in a container. The runner skips them. Tell the
-  user, then run them in host mode as [SKILL.md](../SKILL.md) describes.
+  why each cannot run in a container. The runner skips them. Tell the user, then run them in host mode as
+  [SKILL.md](../SKILL.md) describes.
 - Exit `5` or `3` with a `FAIL` line means the key is missing or refused, or Docker is missing. Tell the user in
   one sentence what the runner needs, and offer host mode. Do not switch on your own. For a refused key, quote the
   `FAIL` line. It names the key's source and fingerprint and the API's answer.
@@ -81,9 +81,9 @@ and so on. The id is also the task's run id.
 - MCP features run in [the dist start mode](#the-dist-start-mode). The journeys that call `docker` or
   `agent-up`, and the whole MCP security feature, are in host-only.mjs.
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
-  `summary.md`, and for each task `prepare.log`, `report.md` (its evidence paths open on the host),
-  `transcript.jsonl`, `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs`
-  and `run.env`.
+  `summary.md`, and for each task `prepare.log`, `addendum.txt`, `brief.txt`, `report.md` (its evidence paths
+  open on the host), `transcript.jsonl`, `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's
+  `evidence`, `logs` and `run.env`.
 - At the end of a task the runner folds the `evidence/journeys.jsonl` of every run under its `runs/`. `result.json`
   holds each expected journey's verdict and note, `MISSING` when it has none, and a result. The result is
   `INCOMPLETE` when any journey is `MISSING`, else `PASS` when every journey is `PASS`, else `ISSUES`. `summary.md`
@@ -140,3 +140,26 @@ The addendum tells the session these facts, and how to kill only the renderer's 
   [MR9](../features/mcp-renderer.md#mr9-renderer-role) does not cover the container shape, the image or the
   network isolation. For a change under `apps/mcp/Dockerfile`, `apps/mcp/docker/`, `apps/mcp/package.json` or
   `apps/mcp/scripts/`, run M1, MR9 and [MCP security](../features/mcp-security.md) on the host.
+
+## Remove the runner
+
+Host mode does not need the runner. `HOOKS` in [boundary.test.mjs](boundary.test.mjs) lists every file outside
+`runner/` that keeps a hook for it, with the tokens each hook has, and the test fails when the files and that list
+disagree. To remove the runner:
+
+1. Delete `runner/`.
+2. In each file that `HOOKS` lists, delete what its tokens find:
+   - `runner/` and `the runner`: the text that names the runner, such as the opt-in paragraph of SKILL.md and the
+     pointer from MCP mode.
+   - `dist start mode` and `VERIFY_UVW_RUNNER`: every branch of the dist start mode and the functions only those
+     branches call, and `VERIFY_UVW_MCP_FROM` with them, so MCP mode always builds and starts the image.
+   - `VERIFY_UVW_EVIDENCE_ROOT`: the evidence links in `cmd_up`, and the fold across every run under the root with
+     `readRuns`, which only the fold and the runner use.
+   - `VERIFY_UVW_SKIP_JOURNEYS`: the journeys `run-journeys` leaves out.
+3. Delete `docs/design/verify-runner/`, and the verify runner sentences in
+   `docs/design/workspace-mcp/README.zh-CN.md` (the supplement to D13) and
+   `docs/design/workspace-mcp/local-verification.zh-CN.md` (R1 and R5).
+4. Run `node --test .agents/skills/verify-uvw/bin/*.test.mjs` and `bash -n .agents/skills/verify-uvw/bin/verify-uvw`.
+
+Docker keeps the `uvw-verify-runner` images and the `uvw-verify-runner-pnpm-store` volume a runner built. Remove
+them with `docker image rm` and `docker volume rm` to free the space.

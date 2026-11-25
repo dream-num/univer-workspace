@@ -5,8 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
-const docs = ['SKILL.md', ...['references', 'features', 'runner'].flatMap((dir) =>
-  readdirSync(join(skill, dir)).filter((name) => name.endsWith('.md')).map((name) => join(dir, name)))];
+const docs = readdirSync(skill, { recursive: true }).filter((name) => name.endsWith('.md')).sort();
 
 const prose = (file) => readFileSync(file, 'utf8').split(/^```.*$/m).filter((_, i) => i % 2 === 0).join('\n');
 
@@ -46,7 +45,7 @@ test('the sections that brief names exist in SKILL.md', () => {
 
 test('every VERIFY_UVW_ variable the helper reads is documented', () => {
   const helper = readFileSync(join(skill, 'bin/verify-uvw'), 'utf8');
-  const documented = ['SKILL.md', 'references/mcp-mode.md', 'references/stories.md', 'runner/README.md'].map((doc) => readFileSync(join(skill, doc), 'utf8')).join('\n');
+  const documented = docs.filter((doc) => !doc.startsWith('features/')).map((doc) => readFileSync(join(skill, doc), 'utf8')).join('\n');
   const read = new Set([...helper.matchAll(/\$\{?(VERIFY_UVW_[A-Z_]+)/g)].map(([, name]) => name));
   const missing = [...read].filter((name) => !documented.includes(name));
   assert.ok(read.has('VERIFY_UVW_MCP_SAME_ORIGIN'), 'the pattern finds the variables the helper reads');
