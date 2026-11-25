@@ -191,7 +191,7 @@ const atMergeSchema = z
   .boolean()
   .nullable()
   .describe(
-    "true: as it stood when the pull request merged; later file, member or permission changes do not change it. false: merged before merges recorded their checks, so computed now. null: not merged.",
+    "true: as it stood when the pull request merged; later file, member or permission changes do not change it. false: its merge recorded no checks, as for one merged before merges recorded them, so computed now. null: not merged.",
   );
 export const worktreeSchema = z.object({
   id: z.string(),

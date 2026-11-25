@@ -499,7 +499,7 @@ describe("uvw pr and the worktree alias", () => {
     const view = (atMerge: boolean | null) =>
       run(pullRequestCommands({ checks: { passed: 2, failed: 0, missing: 0, atMerge } }).pr, ["view", "12", "-R", "alice/docs"]);
     expect(await view(true)).toContain("checks at merge: 2 passed, 0 failed, 0 missing");
-    expect(await view(false)).toContain("checks now (merged before merges recorded checks): 2 passed");
+    expect(await view(false)).toContain("checks now (not recorded at merge): 2 passed");
     expect(await view(null)).toContain("checks: 2 passed");
   });
 

@@ -433,7 +433,7 @@ function label(worktree: WorkspaceWorktree): string {
 
 function checksBasis(atMerge: boolean | null): string {
   if (atMerge === null) return "";
-  return atMerge ? " at merge" : " now (merged before merges recorded checks)";
+  return atMerge ? " at merge" : " now (not recorded at merge)";
 }
 
 function freshness({ fileState, freshness: value }: WorkspaceWorktree["units"][number]): string {

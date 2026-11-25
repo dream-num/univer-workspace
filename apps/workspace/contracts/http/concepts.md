@@ -305,8 +305,9 @@ A merge records every check as it stands just before trunk moves: the checks dec
 trunk as the Space owner reads them, each check's state and every result with its `current`
 and `counts`, on the content the merge lands. A merged Worktree lists that record with
 `atMerge: true`, and later changes to its files, members or permissions do not change it.
-A Worktree merged before merges recorded their checks has no record; it lists them computed
-now with `atMerge: false`. `atMerge` is `null` while the Worktree is not merged. The summary
+A Worktree has no record when it merged before merges recorded their checks, or when it merged
+in a repository that does not require checks while trunk's declaration could not be read, since
+such a merge goes ahead without one. It lists them computed now with `atMerge: false`. `atMerge` is `null` while the Worktree is not merged. The summary
 carries the same `atMerge`.
 
 Checks block a merge only in a Team Space whose `landing` is `checks`, and only for an agent

@@ -614,26 +614,40 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     await this._database
       .prepare(
         `UPDATE operations
-         SET payload_json = (payload_json::jsonb || jsonb_build_object('checksAtMerge', ?::jsonb, 'checksRecordedAt', ?::bigint))::text,
-             updated_at = ?
+         SET payload_json = jsonb_set(payload_json::jsonb, '{checksAtMerge}', ?::jsonb)::text, updated_at = ?
          WHERE id = ? AND kind = 'merge_worktree' AND state = 'pending'`
       )
-      .run(JSON.stringify(record), recordedAt, recordedAt, operationId);
+      .run(JSON.stringify(record), recordedAt, operationId);
+  }
+
+  async claimLanding(operationId: string, worktreeId: string): Promise<void> {
+    // Serializable, so of two merges claiming at once one replays and finds the other's claim.
+    await this._database.transaction(async (database) => {
+      await database
+        .prepare(
+          `UPDATE operations
+           SET payload_json = jsonb_set(payload_json::jsonb, '{landed}', 'true')::text
+           WHERE id = ? AND kind = 'merge_worktree'
+             AND NOT EXISTS (
+               SELECT 1 FROM operations
+               WHERE kind = 'merge_worktree' AND payload_json::jsonb ->> 'worktreeId' = ?
+                 AND payload_json::jsonb -> 'landed' IS NOT NULL
+             )`
+        )
+        .run(operationId, worktreeId);
+    });
   }
 
   async checksAtMerge(worktreeId: string): Promise<WorktreeChecksAtMerge | null> {
-    // The merge that landed recorded last, since nothing records after Trunk moves. A retry touches updated_at even when refused.
     const row = await this._database
       .prepare(
         `SELECT payload_json::jsonb ->> 'checksAtMerge' AS record
          FROM operations
          WHERE kind = 'merge_worktree' AND payload_json::jsonb ->> 'worktreeId' = ?
-           AND payload_json::jsonb ->> 'checksAtMerge' IS NOT NULL
-         ORDER BY (payload_json::jsonb ->> 'checksRecordedAt')::bigint DESC, id DESC
-         LIMIT 1`
+           AND payload_json::jsonb -> 'landed' IS NOT NULL`
       )
-      .get(worktreeId) as { record: string } | undefined;
-    return row ? JSON.parse(row.record) as WorktreeChecksAtMerge : null;
+      .get(worktreeId) as { record: string | null } | undefined;
+    return row?.record ? JSON.parse(row.record) as WorktreeChecksAtMerge : null;
   }
 
   async mergeRunning(worktreeId: string, now: number): Promise<boolean> {

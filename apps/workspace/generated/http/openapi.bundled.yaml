@@ -8171,7 +8171,7 @@ components:
             - $ref: '#/components/schemas/WorktreeUnitFileState'
             - type: 'null'
     WorktreeChecksAtMerge:
-      description: true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk moved; later changes to files, members or permissions do not change it. false on a pull request merged before merges recorded their checks, whose check is computed now with today's permissions. null while the pull request is not merged.
+      description: true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk moved; later changes to files, members or permissions do not change it. false on a pull request whose merge recorded no checks, such as one merged before merges recorded them, whose check is computed now with today's permissions. null while the pull request is not merged.
       oneOf:
         - type: boolean
         - type: 'null'

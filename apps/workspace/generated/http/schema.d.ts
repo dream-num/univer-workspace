@@ -3956,7 +3956,7 @@ export interface components {
             /** @description Where the Unit's file is now. Null for a new Unit that no merge has created yet, and for a reader who reads the name `Removed resource` because they cannot open the file, so that nothing tells them whether it is live, in Trash or deleted. No one opens or compares a file that is inTrash or deleted, and such a file no longer decides whether a reader may review the others. An open pull request that still changes one cannot merge until its author leaves it out. */
             fileState: components["schemas"]["WorktreeUnitFileState"] | null;
         };
-        /** @description true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk moved; later changes to files, members or permissions do not change it. false on a pull request merged before merges recorded their checks, whose check is computed now with today's permissions. null while the pull request is not merged. */
+        /** @description true when the check is as it stood when the pull request's merge began, which the merge recorded before trunk moved; later changes to files, members or permissions do not change it. false on a pull request whose merge recorded no checks, such as one merged before merges recorded them, whose check is computed now with today's permissions. null while the pull request is not merged. */
         WorktreeChecksAtMerge: boolean | null;
         /** @description How many checks declared in Trunk's `.agents/checks.md` pass, fail, or have no counting result. */
         WorktreeChecksSummary: {

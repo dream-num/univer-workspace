@@ -126,8 +126,8 @@ export interface WorktreeCheck {
   readonly state: WorktreeCheckReportState | "missing";
   readonly results: readonly WorktreeCheckResult[];
   /**
-   * True when this is the check as it stood when the pull request merged. False on a pull request merged before merges
-   * recorded their checks, which is computed now. Null while the pull request is not merged.
+   * True when this is the check as it stood when the pull request merged. False on a pull request whose merge recorded
+   * no checks, which is computed now. Null while the pull request is not merged.
    */
   readonly atMerge: boolean | null;
 }

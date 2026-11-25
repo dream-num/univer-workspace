@@ -217,7 +217,9 @@ export interface WorktreesRepository {
   holdForMerge(operationId: string, contentKey: string, heldAt: number): Promise<void>;
   /** Records the checks on a merge Operation that has not finished, before it moves Trunk. */
   recordChecksAtMerge(operationId: string, record: WorktreeChecksAtMerge, recordedAt: number): Promise<void>;
-  /** The checks the Worktree's merge recorded, or null for one merged before merges recorded them. */
+  /** Marks the merge Operation as the one that landed the Worktree, unless another merge of it already is. */
+  claimLanding(operationId: string, worktreeId: string): Promise<void>;
+  /** The checks the merge that landed the Worktree recorded, or null when it recorded none. */
   checksAtMerge(worktreeId: string): Promise<WorktreeChecksAtMerge | null>;
   /** Whether a merge of the Worktree has started and still holds its lease. */
   mergeRunning(worktreeId: string, now: number): Promise<boolean>;

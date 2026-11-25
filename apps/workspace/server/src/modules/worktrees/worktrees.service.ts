@@ -1115,13 +1115,21 @@ export function createWorktreesModule(options: {
           }
           // Recorded before Trunk moves: the merge then trashes removed files, and nobody may merge a file in Trash.
           if (decided.state === "ready") {
-            await options.repository.recordChecksAtMerge(operationId, await checksAtMerge(decided, pageDraftIds), now());
+            const record = await checksAtMerge(decided, pageDraftIds).catch((error: unknown) => {
+              // Only a repository that requires checks needs its declaration to merge; elsewhere the merge shows checks computed now.
+              if (decided.row.team_landing === "checks") throw error;
+              logger.warn({ err: error, worktreeId }, "Checks could not be recorded at merge");
+              return null;
+            });
+            if (record) await options.repository.recordChecksAtMerge(operationId, record, now());
           }
           const data = await backendCall(() =>
             resumeMerged
               ? options.backend.getWorktree(worktreeId, userId)
               : options.backend.merge(worktreeId, userId, checkedDraft),
           );
+          // Before anything trashes: a merge that read ready before another landed records after Trunk moved, and must not be shown.
+          if (data.status === "merging" || data.status === "merged") await options.repository.claimLanding(operationId, worktreeId);
           const unitRows = await options.repository.units(worktreeId);
           const mergedUnitIds = await activateSuccessfulUnits(
             userId,

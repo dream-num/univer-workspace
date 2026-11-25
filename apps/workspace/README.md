@@ -820,7 +820,7 @@ checks. Anyone who may review a ready pull request reports a check with `PUT /ap
 edit to one of its files, or a reopen that changes its content, leaves earlier results visible but out of date. A result
 counts when its reporter may merge the pull request. A merge records the checks as they stand just before Trunk
 moves, and a merged pull request shows that record, labelled as at merge, whatever happens to its files, members or
-permissions later. One merged before merges recorded checks shows them computed now, labelled so.
+permissions later. One whose merge recorded none, such as one merged before merges recorded checks, shows them computed now, labelled so.
 `GET /api/worktrees/{id}/checks` and MCP `pr_view` list every declared check and every result. The pull request page shows them, and so does the Issue page's acceptance panel after
 each linked pull request the reader may review, saying so when the repository declares no checks. Checks block a merge
 only where a repository requires them, as the next section describes.

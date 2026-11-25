@@ -100,8 +100,8 @@ export interface WorkspaceCheck {
   readonly state: "passed" | "failed" | "missing";
   readonly results: readonly WorkspaceCheckResult[];
   /**
-   * true: as it stood when the pull request merged. false: merged before merges recorded their checks, so computed
-   * now. null: not merged, or a server that does not say.
+   * true: as it stood when the pull request merged. false: its merge recorded no checks, so computed now. null: not
+   * merged, or a server that does not say.
    */
   readonly atMerge: boolean | null;
 }

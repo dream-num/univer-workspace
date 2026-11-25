@@ -472,6 +472,27 @@ it("keeps the checks of the merge that landed when an earlier merge that stopped
     .toEqual([["totals-match", "failed", true], ["header-unchanged", "passed", true]]);
 }, 120_000);
 
+it("keeps the checks of the merge that landed when a merge that read the pull request before it landed records after", async () => {
+  const f = await repository();
+  const { pull, addedNodeId } = await passedPull(f);
+  f.beforeReserve(async () => {
+    await f.merge(f.owner.id, pull);
+    await f.application.trash.trashNode(f.owner.id, addedNodeId);
+  });
+  expect(await f.merge(f.owner.id, pull)).toMatchObject({ worktree: { state: "merged" } });
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks).toMatchObject(passedAtMerge(f.alice.id));
+}, 120_000);
+
+it("merges in a review repository when its declared checks cannot be read, and shows the checks computed now", async () => {
+  const f = await repository();
+  const { pull } = await passedPull(f);
+  f.unreadable.add(f.declaration.objectKey);
+  expect(await f.merge(f.owner.id, pull)).toMatchObject({ worktree: { state: "merged" } });
+  f.unreadable.delete(f.declaration.objectKey);
+  expect((await f.application.worktrees.checks(f.owner.id, pull)).checks.map(({ name, state, atMerge }) => [name, state, atMerge]))
+    .toEqual([["totals-match", "passed", false], ["header-unchanged", "passed", false]]);
+}, 120_000);
+
 /** alice's ready pull request that adds a sheet, with both declared checks passed by alice, who may merge it. */
 async function passedPull(f: Awaited<ReturnType<typeof repository>>) {
   const { worktrees } = f.application;
@@ -501,7 +522,7 @@ interface Actor {
  * viewer agent, both claimed by the owner.
  */
 async function repository(landing: "review" | "checks" = "review") {
-  const { application, origin, trunk, trunkHead, unreadable, beforeSecondRead, beforeSdkMerge, afterSdkMerge, sdk, sql } = await start();
+  const { application, origin, trunk, trunkHead, unreadable, beforeSecondRead, beforeReserve, beforeSdkMerge, afterSdkMerge, sdk, sql } = await start();
   const person = async (username: string): Promise<Actor> => {
     const issued = await application.identity.registerWithPassword({ username, displayName: username, password: "correct horse battery staple" });
     return { id: issued.view.user.id, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
@@ -576,7 +597,7 @@ async function repository(landing: "review" | "checks" = "review") {
 
   return {
     application, origin, team, folder, declaration, sheet, otherSheet, owner, alice, bot, reader, unreadable, beforeSecondRead,
-    beforeSdkMerge, afterSdkMerge, sdk, sql, agent, principal, upload, objectKey, sheetNamed, editDraft, openPull, trunkHead,
+    beforeReserve, beforeSdkMerge, afterSdkMerge, sdk, sql, agent, principal, upload, objectKey, sheetNamed, editDraft, openPull, trunkHead,
     async readyPull(userId: string, resourceId: string = sheet.id, teamSpaceId: string = team, edit = false) {
       const id = await openPull(userId, teamSpaceId);
       await application.worktrees.addUnit(userId, id, randomUUID(), { source: "trunk", resourceId });
@@ -650,6 +671,15 @@ async function start() {
   let hook: { run: () => Promise<void>; reads: number } | undefined;
   let mergeHook: (() => Promise<void>) | undefined;
   let mergedHook: (() => Promise<void>) | undefined;
+  let reserveHook: (() => Promise<void>) | undefined;
+  const worktrees = database.repositories.worktrees;
+  const reserve = worktrees.reserveOperation.bind(worktrees);
+  worktrees.reserveOperation = async (input) => {
+    const run = reserveHook;
+    reserveHook = undefined;
+    await run?.();
+    return reserve(input);
+  };
   const worktreeBackend: WorktreeBackend = {
     ...backend,
     async getWorktree(worktreeId, userId) {
@@ -710,6 +740,10 @@ async function start() {
     unreadable,
     beforeSecondRead(run: () => Promise<void>) {
       hook = { run, reads: 0 };
+    },
+    /** Runs once, when the next Operation is about to be reserved. */
+    beforeReserve(run: () => Promise<void>) {
+      reserveHook = run;
     },
     /** Runs once the second gate decided, just before the product asks the Collaboration Service to merge. */
     beforeSdkMerge(run: () => Promise<void>) {
