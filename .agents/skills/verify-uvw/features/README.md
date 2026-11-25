@@ -64,6 +64,13 @@ keeps the journey `agent`. The helper runs blocks this way:
 - Each journey's output goes to `evidence/<ID>.run.log`, and each broken check records its markdown line, exit
   code and the redacted end of that output. A journey stops after 600 s.
 
+## Agent Mode
+
+Agent Mode keeps people out of an agent's task between the grant at the start and the merge at the end. Its journeys
+are in the five `agent-mode-*` files and in parts of `pull-requests`, `agent-handoff`, `mcp-blobs-office` and
+`mcp-html-view`. [references/agent-mode.md](../references/agent-mode.md) maps the spec to them, says how to run all of
+them, and lists what no journey covers yet.
+
 ## Features
 
 - [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded
@@ -89,28 +96,32 @@ keeps the journey `agent`. The helper runs blocks this way:
   parity, tool lists, credential, Origin and production refusals, opencode, and cleanup. Every other `mcp-*`
   file runs in this MCP mode.
 - [Issues and pull requests over MCP](./mcp-issues-prs.md): MI1-MI11 and MP1-MP10 compare the Issue, pull
-  request, search and browse tools with uvw, including idempotency keys and preserved errors. MI12 submits an Issue
-  over MCP, sends it back and accepts it in the browser. MI13 judges four merged pull requests, one of which deletes a
-  file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its claimer and not to a member
-  who may not accept. MI17 shows that sharing to an acceptor who did not claim the agent by name only. MI14 shows
-  each linked pull request's check results there, counting or not, and says when the repository declares none. MI15
-  turns on an acceptance deadline and has the server accept a submitted Issue by deadline, attributed to no one, with a
-  reopen restarting the clock. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every
-  pull request's files in the panel with the file the revert moved to Trash noted and its checks as they stood at
-  merge, leaves a file someone edited after
-  the merge blocked until a person overwrites it, and has an agent revert with `pr_revert`. MP11
-  lists reviewable pull requests, and MP12 has two agents find their own work with prompts that carry no task. MP13 links a fork's
-  pull request to an Issue and checks both sides in MCP, uvw and the browser. MP14 drives an
-  agent to its budget of open pull requests and counts a merge in `whoami`. MP15 reports check results declared in
-  `.agents/checks.md` and shows them, out of date after a Trunk edit, in the browser. MP16 reads a merged pull
+  request, search and browse tools with uvw, including idempotency keys and preserved errors.
+- [Agent Mode: an Issue as an agent's task](./agent-mode-tasks.md): MP11 lists reviewable pull requests, and MP12 has
+  two agents find their own work with prompts that carry no task. MP13 links a fork's pull request to an Issue and
+  checks both sides in MCP, uvw and the browser. MI12 submits an Issue over MCP, sends it back and accepts it in the
+  browser. MI15 turns on an acceptance deadline and has the server accept a submitted Issue by deadline, attributed to
+  no one, with a reopen restarting the clock.
+- [Agent Mode: judge and undo an agent's task](./agent-mode-acceptance.md): MI13 judges four merged pull requests, one
+  of which deletes a file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its
+  claimer and not to a member who may not accept. MI14 shows each linked pull request's check results there as they
+  stood at merge, counting or not, and says on an open pull request when the repository declares none. MI17 shows
+  that sharing to an acceptor who did not claim the agent by name only. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every pull
+  request's files in the panel with the file the revert moved to Trash noted and its checks as they stood at merge,
+  leaves a file someone edited after the merge blocked until a person overwrites it, and has an agent revert with
+  `pr_revert`.
+- [Agent Mode: declared checks and the landing guard](./agent-mode-checks.md): MP15 reports check results declared in
+  `.agents/checks.md` and shows them, out of date after a Trunk edit, in the browser. MP17 requires checks before an
+  agent merges: a claimed agent's merge is refused with the check names over MCP, uvw and the browser, its browser
+  opens Trunk read-only, its direct changes to `.agents/checks.md` are refused, a pull request of its that changes
+  `.agents/` is refused and a person merges it, and a person is not gated. MP18 has an agent declare checks in its own
+  repository on the default connection, gate its Editor agent's merge on them, and refuse that agent's Trunk writes.
+- [Agent Mode: files that move to Trash around a pull request](./agent-mode-trash.md): MP16 reads a merged pull
   request that deleted a file over uvw and MCP, and answers 409 to every comparison of a file moved to Trash under an
-  open pull request. MP17 requires checks before an agent merges: a claimed agent's merge is refused with the check
-  names over MCP, uvw and the browser, its browser opens Trunk read-only, its direct changes to `.agents/checks.md`
-  are refused, a pull request of its that changes `.agents/` is refused and a person merges it, and a person is not
-  gated. MP18 has an agent declare checks in its own repository on the default connection, gate its Editor agent's
-  merge on them, and refuse that agent's Trunk writes. MP19 moves a file of an agent's ready pull request to Trash:
-  every reader still reviews the other file, the merge is refused with `FILES_IN_TRASH`, and the agent leaves the
-  file out with `pr_edit` and merges.
+  open pull request. MP19 moves a file of an agent's ready pull request to Trash: every reader still reviews the other
+  file, the merge is refused with `FILES_IN_TRASH`, and the agent leaves the file out with `pr_edit` and merges.
+- [Agent Mode: an agent's limits](./agent-mode-limits.md): MP14 drives an agent to its budget of open pull requests
+  and counts a merge in `whoami`.
 - [Space files, repositories and resources over MCP](./mcp-space-files.md): MS1-MS11 cover browse, find,
   repositories, labels, Units, Nodes, merge and discard; MC1-MC4 cover SVG resources.
 - [Files, Office and Markdown exchange over MCP](./mcp-blobs-office.md): MF1-MF9 cover upload capabilities,

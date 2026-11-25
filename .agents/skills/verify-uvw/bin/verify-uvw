@@ -36,6 +36,9 @@ load_run() {
   export AGENT_BROWSER_SESSION="verify-uvw-$RUN_ID"
 }
 
+# Why the server answered 429 to an agent creation. A run started before up recorded its limit has the server default of 5.
+agent_limit_reason() { echo "agent creation is limited to ${AGENT_CREATE_LIMIT:-5} per hour per source IP on run $RUN_ID; reuse an agent, or down and up again with a higher VERIFY_UVW_AGENT_CREATE_LIMIT (up's default is 100)"; }
+
 listener_pid() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -n1 || true; }
 
 deps_fresh() { cmp -s "$REPO/pnpm-lock.yaml" "$REPO/node_modules/.pnpm/lock.yaml"; }
@@ -397,12 +400,12 @@ cmd_principal() { # name [label]: a new agent principal whose token never leaves
     || die "usage: verify-uvw principal <name> [label]  (name: a-z, 0-9, _ and -, not human)"
   load_run
   [[ ! -e "$RUN/home/principals/$1.token" ]] || die "principal $1 already exists in this run"
-  node --input-type=module - "$RUN" "$ORIGIN" "$@" <<'JS'
+  VERIFY_UVW_AGENT_LIMIT_REASON="$(agent_limit_reason)" node --input-type=module - "$RUN" "$ORIGIN" "$@" <<'JS'
 import {mkdirSync,writeFileSync} from 'node:fs';
 const [run,origin,name,label]=process.argv.slice(2);
 const fail=message=>{ console.error('verify-uvw: '+message); process.exit(1); };
 const response=await fetch(origin+'/api/agents',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(label===undefined?{}:{label})});
-if (response.status===429) fail('agent creation is limited to 5 per hour per source IP on this instance; reuse a principal or wait');
+if (response.status===429) fail(process.env.VERIFY_UVW_AGENT_LIMIT_REASON);
 const body=await response.json().catch(()=>null);
 if (response.status!==201 || typeof body?.token!=='string' || typeof body.agent?.id!=='string') fail('POST /api/agents returned '+response.status);
 mkdirSync(run+'/home/principals',{recursive:true,mode:0o700});
@@ -425,7 +428,7 @@ cmd_story() { # [--as identity] [--oauth] [--model id[#effort]] label mcp|uvw|co
   # shellcheck disable=SC1091
   [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"
   [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_url="$MCP_URL"
-  node "$BIN/story.mjs" "$REPO" "$RUN" "$ORIGIN" "$mcp_url" "$USERNAME" "$OPENCODE_MODEL" "$@"
+  VERIFY_UVW_AGENT_LIMIT_REASON="$(agent_limit_reason)" node "$BIN/story.mjs" "$REPO" "$RUN" "$ORIGIN" "$mcp_url" "$USERNAME" "$OPENCODE_MODEL" "$@"
 }
 
 cmd_open_anon() { # label url: what a visitor with no cookies sees
@@ -570,6 +573,9 @@ cmd_up() {
 
   [[ "${VERIFY_UVW_MCP_RENDERER:-1}" =~ ^[01]$ && "${VERIFY_UVW_MCP_PRODUCTION:-0}" =~ ^[01]$ ]] || die "MCP renderer and production flags must be 0 or 1"
   [[ "${VERIFY_UVW_MCP_EXECUTORS:-1}" =~ ^[12]$ ]] || die "VERIFY_UVW_MCP_EXECUTORS must be 1 or 2"
+  # Journeys create many agents, so a run lifts the production default of 5 agent creations per source IP per hour.
+  local agent_limit="${VERIFY_UVW_AGENT_CREATE_LIMIT:-100}"
+  [[ "$agent_limit" =~ ^[0-9]+$ ]] || die "VERIFY_UVW_AGENT_CREATE_LIMIT must be a non-negative integer"
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
   local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" mcp_public_url engine
   if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
@@ -623,7 +629,7 @@ console.log(clients.length ? JSON.stringify({clients}) : "")' "$run/home/mcp-oau
 
   # env -i keeps the developer's shell and apps/workspace/.env (OAuth, data paths) out of this instance.
   (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" \
-    HOST=127.0.0.1 PORT="$server_port" LOG_LEVEL=info SECURE_COOKIES=false \
+    HOST=127.0.0.1 PORT="$server_port" LOG_LEVEL=info SECURE_COOKIES=false AGENT_CREATE_LIMIT_PER_HOUR="$agent_limit" \
     METRICS_TOKEN="$(cat "$run/home/workspace-metrics-token")" \
     "${server_oauth_env[@]}" \
     DATABASE_FILE="$run/data/univer-workspace.sqlite" \
@@ -641,6 +647,7 @@ RUN_ID=$id
 SERVER_PORT=$server_port
 WEB_PORT=$web_port
 AGENT_PORT=$agent_port
+AGENT_CREATE_LIMIT=$agent_limit
 SERVER_PID=$server_pid
 WEB_PID=$web_pid
 GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
@@ -742,7 +749,7 @@ cmd_mcp_oauth() {
   local USERNAME=""
   # shellcheck disable=SC1091
   [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"
-  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$BIN/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
+  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" VERIFY_UVW_AGENT_LIMIT_REASON="$(agent_limit_reason)" node "$BIN/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
 }
 
 cmd_env() {

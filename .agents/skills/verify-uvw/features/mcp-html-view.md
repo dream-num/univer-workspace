@@ -361,7 +361,7 @@ and the list, the draft and the `Pages` section of the pull request all read `co
 ### MHV10. An Editor agent merges its own pull request over MCP, and its page publishes
 
 Continue from MHV9 with the run browser signed in as O. A claimed agent principal becomes an Editor of H's
-Space. This `principal` counts toward the 5 agents per hour:
+Space:
 
 ```bash
 $V principal pagebot mpa-bot
@@ -399,9 +399,9 @@ Before `$V down`, close E's browser session and run `uh daemon stop` and `ue dae
 ### MHV11. A Viewer agent changes a Sheet and its page through a fork, and an Editor merges in the browser
 
 A holder H owns a public Team Space whose `proposals` setting is `accountable`. A claimed agent A is a Viewer and
-works only through its fork, and E is an Editor. Register H and E and sign their uvw in as in MHV8, then define
-`uh`, `ue` and MHV8's `page` function. H creates the Space and A. Each `principal` counts toward the 5 agents per
-hour, and MHV11 to MHV15 use two:
+works only through its fork, and E is an Editor. Register H and E and sign their uvw in as in MHV8, unless this run
+already did, then define `uh`, `ue` and MHV8's `page` function. H creates the Space and A. MHV11 to MHV15 use two
+`principal`s:
 
 ```bash
 uh repo create fork-pages --name "Fork pages" --public --proposals accountable --json id > "$EVIDENCE/mfp-team.out"; T=$(jq -r .id "$EVIDENCE/mfp-team.out")
@@ -413,7 +413,8 @@ $V mcp --as pagefork mfp-claim claim '{}'
 Open the `claimUrl` from `mfp-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
 code in `mfp-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then H adds A
 as a Viewer and E as an Editor, and puts a Sheet with North `42` in B2 on Trunk and a page bound to it, with the
-commands of MHV8 on `$H/fork-pages`, from `uh pr create` to `PN` and `PR`:
+commands of MHV8 on `$H/fork-pages`, from `uh pr create` to `PN` and `PR`, with `mfp-h` in place of `mpm-h` in the
+evidence names and the idempotency key:
 
 ```bash
 for pair in "$AID:viewer" "$(jq -r .user.id "$EH/register.json"):editor"; do
@@ -588,10 +589,12 @@ fork's pull request is `ready`, and no `mcp.tool_call` event holds `AGENT_NOT_AL
 
 ### MHV16. An Editor merges only the pages they reviewed
 
-Continue from MHV8, with or without MHV9 and MHV10. O proposes B2 `55` and a new version of H's page, then marks
-the pull request ready:
+Continue from MHV8, with or without MHV9 to MHV15. MHV11 sets `T`, `U`, `RES`, `S`, `PN` and `PR` for its own
+Space, so take MHV8's back first. O proposes B2 `55` and a new version of H's page, then marks the pull request ready:
 
 ```bash
+T=$(jq -r .id "$EVIDENCE/mpm-team.out"); U=$(jq -r .unit.unitId "$EVIDENCE/mpm-h-unit.out"); RES=$(jq -r .unit.resourceId "$EVIDENCE/mpm-h-unit.out")
+S=$(jq -r .value.sheetId "$EVIDENCE/mpm-h-data.out"); PN=$(jq -r .nodeId "$EVIDENCE/mpm-h-page.out"); PR=$(jq -r .resourceId "$EVIDENCE/mpm-h-page.out")
 $V mcp mrv-pr pr_create "{\"repo\":\"$H/page-merge\",\"title\":\"Reviewed page\"}"
 W5=$(jq -r .id "$EVIDENCE/mrv-pr.out"); P5=$(jq -r .number "$EVIDENCE/mrv-pr.out")
 $V mcp mrv-add unit_add "{\"worktree\":\"$W5\",\"resource\":\"$RES\"}"
@@ -648,7 +651,7 @@ Then open `$ORIGIN/nodes/$PN?view=immersive` in E's session, wait 6 s and save `
 Pass when `mrv-save` is a pending `replace` draft with `publishWhen: "merge"` and `mrv-e-review.png` lists
 `Budget.univer.html` by O as `Pending review`. `mrv-revise` is a new pending draft `D6`. In the kept tab the dialog
 still says `Merging will publish 1 page.`, and the merge ends with the toast
-`The pages in this task changed after you reviewed them. The list is refreshed. Review them again before you merge.`
+`The pages or files in this task changed after you reviewed them. The list is refreshed. Review them again before you merge.`
 and no published-page toast. The pull request is still `ready`, Trunk B2 and the page are as before, and `D6` is
 `pending`. After the refresh the `Pages` section lists one page, `Pending review`, and its preview shows
 `Budget changed after review` with the pull request's `North: 55`. The second merge says `Published 1 page`,

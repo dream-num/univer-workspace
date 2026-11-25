@@ -295,7 +295,7 @@ $R [--jobs N] [--keep] <feature[:ID,ID]>...
 | mcp-executor | MX1、MX2 和 MT1 可用。MX4 失败的原因在 recipe，与启动方式无关。MX3 直接调用 `docker stop`。MX11、MX12 和 MX13 经由 `mcp-resilience.mjs` 依赖 `docker kill`、`docker logs` 和 `host.docker.internal`。这四条都标为 host only | 实测加 grep |
 | mcp-renderer | MR9、MR10 和 MV2 可用。MR11 的问题见 #553。MR12 的 Sheet 部分可以原样运行 | 实测 |
 | mcp-oauth | MO1 可以原样运行，只要 `mcp-oauth-opencode.sh` 中的两行按 provider 分支（7.3 节）。MO2 由脚本驱动。MO3 需要访问外网 HTTPS，拉取 `claude.ai` 和 `vscode.dev` 发布的 CIMD 文档。MO4 只用 curl | MO1 实测，其余 grep |
-| mcp-auth 的其余 journey、mcp-html-view、mcp-issues-prs、mcp-space-files、mcp-skills-api | 预计可用 | grep |
+| mcp-auth 的其余 journey、mcp-html-view、mcp-issues-prs、mcp-space-files、mcp-skills-api，以及从 mcp-issues-prs 拆出的 agent-mode-* | 预计可用 | grep |
 | mcp-production | 需要 `dist` 版本的 `mcp-allow-users` 和 `mcp-gateway-restart`，由 `mcp_compose` 的分派提供 | grep |
 | mcp-auth | 用到 `$V agent-up` 的那条 journey 标为 host only，`agent-up` 在 Linux 上没有测过 | grep |
 | mcp-security | 只能用 `image` | 它测的就是容器边界 |
