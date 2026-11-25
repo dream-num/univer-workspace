@@ -14,6 +14,7 @@ journey covers yet.
 | [Declared checks and the landing guard](../features/agent-mode-checks.md) | MP15, MP17, MP18 | mcp |
 | [Files that move to Trash around a pull request](../features/agent-mode-trash.md) | MP16, MP19 | mcp |
 | [An agent's limits](../features/agent-mode-limits.md) | MP14 | mcp |
+| [Forks](../features/agent-mode-forks.md) | FK1-FK8 | mcp |
 | [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10, then PR11 | mcp, then default |
 | [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9 and MH1-MH5 | default, then mcp |
 | [HTML View drafts over MCP](../features/mcp-html-view.md) | MHV5-MHV16 | mcp |
@@ -53,20 +54,20 @@ Run several features at once only with an id and ports of their own each ([Paral
 | R6 `capabilities` tells an agent whether it may merge | MP11, MP17, MP19, MHV13 |
 | R7 Author and merger are recorded | PR7, MP12 |
 | R8 An owner or admin discards any Worktree | Not covered |
-| R9 A fork is the whole repository and one row | Not covered |
-| R10 An unchanged file in a fork shows the upstream Trunk | MHV11, MHV14 |
-| R11 A Unit joins the fork's Worktree on its first write | MHV11, MF10 (same Unit ID; the baseline is not read) |
-| R12 One open Worktree per fork | Not covered |
-| R13 A fork stays usable after its Worktree ends | MHV11, MHV12 |
-| R14 A ready fork refuses writes | MHV11 (`FORK_WORKTREE_NOT_DRAFT`); reopen, then write, is not covered |
+| R9 A fork is the whole repository and one row | FK1 (same Nodes and IDs, nothing new upstream or in the agent's repositories; the row count is A4.1) |
+| R10 An unchanged file in a fork shows the upstream Trunk | MHV11, MHV14, FK2, FK3 |
+| R11 A Unit joins the fork's Worktree on its first write | FK3 (same Unit ID, baseline at the write), MHV11, MF10 |
+| R12 One open Worktree per fork | FK4 (two first writes at once), FK5 (a result per Unit) |
+| R13 A fork stays usable after its Worktree ends | MHV11, MHV12, FK5, FK6 |
+| R14 A ready fork refuses writes | MHV11 (`FORK_WORKTREE_NOT_DRAFT`), FK5 (reopen, then write) |
 | R15 The way back is a Worktree Merge | MHV11, MF10 |
 | R16 `freshness` and `stale` | Not covered |
 | R17 Verify on the merge preview | Not covered for agents |
 | R18 A page changed upstream since its draft is not overwritten | MHV9, MHV12 |
 | R19 The same for other Blobs | MF10, MF11 |
 | R20 Reading upstream content needs upstream read access | MH3, MP11, PR11 |
-| R21 Losing membership cuts the fork off | Not covered. MHV13 shows only that `accountable` admits a non-member |
-| R22 A fork stores no upstream data | Not covered |
+| R21 Losing membership cuts the fork off | FK7 (a private upstream, then a public one with `proposals` `members`) |
+| R22 A fork stores no upstream data | FK1 (copies nothing), FK6 (deleting it changes nothing upstream) |
 | R23 An unclaimed agent's quota spans all its Spaces | Not covered |
 | R24 The server derives identity and state | No journey of its own |
 
@@ -100,9 +101,16 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 | A2.12 Who merges their own Worktree today still does | PR1, PR9, HO2 |
 | A3.1 An agent creates a repository and works in it alone | MP11, MP18 (the repository stays private) |
 | A3.9 An unclaimed agent cannot make a Space public | MH4 (expiry is not covered) |
-| A4.6 A ready fork refuses writes | MHV11 (reopen is not covered) |
+| A4.2 Browsing through a fork lists the whole repository | FK1 |
+| A4.3 A file someone changed on Trunk reads changed through the fork | FK2 |
+| A4.4 The first write adds one Unit with the Trunk revision of that moment | FK3 |
+| A4.5 Two first writes at once share one Worktree | FK4 |
+| A4.6 A ready fork refuses writes | MHV11, FK5 (reopen, then write) |
 | A4.7 After the merge the fork is clean and opens a new Worktree | MHV11, MHV12 |
 | A4.8 One Unit merges while another conflicts | MHV12 (a page), MF11 (a file); the discard and redo are not covered |
+| A4.9 A removed member reads and writes nothing upstream through its fork | FK7 |
+| A4.10 Deleting a fork changes nothing upstream and keeps its history | FK6 |
+| A4.11 Two forks of one repository each have their own Worktree | FK4, FK5 |
 | A6.5 An Editor agent in a `review` repository merges as before | MHV10, MI13, MP17 |
 | A6.6 Past its budget an agent is refused at the first step | MP14 (`pr_create`; a first write through a fork is not covered) |
 | Phase 5: pages and Blobs through a fork | MHV5-MHV7 and MHV16 review pages, MHV8-MHV14, MF10, MF11 |
@@ -122,8 +130,6 @@ A0.x, A2.11, A4.1, A4.12, A6.7 and A6.8 are measurements, test suites or migrati
 
 ## Not covered yet
 
-- Fork substrate: R9, R12, R14 reopen then write, R21, R22, A4.2-A4.5, A4.9-A4.11, and `uvw fork list`, `view` and
-  `delete`.
 - The Trunk write guards of #581 and #590.
 - Agent ceilings: R2c, R23, A2.1, A3.3, A3.4, A3.7 and A3.8.
 - Ownership of an agent's repository: R2a labels and other people's Worktrees, R2b as admin, R2d, A3.2, A3.5 and

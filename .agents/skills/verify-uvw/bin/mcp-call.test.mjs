@@ -146,6 +146,14 @@ for (const tool of ['fork_view', 'fork_delete']) {
     assert.equal(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: 'space-1' } }).length, 0);
     assert.ok(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: null } }).includes('Unexpected repository or Unit identity'));
   });
+
+  test(`${tool} records no repository once the fork's owner cannot read its upstream`, () => {
+    const fork = { fullName: 'agent/fix', upstream: null };
+    const result = { structuredContent: tool === 'fork_delete' ? { fork, worktree: null } : fork };
+    const globals = { tool, args: { fork: 'agent/fix' } };
+    assert.equal(validateErrorCode('ok', undefined, null, { globals, result, event: { tool, repo: null } }).length, 0);
+    assert.ok(validateErrorCode('ok', undefined, null, { globals, result, event: { tool, repo: 'space-1' } }).includes('Unexpected repository or Unit identity'));
+  });
 }
 
 test('a read through a fork address records a repository only when it reads the fork\'s Worktree', () => {
