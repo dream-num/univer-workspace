@@ -1,5 +1,16 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+
+/** Pin the generated profile to the DSH graph installed by the frozen bootstrap. */
+export async function readBootstrapDshVersions(bootstrap) {
+  const scope = join(bootstrap, 'node_modules/@deepseek-ai');
+  const versions = {};
+  for (const name of (await readdir(scope)).sort()) {
+    const manifest = JSON.parse(await readFile(join(scope, name, 'package.json'), 'utf8'));
+    versions[manifest.name] = manifest.version;
+  }
+  return versions;
+}
 
 /** The generated profile is an isolated pnpm project, including after relocation. */
 export async function writeProfileWorkspace(profile, overrides = {}) {

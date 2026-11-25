@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import policy from "../src/policy.cjs";
@@ -113,18 +113,23 @@ if (!expected || createHash("sha256").update(bytes).digest("hex") !== expected)
 const archivePath = join(root, archive);
 await writeFile(archivePath, bytes);
 if (platform === "win32") {
-  // Paths are passed through environment variables, never interpolated as code.
+  // Use the same PowerShell 7 host as the Windows builder. A legacy
+  // powershell.exe process can inherit PowerShell 7's incompatible Archive module.
+  // Pass the paths through the environment and stop on extraction errors.
   run(
-    "powershell.exe",
+    "pwsh.exe",
     [
       "-NoProfile",
       "-Command",
-      "Expand-Archive -LiteralPath $env:UWA_ARCHIVE -DestinationPath $env:UWA_EXTRACT",
+      "Expand-Archive -LiteralPath $env:UWA_ARCHIVE -DestinationPath $env:UWA_EXTRACT -ErrorAction Stop",
     ],
     { env: { ...process.env, UWA_ARCHIVE: archivePath, UWA_EXTRACT: root } },
   );
+  const nodeExe = join(root, stem, "node.exe");
+  if (!(await stat(nodeExe).catch(() => null))?.isFile())
+    throw new Error(`Node archive extraction did not produce ${stem}/node.exe`);
   await mkdir(join(runtime, "node", "bin"), { recursive: true });
-  await cp(join(root, stem, "node.exe"), join(runtime, "node", "bin", "node.exe"));
+  await cp(nodeExe, join(runtime, "node", "bin", "node.exe"));
 } else {
   run("tar", ["-xzf", archivePath, "-C", root]);
   await mkdir(join(runtime, "node", "bin"), { recursive: true });
@@ -136,14 +141,11 @@ for (const name of ["LICENSE", "README.md", "CHANGELOG.md"]) {
 }
 const node = join(runtime, "node", "bin", platform === "win32" ? "node.exe" : "node");
 const bootstrap = join(runtime, "bootstrap");
-// Materialize the DSH runtime cohort (packages/dsh-runtime) from its own
-// committed lockfile instead of floating at build time. The cohort lives in a
-// standalone nested workspace: sharing the root graph re-resolves consumers'
-// optional peers and splits branded types (SessionId, Context) across the
-// workspace. The hoisted deploy output is a load-bearing layout: finalize
-// scans its top-level @deepseek-ai scope for the profile's portability
-// overrides, pack-host copies preset templates from it, and the packed ASAR
-// root must stay free of store symlinks.
+// Install the committed DSH graph into the directory that becomes host.asar.
+// Legacy pnpm deploy ignores the source lockfile even after a frozen install.
+// A floating deployment can pick Cordis 4.1, whose service records do not
+// expose the fiber required by the pinned agent preset. The hoisted layout
+// still keeps top-level DSH packages visible and the archive free of store links.
 await rm(bootstrap, { recursive: true, force: true });
 // prepare:runtime always runs through the pnpm CLI, which exposes its own
 // entry script so the deploy uses the same pnpm that produced the lockfile.
@@ -152,19 +154,20 @@ if (!pnpmExecPath || !/\.[cm]js$/.test(pnpmExecPath)) {
   throw new Error("prepare:runtime must run through the pnpm CLI (pnpm --dir apps/agent/desktop prepare:runtime)");
 }
 const dshRuntime = join(repo, "packages", "dsh-runtime");
-// Fail here when the manifest and the committed lockfile drift apart.
-run(node, [pnpmExecPath, "install", "--frozen-lockfile"], { cwd: dshRuntime });
+await mkdir(bootstrap, { recursive: true });
+for (const file of ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"]) {
+  await cp(join(dshRuntime, file), join(bootstrap, file));
+}
 run(node, [
   pnpmExecPath,
-  "deploy",
-  // pnpm v10+ deploys only injected workspaces; nothing here needs injection.
-  "--legacy",
-  "--filter",
-  "@univerjs/univer-workspace-dsh-runtime",
+  "install",
+  "--frozen-lockfile",
   "--prod",
   "--config.node-linker=hoisted",
-  bootstrap,
-], { cwd: dshRuntime });
+], { cwd: bootstrap });
+// The lock and configuration are build inputs, not product resources.
+await rm(join(bootstrap, "pnpm-workspace.yaml"));
+await rm(join(bootstrap, "pnpm-lock.yaml"));
 const { delimiter } = await import("node:path");
 const env = {
   ...process.env,
@@ -173,8 +176,10 @@ const env = {
 };
 const profile = join(runtime, "home", "profiles", "univer-workspace-harness");
 await mkdir(profile, { recursive: true });
-const { writeProfileWorkspace } = await import('./portable-profile.mjs');
-await writeProfileWorkspace(profile);
+const { readBootstrapDshVersions, writeProfileWorkspace } = await import('./portable-profile.mjs');
+// Both graphs become part of host.asar. Pin before installing the profile:
+// rewriting only its lockfile at finalization cannot change the modules packed.
+await writeProfileWorkspace(profile, await readBootstrapDshVersions(bootstrap));
 const dsh = join(bootstrap, "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
 run(
   node,

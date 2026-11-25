@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.target == 'windows' && '[{"os":"windows-2025","target":"win-x64"}]' || inputs.target == 'macos' && '[{"os":"macos-15","target":"mac-arm64"}]' || '[{"os":"ubuntu-24.04","target":"linux-x64"},{"os":"macos-15","target":"mac-arm64"},{"os":"windows-2025","target":"win-x64"}]') }}
+        include: ${{ fromJSON(inputs.target == 'windows' && '[{"os":"windows-2025","target":"win-x64","installer":"win-x64.exe"}]' || inputs.target == 'macos' && '[{"os":"macos-15","target":"mac-arm64","installer":"mac-arm64.dmg"}]' || '[{"os":"ubuntu-24.04","target":"linux-x64","installer":"linux-x86_64.AppImage"},{"os":"macos-15","target":"mac-arm64","installer":"mac-arm64.dmg"},{"os":"windows-2025","target":"win-x64","installer":"win-x64.exe"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
@@ -237,17 +237,23 @@ jobs:
       - name: Enforce native directory recovery regression
         if: ${{ always() && steps.nsis_recovery.outcome == 'failure' }}
         run: node -e "throw new Error('Native directory recovery regression failed; see its phase log')"
-      - uses: actions/upload-artifact@v4
+      - name: Upload standalone installer
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: agent-desktop-${{ matrix.target }}
           if-no-files-found: error
           retention-days: 14
+          path: apps/agent/desktop/artifacts/Univer-Workspace-Agent-*-${{ matrix.installer }}
+      - name: Upload auto-update files separately
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-desktop-updates-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
           path: |
-            apps/agent/desktop/artifacts/*.exe
-            apps/agent/desktop/artifacts/*.dmg
             apps/agent/desktop/artifacts/*.zip
-            apps/agent/desktop/artifacts/*.AppImage
             apps/agent/desktop/artifacts/*.blockmap
             apps/agent/desktop/artifacts/latest*.yml
             apps/agent/desktop/artifacts/alpha*.yml
@@ -262,6 +268,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          # Match both the standalone installers and their auto-update files.
           pattern: agent-desktop-*
           merge-multiple: true
           path: artifacts

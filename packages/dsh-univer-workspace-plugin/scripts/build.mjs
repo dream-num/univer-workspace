@@ -70,7 +70,10 @@ await copyFile(
 
 await build({
   ...nodeEsmOptions,
-  entryPoints: ["src/index.ts"],
+  entryPoints: {
+    index: "src/index.ts",
+    "runtime-manager": "src/runtime/manager.ts",
+  },
   outdir: "lib",
   splitting: true,
   // The public pool resolves its worker bootstrap beside import.meta.url.
