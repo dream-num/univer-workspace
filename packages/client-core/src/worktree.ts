@@ -206,9 +206,16 @@ export class WorkspaceWorktreeFeature {
     if (!isWorkspaceRecord(operation) || typeof operation["id"] !== "string" || typeof operation["state"] !== "string") {
       throw workspaceError("workspace-invalid-response", "Workspace response is missing the revert Operation.");
     }
+    const error = operation["error"];
     const items = body["items"];
     return {
-      operation: { id: operation["id"], state: operation["state"] },
+      operation: {
+        id: operation["id"],
+        state: operation["state"],
+        error: isWorkspaceRecord(error) && typeof error["code"] === "string" && typeof error["message"] === "string"
+          ? { code: error["code"], message: error["message"] }
+          : null,
+      },
       items: Array.isArray(items) ? items.map((item: unknown) => parseRevertItem(item)) : null,
     };
   }

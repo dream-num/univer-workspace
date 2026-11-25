@@ -379,6 +379,9 @@ function build(
         ...(result.applied ? [`Revert ${result.operation!.state}`] : [result.refusal ?? "Plan only; run again with --yes to revert."]),
         ...result.items.map(revertLine),
       ].join("\n"));
+      if (result.applied && result.operation!.state === "failed") {
+        revert.error(result.operation!.error?.message ?? "The revert failed.", { code: "workspace.command.failed", exitCode: 1 });
+      }
     });
 
   root.addCommand(list).addCommand(get).addCommand(create).addCommand(edit).addCommand(check).addCommand(revert);

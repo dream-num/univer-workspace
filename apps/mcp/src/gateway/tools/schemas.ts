@@ -248,7 +248,10 @@ export const revertSchema = z.object({
   pullRequests: z.array(z.object({ id: z.string(), number: z.number().nullable(), title: z.string() })).optional(),
   canRevert: z.boolean().optional(),
   refusal: z.string().nullable().optional().describe("Why you cannot revert."),
-  operation: z.object({ id: z.string(), state: z.string() }).optional().describe("pending: it finishes on its own."),
+  operation: z
+    .object({ id: z.string(), state: z.string(), error: z.object({ code: z.string(), message: z.string() }).nullable() })
+    .optional()
+    .describe("pending: it finishes on its own. failed: nothing was reverted, and error says why."),
   items: z.array(revertItemSchema),
 });
 

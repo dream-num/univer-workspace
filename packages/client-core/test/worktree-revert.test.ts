@@ -8,7 +8,7 @@ const blocked = {
 };
 const trashed = { ...blocked, action: "trash", state: "done", unitId: null, unitType: null, targetRevision: null, headRevision: null, reason: null, laterEdits: [] };
 
-it("reads an Issue's revert plan, reverts with a fresh key and no force, and reads a pending result", async () => {
+it("reads an Issue's revert plan, reverts with a fresh key and no force, and reads pending and failed results", async () => {
   const calls: unknown[] = [];
   const fetcher: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -16,8 +16,11 @@ it("reads an Issue's revert plan, reverts with a fresh key and no force, and rea
     if (request.method === "GET") {
       return Response.json({ pullRequests: [{ id: "w1", number: 3, title: "Fix" }], items: [blocked], capabilities: { revert: true, force: false }, refusal: null });
     }
+    if (request.url.includes("/s2/")) {
+      return Response.json({ operation: { id: "o3", state: "failed", error: { code: "CONFLICT", message: "Nothing was reverted." } }, items: [blocked] }, { status: 201 });
+    }
     return request.url.includes("/worktrees/")
-      ? Response.json({ operation: { id: "o2", state: "pending" } }, { status: 202 })
+      ? Response.json({ operation: { id: "o2", state: "pending", error: null } }, { status: 202 })
       : Response.json({ operation: { id: "o1", state: "completed" }, items: [blocked, trashed] }, { status: 201 });
   };
   const http = new WorkspaceHttp({ cookie: "workspace_session=test", fetcher, origin: "https://workspace.test", role: "client" });
@@ -30,11 +33,15 @@ it("reads an Issue's revert plan, reverts with a fresh key and no force, and rea
   });
   const done = await worktrees.revert({ spaceId: "s1", issueNumber: 7 });
   expect(done).toMatchObject({ operation: { id: "o1", state: "completed" }, items: [parsed, { action: "trash", state: "done" }] });
-  expect(await worktrees.revert({ worktreeId: "w1" })).toEqual({ operation: { id: "o2", state: "pending" }, items: null });
+  expect(await worktrees.revert({ worktreeId: "w1" })).toEqual({ operation: { id: "o2", state: "pending", error: null }, items: null });
+  expect(await worktrees.revert({ spaceId: "s2", issueNumber: 7 })).toEqual({
+    operation: { id: "o3", state: "failed", error: { code: "CONFLICT", message: "Nothing was reverted." } }, items: [parsed],
+  });
   expect(calls).toEqual([
     ["GET", "/api/spaces/s1/issues/7/revert", null, ""],
     ["POST", "/api/spaces/s1/issues/7/revert", 36, ""],
     ["POST", "/api/worktrees/w1/revert", 36, ""],
+    ["POST", "/api/spaces/s2/issues/7/revert", 36, ""],
   ]);
   await expect(worktrees.revertPlan({ spaceId: "s1", issueNumber: 0 })).rejects.toThrow("Issue number must be a positive integer.");
 });

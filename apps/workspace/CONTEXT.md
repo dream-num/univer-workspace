@@ -150,8 +150,8 @@ Taking merged Worktrees out of Trunk in one Operation: one merged Worktree, or e
 Worktree linked to an Issue. Each Unit they changed returns to its Trunk revision before the
 first of them, as a new revision; a file they added moves to Trash, and a file they removed comes
 back from Trash. A Unit edited on Trunk afterwards by anything but those merges is blocked and
-stays as it is unless a person in the browser forces it. An Issue revert records the Verdict
-reverted and reopens the Issue.
+stays as it is unless a person in the browser forces it. An Issue revert that reverted at least
+one file records the Verdict reverted and reopens the Issue; one that reverted nothing fails.
 _Avoid_: Rollback, undo, selective revert
 
 ## Change preparation

@@ -124,7 +124,8 @@ export interface WorkspaceRevertPlan {
 }
 
 export interface WorkspaceRevertResult {
-  readonly operation: { readonly id: string; readonly state: string };
+  /** `failed` with an error when nothing was reverted. */
+  readonly operation: { readonly id: string; readonly state: string; readonly error: { readonly code: string; readonly message: string } | null };
   /** Null while the revert Operation is still pending. */
   readonly items: readonly WorkspaceRevertItem[] | null;
 }

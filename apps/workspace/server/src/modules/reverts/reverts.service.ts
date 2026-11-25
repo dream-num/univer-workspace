@@ -339,6 +339,10 @@ export function createRevertsModule(options: {
           : await trashNode(row, item);
         await save(index, outcome);
       }
+      if (!payload.items.some(reverted)) {
+        const reasons = payload.items.filter((item) => item.reason).map((item) => `${item.name}: ${item.reason}`).join(" ");
+        throw new ApplicationError("CONFLICT", 409, `Nothing was reverted. ${reasons}`.trim());
+      }
       if (payload.scope.kind === "issue") {
         await options.issues.recordReverted(row.actor_user_id, payload.scope.spaceId, payload.scope.number, row.id);
       }
@@ -433,6 +437,11 @@ export function createRevertsModule(options: {
 
 function view({ univerType: _type, mergeRevisions: _merges, batchId: _batch, attempt: _attempt, ...item }: RevertWork): RevertItem {
   return item;
+}
+
+/** A done item with a reason was done before this revert, as a file someone else already brought back from Trash. */
+function reverted(item: RevertWork): boolean {
+  return item.state === "done" && item.reason === null;
 }
 
 function trashBatchId(operationId: string, nodeId: string): string {

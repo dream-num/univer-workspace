@@ -200,7 +200,7 @@ export interface IssuesModule {
   ): Promise<IssueTimelinePage>;
   createComment(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueCommentView>;
   verdict(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueView>;
-  /** Records that a revert took the Issue's merged pull requests out of Trunk, once per Operation, and reopens the Issue. */
+  /** Records that a revert took at least one of the Issue's merged changes out of Trunk, once per Operation, and reopens the Issue. */
   recordReverted(userId: string, spaceId: string, number: number, operationId: string): Promise<void>;
   /** Who may read content now, as each current assignee set it after its latest assignment. */
   accessChanges(userId: string, spaceId: string, number: unknown): Promise<AccessChanges>;

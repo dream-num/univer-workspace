@@ -828,8 +828,10 @@ Unit 的 `mergeResult.trunkRevision`、Trunk 的 changeset 记录和修订、Wor
 3. 恢复只在 Trunk 最新修订上提交。基线过期时重读最新修订，没有别人的新修改就换下一个 `reqId` 再试；出现别人的修改时
    这一项停为 `blocked`；
 4. 每一项的结果都写回 `payload_json`，每次写都比对 `lease_owner`，Lease 被别的副本接手后旧执行者停止且不再写；
-5. Issue 范围写一条 `reverted` Verdict（以 `operation_id` 去重），Issue 已关闭时重新打开并写 `reopened` 事件；
-   然后标记 Completed，`result_json` 是每一项的结果。
+5. 至少一项由本次撤回完成（`done`）时，Issue 范围写一条 `reverted` Verdict（以 `operation_id` 去重），Issue 已关闭时
+   重新打开并写 `reopened` 事件；然后标记 Completed，`result_json` 是每一项的结果。没有一项完成时（例如唯一的 Unit 在
+   撤回途中被别人修改，或被内容保护拒绝），Operation 标记 Failed，错误码 `CONFLICT`，不写 Verdict，Issue 保持原状；
+   每一项的原因仍在 `payload_json` 里，响应照常列出。
 
 崩溃或 Lease 过期后，后台恢复领取 Pending 的撤回继续执行：已保存的恢复先原样重发，SDK 以 `(unit, sid, reqId)` 去重，
 所以同一项不会恢复两次。可重试错误按指数退避最多尝试 5 次，之后 Failed，可用 Operation Retry 重新开始。撤回恢复整个

@@ -394,7 +394,7 @@ describe("uvw pr and the worktree alias", () => {
     laterEdits: [{ user: { id: "u2", username: "eve", displayName: "Eve" }, revisions: 2, lastEditedAt: null }],
   };
 
-  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; env?: NodeJS.ProcessEnv; ownerId?: string } = {}) {
+  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; env?: NodeJS.ProcessEnv; ownerId?: string; revertState?: "failed" } = {}) {
     const { repoContext } = context(options.env);
     const calls: [string, ...unknown[]][] = [];
     const record = (name: string, result: unknown) =>
@@ -414,7 +414,7 @@ describe("uvw pr and the worktree alias", () => {
         results: [{ reporter: { id: "u1", username: "alice", displayName: "Alice" }, state: "passed", summary: "B5 = 60", reportedAt: "2026-11-24T00:00:00.000Z", current: true, counts: false }],
       }),
       revertPlan: record("revertPlan", { pullRequests: [], items: [revertItem], capabilities: { revert: true, force: false }, refusal: null }),
-      revert: record("revert", { operation: { id: "op-1", state: "completed" }, items: [revertItem] }),
+      revert: record("revert", { operation: { id: "op-1", state: options.revertState ?? "completed", error: options.revertState ? { code: "CONFLICT", message: "Nothing was reverted. North: Edited on Trunk after this task's merge." } : null }, items: [revertItem] }),
     } as unknown as WorkspaceWorktreeFeature;
     const spaces = { get: vi.fn(async (id: string) => ({
       ...teamSpace,
@@ -473,6 +473,13 @@ describe("uvw pr and the worktree alias", () => {
       ["getByNumber", "space-1", 12],
       ["revert", { worktreeId: "wt-1" }],
     ]);
+  });
+
+  it("exits 1 with the reason when a revert reverted nothing", async () => {
+    const { pr } = pullRequestCommands({ revertState: "failed" });
+    await expect(run(pr, ["revert", "12", "-R", "alice/docs", "--yes"])).rejects.toMatchObject({
+      exitCode: 1, message: "Nothing was reverted. North: Edited on Trunk after this task's merge.",
+    });
   });
 
   it("reports one check as passed or failed and shows whether each result counts", async () => {

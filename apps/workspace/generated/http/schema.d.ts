@@ -2363,8 +2363,10 @@ export interface paths {
          *     files to Trash. A `blocked` Unit is skipped and stays `blocked` unless `force` names it with the `headRevision`
          *     the plan showed; only a person signed in to the browser may send `force`. If someone edits a Unit after the
          *     revert reads it, the revert reads the head again and stops that Unit as `blocked` when the edit is not its own.
-         *     A finished Issue revert records a `reverted` verdict and reopens the Issue if it was closed. A replay with the
-         *     same Idempotency-Key and body returns the Operation.
+         *     When at least one item ends `done`, an Issue revert records a `reverted` verdict and reopens the Issue if it was
+         *     closed. When none does, because every Unit was edited or refused mid-revert, the Operation is `failed` with
+         *     `CONFLICT`, its items say why, and the Issue is left as it was. A replay with the same Idempotency-Key and body
+         *     returns the Operation.
          *
          *     In a Team Space whose `landing` is `checks`, an agent that does not own it cannot revert, because a revert
          *     changes Trunk without a merge: `403 AGENT_NOT_ALLOWED`.
@@ -9061,7 +9063,7 @@ export interface operations {
                     "application/json": components["schemas"]["RevertResponse"];
                 };
             };
-            /** @description The revert finished. Each item says what it did. */
+            /** @description The revert finished. Each item says what it did. `operation.state` is `failed` when nothing was reverted. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -9723,7 +9725,7 @@ export interface operations {
                     "application/json": components["schemas"]["RevertResponse"];
                 };
             };
-            /** @description The revert finished. Each item says what it did. */
+            /** @description The revert finished. Each item says what it did. `operation.state` is `failed` when nothing was reverted. */
             201: {
                 headers: {
                     [name: string]: unknown;

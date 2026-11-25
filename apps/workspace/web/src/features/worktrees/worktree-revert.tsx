@@ -73,6 +73,7 @@ export function RevertSection({ target }: { readonly target: RevertTarget }) {
   const run = () => revert.mutate(force, {
     onSuccess: (data) => {
       if (!("items" in data)) toast.info(t("revertRunning"));
+      else if (data.operation.state === "failed") toast.error(data.operation.error?.message ?? t("revertNothing"));
       else if (data.items.some((item) => item.state === "blocked" || item.state === "failed")) toast.info(t("revertPartly"));
       else toast.success(t("revertDone"));
     },

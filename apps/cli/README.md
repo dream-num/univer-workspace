@@ -249,8 +249,9 @@ revert would do to each file and changes nothing; `--yes` reverts. A file the me
 before the first of them, a file they added moves to Trash, and a file they removed comes back from Trash. A file
 someone else edited on trunk after the merge is `blocked` and stays as it is, and the plan names who edited it; only a
 person in the browser can overwrite it. Replaced pages and files cannot be reverted. Whoever may merge the pull request,
-or accept the Issue, may revert it, with edit access to every file it restores. An Issue revert records the verdict
-`reverted` and reopens the Issue.
+or accept the Issue, may revert it, with edit access to every file it restores. An Issue revert that reverted at least
+one file records the verdict `reverted` and reopens the Issue. When nothing was reverted, `--yes` prints each file's
+reason, records nothing and exits 1.
 
 ### Repository members
 

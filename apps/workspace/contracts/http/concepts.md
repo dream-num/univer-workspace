@@ -567,9 +567,10 @@ does not own it gets `403 AGENT_NOT_ALLOWED`, because a revert changes Trunk wit
 Units stay as they are unless `force` names each with the `headRevision` its plan showed, and only
 a person signed in to the browser may send `force`. A Unit edited after that revision stays
 `blocked`. The revert restores at Trunk head: if someone edits a Unit in between, it reads the
-head again, and stops that Unit as `blocked` when the edit is not its own. An Issue revert writes
-a `reverted` verdict and reopens the Issue if it was closed; a pull request revert writes no
-verdict. The response lists what happened to each item, or answers `202` while the Operation is
+head again, and stops that Unit as `blocked` when the edit is not its own. An Issue revert that
+reverted at least one item writes a `reverted` verdict and reopens the Issue if it was closed; a
+pull request revert writes no verdict. When no item ends `done`, the Operation is `failed` with
+`CONFLICT` and the Issue stays as it was. The response lists what happened to each item, or answers `202` while the Operation is
 pending, and recovery finishes it. A revert replaces whole Units: comments and history stay, and
 history keeps both the merge and the restore.
 

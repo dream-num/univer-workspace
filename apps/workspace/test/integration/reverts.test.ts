@@ -213,6 +213,38 @@ it("refuses a revert by an agent that a checks repository gates, and lets one re
   expect(await f.h.a1(north.unitId)).toBeNull();
 }, 120_000);
 
+it.each([
+  ["someone edits the only file while the revert restores it", async (f: Awaited<ReturnType<typeof repository>>) => {
+    f.h.beforeFirstRestore((unitId) => f.h.commit(f.bob.id, unitId, "foreign"));
+    return { state: "blocked", a1: "foreign" };
+  }],
+  ["the protection guard refuses to restore the only file", async (f: Awaited<ReturnType<typeof repository>>) => {
+    f.h.beforeFirstRestore(() => Promise.reject(Object.assign(new Error("Protected range"), { code: "PERMISSION_DENIED" })));
+    return { state: "failed", a1: "merged" };
+  }],
+])("records no verdict and keeps an accepted Issue closed when %s", async (_case, arrange) => {
+  const f = await repository();
+  const { application } = f.h;
+  const north = await f.sheet("North");
+  const issue = await application.issues.create(f.owner.id, f.team, { title: "Fix totals", assigneeUserIds: [f.alice.id] });
+  const pull = await f.pull(f.alice.id, issue.number);
+  await f.edit(f.alice.id, pull, await f.add(f.alice.id, pull, north.id), "merged");
+  await f.merge(f.owner.id, pull);
+  await application.issues.verdict(f.alice.id, f.team, issue.number, { kind: "submitted", body: "Done." });
+  await application.issues.verdict(f.owner.id, f.team, issue.number, { kind: "accepted", body: "" });
+  const expected = await arrange(f);
+
+  const response = await f.post(f.owner, `/api/spaces/${f.team}/issues/${issue.number}/revert`, randomUUID());
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as { operation: { state: string; error: { code: string; message: string } | null }; items: RevertPlan["items"] };
+  expect(body.operation).toMatchObject({ state: "failed", error: { code: "CONFLICT", message: expect.stringMatching(/^Nothing was reverted\. North: /) } });
+  expect(body.items).toMatchObject([{ action: "restore", state: expected.state }]);
+  expect(await f.h.a1(north.unitId)).toBe(expected.a1);
+  expect(await application.issues.get(f.owner.id, f.team, issue.number)).toMatchObject({ state: "closed", acceptance: { kind: "accepted" } });
+  const timeline = await application.issues.timeline(f.owner.id, f.team, issue.number, {});
+  expect(timeline.items.filter((item) => item.type === "event" && ["reopened", "reverted"].includes(item.kind))).toEqual([]);
+}, 120_000);
+
 async function repository() {
   const h = await start();
   const { application } = h;
@@ -302,9 +334,11 @@ async function start() {
   const sdk = createWorktreeBackend(runtime.worktreeService, runtime.service);
   // The test seam: after the nth restore commits, its runner stops as a dead replica's would.
   let crash: { after: number; calls: number; reached: (operationId: string) => void; wake: Promise<void> } | undefined;
+  let beforeRestore: ((unitId: string) => Promise<void>) | undefined;
   const backend: WorktreeBackend = {
     ...sdk,
     async restoreTrunk(input, userId) {
+      await beforeRestore?.(input.unitId);
       const result = await sdk.restoreTrunk(input, userId);
       if (crash && ++crash.calls === crash.after) {
         crash.reached(input.sid.slice("revert-".length));
@@ -384,6 +418,13 @@ async function start() {
     async restores(unitId: string, operationId: string, type = UniverType.UNIVER_SHEET) {
       const { changesets } = await runtime.service.getChangesets({ unitID: unitId, type, from: 1, to: await head(unitId) }, collaborationCallOptions("reader"));
       return changesets.filter((changeset) => changeset.sid === `revert-${operationId}`).length;
+    },
+    /** Runs once, right before the revert's first restore is submitted. */
+    beforeFirstRestore(run: (unitId: string) => Promise<void>) {
+      beforeRestore = async (unitId) => {
+        beforeRestore = undefined;
+        await run(unitId);
+      };
     },
     crashAfterRestore(after: number) {
       let reached!: (operationId: string) => void;

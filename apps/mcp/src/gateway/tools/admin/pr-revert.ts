@@ -17,7 +17,7 @@ export const prRevertTool: ToolDefinition = {
   scope: "worktree:merge",
   title: "Revert merged pull requests",
   description:
-    "Take a merged pull request, or every merged pull request linked to an Issue (pass number or issue), out of trunk. Without apply it returns the plan: each file goes back to its content before the first merge, a file the merges added moves to Trash, and one they removed comes back. A file someone else edited on trunk after the merge is blocked and stays as it is; only a person in the Browser may overwrite it. Replaced pages and files cannot be reverted. With apply it reverts and returns what it did to each file. An Issue revert records the verdict reverted and reopens the Issue. Unless the user asked you to revert, leave it to them.",
+    "Take a merged pull request, or every merged pull request linked to an Issue (pass number or issue), out of trunk. Without apply it returns the plan: each file goes back to its content before the first merge, a file the merges added moves to Trash, and one they removed comes back. A file someone else edited on trunk after the merge is blocked and stays as it is; only a person in the Browser may overwrite it. Replaced pages and files cannot be reverted. With apply it reverts and returns what it did to each file. When at least one file was reverted, an Issue revert records the verdict reverted and reopens the Issue. When none was, the operation is failed and nothing is recorded. Unless the user asked you to revert, leave it to them.",
   inputSchema,
   outputSchema: revertSchema,
   annotations: destructiveAnnotations,
