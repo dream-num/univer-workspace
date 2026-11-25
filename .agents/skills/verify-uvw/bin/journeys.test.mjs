@@ -225,9 +225,6 @@ test('$V journeys prints each mode with its up --for line; up --for and brief ta
     assert.match(right.stdout, /with these IDs: A2, A4\. Each needs a verdict\./);
     assert.match(right.stdout, /Run `\$V journeys f mcp`\./);
     assert.equal(v('brief', 'f').status, 2, 'a brief spanning modes is refused');
-    const own = v('brief', '--own', 'f-mcp-same-origin', 'f', 'mcp-same-origin');
-    assert.match(own.stdout, /^Run f-mcp-same-origin is already running in the `mcp-same-origin` mode/m, 'the runner brief needs no running instance yet');
-    assert.match(own.stdout, /with these IDs: A3\. Each needs a verdict\./);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

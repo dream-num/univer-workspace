@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief [--own run-id] <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -766,11 +766,7 @@ EOF
   fi
 }
 
-cmd_brief() { # [--own run-id] feature [journey-id|mode...]: the text to hand an agent that drives a run, from journeys.mjs
-  if [[ "${1:-}" == --own ]]; then
-    [[ $# -ge 3 && "$2" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "usage: verify-uvw brief --own <run-id> <feature> [journey-id|mode...]"
-    exec node "$BIN/journeys.mjs" brief --own --repo "$REPO" --root "$ROOT" --run-id "$2" "${@:3}"
-  fi
+cmd_brief() { # feature [journey-id|mode...]: the text to hand an agent that drives a run, from journeys.mjs
   [[ $# -ge 1 ]] || die "usage: verify-uvw brief <feature> [journey-id|mode...]"
   load_run
   exec node "$BIN/journeys.mjs" brief --repo "$REPO" --root "$ROOT" --run-id "$RUN_ID" "$@"

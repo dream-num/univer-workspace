@@ -8,7 +8,7 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NEEDS, fold, loadFeatures, plan, readRuns } from '../bin/journeys.mjs';
+import { MODES, NEEDS, fold, loadFeatures, plan, readRuns } from '../bin/journeys.mjs';
 import { HOST_ONLY } from './host-only.mjs';
 
 const skill = fileURLToPath(new URL('..', import.meta.url));
@@ -59,7 +59,7 @@ export function expand(specs, features, leftToHost = HOST_ONLY) {
     const { partitions } = runs.length ? plan(feature, runs.map((j) => j.id)) : { partitions: [] };
     for (const p of partitions) {
       tasks.push({ id: unique(partitions.length > 1 && p.mode !== 'default' ? `${name}-${p.mode}` : name), feature: name, mode: p.mode, needs: p.needs,
-        selectors: p.selectors, expected: p.journeys, skip: left.map((j) => j.id) });
+        selectors: p.selectors, expected: p.journeys, skip: left });
     }
     if (!partitions.length) hostOnly.push({ id: unique(name), feature: name });
     if (only.length) {
@@ -68,6 +68,20 @@ export function expand(specs, features, leftToHost = HOST_ONLY) {
     }
   }
   return { tasks, hostOnly, host };
+}
+
+// What the runner adds to the host brief of a task whose run is `<root>/<task id>` in the container.
+export function addendum(task, root) {
+  const left = task.skip.filter((j) => j.mode === task.mode).map((j) => j.id);
+  return [
+    '',
+    `This container is disposable and yours. Leave run ${task.id} running when you reply: the runner checks its evidence, then stops it. The runner also fails a task whose files hold its API key.`,
+    ...(left.length ? ['', `Do not run ${left.join(', ')}. Only the host runs ${left.length === 1 ? 'it' : 'them'}.`] : []),
+    '',
+    `In your reply, name each evidence file by its full path, such as ${root}/${task.id}/evidence/<file>.`,
+    ...(MODES[task.mode].VERIFY_UVW_MCP === '1' ? ['', 'Here the MCP gateway, executor and renderer start from `apps/mcp/dist` as local processes that reach the server at 127.0.0.1, with no image, container or internal network. So `doctor` prints `skip` for its container, image and network checks: they are not checked here and are not failures, and every other MCP check still prints `ok`. The `docker exec` checks in a pass condition and the gotchas about the MCP image do not apply here; the host runs them. To kill the renderer\'s Chromium, kill only the children of the renderer process: `pkill -P "$(node .agents/skills/verify-uvw/runner/mcp-processes.mjs pid "$RUN" renderer)" chromium`. A plain `pkill chromium` also kills the run\'s agent-browser.'] : []),
+    '',
+  ].join('\n');
 }
 
 export function findKey(env, dotenv) {
@@ -331,8 +345,10 @@ async function main() {
     for (let task; (task = queue.shift());) {
       let begun;
       mkdirSync(join(dir, task.id), { recursive: true });
+      // task.sh appends it to the host brief; task.sh leaves VERIFY_UVW_ROOT unset, so runs live under /tmp/verify-uvw.
+      writeFileSync(join(dir, task.id, 'addendum.txt'), addendum(task, '/tmp/verify-uvw'));
       // The skip list keeps run-journeys from running a journey left to the host, even as an earlier one a later journey needs.
-      const phase = (step, keys) => run(['exec', '-e', `VERIFY_UVW_SKIP_JOURNEYS=${task.skip.join(' ')}`, ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
+      const phase = (step, keys) => run(['exec', '-e', `VERIFY_UVW_SKIP_JOURNEYS=${task.skip.map((j) => j.id).join(' ')}`, ...(keys ? ['-e', 'ANTHROPIC_AUTH_TOKEN', '-e', 'DEEPSEEK_API_KEY'] : []), name, 'bash',
         '/home/node/repo/.agents/skills/verify-uvw/runner/task.sh', step, ...(model ? [] : ['--no-model']), task.id, task.feature, ...task.selectors],
       { log: join(dir, task.id, 'task.log'), env });
       const prepared = await prepareOne(() => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One task inside a verify runner container, in the two phases runner.mjs runs through docker exec. prepare writes
-# the brief and starts the instance in the journeys' mode; run runs the helper's journeys and the verifier's session
+# One task inside a verify runner container, in the two phases runner.mjs runs through docker exec. prepare starts
+# the instance in the journeys' mode, then writes the brief; run runs the helper's journeys and the verifier's session
 # unless --no-model, then per run secret-check, down, copy.
 # Usage: task.sh prepare|run [--no-model] <task-id> <feature> [journey-id|mode...]
 phase=$1 model=1
@@ -17,7 +17,6 @@ export VERIFY_UVW_EVIDENCE_ROOT=$out/runs
 if [[ "$phase" == prepare ]]; then
   mkdir -p "$out/runs"
   rm -rf /tmp/verify-uvw /tmp/verify-uvw-*
-  $V brief --own "$task" "$feature" "$@" >"$out/brief.txt" || exit 3
   # A failed prepare skips the verifier; runner.mjs reports the task as infra-error with the FAIL lines of prepare.log.
   # The first page load starts Chromium and makes Vite compile the app. Under host load that outran agent-browser's
   # fixed 25 s load timeout and broke the first browser check of a journey, so prepare loads it, retrying: Vite keeps
@@ -26,6 +25,10 @@ if [[ "$phase" == prepare ]]; then
     for try in 1 2 3 4 5; do agent-browser open "$ORIGIN/login" && exit 0; sleep 5; done
     echo "FAIL  the browser did not load $ORIGIN/login in 5 tries"; exit 1' \
     "$V" "$feature" "$@" >"$out/prepare.log" 2>&1 || echo $? >"$out/prepare.failed"
+  # The host brief checks that the run is up in the journeys' mode, so it comes after a prepare that worked, followed by
+  # the addendum runner.mjs wrote for this task.
+  [[ -f "$out/prepare.failed" ]] || { VERIFY_UVW_RUN=$task $V brief "$feature" "$@" && cat "$out/addendum.txt"; } >"$out/brief.txt" 2>>"$out/prepare.log" \
+    || echo 3 >"$out/prepare.failed"
   exit 0
 fi
 [[ "$phase" == run ]] || { echo "usage: task.sh prepare|run [--no-model] <task-id> <feature> [journey-id|mode...]" >&2; exit 2; }

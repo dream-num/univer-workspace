@@ -2,7 +2,7 @@
 // The journey contract: the only reader of features/*.md structure and the only writer of a run's journeys.jsonl.
 // Usage (through bin/verify-uvw): journeys.mjs list [--run DIR] <feature> [ID|mode...]
 //   | journeys.mjs verdict --run DIR <ID> PASS|FAIL|DRIFT|BLOCKED [note]
-//   | journeys.mjs brief [--own] --repo DIR --root DIR --run-id ID <feature> [ID|mode...]
+//   | journeys.mjs brief --repo DIR --root DIR --run-id ID <feature> [ID|mode...]
 //   | journeys.mjs up-env <feature> [ID|mode...]
 //   | journeys.mjs run --run DIR [--again] <feature> [ID|mode...]
 import { spawn } from 'node:child_process';
@@ -289,7 +289,7 @@ export async function runJourneys({ run, feature, mode, ids, again = false, skip
   return { ok: ids.every((id) => !chain.some((s) => s.id === id) || last(id)?.outcome === 'held'), entries };
 }
 
-export function brief({ own, repo, root, runId, feature, selectors, partition }) {
+export function brief({ repo, root, runId, feature, selectors, partition }) {
   const file = `.agents/skills/verify-uvw/features/${feature.name}.md`;
   const expected = partition.journeys.map((j) => j.id);
   const others = partition.journeys.length < feature.journeys.length;
@@ -310,21 +310,21 @@ export function brief({ own, repo, root, runId, feature, selectors, partition })
    - BLOCKED: the journey could not run, or ran only in part. Say why. A command that timed out or failed before the product answered, such as an \`agent-browser\` load timeout, is BLOCKED, not FAIL.
    Every verdict but PASS needs a note with the values you read and the evidence files. Record each verdict as soon as you judge the journey; one command can record several. A later verdict for a journey replaces the earlier one.`,
     `Run \`$V journeys ${[feature.name, ...selectors].join(' ')}\`. Record a verdict for each journey it lists as MISSING, until its last line no longer says INCOMPLETE.`,
-    `Reply with a short account of every journey that is not PASS, and of anything surprising in a PASS. Give the values you read, not the values the recipe expects.${own ? ` Name each evidence file by its full path, such as ${root}/${runId}/evidence/<file>.` : ''}`,
+    `Reply with a short account of every journey that is not PASS, and of anything surprising in a PASS. Give the values you read, not the values the recipe expects.`,
   ];
-  return `Follow a written recipe against a Univer Workspace instance, and record a verdict for each of its journeys.${own ? ' This container is disposable and yours.' : ''}
+  return `Follow a written recipe against a Univer Workspace instance, and record a verdict for each of its journeys.
 
 Run ${runId} is already running in the \`${partition.mode}\` mode that these journeys declare, with its user signed in and a doctor check that found no FAIL line. Do not run \`up\`, \`down\` or \`user\` unless a journey's own text restarts the instance; then run what that text says.
 
 Work from ${repo}. Start every shell command with this line. It selects the instance:
 
-export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=${runId}; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env${own ? ' 2>/dev/null' : ''})"
+export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=${runId}; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env)"
 
 Your journeys are the \`### <ID>. <Title>\` sections of ${file} with these IDs: ${expected.join(', ')}. Each needs a verdict.
 
 ${steps.map((step, k) => `${k + 1}. ${step}`).join('\n')}
 
-${own ? `Leave run ${runId} running when you reply: the runner checks its evidence, then stops it. ` : ''}Never run \`set -x\`, and never print a cookie, token, password or environment variable, for example with \`agent-browser cookies get\` or \`env\`: your transcript is kept${own ? ', and the runner fails a task whose files hold its API key' : ''}. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next journey.
+Never run \`set -x\`, and never print a cookie, token, password or environment variable, for example with \`agent-browser cookies get\` or \`env\`: your transcript is kept. Do not edit files in the repository. When the product differs from the recipe, do not work around it or fix it. Record what you saw and go on to the next journey.
 `;
 }
 
@@ -333,9 +333,9 @@ const readEnv = (file) => Object.fromEntries((existsSync(file) ? readFileSync(fi
 async function main(argv) {
   const die = (message, code = 1) => { console.error(`verify-uvw: ${message}`); process.exit(code); };
   const [command, ...rest] = argv;
-  const opts = { own: false, again: false }, args = [];
+  const opts = { again: false }, args = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === '--own' || rest[i] === '--again') opts[rest[i].slice(2)] = true;
+    if (rest[i] === '--again') opts.again = true;
     else if (['--run', '--repo', '--root', '--run-id'].includes(rest[i])) opts[rest[i].slice(2)] = rest[++i];
     else args.push(rest[i]);
   }
@@ -388,10 +388,10 @@ async function main(argv) {
     if (result === 'INCOMPLETE') process.exitCode = 1;
   } else if (command === 'brief') {
     const [name, ...selectors] = args;
-    if (!name || !opts.repo || !opts.root || !opts['run-id']) die('usage: verify-uvw brief [--own <run-id>] <feature> [journey-id|mode...]', 2);
+    if (!name || !opts.repo || !opts.root || !opts['run-id']) die('usage: verify-uvw brief <feature> [journey-id|mode...]', 2);
     const partition = single(planned(named(name), selectors), name, selectors, 'Brief one instance at a time, after');
-    if (!opts.own) runningMode(join(opts.root, opts['run-id']), partition, '');
-    process.stdout.write(brief({ own: opts.own, repo: opts.repo, root: opts.root, runId: opts['run-id'], feature: named(name), selectors, partition }));
+    runningMode(join(opts.root, opts['run-id']), partition, '');
+    process.stdout.write(brief({ repo: opts.repo, root: opts.root, runId: opts['run-id'], feature: named(name), selectors, partition }));
   } else if (command === 'up-env') {
     const [name, ...selectors] = args;
     if (!name) die('usage: verify-uvw up [--reuse] --for <feature> [journey-id|mode...]', 2);

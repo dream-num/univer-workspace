@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { loadFeatures, parseFeature, plan } from '../bin/journeys.mjs';
 import { HOST_ONLY } from './host-only.mjs';
-import { exitCode, expand, findKey, finish, parseArgs, readTranscript, serial, summary } from './runner.mjs';
+import { addendum, exitCode, expand, findKey, finish, parseArgs, readTranscript, serial, summary } from './runner.mjs';
 
 const transcript = readFileSync(fileURLToPath(new URL('./fixtures/runner-transcript.jsonl', import.meta.url)), 'utf8');
 const recipe = (h1, ...journeys) => `# ${h1}\n\n## Driving it with agent-browser and uvw\n\n${journeys.map((j) => `### ${j}\n`).join('\n')}`;
@@ -49,7 +49,7 @@ test('each spec becomes one task per mode, with a run id per task, and journeys 
   }).map(([name, text]) => [name, parseFeature(name, text)]));
   const left = new Map([['lens:L2', 'why'], ['agents:G2', 'why'], ['whole', 'why']]);
   const tasks = (...specs) => expand(specs.map((spec) => ({ feature: spec[0], selectors: spec.slice(1) })), features, left);
-  const shape = ({ tasks: t }) => t.map(({ id, mode, needs, selectors, expected, skip }) => [id, mode, needs, selectors, expected.map((j) => j.id), skip]);
+  const shape = ({ tasks: t }) => t.map(({ id, mode, needs, selectors, expected, skip }) => [id, mode, needs, selectors, expected.map((j) => j.id), skip.map((j) => j.id)]);
 
   const batch = tasks(['lens'], ['agents'], ['whole'], ['lens', 'L3'], ['lens', 'mcp-same-origin', 'L1']);
   assert.deepEqual(shape(batch), [
@@ -82,9 +82,24 @@ test('every journey host-only.mjs leaves to the host exists, and the recipes get
     ['sheet-lens-mcp', ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']],
     ['sheet-lens-mcp-same-origin', ['SLM8']],
     ['mcp-executor', ['MX1', 'MX2', 'MX4', 'MX5', 'MX6', 'MX16', 'MT1', 'MV1', 'MT2']]]);
-  assert.deepEqual(tasks.find((t) => t.id === 'mcp-executor').skip, ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15']);
+  assert.deepEqual(tasks.find((t) => t.id === 'mcp-executor').skip.map((j) => j.id), ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15']);
   assert.deepEqual(host, [{ feature: 'sheet-lens', selectors: ['SLM1'] }, { feature: 'mcp-executor', selectors: ['MX3', 'MX11', 'MX12', 'MX13', 'MX14', 'MX15'] },
     { feature: 'mcp-security', selectors: [] }]);
+});
+
+test('the addendum gives the verifier the container, the journeys only the host runs and, in MCP modes, the dist start mode', () => {
+  const { tasks } = expand([{ feature: 'sheet-lens', selectors: [] }], loadFeatures());
+  const [lens, mcp] = tasks.map((task) => addendum(task, '/tmp/verify-uvw'));
+  for (const [text, id] of [[lens, 'sheet-lens'], [mcp, 'sheet-lens-mcp']]) {
+    assert.match(text, /^\nThis container is disposable and yours\. /);
+    assert.ok(text.includes(`Leave run ${id} running when you reply: the runner checks its evidence, then stops it.`));
+    assert.match(text, /The runner also fails a task whose files hold its API key\./);
+    assert.ok(text.includes(`name each evidence file by its full path, such as /tmp/verify-uvw/${id}/evidence/<file>.`));
+  }
+  assert.doesNotMatch(lens, /Do not run|apps\/mcp\/dist/, 'SLM1 is in another mode, and the default mode has no MCP');
+  assert.match(mcp, /\nDo not run SLM1\. Only the host runs it\.\n/);
+  assert.match(mcp, /start from `apps\/mcp\/dist` .*`doctor` prints `skip` for its container, image and network checks: they are not checked here and are not failures/);
+  assert.ok(mcp.includes('pkill -P "$(node .agents/skills/verify-uvw/runner/mcp-processes.mjs pid "$RUN" renderer)" chromium'));
 });
 
 test('runner --check names the key source and fingerprint, proves the key with one request, and names the host-only tasks', async () => {

@@ -37,7 +37,7 @@ trap 'exit 143' TERM
 # Browser and CLI errors can include OAuth URLs, so redact the entire transcript too.
 exec > "$oauth_dir/journey.out" 2>&1
 # A console-* model's OpenCode Console credential, exported once per run as stories do, then imported only into
-# this opencode. Other providers, such as the runner's deepseek, read their key from the environment.
+# this opencode. Other providers, such as deepseek, read their key from the environment.
 credential="$RUN/home/opencode-credential.json"
 [[ "$MCP_OPENCODE_MODEL" != console-* || -s "$credential" ]] || opencode auth export 'OpenCode Console' --standalone < /dev/null > "$credential"
 export XDG_DATA_HOME="$oauth_dir/data" XDG_CONFIG_HOME="$oauth_dir/config"

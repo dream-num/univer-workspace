@@ -47,11 +47,8 @@ test "$(cat "$EVIDENCE/mcp-doctor.exit")" = 0
 grep FAIL "$EVIDENCE/mcp-doctor.txt"; test $? -eq 1
 ```
 
-Pass when doctor exits 0 and has no `FAIL` lines. In the `image` start mode it prints an `ok` for every MCP
-check in [local verification section 6.2](../../../../docs/design/workspace-mcp/local-verification.zh-CN.md).
-In the `dist` start mode ([MCP mode](../references/mcp-mode.md#start)) the container, image and network checks
-print `skip` lines instead, and every other MCP check prints `ok`: staging, gateway port and Workspace reach,
-metrics, whoami, PAT exchange, executor and renderer RPC, worker environment and the log scans.
+Pass when doctor exits 0, has no `FAIL` lines, and prints an `ok` for every MCP check
+in [local verification section 6.2](../../../../docs/design/workspace-mcp/local-verification.zh-CN.md).
 
 ### M2. Identity, new protocol
 
@@ -254,10 +251,8 @@ and developer PIDs are unchanged or absent both times. Evidence and logs survive
 ## Gotchas
 
 - MCP is opt-in at `up`. Setting `VERIFY_UVW_MCP` later does not change an existing run.
-- On the host, only macOS Docker Desktop and OrbStack are supported. The container accesses the loopback
-  Server through `host.docker.internal`, bypassing Vite's host checks. The runner uses the `dist` start mode
-  instead, where the roles are local processes that reach the Server at `127.0.0.1`, and the image gotchas
-  below do not apply.
+- Only macOS Docker Desktop and OrbStack are supported. The container accesses the loopback Server
+  through `host.docker.internal`, bypassing Vite's host checks.
 - `user` gets a separate session from the public CLI login endpoint. It never reads
   uvw's private session file. Every call to `user` creates a fresh opencode directory
   because opencode caches project configuration by directory.

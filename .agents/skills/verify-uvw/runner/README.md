@@ -60,11 +60,14 @@ and so on. The id is also the task's run id.
   builds the CLI, the MCP gateway and the needs of the queued tasks once, then takes tasks one at a time. For each
   task, `runner/task.sh` runs `$V up --for`, `$V user` and `$V doctor` into the task's `prepare.log`, and loads
   the login page in the run's browser. Runners take turns at this prepare, because instances that start at once
-  slow each other down. Then the task runs `$V run-journeys` into `run-journeys.log`, then gives a new Claude Code
-  session the brief that `$V brief --own <run-id> <feature> [journey-id|mode...]` prints. The brief says the
-  instance is already running in the journeys' mode, and that the helper already ran its journeys, whose checks
-  the session reads and judges. When the prepare fails, no session starts, the task is `infra-error`, and
-  `summary.md` quotes the `FAIL` lines of its `prepare.log`.
+  slow each other down. The prepare then writes `brief.txt`: the brief that `$V brief <feature> <journey-id...>`
+  prints on the host, followed by the addendum that `addendum()` in `runner.mjs` wrote to the task's
+  `addendum.txt`. The host brief says the instance is already running in the journeys' mode, and that the helper
+  already ran its journeys, whose checks the session reads and judges. The addendum says the container is the
+  session's, that the run stays up for the runner, which journeys only the host runs, and, in an MCP mode, what
+  [the dist start mode](#the-dist-start-mode) changes. Then the task runs `$V run-journeys` into
+  `run-journeys.log`, then gives a new Claude Code session `brief.txt`. When the prepare fails, no session starts,
+  the task is `infra-error`, and `summary.md` quotes the `FAIL` and `verify-uvw:` lines of its `prepare.log`.
 - `--no-model` stops each task after `run-journeys`, so it needs no key, starts no session and judges nothing.
   `summary.md` then counts each task's checks that held, broke, were blocked or did not run, and the journeys the
   agent drives, and lists every check that did not hold. It exits `1` when one did not hold, `4` when a task
@@ -75,10 +78,8 @@ and so on. The id is also the task's run id.
   `up --for`, `run-journeys` and `brief` by ID, and sets `VERIFY_UVW_SKIP_JOURNEYS` to the journeys of its feature
   that host-only.mjs lists, so `run-journeys` never runs one of them, not even as an earlier journey that a later
   one needs.
-- MCP features run in the runner in the `dist` start mode of [MCP mode](../references/mcp-mode.md#start), which
-  starts the gateway, executor and renderer as local processes. The image sets `VERIFY_UVW_MCP_FROM=dist` and
-  `VERIFY_UVW_RUNNER=1`, which `up` requires for that mode. Never set `VERIFY_UVW_RUNNER` on the host. The
-  journeys that call `docker` or `agent-up`, and the whole MCP security feature, are in host-only.mjs.
+- MCP features run in [the dist start mode](#the-dist-start-mode). The journeys that call `docker` or
+  `agent-up`, and the whole MCP security feature, are in host-only.mjs.
 - Output goes to `${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/runner/<batch>/` on the host, which every runner mounts:
   `summary.md`, and for each task `prepare.log`, `report.md` (its evidence paths open on the host),
   `transcript.jsonl`, `result.json`, `secret-check-<run>.txt` and `runs/<run>/` with the run's `evidence`, `logs`
@@ -103,3 +104,39 @@ and so on. The id is also the task's run id.
   `secret-check` file with a `FAIL` line, without changing the status. The transcript holds recipe code with the
   same shapes, so read those lines before you share the files.
 - The runner removes its containers at the end and on Ctrl-C. `--keep` leaves them for `docker exec`.
+
+## The dist start mode
+
+[MCP mode](../references/mcp-mode.md#start) on the host builds the MCP image and starts its roles with Docker
+Compose. The runner's containers have no Docker, so the image sets `VERIFY_UVW_MCP_FROM=dist` and
+`VERIFY_UVW_RUNNER=1`, and `up` refuses `dist` without the second. Never set `VERIFY_UVW_RUNNER` on the host.
+
+- `up` starts `node dist/main.js` in `apps/mcp` once per role, as processes on loopback ports that it picks and
+  saves in `run.env`. `apps/mcp/dist` must be newer than `apps/mcp/src`
+  (`pnpm --filter '@univerjs/univer-workspace-mcp...' build`); `up` does not build it. The renderer uses the
+  Chromium at `UNIVER_RENDER_BROWSER`. [mcp-processes.mjs](mcp-processes.mjs) holds the roles, and serves the
+  compose commands verify-uvw uses.
+- The roles reach the server at `127.0.0.1`, not through `host.docker.internal`, so the MCP image gotchas of
+  [MCP gateway](../features/mcp.md#gotchas) do not apply.
+- Each role writes `logs/mcp-<role>.log` and its process id to `mcp-<role>.pid`. `mcp-logs` shows each role's
+  current process, and the file keeps earlier processes of a restarted role. `MCP_PROJECT` and `MCP_IMAGE` are
+  empty.
+- `doctor` prints a `skip` line for each container, image and network check, checks that the gateway's recorded
+  process owns its port, and runs every functional check: staging, gateway port and Workspace reach, metrics,
+  whoami, PAT exchange, executor and renderer RPC, worker environment and the log scans.
+- `down` stops each role's process group and removes `staging/`.
+- The benchmarks and probes of [MCP mode](../references/mcp-mode.md#benchmarks-and-probes) drive containers, so
+  they need the image start mode.
+
+The addendum tells the session these facts, and how to kill only the renderer's Chromium for
+[MR9](../features/mcp-renderer.md#mr9-renderer-role): a plain `pkill chromium` also kills the run's agent-browser.
+
+## What the runner does not prove
+
+- The journeys in [host-only.mjs](host-only.mjs) do not run in a container. Each entry says why. Run them on the
+  host.
+- `dist` checks what the MCP roles do, not how they are packaged. It has no image, container, internal network or
+  published port. So a runner `PASS` of [M1](../features/mcp.md#m1-environment) and
+  [MR9](../features/mcp-renderer.md#mr9-renderer-role) does not cover the container shape, the image or the
+  network isolation. For a change under `apps/mcp/Dockerfile`, `apps/mcp/docker/`, `apps/mcp/package.json` or
+  `apps/mcp/scripts/`, run M1, MR9 and [MCP security](../features/mcp-security.md) on the host.

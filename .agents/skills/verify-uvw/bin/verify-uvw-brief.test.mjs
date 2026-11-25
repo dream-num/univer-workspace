@@ -9,7 +9,7 @@ import { test } from 'node:test';
 const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const listed = (brief) => /with these IDs: ([^.]+)\. Each needs a verdict\./.exec(brief)?.[1].split(', ');
 
-test('both briefs name the run, the feature file and every expected journey id, and ask for a verdict on each', () => {
+test('a brief names the run, the feature file and every expected journey id, and asks for a verdict on each', () => {
   const root = mkdtempSync(join(process.env.VERIFY_UVW_TEST_ROOT ?? tmpdir(), 'verify-uvw-brief-'));
   const call = (...args) => spawnSync('bash', [helper, 'brief', ...args], {
     env: { ...process.env, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test' }, encoding: 'utf8',
@@ -33,19 +33,8 @@ test('both briefs name the run, the feature file and every expected journey id, 
     assert.equal(host.status, 0, host.stderr);
     assert.deepEqual(listed(host.stdout), ['SLM1', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10'], 'a mode selects every journey of that mode');
 
-    const own = call('--own', 'task-1', 'sheet-lens', 'SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10');
-    assert.equal(own.status, 0, own.stderr);
-    assert.deepEqual(listed(own.stdout), ['SLM2', 'SLM3', 'SLM4', 'SLM5', 'SLM6', 'SLM7', 'SLM9', 'SLM10']);
-    assert.match(own.stdout, /Skip its other journeys\./);
-    assert.match(own.stdout, /This container is disposable and yours\.\n/);
-    assert.ok(own.stdout.includes(`export VERIFY_UVW_ROOT=${root} VERIFY_UVW_RUN=task-1; V=.agents/skills/verify-uvw/bin/verify-uvw; eval "$($V env 2>/dev/null)"`));
-    assert.match(own.stdout, /Leave run task-1 running when you reply/);
-    assert.match(own.stdout, /Never run `set -x`, and never print a cookie, token, password or environment variable/);
-    assert.match(some.stdout, /Never run `set -x`, and never print a cookie, token, password or environment variable, for example with `agent-browser cookies get` or `env`: your transcript is kept\. /, 'the host brief forbids it too');
-    assert.ok(own.stdout.includes(`Name each evidence file by its full path, such as ${root}/task-1/evidence/<file>.`));
-    assert.doesNotMatch(own.stdout + host.stdout, /RESULT: PASS/);
-
-    assert.notEqual(call('--own', 'Bad Id', 'issues').status, 0);
+    assert.match(some.stdout, /Never run `set -x`, and never print a cookie, token, password or environment variable, for example with `agent-browser cookies get` or `env`: your transcript is kept\. /);
+    assert.doesNotMatch(host.stdout, /RESULT: PASS/);
 
     const unknownId = call('issues', 'IS9');
     assert.notEqual(unknownId.status, 0);
