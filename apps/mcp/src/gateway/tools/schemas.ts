@@ -159,6 +159,10 @@ export const unitSchema = z.object({
   ]),
   change: z.enum(["modified", "added", "deleted", "unchanged"]),
   draftHeadRevision: z.number(),
+  fileState: z
+    .enum(["live", "inTrash", "deleted"])
+    .nullable()
+    .describe("Where the file is now. Null for a new file no merge has created yet. No one opens a file that is inTrash or deleted."),
   freshness: z
     .object({
       addedAt: z.string(),

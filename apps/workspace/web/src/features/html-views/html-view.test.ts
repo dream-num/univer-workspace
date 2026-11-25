@@ -170,7 +170,7 @@ it.each([
     id: "pr-3", state,
     units: mapped ? [{ unitId: "unit", resourceId: "local-resource", nodeId: null, name: "New Sheet", unitType: "sheet",
       source: "worktree", target: null, draftHeadRevision: 1, change: "added", mergeResult: "pending", activationState: "waitingForMerge",
-      freshness: null }] : [],
+      freshness: null, fileState: null }] : [],
   };
   if (worktree) mocks.POST.mockResolvedValue({ data: { unit: { unitId: "unit", unitType: "sheet", editorMode: "edit" }, collaborationScope: { kind: "worktree", worktreeId: "pr-3" } } });
   renderToStaticMarkup(createElement(LanguageProvider, null,

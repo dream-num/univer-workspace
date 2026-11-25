@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { randomUUID } from "node:crypto";
+import { UniverType } from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
@@ -116,6 +117,51 @@ describe("the Issue acceptance panel's data", () => {
     expect([comparison.status, (await comparison.json()).error?.code]).toEqual([403, "FORBIDDEN"]);
   }, 60_000);
 
+  it.each([
+    ["moved to Trash by hand", "inTrash", async (f: Task) => void (await f.application.trash.trashNode(f.owner.id, f.added.nodeId))],
+    ["moved to Trash by a revert", "inTrash", async (f: Task) => {
+      const reverted = await fetch(`${f.origin}/api/spaces/${f.team}/issues/${f.issueNumber}/revert`, {
+        method: "POST", headers: { cookie: f.owner.cookie, "idempotency-key": randomUUID() },
+      });
+      expect(((await reverted.json()) as { operation: { state: string } }).operation.state).toBe("completed");
+    }],
+    ["permanently deleted", "deleted", async (f: Task) => {
+      const batch = await f.application.trash.trashNode(f.owner.id, f.added.nodeId);
+      await f.application.trash.removePermanently(f.owner.id, batch.id);
+    }],
+  ] as const)("lets every member review a merged pull request whose added file was %s", async (_case, fileState, arrange) => {
+    const f = await mergedTask();
+    await arrange(f);
+
+    for (const reader of [f.owner, f.admin, f.editor, f.viewer]) {
+      const read = (path: string) => fetch(`${f.origin}${path}`, { headers: { cookie: reader.cookie } });
+      const { worktree } = (await (await read(`/api/worktrees/${f.pull}`)).json()) as { worktree: PullRequestView };
+      expect(worktree.capabilities.review, reader.name).toBe(true);
+      expect(worktree.units.map(({ name, fileState: state }) => [name, state])).toEqual([["Totals", "live"], ["Added", fileState]]);
+      const listed = (await (await read(`/api/worktrees?scope=all&kind=team&teamSpaceId=${f.team}`)).json()) as { items: PullRequestView[] };
+      expect(listed.items.find((item) => item.id === f.pull)?.capabilities.review).toBe(true);
+      const issue = (await (await read(`/api/spaces/${f.team}/issues/${f.issueNumber}`)).json()) as { pullRequests: { id: string }[] };
+      expect(issue.pullRequests.map((pull) => pull.id)).toEqual([f.pull]);
+      expect((await read(`/api/worktrees/${f.pull}/checks`)).status).toBe(200);
+      const compare = (unitId: string) => read(`/universer-api/worktrees/${f.pull}/units/${unitId}/comparison?baseMode=parent&view=merged`);
+      expect((await compare(f.totalsUnitId)).status).toBe(200);
+      expect((await compare(f.added.unitId)).status, "no one opens a file that left Trunk").toBe(409);
+      expect((await read(`/universer-api/worktrees/${f.pull}/units/${f.added.unitId}/comparison`)).status).toBe(409);
+    }
+  }, 60_000);
+
+  it("still hides a merged pull request from its author once a live file in it is unreadable", async () => {
+    const f = await mergedTask();
+    await f.application.trash.trashNode(f.owner.id, f.added.nodeId);
+    await f.application.permissions.removeTeamMember(f.owner.id, f.team, f.editor.id);
+
+    const read = (path: string) => fetch(`${f.origin}${path}`, { headers: { cookie: f.editor.cookie } });
+    const { worktree } = (await (await read(`/api/worktrees/${f.pull}`)).json()) as { worktree: PullRequestView };
+    expect(worktree.capabilities.review).toBe(false);
+    expect(worktree.units).toEqual([]);
+    expect((await read(`/api/worktrees/${f.pull}/checks`)).status).toBe(403);
+  }, 60_000);
+
   it("lists only the Team Space memberships an assignee granted after its assignment, as they stand now", async () => {
     const { application, register, team, owner } = await setup();
     const assignee = await register("assignee");
@@ -198,6 +244,56 @@ async function listen(application: ProductTestApplication): Promise<string> {
   return `http://127.0.0.1:${address.port}`;
 }
 
+type PullRequestView = {
+  readonly id: string;
+  readonly capabilities: { readonly review: boolean };
+  readonly units: readonly { readonly name: string; readonly fileState: string | null }[];
+};
+type Task = Awaited<ReturnType<typeof mergedTask>>;
+
+/** An Issue whose one merged pull request, by the editor, edits the Sheet Totals and adds a Sheet named Added. */
+async function mergedTask() {
+  const { application, register, team, owner } = await setup();
+  const [admin, editor, viewer] = [await register("admin"), await register("editor"), await register("viewer")];
+  for (const [member, role] of [[admin, "admin"], [editor, "editor"], [viewer, "viewer"]] as const) {
+    await application.permissions.upsertTeamMember(owner.id, team, member.id, { role });
+  }
+  const sheet = await application.resources.create(owner.id, randomUUID(), {
+    kind: "univer", spaceId: team, parentNodeId: null, name: "Totals", unitType: "sheet",
+  });
+  if (sheet.status === 202) throw new Error("Resource creation pending");
+  const issue = await application.issues.create(owner.id, team, { title: "Fix totals", assigneeUserIds: [editor.id] });
+  const { id: pull } = (await application.worktrees.create(editor.id, randomUUID(), {
+    kind: "team", teamSpaceId: team, visibility: "space", name: "Totals", summary: null, issueNumber: issue.number,
+  })).body;
+  const { unitId: totalsUnitId } = (await application.worktrees.addUnit(editor.id, pull, randomUUID(), {
+    source: "trunk", resourceId: sheet.body.node.resource!.id,
+  })).body.unit;
+  const added = (await application.worktrees.addUnit(editor.id, pull, randomUUID(), {
+    source: "worktree", name: "Added", unitType: "sheet", targetSpaceId: team, targetParentNodeId: null,
+  })).body.unit;
+  const origin = await listen(application);
+  const draft = (await (await fetch(`${origin}/universer-api/worktrees/${pull}/units/${totalsUnitId}/comparison`, {
+    headers: { cookie: editor.cookie },
+  })).json()) as { right: { revision: number; unitData: { sheetOrder: string[] } } };
+  await application.worktrees.submitChangeset(editor.id, pull, totalsUnitId, {
+    changeset: {
+      unitID: totalsUnitId, type: UniverType.UNIVER_SHEET, baseRev: draft.right.revision, revision: draft.right.revision + 1,
+      sid: randomUUID(), reqId: 1, userID: "", memberID: "", createTime: 1,
+      mutations: [{
+        id: "sheet.mutation.set-range-values",
+        data: JSON.stringify({ unitId: totalsUnitId, subUnitId: draft.right.unitData.sheetOrder[0], cellValue: { 0: { 0: { v: "fixed" } } } }),
+      }],
+    },
+  });
+  await application.worktrees.markReady(editor.id, pull);
+  await application.worktrees.merge(owner.id, pull, randomUUID());
+  return {
+    application, team, owner, admin, editor, viewer, pull, totalsUnitId, issueNumber: issue.number,
+    added: { unitId: added.unitId, nodeId: added.nodeId! }, origin,
+  };
+}
+
 async function setup() {
   const application = await createProductTestApplication({
     host: "127.0.0.1", port: 0, productFilename: ":memory:", collaborationDatabaseFilename: ":memory:",
@@ -208,7 +304,7 @@ async function setup() {
     const issued = await application.identity.registerWithPassword({
       username, displayName: username, password: "correct horse battery staple",
     });
-    return { id: issued.view.user.id, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
+    return { id: issued.view.user.id, name: username, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
   };
   const owner = await register("owner");
   const { id: team } = await application.spaces.createTeamSpace(owner.id, { name: "Team" });

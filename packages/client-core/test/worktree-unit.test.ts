@@ -53,6 +53,14 @@ describe("Workspace Worktree model and workflow", () => {
     }
   });
 
+  it("keeps where a Unit's file is now, reads an absent state as none, and rejects an unknown one", () => {
+    expect(parseUnit({ ...rawUnit(), fileState: "inTrash" }, "wt-1").fileState).toBe("inTrash");
+    expect(parseUnit(rawUnit(), "wt-1").fileState).toBeNull();
+    expect(() => parseUnit({ ...rawUnit(), fileState: "trashed" }, "wt-1")).toThrowError(
+      expect.objectContaining({ code: "workspace-invalid-response" }),
+    );
+  });
+
   it("reads a merged pull request that deleted a file, in Trash and after permanent deletion", () => {
     const removed = { change: "deleted", mergeResult: "removed" };
     const worktree = parseWorktree(rawWorktree("wt-1", "merged", [

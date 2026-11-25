@@ -834,7 +834,9 @@ Unit 的 `mergeResult.trunkRevision`、Trunk 的 changeset 记录和修订、Wor
    每一项的原因仍在 `payload_json` 里，响应照常列出。
 
 崩溃或 Lease 过期后，后台恢复领取 Pending 的撤回继续执行：已保存的恢复先原样重发，SDK 以 `(unit, sid, reqId)` 去重，
-所以同一项不会恢复两次。可重试错误按指数退避最多尝试 5 次，之后 Failed，可用 Operation Retry 重新开始。撤回恢复整个
+所以同一项不会恢复两次。可重试错误按指数退避最多尝试 5 次，之后 Failed。Operation Retry 只继续仍是 `ready` 的项，
+已停为 `blocked` 或 `failed` 的项不再尝试，所以一项都没撤回的 Failed 撤回重试时以同样的原因失败；要继续，只能用新的
+Idempotency Key 发起一次新的撤回，它重新计算计划，`blocked` 的 Unit 由在 Browser 登录的人强制。撤回恢复整个
 Unit，不撤回评论和历史；历史里同时留着合入和恢复。
 
 ### Rename 与 Move

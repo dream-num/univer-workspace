@@ -89,7 +89,10 @@ export interface WorktreeUnit {
   readonly mergeResult: MergeResult;
   readonly activationState: ActivationState;
   readonly freshness: WorktreeUnitFreshness | null;
+  readonly fileState: WorktreeUnitFileState | null;
 }
+
+export type WorktreeUnitFileState = "live" | "inTrash" | "deleted";
 
 export interface WorktreeUnitFreshness {
   readonly label: "current" | "behind" | "stale";

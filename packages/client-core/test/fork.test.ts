@@ -229,7 +229,7 @@ describe("Workspace forks", () => {
     const feature = new WorkspaceUnitExchangeFeature({
       configureExchange: async () => undefined,
       createUnit: async (input) => ({
-        activationState: "notApplicable", change: "added", draftHeadRevision: 0, freshness: null, mergeResult: "pending",
+        activationState: "notApplicable", change: "added", draftHeadRevision: 0, fileState: null, freshness: null, mergeResult: "pending",
         name: input.name, nodeId: "n7", resourceId: "r7", source: "worktree",
         target: { parentNodeId: null, spaceId: input.spaceId }, type: input.type, unitId: "u7", worktreeId: "w1",
       }),

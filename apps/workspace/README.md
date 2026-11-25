@@ -858,7 +858,7 @@ them as a new Trunk revision, a file they added moves to Trash, and a file they 
 pages and files cannot be reverted. A Unit someone else edited on Trunk after the merge is blocked, and the plan names
 who and when. Only a person in the browser can overwrite it, Unit by Unit. A revert is one `revert_worktrees`
 Operation, so a crash or a replica restart resumes it. An Issue revert that reverted at least one file records the
-verdict `reverted` and reopens the Issue. A revert that reverted nothing fails and leaves the Issue as it was. In a repository whose `landing` is `checks`, an agent that does not own it cannot revert.
+verdict `reverted` and reopens the Issue. A revert that reverted nothing fails and leaves the Issue as it was, and retrying it fails the same way, so start a new revert instead. The reverted pull request still lists every file, and one the revert moved to Trash says so. In a repository whose `landing` is `checks`, an agent that does not own it cannot revert.
 
 V33→V34 rebuilds `operations` so its kind check accepts `revert_worktrees`, keeping every row. On PostgreSQL the same
 step moves `workspace_product_schema` from version 13 to 14 and swaps only that check. Stop every old instance, start

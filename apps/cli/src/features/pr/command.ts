@@ -423,7 +423,9 @@ function label(worktree: WorkspaceWorktree): string {
   return worktree.number == null ? worktree.id.slice(0, 8) : `#${String(worktree.number)}`;
 }
 
-function freshness({ freshness: value }: WorkspaceWorktree["units"][number]): string {
+function freshness({ fileState, freshness: value }: WorkspaceWorktree["units"][number]): string {
+  if (fileState === "inTrash") return "in Trash";
+  if (fileState === "deleted") return "deleted";
   if (!value) return "";
   if (value.revisionsBehind === 0) return value.label;
   return `${value.label === "stale" ? "stale, " : ""}behind by ${String(value.revisionsBehind)}`;

@@ -179,6 +179,7 @@ WorktreeUnit:
     - mergeResult
     - activationState
     - freshness
+    - fileState
   properties:
     unitId:
       type: string
@@ -212,6 +213,18 @@ WorktreeUnit:
       oneOf:
         - $ref: "#/WorktreeUnitFreshness"
         - type: "null"
+    fileState:
+      description: >-
+        Where the Unit's file is now. Null for a new Unit that no merge has created yet. No one opens or
+        compares a file that is inTrash or deleted, and once the pull request is merged such a file no longer
+        decides whether a reader may review the others.
+      oneOf:
+        - $ref: "#/WorktreeUnitFileState"
+        - type: "null"
+
+WorktreeUnitFileState:
+  type: string
+  enum: [live, inTrash, deleted]
 
 WorktreeUnitFreshness:
   type: object

@@ -302,6 +302,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
            mapping.ordinal,
            mapping.added_at,
            existing.name AS existing_name,
+           existing.trash_batch_id AS existing_trash_batch_id,
            existing_univer.unit_type AS existing_unit_type,
            future.target_space_id,
            future.target_parent_node_id,
