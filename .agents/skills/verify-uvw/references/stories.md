@@ -40,9 +40,25 @@ $V story --model gpt-6.2-sol#xhigh another codex '<prompt>'
 Each client and identity gets a throwaway HOME,
 `home/stories/<client>-<identity>/`, with XDG config, data, state and cache, `TMPDIR`, and an empty
 working directory `work/<label>/` addressed by its real path. opencode's environment holds your
-PATH, that HOME and the XDG variables, and no API key from your shell. The model credential is
-copied once with `opencode auth export 'OpenCode Console'` into `home/opencode-credential.json`
-(mode 0600) and imported into each story HOME. `down` deletes all of it with `home/`. Nothing is
+PATH, that HOME and the XDG variables, and no API key from your shell unless you name it.
+
+The model credential comes from the opencode integration of the model's provider, the part before
+the first `/`. A `console-` provider uses integration `opencode`. `VERIFY_UVW_OPENCODE_CREDENTIAL=<integration>`
+names another one; `opencode auth list` shows yours. The first story of a run exports that
+integration from your own opencode with `opencode auth export <integration> --standalone` into
+`home/opencode-credential-<integration>.json` (mode 0600), and each story imports it into its HOME.
+When opencode stores nothing for the integration, the story passes only the shell variables that
+`VERIFY_UVW_STORY_ENV` names, comma- or space-separated, and records their values in
+`home/story-env.json` (mode 0600) for the redactor. For example:
+
+```bash
+VERIFY_UVW_OPENCODE_MODEL='deepseek/deepseek-flash#high' VERIFY_UVW_STORY_ENV=DEEPSEEK_API_KEY \
+  $V story s1 mcp '调用 whoami，然后告诉我你的用户名。'
+```
+
+With neither, the story fails before opencode starts and names the model, the integration, the
+integrations opencode stores and both variables. `run-meta.json` records which source the story used
+in `model_credential`. `down` deletes all of it with `home/`. Nothing is
 written to your own opencode database. Codex instead copies only `auth.json` from the launching
 shell's `CODEX_HOME` (default `~/.codex`) once into `home/codex-credential.json` (mode 0600),
 then into its own `home/stories/codex-<identity>/.codex/auth.json` (mode 0600). That directory is its `CODEX_HOME`; no user config, rules, plugins, or sessions
@@ -125,9 +141,11 @@ Not contained, so read `trajectory.txt` for it and report it:
   and backticks are refused. But `uvw "$(< file)"`, `X=$(<file); uvw "$X"`, `uvw … < file`, a
   here-string and zsh's bare `< file` all run and return the file. opencode checks only command
   nodes, and these read files without one.
-- The plaintext export `home/opencode-credential.json` stays for the whole run. `secrets.mjs` reads
-  it to redact the model credential, and each story HOME's opencode database holds the same value
-  anyway. The sandbox denies both to the shell. `down` removes them.
+- The plaintext export `home/opencode-credential-<integration>.json` and `home/story-env.json` stay
+  for the whole run. `secrets.mjs` reads them to redact the model credential, and each story HOME's
+  opencode database holds the same value anyway. The sandbox denies these files to the shell.
+  `down` removes them. A variable that `VERIFY_UVW_STORY_ENV` names is in the environment of a `uvw`
+  story's shell, so the model can print it.
 
 Rules for the verifier:
 

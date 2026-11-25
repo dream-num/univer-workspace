@@ -8,11 +8,11 @@ import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { storyCredential } from './opencode-credential.mjs';
 import { credentialSecrets, redact, runSecrets } from './secrets.mjs';
 
 // The name the README gives the server, so the model sees what a user who followed it sees.
 const SERVER = 'univer-workspace';
-const CREDENTIAL = 'OpenCode Console';
 const TIMEOUT_MS = 30 * 60_000;
 
 export function parseStory(argv) {
@@ -169,6 +169,7 @@ async function main() {
     ...(client === 'uvw' ? { UNIVER_HOME: join(home, '.univer-workspace-cli'), SHELL: join(home, '.local/libexec/zsh') } : {}),
   };
   const opencode = (args, options = {}) => spawnSync('opencode', args, { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  let credential;
   if (client === 'codex') {
     env.CODEX_HOME = join(home, '.codex');
     env.VERIFY_UVW_MCP_BEARER = bearer;
@@ -186,17 +187,11 @@ async function main() {
   } else {
     writeFileSync(join(home, '.config/opencode/opencode.json'), `${JSON.stringify(opencodeConfig({ client, mcpUrl, bearer, tmp: env.TMPDIR }), null, 2)}\n`, { mode: 0o600 });
 
-    // The model credential is copied once from the developer's opencode and only ever lives under home/.
-    const credential = join(run, 'home/opencode-credential.json');
-    if (!existsSync(credential)) {
-      const file = openSync(credential, 'w', 0o600);
-      const exported = spawnSync('opencode', ['auth', 'export', CREDENTIAL, '--standalone'], { stdio: ['ignore', file, 'ignore'] });
-      closeSync(file);
-      let secrets = [];
-      try { secrets = credentialSecrets(JSON.parse(readFileSync(credential, 'utf8'))); } catch {}
-      if (exported.status !== 0 || !secrets.length) { rmSync(credential); fail(`opencode has no stored "${CREDENTIAL}" credential for ${model}`); }
-    }
-    if (!existsSync(join(home, '.local/share/opencode/opencode.db')) && opencode(['auth', 'import', '--standalone', credential]).status !== 0) fail('opencode could not import the model credential');
+    try { credential = storyCredential(run, model); } catch (error) { fail(error.message); }
+    // A named variable cannot replace the story's own HOME, PATH or XDG directories.
+    Object.assign(env, { ...credential.vars, ...env });
+    // A credential already in this HOME is skipped, so a token opencode refreshed here stays.
+    if (credential.file && opencode(['auth', 'import', '--standalone', credential.file]).status !== 0) fail('opencode could not import the model credential');
   }
 
   if (client === 'uvw') {
@@ -242,7 +237,10 @@ async function main() {
   writeFileSync(join(evidence, 'trajectory.txt'), `${lines.join('\n')}\n\n=== final answer ===\n${answer}\n`);
   const meta = {
     label, client, identity: as, auth: client === 'uvw' ? (as === 'human' ? 'uvw session of the run user' : 'uvw with the origin configured; the identity signs in itself') : oauth ? 'opencode OAuth through the guest agent card' : as === 'human' ? 'PAT of the run user' : 'PAT of the agent principal',
-    model, ...(client === 'codex' ? { effort, codex: spawnSync('codex', ['--version'], { env, encoding: 'utf8' }).stdout.trim() } : { opencode: opencode(['--version']).stdout.trim() }), started_at: new Date(started).toISOString(), duration_seconds: seconds,
+    model, ...(client === 'codex' ? { effort, codex: spawnSync('codex', ['--version'], { env, encoding: 'utf8' }).stdout.trim() } : {
+      opencode: opencode(['--version']).stdout.trim(),
+      model_credential: credential.file ? `opencode export of ${credential.integration}` : `shell variables ${Object.keys(credential.vars).join(', ')}`,
+    }), started_at: new Date(started).toISOString(), duration_seconds: seconds,
     exit_code: result.status, timed_out: result.error?.code === 'ETIMEDOUT',
   };
   writeFileSync(join(evidence, 'run-meta.json'), `${JSON.stringify(meta, null, 2)}\n`);

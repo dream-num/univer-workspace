@@ -34,16 +34,15 @@ mo1_cleanup() {
 trap mo1_cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# The model's stored credential, exported once per run as stories do, then imported only into this opencode.
+# With none stored, the provider reads its key from this shell, such as DEEPSEEK_API_KEY.
+credential=$(node "$BIN/opencode-credential.mjs" "$RUN" "$MCP_OPENCODE_MODEL")
 # Browser and CLI errors can include OAuth URLs, so redact the entire transcript too.
 exec > "$oauth_dir/journey.out" 2>&1
-# A console-* model's OpenCode Console credential, exported once per run as stories do, then imported only into
-# this opencode. Other providers, such as deepseek, read their key from the environment.
-credential="$RUN/home/opencode-credential.json"
-[[ "$MCP_OPENCODE_MODEL" != console-* || -s "$credential" ]] || opencode auth export 'OpenCode Console' --standalone < /dev/null > "$credential"
 export XDG_DATA_HOME="$oauth_dir/data" XDG_CONFIG_HOME="$oauth_dir/config"
 export XDG_STATE_HOME="$oauth_dir/state" XDG_CACHE_HOME="$oauth_dir/cache"
 mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
-[[ "$MCP_OPENCODE_MODEL" != console-* ]] || opencode auth import --standalone "$credential" < /dev/null
+[[ -z "$credential" ]] || opencode auth import --standalone "$credential" < /dev/null
 jq -n --arg url "$MCP_URL" '{mcp:{ws:{type:"remote",url:$url,enabled:true}},permission:{edit:"deny",bash:"deny",webfetch:"deny"}}' > "$oauth_dir/opencode.json"
 
 status=$(curl -sS -D "$EVIDENCE/mcp-oauth-challenge.headers" -o "$EVIDENCE/mcp-oauth-challenge.out" \

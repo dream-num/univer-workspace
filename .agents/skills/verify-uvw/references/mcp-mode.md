@@ -58,9 +58,10 @@ gateway exchanges the PAT with Workspace (confidential client `univer-workspace-
 secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. In MCP mode
 `$V env` adds `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL` to the
 default exports, which include `RUN`, `ORIGIN` and `EVIDENCE`. `MCP_OPENCODE_MODEL` is
-`console-deepseek/deepseek-flash#high` unless `VERIFY_UVW_OPENCODE_MODEL` names another model, whose provider
-reads its own key, such as `DEEPSEEK_API_KEY` for `deepseek/deepseek-flash#high`. MO1 imports the OpenCode
-Console credential only for a `console-` model. Sessions, opencode config, the executor and renderer tokens, and
+`console-deepseek/deepseek-flash#high` unless `VERIFY_UVW_OPENCODE_MODEL` names another model. MO1 and stories
+export the model's stored opencode credential once per run, as [stories](stories.md) describes. When opencode
+stores none, MO1's opencode reads the provider's key from your shell, such as `DEEPSEEK_API_KEY` for
+`deepseek/deepseek-flash#high`, while a story gets only the variables `VERIFY_UVW_STORY_ENV` names. Sessions, opencode config, the executor and renderer tokens, and
 the metrics token stay under `home/` with credential files at mode 0600.
 
 ## Commands

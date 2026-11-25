@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { modelIntegration } from './opencode-credential.mjs';
 import { codexConfig, codexTrajectory, opencodeConfig, parseStory, shellSandbox, storyModel, trajectory } from './story.mjs';
 
 test('story options: the prompt is one verbatim argument and the identity defaults to the run user', () => {
@@ -210,5 +211,83 @@ console.error('codex-refresh-secret');
       assert.match(readFileSync(join(evidence, 'trajectory.txt'), 'utf8'), /^ok     univer-workspace.whoami  \{\}/);
       for (const file of readdirSync(evidence)) assert.doesNotMatch(readFileSync(join(evidence, file), 'utf8'), /human-bearer-secret|principal-bearer-secret|codex-access-secret|codex-refresh-secret/);
     }
+  } finally { rmSync(run, { recursive: true, force: true }); }
+});
+
+test('a model takes the credential of its provider integration unless the developer names another', () => {
+  assert.equal(modelIntegration('console-deepseek/deepseek-flash#high'), 'opencode');
+  assert.equal(modelIntegration('console-kimi/kimi-k3'), 'opencode');
+  assert.equal(modelIntegration('deepseek/deepseek-flash#high'), 'deepseek');
+  assert.equal(modelIntegration('anthropic/claude-x'), 'anthropic');
+  assert.equal(modelIntegration('deepseek/deepseek-flash#high', 'opencode'), 'opencode');
+  assert.equal(modelIntegration('console-deepseek/deepseek-flash', ''), 'opencode');
+});
+
+test('an opencode story imports the stored credential once exported, or gets only the shell variables named, or fails before opencode runs', () => {
+  const run = mkdtempSync(join(tmpdir(), 'verify-uvw-credential-'));
+  try {
+    for (const path of ['bin', 'home', 'evidence']) mkdirSync(join(run, path), { recursive: true });
+    writeFileSync(join(run, 'home/mcp-token'), 'human-bearer-secret');
+    const calls = join(run, 'opencode-calls.txt');
+    writeFileSync(join(run, 'bin/opencode'), `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === '--version') { console.log('opencode test'); process.exit(0); }
+if (process.env.OPENCODE_CALLS) fs.appendFileSync(process.env.OPENCODE_CALLS, args.join(' ') + '\\n');
+if (args[1] === 'export') {
+  if (args[2] === 'opencode') console.log(JSON.stringify([{ active: true, id: 'cred_1', integrationID: 'opencode', label: 'Personal', value: { type: 'oauth', access: 'model-access-secret', refresh: 'model-refresh-secret', expires: 1 } }]));
+  else if (args[2] === 'deepseek') console.log('[]');
+  else { console.error('Integration not found: ' + args[2]); process.exit(1); }
+} else if (args[1] === 'list') {
+  console.log(JSON.stringify([{ id: 'deepseek', name: 'DeepSeek', connections: [{ type: 'env', name: 'DEEPSEEK_API_KEY' }] }, { id: 'opencode', name: 'OpenCode', connections: [{ type: 'credential', id: 'cred_1', label: 'Personal', method: 'oauth' }] }]));
+} else if (args[1] === 'import') {
+  fs.appendFileSync(process.env.HOME + '/imported.txt', fs.readFileSync(args.at(-1), 'utf8'));
+} else if (args[0] === 'run') {
+  fs.writeFileSync(process.env.HOME + '/observed.json', JSON.stringify({ args, env: process.env }));
+  console.log(JSON.stringify({ type: 'text', part: { text: 'key ' + process.env.DEEPSEEK_API_KEY } }));
+} else process.exit(3);
+`, { mode: 0o755 });
+    const env = extra => ({ ...process.env, PATH: `${join(run, 'bin')}:${process.env.PATH}`, OPENCODE_CALLS: calls, DEEPSEEK_API_KEY: 'shell-deepseek-key', VERIFY_UVW_OPENCODE_CREDENTIAL: '', VERIFY_UVW_STORY_ENV: '', ...extra });
+    const story = (model, label, extra = {}) => spawnSync(process.execPath, [fileURLToPath(new URL('./story.mjs', import.meta.url)), 'repo', run, 'http://127.0.0.1:5981', 'http://127.0.0.1:3938/mcp', 'verify-models', model, label, 'mcp', 'prompt'], { encoding: 'utf8', env: env(extra) });
+    const exportedBy = (model, extra = {}) => spawnSync(process.execPath, [fileURLToPath(new URL('./opencode-credential.mjs', import.meta.url)), run, model], { encoding: 'utf8', env: env(extra) }).stdout;
+    const home = join(realpathSync(run), 'home/stories/mcp-human');
+    const observed = () => JSON.parse(readFileSync(join(home, 'observed.json')));
+    const meta = label => JSON.parse(readFileSync(join(run, 'evidence', label, 'run-meta.json')));
+    const credential = join(run, 'home/opencode-credential-opencode.json');
+
+    const exported = story('console-deepseek/deepseek-flash#high', 's-export');
+    assert.equal(exported.status, 0, exported.stderr);
+    assert.equal(statSync(credential).mode & 0o777, 0o600);
+    assert.match(readFileSync(join(home, 'imported.txt'), 'utf8'), /model-access-secret/);
+    assert.equal(observed().env.DEEPSEEK_API_KEY, undefined);
+    assert.equal(meta('s-export').model_credential, 'opencode export of opencode');
+
+    const overridden = story('deepseek/deepseek-flash#high', 's-override', { VERIFY_UVW_OPENCODE_CREDENTIAL: 'opencode' });
+    assert.equal(overridden.status, 0, overridden.stderr);
+    assert.deepEqual(observed().args.slice(0, 6), ['run', '--standalone', '--auto', '--format', 'json', '-m']);
+    assert.equal(observed().args[6], 'deepseek/deepseek-flash#high');
+    assert.equal(meta('s-override').model_credential, 'opencode export of opencode');
+    assert.equal(exportedBy('console-deepseek/deepseek-flash#high'), `${credential}\n`);
+    assert.equal(exportedBy('deepseek/deepseek-flash#high'), '\n');
+    assert.equal(exportedBy('deepseek/deepseek-flash#high', { VERIFY_UVW_OPENCODE_CREDENTIAL: 'opencode' }), `${credential}\n`);
+    assert.equal(readFileSync(calls, 'utf8').split('\n').filter(line => line.startsWith('auth export opencode')).length, 1);
+
+    for (const [label, extra, reason] of [['s-none', {}, ''], ['s-unset', { VERIFY_UVW_STORY_ENV: 'DEEPSEEK_API_KEY MISSING_KEY' }, ', and your shell does not set MISSING_KEY']]) {
+      const refused = story('deepseek/deepseek-flash#high', label, extra);
+      assert.equal(refused.status, 1);
+      assert.equal(refused.stderr, `verify-uvw: deepseek/deepseek-flash#high has no model credential: opencode stores none for integration deepseek (stored: opencode)${reason}. Set VERIFY_UVW_OPENCODE_CREDENTIAL=<integration> to use a stored one, or VERIFY_UVW_STORY_ENV=<names> to pass those shell variables, such as DEEPSEEK_API_KEY\n`);
+      assert.equal(existsSync(join(run, 'evidence', label)), false);
+    }
+    assert.equal(existsSync(join(run, 'home/opencode-credential-deepseek.json')), false);
+
+    const named = story('deepseek/deepseek-flash#high', 's-env', { VERIFY_UVW_STORY_ENV: 'DEEPSEEK_API_KEY, EXTRA_SETTING HOME', EXTRA_SETTING: 'extra-value-1', OTHER_API_KEY: 'other-key' });
+    assert.equal(named.status, 0, named.stderr);
+    const { env: seen } = observed();
+    // macOS itself adds __CF_USER_TEXT_ENCODING, a text encoding number, to every process it starts.
+    assert.deepEqual(Object.keys(seen).filter(name => name !== '__CF_USER_TEXT_ENCODING').sort(), ['DEEPSEEK_API_KEY', 'EXTRA_SETTING', 'HOME', 'LANG', 'PATH', 'TERM', 'TMPDIR', 'XDG_CACHE_HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME']);
+    assert.deepEqual([seen.DEEPSEEK_API_KEY, seen.EXTRA_SETTING, seen.HOME], ['shell-deepseek-key', 'extra-value-1', home]);
+    assert.equal(meta('s-env').model_credential, 'shell variables DEEPSEEK_API_KEY, EXTRA_SETTING, HOME');
+    assert.equal(statSync(join(run, 'home/story-env.json')).mode & 0o777, 0o600);
+    assert.equal(readFileSync(join(run, 'evidence/s-env/answer.txt'), 'utf8'), 'key [REDACTED]');
   } finally { rmSync(run, { recursive: true, force: true }); }
 });

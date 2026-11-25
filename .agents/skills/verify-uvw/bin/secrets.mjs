@@ -63,6 +63,7 @@ export function runSecrets(run) {
   const read = path => existsSync(path) ? readFileSync(path, 'utf8').trim() : '';
   const names = directory => existsSync(directory) ? readdirSync(directory) : [];
   const json = path => { try { return credentialSecrets(JSON.parse(read(path))); } catch { return []; } };
+  const values = path => { try { return Object.values(JSON.parse(read(path))); } catch { return []; } };
   const home = join(run, 'home');
   // uvw keeps its session cookie here, for the run's user and for every story identity.
   const univerHomes = [home, ...names(join(home, 'stories')).map(name => join(home, 'stories', name, '.univer-workspace-cli'))];
@@ -71,7 +72,9 @@ export function runSecrets(run) {
     ...['mcp-session', 'mcp-token', 'mcp-oauth-access', 'mcp-oauth-refresh', 'mcp-oauth-refresh-previous', 'mcp-oauth-secret', 'metrics-token', 'workspace-metrics-token', 'executor-token', 'renderer-token']
       .map(name => read(join(home, name))),
     ...names(join(home, 'principals')).filter(name => name.endsWith('.token')).map(name => read(join(home, 'principals', name))),
-    ...json(join(home, 'opencode-credential.json')),
+    ...names(home).filter(name => /^opencode-credential-.+\.json$/.test(name)).flatMap(name => json(join(home, name))),
+    // Every shell variable a story was given, whatever its name.
+    ...values(join(home, 'story-env.json')),
     ...json(join(home, 'codex-credential.json')),
     ...names(join(home, 'stories')).flatMap(name => json(join(home, 'stories', name, '.codex/auth.json'))),
     ...univerHomes.flatMap(directory => json(join(directory, 'distributions/univer-workspace-cli/workspace-cli/session.json'))),
