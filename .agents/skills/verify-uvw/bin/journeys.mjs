@@ -272,7 +272,7 @@ export async function runJourneys({ run, feature, mode, ids, again = false, skip
   if (!chain.length) return { ok: true, entries: [] };
   if (feature.setup.length) chain.unshift({ id: 'setup', blocks: feature.setup });
   mkdirSync(join(run, 'journeys'), { recursive: true, mode: 0o700 });
-  const journal = journalFile(run), done = readJournal(journal).filter((e) => e.kind === 'checks');
+  const journal = journalFile(run), done = readJournal(journal).filter((e) => e.kind === 'checks' && e.feature === feature.name);
   const width = Math.max(...chain.map((s) => s.id.length));
   const show = (e, note) => {
     print(`${e.journey.padEnd(width)}  ${e.outcome.padEnd(7)}  ${e.seconds} s${note ? `  ${note}` : ''}`);
