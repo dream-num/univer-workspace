@@ -13,6 +13,7 @@ import { createComparisonUniver } from "../editor/comparison-univer";
 import { worktreeHtmlViewDraftsQueryOptions } from "../html-views/drafts/draft-queries";
 import {
   PullRequestChecks,
+  RevertSection,
   UnitChangeIcon,
   UnitTypeIcon,
   worktreeQueryOptions,
@@ -78,6 +79,11 @@ export function IssueAcceptancePanel({ issue, timeline }: { readonly issue: Issu
       </Section>
       <OutwardActions issue={issue} />
       {awaitsDecision(issue) ? <Decision spaceId={issue.space.id} number={issue.number} /> : null}
+      {issue.capabilities.close && issue.pullRequests.some((pull) => pull.state === "merged") ? (
+        <div className="rounded-lg border border-border p-4">
+          <RevertSection target={{ spaceId: issue.space.id, number: issue.number }} />
+        </div>
+      ) : null}
     </div>
   );
 }

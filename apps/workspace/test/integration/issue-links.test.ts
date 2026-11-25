@@ -109,7 +109,7 @@ async function setup() {
     getWorktree: async (id) => states.get(id) ?? Promise.reject(new Error("Unknown worktree")),
     markReady: (id) => transition(id, "ready"), merge: (id) => transition(id, "merged"),
     discard: (id) => transition(id, "discarded"), reopen: (id) => transition(id, "draft"),
-    addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused, trunkRevision: unused,
+    addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused, trunkRevision: unused, trunkChangesets: unused, restoreTrunk: unused,
   };
   const application = await createProductTestApplication(
     {

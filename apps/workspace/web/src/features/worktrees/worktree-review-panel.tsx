@@ -52,6 +52,7 @@ import {
 } from "./worktree-review-presentation";
 import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktree-review-search";
 import { WorktreeReviewHeader } from "./worktree-review-header";
+import { RevertSection } from "./worktree-revert";
 import { worktreeHtmlViewDraftsQueryOptions } from "../html-views/drafts/draft-queries";
 import { useDraftMessages } from "../html-views/drafts/messages";
 import { formatSkillFileSize } from "../skill-drafts/review-presentation";
@@ -233,7 +234,11 @@ export function WorktreeReviewPanel({
     </>
   );
   const pages = worktree.capabilities.review
-    ? <><PullRequestChecks worktreeId={worktree.id} /><PageDrafts worktreeId={worktree.id} /></>
+    ? <>
+        <PullRequestChecks worktreeId={worktree.id} />
+        <PageDrafts worktreeId={worktree.id} />
+        {worktree.state === "merged" ? <div className="border-t border-border px-4 py-3"><RevertSection target={{ worktreeId: worktree.id }} /></div> : null}
+      </>
     : null;
   const review = (
     <article className="flex h-full min-h-0 flex-col">

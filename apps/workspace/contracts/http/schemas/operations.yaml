@@ -11,6 +11,7 @@ OperationKind:
     - discardWorktree
     - activateWorktreeResource
     - copyNode
+    - revertWorktrees
 
 OperationState:
   type: string

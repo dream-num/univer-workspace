@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { DROP_V34_SQL } from "./v34-downgrade.js";
 
-export const DROP_V33_SQL = `
+export const DROP_V33_SQL = `${DROP_V34_SQL}
 ALTER TABLE spaces DROP COLUMN landing;
 `;
 

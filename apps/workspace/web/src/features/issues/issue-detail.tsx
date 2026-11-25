@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   Paperclip,
   Pencil,
+  RotateCcw,
   Send,
   Tag,
   Undo2,
@@ -593,6 +594,7 @@ const EVENT_MESSAGES: Readonly<Record<TimelineEvent["kind"], MessageKey>> = {
   submitted: "issueEventSubmitted",
   accepted: "issueEventAccepted",
   sent_back: "issueEventSentBack",
+  reverted: "issueEventReverted",
 };
 
 const EVENT_ICONS: Readonly<Record<TimelineEvent["kind"], LucideIcon>> = {
@@ -608,12 +610,14 @@ const EVENT_ICONS: Readonly<Record<TimelineEvent["kind"], LucideIcon>> = {
   submitted: Send,
   accepted: CircleCheck,
   sent_back: Undo2,
+  reverted: RotateCcw,
 };
 
 const ACCEPTANCE_LABELS: Readonly<Record<components["schemas"]["IssueVerdictKind"], MessageKey>> = {
   submitted: "issueAcceptanceSubmitted",
   accepted: "issueAcceptanceAccepted",
   sent_back: "issueAcceptanceSentBack",
+  reverted: "issueAcceptanceReverted",
 };
 
 /** Replaces `{name}` placeholders with nodes so each language keeps its own word order. */

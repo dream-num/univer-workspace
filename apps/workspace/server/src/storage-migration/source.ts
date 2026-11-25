@@ -1,7 +1,7 @@
 import { copyFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { assertV33Fingerprint } from "../db/sqlite/migrations/prepare-current-database.js";
+import { assertV34Fingerprint } from "../db/sqlite/migrations/prepare-current-database.js";
 import { createSqliteUnitCreationFactsReader } from "../db/sqlite/unit-creation-facts.js";
 import { openSqliteCollaborationDatabase } from "../integrations/univer/collaboration-database/sqlite/open.js";
 
@@ -65,12 +65,12 @@ export async function prepareSource(
   const product = new DatabaseSync(productPath);
   resources.defer(() => product.close());
   const version = product.prepare("PRAGMA user_version").get()?.user_version;
-  if (version !== 33) {
+  if (version !== 34) {
     throw new Error(
-      `Expected a V33 SQLite product database, got V${version}. For older versions, upgrade on SQLite before migrating.`,
+      `Expected a V34 SQLite product database, got V${version}. For older versions, upgrade on SQLite before migrating.`,
     );
   }
-  assertV33Fingerprint(product);
+  assertV34Fingerprint(product);
   checkIntegrity(product);
 
   await copyStoppedDatabase(collaborationFile, collaborationPath);

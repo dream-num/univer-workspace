@@ -24,6 +24,7 @@ import type {
 } from "./worktrees.repository.js";
 import type {
   ActivationState,
+  MergedUnit,
   WorktreeBackend,
   WorktreeCapabilities,
   WorktreeCheck,
@@ -392,6 +393,42 @@ export function createWorktreesModule(options: {
         },
         mergedBy: mergers.get(row.id) ?? null,
       }));
+    },
+
+    async mergedChanges(userId, worktreeId) {
+      const value = await context(userId, worktreeId);
+      const data = await backendCall(() => options.backend.getWorktree(worktreeId, userId));
+      const views = new Map(value.units.map((unit) => [unit.unitId, unit]));
+      const rows = new Map((await options.repository.units(worktreeId)).map((row) => [row.unit_id, row]));
+      const units: MergedUnit[] = [];
+      for (const unit of data.units) {
+        const view = views.get(unit.unitID);
+        const row = rows.get(unit.unitID);
+        const result = unit.mergeResult;
+        if (!view || !row || !result) continue;
+        const base = {
+          unitId: unit.unitID, nodeId: view.nodeId, resourceId: view.resourceId, name: view.name,
+          unitType: view.unitType, univerType: unit.type,
+        };
+        if (row.source === "worktree") {
+          if (row.activated_at !== null && (result.status === "merged" || result.status === "unchanged")) {
+            units.push({ ...base, change: { kind: "added" } });
+          }
+        } else if (result.status === "merged") {
+          units.push({ ...base, change: { kind: "modified", trunkRevision: result.trunkRevision } });
+        } else if (result.status === "removed") {
+          units.push({ ...base, change: { kind: "removed", removalBatchId: await options.repository.removalBatchId(worktreeId, unit.unitID) } });
+        }
+      }
+      return {
+        id: value.row.id,
+        number: value.row.number,
+        title: value.row.name,
+        teamSpaceId: value.row.team_space_id,
+        merged: data.status === "merged" && value.row.processed_at !== null,
+        decides: mayMerge({ ...value.facts, editsAll: true, writesPages: true }),
+        units,
+      };
     },
 
     async list(userId, query) {

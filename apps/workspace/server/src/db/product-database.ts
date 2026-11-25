@@ -8,6 +8,7 @@ import type { AccessTokenRepository, IdentityRepository } from "../modules/ident
 import type { IssuesRepository } from "../modules/issues/index.js";
 import type { NodesRepository } from "../modules/nodes/index.js";
 import type { OperationsRepository } from "../modules/operations/index.js";
+import type { RevertsRepository } from "../modules/reverts/index.js";
 import type { PermissionsRepository } from "../modules/permissions/index.js";
 import type { ResourcesRepository } from "../modules/resources/index.js";
 import type { SkillDraftsRepository } from "../modules/skill-drafts/index.js";
@@ -27,6 +28,7 @@ export interface ProductRepositories {
   readonly blobs: BlobsRepository;
   readonly contentPermissions: ContentPermissionsRepository;
   readonly copies: CopiesRepository;
+  readonly reverts: RevertsRepository;
   readonly forks: ForksRepository;
   readonly htmlViewDrafts: HtmlViewDraftsRepository;
   readonly identity: IdentityRepository;

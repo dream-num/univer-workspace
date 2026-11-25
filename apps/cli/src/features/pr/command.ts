@@ -7,6 +7,8 @@ import {
   pullUrl,
   workspaceError,
   type WorkspaceCheck,
+  type WorkspaceRevertItem,
+  type WorkspaceRevertTarget,
   type WorkspaceSpaceFeature,
   type WorkspaceWorktree,
   type WorkspaceWorktreeFeature,
@@ -31,6 +33,7 @@ export const PR_JSON_FIELDS = [
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
 
 const CHECK_JSON_FIELDS = ["name", "declared", "state", "results"] as const satisfies readonly (keyof WorkspaceCheck)[];
+const REVERT_JSON_FIELDS = ["applied", "pullRequests", "canRevert", "refusal", "operation", "items"] as const;
 
 const ISSUE_OPTION = [
   "--issue <number>",
@@ -345,7 +348,43 @@ function build(
       },
     );
 
-  root.addCommand(list).addCommand(get).addCommand(create).addCommand(edit).addCommand(check);
+  const revert = new Command("revert")
+    .description("Show what reverting a merged pull request, or every merged pull request of an Issue, would do; --yes reverts")
+    .argument("[pr]", "a merged pull request; omit with --issue")
+    .option(...REPO_OPTION)
+    .option(...ISSUE_OPTION)
+    .option("--yes", "revert. A file edited on trunk after the merge stays as it is; a person can overwrite it in the browser")
+    .addOption(jsonFieldsOption(REVERT_JSON_FIELDS))
+    .action(async (argument: string | undefined, options: JsonFieldsOption & RepoOption & { issue?: number; yes?: boolean }) => {
+      const result = await executeCommand(revert, async () => {
+        if ((argument === undefined) === (options.issue === undefined)) {
+          throw workspaceError("workspace-argument-invalid", "Pass a pull request or --issue, not both.");
+        }
+        let target: WorkspaceRevertTarget;
+        if (options.issue === undefined) {
+          target = { worktreeId: (await find(argument!, options.repo)).worktree.id };
+        } else {
+          const issue = await context.item(String(options.issue), options.repo, "issue");
+          if (issue.kind !== "number") throw workspaceError("workspace-argument-invalid", "Expected an Issue number.");
+          target = { spaceId: issue.spaceId, issueNumber: issue.number };
+        }
+        if (options.yes !== true) {
+          const plan = await worktrees.revertPlan(target);
+          return { applied: false, pullRequests: plan.pullRequests, canRevert: plan.capabilities.revert, refusal: plan.refusal, items: plan.items };
+        }
+        const done = await worktrees.revert(target);
+        return { applied: true, operation: done.operation, items: done.items ?? [] };
+      });
+      emit(revert, options, result, [
+        ...(result.applied ? [`Revert ${result.operation!.state}`] : [result.refusal ?? "Plan only; run again with --yes to revert."]),
+        ...result.items.map(revertLine),
+      ].join("\n"));
+      if (result.applied && result.operation!.state === "failed") {
+        revert.error(result.operation!.error?.message ?? "The revert failed.", { code: "workspace.command.failed", exitCode: 1 });
+      }
+    });
+
+  root.addCommand(list).addCommand(get).addCommand(create).addCommand(edit).addCommand(check).addCommand(revert);
   if (names.reopen === undefined) {
     root.addCommand(transition("ready", "ready", "Mark a draft pull request ready for review", true));
   } else {
@@ -373,6 +412,11 @@ function build(
     }
   }
   return root;
+}
+
+function revertLine(item: WorkspaceRevertItem): string {
+  const edits = item.laterEdits.map((edit) => `${edit.user?.username ?? "a removed user"} (${String(edit.revisions)})`).join(", ");
+  return `${item.state.padEnd(11)} ${item.action.padEnd(7)} ${item.name}${edits ? ` edited later by ${edits}` : ""}${item.reason && !edits ? `: ${item.reason}` : ""}`;
 }
 
 function label(worktree: WorkspaceWorktree): string {

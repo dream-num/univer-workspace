@@ -389,7 +389,12 @@ describe("uvw repository and Issue commands", () => {
 });
 
 describe("uvw pr and the worktree alias", () => {
-  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; env?: NodeJS.ProcessEnv; ownerId?: string } = {}) {
+  const revertItem = {
+    action: "restore", state: "blocked", name: "North", nodeId: "n1", unitId: "u9", targetRevision: 1, headRevision: 4, reason: "Edited on Trunk after this task's merge.",
+    laterEdits: [{ user: { id: "u2", username: "eve", displayName: "Eve" }, revisions: 2, lastEditedAt: null }],
+  };
+
+  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; env?: NodeJS.ProcessEnv; ownerId?: string; revertState?: "failed" } = {}) {
     const { repoContext } = context(options.env);
     const calls: [string, ...unknown[]][] = [];
     const record = (name: string, result: unknown) =>
@@ -408,6 +413,8 @@ describe("uvw pr and the worktree alias", () => {
         name: "totals-match", declared: true, state: "missing",
         results: [{ reporter: { id: "u1", username: "alice", displayName: "Alice" }, state: "passed", summary: "B5 = 60", reportedAt: "2026-11-24T00:00:00.000Z", current: true, counts: false }],
       }),
+      revertPlan: record("revertPlan", { pullRequests: [], items: [revertItem], capabilities: { revert: true, force: false }, refusal: null }),
+      revert: record("revert", { operation: { id: "op-1", state: options.revertState ?? "completed", error: options.revertState ? { code: "CONFLICT", message: "Nothing was reverted. North: Edited on Trunk after this task's merge." } : null }, items: [revertItem] }),
     } as unknown as WorkspaceWorktreeFeature;
     const spaces = { get: vi.fn(async (id: string) => ({
       ...teamSpace,
@@ -451,6 +458,28 @@ describe("uvw pr and the worktree alias", () => {
     expect(viaWorktree.calls).toEqual(viaPr.calls);
     expect(worktreeOutput).toBe(prOutput);
     expect(viaPr.calls.length).toBeGreaterThan(0);
+  });
+
+  it("plans a revert of an Issue, reverts a pull request only with --yes, and takes exactly one target", async () => {
+    const { calls, pr } = pullRequestCommands();
+    expect(await run(pr, ["revert", "-R", "alice/docs", "--issue", "7"]))
+      .toContain("Plan only; run again with --yes to revert.\nblocked     restore North edited later by eve (2)");
+    expect(await run(pr, ["revert", "12", "-R", "alice/docs", "--yes"])).toContain("Revert completed\nblocked");
+    for (const args of [["revert", "-R", "alice/docs"], ["revert", "12", "-R", "alice/docs", "--issue", "7"]]) {
+      await expect(run(pr, args)).rejects.toThrow(/a pull request or --issue, not both/u);
+    }
+    expect(calls).toEqual([
+      ["revertPlan", { spaceId: "space-1", issueNumber: 7 }],
+      ["getByNumber", "space-1", 12],
+      ["revert", { worktreeId: "wt-1" }],
+    ]);
+  });
+
+  it("exits 1 with the reason when a revert reverted nothing", async () => {
+    const { pr } = pullRequestCommands({ revertState: "failed" });
+    await expect(run(pr, ["revert", "12", "-R", "alice/docs", "--yes"])).rejects.toMatchObject({
+      exitCode: 1, message: "Nothing was reverted. North: Edited on Trunk after this task's merge.",
+    });
   });
 
   it("reports one check as passed or failed and shows whether each result counts", async () => {

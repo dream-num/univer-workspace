@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks, addLanding];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions, addForks, addProposals, addIssueLink, addIssueVerdicts, addWorktreeChecks, addLanding, addRevertOperation];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -147,6 +147,25 @@ async function addWorktreeChecks(client: PoolClient): Promise<void> {
 
 async function addLanding(client: PoolClient): Promise<void> {
   await client.query("ALTER TABLE spaces ADD COLUMN landing TEXT NOT NULL DEFAULT 'review' CHECK (landing IN ('review', 'checks'))");
+}
+
+async function addRevertOperation(client: PoolClient): Promise<void> {
+  await client.query(`ALTER TABLE operations DROP CONSTRAINT operations_kind_check;
+ALTER TABLE operations ADD CONSTRAINT operations_kind_check CHECK (
+  kind IN (
+    'create_resource',
+    'create_blob_resource',
+    'replace_blob_content',
+    'create_worktree',
+    'add_worktree_unit',
+    'create_worktree_unit',
+    'merge_worktree',
+    'discard_worktree',
+    'activate_worktree_resource',
+    'copy_node',
+    'revert_worktrees'
+  )
+);`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

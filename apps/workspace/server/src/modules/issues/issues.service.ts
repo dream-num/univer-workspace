@@ -34,6 +34,7 @@ import {
   type IssueTimelineItem,
   type IssuePullRequestView,
   type IssueVerdictKind,
+  type RequestedVerdictKind,
   type IssueView,
   type IssuesModule,
 } from "./issues.types.js";
@@ -287,13 +288,18 @@ export function createIssuesModule(options: {
       if (!(ISSUE_VERDICT_KINDS as readonly unknown[]).includes(fields.kind)) {
         throw invalid(`kind must be one of ${ISSUE_VERDICT_KINDS.join(", ")}.`, "kind");
       }
-      const kind = fields.kind as IssueVerdictKind;
+      const kind = fields.kind as RequestedVerdictKind;
       const body = validText(fields.body ?? "", "body", kind === "accepted");
       const detail = await repository.recordVerdict({
         id: randomUUID(), userId, spaceId, number: issueNumber(number), kind, body, now: now(),
       });
       await notify(spaceId);
       return issueView(userId, detail);
+    },
+
+    async recordReverted(userId, spaceId, number, operationId) {
+      await repository.recordReverted({ id: randomUUID(), userId, spaceId, number, operationId, now: now() });
+      await notify(spaceId);
     },
 
     async accessChanges(userId, spaceId, number) {

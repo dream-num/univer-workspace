@@ -2,7 +2,7 @@ import type {
   WorktreeData,
   WorktreeUnitMergeResult,
 } from "@univerjs-pro/collaboration-worktree-service";
-import type { IChangeset } from "@univerjs/protocol";
+import type { IChangeset, UniverType } from "@univerjs/protocol";
 import type { UnitType } from "../access/index.js";
 import type { PublishedPage } from "../html-view-drafts/drafts.types.js";
 import type { OperationState } from "../resources/resources.types.js";
@@ -203,6 +203,54 @@ export interface WorktreeBackend {
   ): Promise<WorktreeChangesetSubmitResult>;
   /** Null when Trunk has no such Unit. */
   trunkRevision(unitId: string, userId: string): Promise<number | null>;
+  /** Trunk changesets after revision `after` through `to`, oldest first. */
+  trunkChangesets(unitId: string, type: UniverType, after: number, to: number, userId: string): Promise<readonly TrunkChangeset[]>;
+  /** Submits on Trunk a changeset that only restores the Unit to `targetRevision`. It commits only while `baseRev` is head. */
+  restoreTrunk(
+    input: {
+      readonly unitId: string;
+      readonly type: UniverType;
+      readonly baseRev: number;
+      readonly targetRevision: number;
+      readonly sid: string;
+      readonly reqId: number;
+    },
+    userId: string,
+  ): Promise<WorktreeChangesetSubmitResult>;
+}
+
+export interface TrunkChangeset {
+  readonly revision: number;
+  readonly userId: string;
+  readonly sid: string;
+  readonly createdAt: number | null;
+}
+
+/** What a pull request's merge did to Trunk, from the Collaboration Service's record of it. */
+export interface MergedChanges {
+  readonly id: string;
+  readonly number: number | null;
+  readonly title: string;
+  readonly teamSpaceId: string | null;
+  /** Trunk moved and the product finished recording the merge. */
+  readonly merged: boolean;
+  /** The actor may merge this pull request, setting aside their access to its Units and pages. */
+  readonly decides: boolean;
+  readonly units: readonly MergedUnit[];
+}
+
+export interface MergedUnit {
+  readonly unitId: string;
+  readonly nodeId: string | null;
+  readonly resourceId: string;
+  readonly name: string;
+  readonly unitType: UnitType;
+  readonly univerType: UniverType;
+  /** modified: the merge wrote `trunkRevision`. added: the merge created the file. removed: it went to Trash in `removalBatchId`. */
+  readonly change:
+    | { readonly kind: "modified"; readonly trunkRevision: number }
+    | { readonly kind: "added" }
+    | { readonly kind: "removed"; readonly removalBatchId: string };
 }
 
 export type WorktreeChangesetSubmitResult =
@@ -272,6 +320,8 @@ export interface WorktreesModule {
   ): Promise<{ readonly status: 201; readonly body: WorktreeSummary }>;
   /** The pull requests linked to an Issue that the User may see, newest first. */
   pullRequestsForIssue(userId: string, issueId: string): Promise<readonly IssuePullRequestView[]>;
+  /** What the pull request's merge changed on Trunk, for a revert. */
+  mergedChanges(userId: string, worktreeId: string): Promise<MergedChanges>;
   get(
     userId: string,
     worktreeId: string,

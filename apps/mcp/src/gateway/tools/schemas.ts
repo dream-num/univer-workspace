@@ -124,7 +124,7 @@ export const issueSchema = z.object({
     })
     .nullable()
     .describe(
-      "Latest verdict (submitted, accepted or sent_back) with its body, or null if never submitted. A null actor means the repository's deadline accepted it.",
+      "Latest verdict (submitted, accepted, sent_back or reverted) with its body, or null if never submitted. A null actor means the repository's deadline accepted it.",
     ),
   url: z.url(),
 });
@@ -221,6 +221,38 @@ export const worktreeSchema = z.object({
     .optional()
     .describe("How many declared checks pass, fail, or lack a result that counts. pr_view lists them."),
   url: z.url(),
+});
+
+const revertItemSchema = z.object({
+  action: z.enum(["restore", "trash", "recover", "none"]).describe("restore: back to targetRevision. trash: added by the merges. recover: removed by them. none: cannot be reverted."),
+  state: z.enum(["ready", "blocked", "done", "unavailable", "refused", "failed"]),
+  name: z.string(),
+  nodeId: z.string().nullable(),
+  unitId: z.string().nullable(),
+  targetRevision: z.number().nullable(),
+  headRevision: z.number().nullable(),
+  laterEdits: z
+    .array(
+      z.object({
+        user: z.object({ id: z.string(), username: z.string(), displayName: z.string() }).nullable(),
+        revisions: z.number(),
+        lastEditedAt: z.string().nullable(),
+      }),
+    )
+    .describe("Who edited a blocked file on trunk after the merge."),
+  reason: z.string().nullable(),
+});
+
+export const revertSchema = z.object({
+  applied: z.boolean().describe("false: the plan, nothing changed. true: the revert ran."),
+  pullRequests: z.array(z.object({ id: z.string(), number: z.number().nullable(), title: z.string() })).optional(),
+  canRevert: z.boolean().optional(),
+  refusal: z.string().nullable().optional().describe("Why you cannot revert."),
+  operation: z
+    .object({ id: z.string(), state: z.string(), error: z.object({ code: z.string(), message: z.string() }).nullable() })
+    .optional()
+    .describe("pending: it finishes on its own. failed: nothing was reverted, and error says why."),
+  items: z.array(revertItemSchema),
 });
 
 export const checkSchema = z.object({

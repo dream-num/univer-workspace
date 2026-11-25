@@ -28,6 +28,10 @@ its budget of open pull requests is refused with `AGENT_QUOTA_EXCEEDED`, and `wh
 - MI15 turns on an acceptance deadline with `repo_edit`, lets the server accept a submitted Issue by deadline with no
   actor while a sent-back one stays open, restarts the clock on a reopen, reads it back in MCP, uvw and the browser,
   shows the settings notice before a change that accepts overdue Issues, and turns the deadline off.
+- MI16 reverts an Issue's three merged pull requests from its acceptance panel: changed files go back, an added file
+  goes to Trash and a deleted one comes back, a file someone edited after the merge stays blocked and names them until
+  a person overwrites it, and the Issue reopens as `reverted`. A claimed agent plans and applies `pr_revert`, cannot
+  overwrite, and is refused while the repository requires checks.
 - MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
@@ -63,7 +67,7 @@ An MCP client connected to `$MCP_URL` calls `issue_create`, `issue_view`, `issue
 `search` and `browse`. The same objects show in `uvw issue`, `uvw pr`, `uvw search` and `uvw browse`. An agent asked to check
 its work calls `search` for the Issues assigned to it and the pull requests waiting for it, then acts on them. MP14 also calls
 `whoami` and `pr_merge` as an agent, MI13 calls `unit_add`, `unit_create`, `execute`, `pr_merge` and `share`, MI14 calls
-`unit_add`, `execute`, `pr_check` and `pr_merge`, and MI15 calls `repo_edit`. MP17 also calls `space_node`, `claim`,
+`unit_add`, `execute`, `pr_check` and `pr_merge`, MI15 calls `repo_edit`, and MI16 calls `pr_revert` and drives `uvw pr revert`. MP17 also calls `space_node`, `claim`,
 `fork_create` and `fork_view` as an agent, and drives `uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`,
 the last two as that agent. A person judges an Issue's whole task in the `Acceptance` view of its page. MP16 also uses
 `uvw space node trash` and the repository's `Trash` page.
@@ -1336,9 +1340,196 @@ has both checks passed, `capabilities.merge` false and a `pr_merge` refused nami
 leaves Trunk's file with G's note; O's merge with no results succeeds; and after `--landing review` G merges without
 results, leaving Trunk with every row.
 
+### MI16. Revert an Issue's merged pull requests
+
+The run user O holds a Team Space with Sheets North, South and Old and a Doc Notes, and makes a claimed agent A and a
+person E Editors there. For an Issue assigned to A, A merges one pull request that changes North and South and one that
+changes Notes and adds a Doc, Summary, and O merges a third that deletes Old. A submits and O accepts. E then edits
+South on Trunk. In the Issue's `Acceptance` view, O reviews the revert: Old comes back, Notes and North go back, South
+is blocked and names E, and Summary goes to Trash. O reverts without overwriting, and the Issue reopens with the verdict
+`reverted`. O reviews again and overwrites South alone. Then A reverts its own second Issue with `pr_revert`: its change
+goes back, a file E edited after the merge stays blocked, and A cannot overwrite it. MI16 uses one `principal`, which
+counts toward the 5 agents per hour.
+
+```bash
+R="$O/revert-story"
+sheet() { jq -nc --arg w "$1" --arg u "$2" --arg c "const ws = univerAPI.getActiveWorkbook().getActiveSheet(); $3" '{worktree:$w,unit:$u,code:$c}'; }
+unit() { jq -r .unit.unitId "$EVIDENCE/mrv-$1.out"; }
+res() { jq -r .unit.resourceId "$EVIDENCE/mrv-$1.out"; }
+cell() { jq -r --arg r "$2" '.json.cells[] | select(.ref == $r) | .value' "$EVIDENCE/$1.out"; }
+$V cli mrv-repo repo create revert-story --name "Revert story" --json id,fullName
+T=$(jq -r .id "$EVIDENCE/mrv-repo.out")
+$V mcp mrv-seed pr_create "{\"repo\":\"$R\",\"title\":\"Seed\"}"
+W0=$(jq -r .id "$EVIDENCE/mrv-seed.out"); N0=$(jq -r .number "$EVIDENCE/mrv-seed.out")
+for name in North South Old; do
+  $V mcp "mrv-$name" unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"sheet\",\"name\":\"$name\"}"
+done
+$V mcp mrv-Notes unit_create "{\"worktree\":\"$W0\",\"space\":\"$R\",\"type\":\"doc\",\"name\":\"Notes\"}"
+$V mcp mrv-north-seed execute "$(sheet "$W0" "$(unit North)" 'ws.getRange("A1:B2").setValues([["Region","Total"],["North",40]]);')"
+$V mcp mrv-south-seed execute "$(sheet "$W0" "$(unit South)" 'ws.getRange("A1:B2").setValues([["Region","Total"],["South",10]]);')"
+$V mcp mrv-notes-seed execute "$(jq -nc --arg w "$W0" --arg u "$(unit Notes)" '{worktree:$w,unit:$u,code:"doc.getParagraphs()[0].setText(\"Draft notes\");"}')"
+$V mcp mrv-seed-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N0\"}"
+$V mcp mrv-seed-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N0\"}"
+$V principal reverter mrv-a
+A=$(jq -r .agent.username "$EVIDENCE/principal-reverter.json")
+$V mcp --as reverter mrv-claim claim '{}'
+```
+
+Open the `claimUrl` from `mrv-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+`mrv-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
+cache. Create E in a second browser session as MI13 does, with username `mrv-e-$VERIFY_UVW_RUN` and display name
+`Erin`. Then:
+
+```bash
+E="mrv-e-$VERIFY_UVW_RUN"
+$V cli mrv-member repo member add "$A" --role editor -R "$R" --json
+$V cli mrv-member-e repo member add "$E" --role editor -R "$R" --json
+$V cli mrv-issue issue create -R "$R" -t "Raise the totals and write a summary" -b "Raise North to 50 and South to 20, finish the notes, and add a Summary Doc." -a "$A" --json number
+N=$(jq -r .number "$EVIDENCE/mrv-issue.out")
+pull() {
+  $V mcp --as reverter "mrv-pr-$1" pr_create "$(jq -nc --arg r "$R" --arg t "$2" --argjson n "$3" '{repo:$r,title:$t,issue:$n}')" >/dev/null
+  jq -r .id "$EVIDENCE/mrv-pr-$1.out"
+}
+ready_merge() {
+  local n; n=$(jq -r .number "$EVIDENCE/mrv-pr-$1.out")
+  $V mcp --as reverter "mrv-ready-$1" pr_ready "{\"repo\":\"$R\",\"number\":\"$n\"}"
+  $V mcp --as reverter "mrv-merge-$1" pr_merge "{\"repo\":\"$R\",\"number\":\"$n\"}"
+}
+W1=$(pull totals "Raise the totals" "$N")
+for name in North South; do
+  $V mcp --as reverter "mrv-add-$name" unit_add "{\"worktree\":\"$W1\",\"resource\":\"$(res "$name")\"}"
+done
+$V mcp --as reverter mrv-edit-north execute "$(sheet "$W1" "$(unit North)" 'ws.getRange("B2").setValue(50);')"
+$V mcp --as reverter mrv-edit-south execute "$(sheet "$W1" "$(unit South)" 'ws.getRange("B2").setValue(20);')"
+ready_merge totals
+W2=$(pull summary "Finish the notes and write the summary" "$N")
+$V mcp --as reverter mrv-add-Notes unit_add "{\"worktree\":\"$W2\",\"resource\":\"$(res Notes)\"}"
+$V mcp --as reverter mrv-edit-notes execute "$(jq -nc --arg w "$W2" --arg u "$(unit Notes)" '{worktree:$w,unit:$u,code:"doc.getParagraphs()[0].setText(\"Final notes\");"}')"
+$V mcp --as reverter mrv-Summary unit_create "{\"worktree\":\"$W2\",\"space\":\"$R\",\"type\":\"doc\",\"name\":\"Summary\"}"
+ready_merge summary
+$V cli mrv-pr-old pr create -R "$R" -t "Remove Old" --issue "$N" --json id,number
+N3=$(jq -r .number "$EVIDENCE/mrv-pr-old.out")
+$V cli mrv-add-old unit add --worktree "$(jq -r .id "$EVIDENCE/mrv-pr-old.out")" --resource "$(res Old)" --json
+```
+
+In the run browser, signed in as O at 1440 × 900, open `$ORIGIN/spaces/$T/pulls/$N3`, click the `Files changed 1` link,
+wait for Old to load, and click `Mark for deletion`. The file list then reads `Old Deleted`. Then:
+
+```bash
+$V cli mrv-ready-old pr ready "$N3" -R "$R" --json state
+$V cli mrv-merge-old pr merge "$N3" -R "$R" --json state
+$V mcp --as reverter mrv-submit issue_verdict "$(jq -nc --arg r "$R" --arg n "$N" '{repo:$r,number:$n,verdict:"submit",body:"Raised North and South, finished the notes and added a Summary Doc."}')"
+$V cli mrv-accept issue accept "$N" -R "$R"
+$V cli mrv-closed issue view "$N" -R "$R" --json state,acceptance
+jq -e '.state == "closed" and .acceptance.kind == "accepted"' "$EVIDENCE/mrv-closed.out"
+```
+
+In E's session, open `$ORIGIN/nodes/<nodeId in mrv-South.out>`, wait 9 s for the grid, type `E note` into the selected
+cell A1 and press `Enter`. Then:
+
+```bash
+$V cli mrv-e-edited read A1:B2 --unit "$(unit South)" --trunk --json
+test "$(cell mrv-e-edited A1)" = "E note"
+```
+
+In the run browser, open `$ORIGIN/spaces/$T/issues/$N`. A closed Issue opens on `Conversation`, so click `Acceptance`,
+then `Review revert` at the bottom, and screenshot the section (`[data-revert-panel]`) as `mrv-plan.png`. It lists, in
+order, Old `Restore from Trash`, Notes and North `Back to before the merge`, each `Ready`, South `Back to before the
+merge` `Edited after the merge` with `Edited on Trunk after this task's merge. Reverting would overwrite those edits.`
+and `Erin edited it once after, Today <time>`, Summary `Move to Trash` `Ready`, one `Overwrite these edits` checkbox,
+under South, and `What a revert cannot undo` with five lines. At 390 × 844, open the plan the same way, check that
+`document.documentElement.scrollWidth` is 390, and screenshot the section as `mrv-plan-narrow.png`. Back at 1440 × 900,
+leave the checkbox clear, click the section's `Revert` (`find role button click --name Revert --exact`), screenshot
+the dialog as `mrv-confirm.png`, and confirm (`click 'div[role=alertdialog] button:last-of-type'`). The toast reads
+`Reverted, except the files the list explains.`, and the list shows Old, Notes, North and Summary `Done` and South
+still `Edited after the merge`: screenshot `mrv-done.png`. Then:
+
+```bash
+$V cli mrv-after-north read A1:B2 --unit "$(unit North)" --trunk --json
+test "$(cell mrv-after-north B2)" = 40
+$V cli mrv-after-south read A1:B2 --unit "$(unit South)" --trunk --json
+test "$(cell mrv-after-south A1)" = "E note" && test "$(cell mrv-after-south B2)" = 20
+$V cli mrv-after-notes inspect document --unit "$(unit Notes)" --trunk --json
+jq -e '[.paragraphs[].textPreview] == ["Draft notes"]' "$EVIDENCE/mrv-after-notes.out"
+$V cli mrv-after-tree space browse "$R" --json
+jq -e '[.. | objects | select(.name? != null and .nodeId? != null) | .name] | unique == ["North","Notes","Old","South"]' "$EVIDENCE/mrv-after-tree.out"
+$V cli mrv-after-issue issue view "$N" -R "$R" --json state,acceptance
+jq -e '.state == "open" and .acceptance.kind == "reverted"' "$EVIDENCE/mrv-after-issue.out"
+```
+
+Choose `Conversation`, scroll to the end and screenshot `mrv-timeline.png`: the sidebar reads `Acceptance` `Reverted`,
+and the timeline ends with `reopened this` and `reverted the merged changes`. Choose `Acceptance` and click `Review
+revert` again. Old reads `Done` with `This file is already back from Trash.`, Summary `Unavailable`, and Notes and North
+are now `Edited after the merge` by O, because the first revert is a Trunk revision after the merge. Check `Overwrite
+these edits` under South only (`[data-revert-panel] > ul > li:nth-of-type(4) input[type=checkbox]`), click `Revert`,
+screenshot the dialog as `mrv-force-confirm.png` (it ends `The file you chose to overwrite loses its edits after the
+merge.`), confirm, and screenshot `mrv-force-done.png`, where South is `Done`. E's open South now shows `Document
+Restored to a Previous Version` with `Refresh page`: screenshot E's session as `mrv-e-open-after-force.png`. Then:
+
+```bash
+$V cli mrv-forced-south read A1:B2 --unit "$(unit South)" --trunk --json
+test "$(cell mrv-forced-south A1)" = Region && test "$(cell mrv-forced-south B2)" = 10
+```
+
+Now A reverts its own work on a second Issue:
+
+```bash
+$V cli mrv-issue-2 issue create -R "$R" -t "Raise North and South again" -b "Raise North to 70 and South to 30." -a "$A" --json number
+N2=$(jq -r .number "$EVIDENCE/mrv-issue-2.out")
+W4=$(pull raise "Raise North and South again" "$N2")
+for name in North South; do
+  $V mcp --as reverter "mrv-add2-$name" unit_add "{\"worktree\":\"$W4\",\"resource\":\"$(res "$name")\"}"
+done
+$V mcp --as reverter mrv-edit2-north execute "$(sheet "$W4" "$(unit North)" 'ws.getRange("B2").setValue(70);')"
+$V mcp --as reverter mrv-edit2-south execute "$(sheet "$W4" "$(unit South)" 'ws.getRange("B2").setValue(30);')"
+ready_merge raise
+```
+
+In E's session, open South again and type `E again` into A1 the same way. Then:
+
+```bash
+$V mcp-tools --as reverter --toolsets core,admin mrv-a-tools
+jq -e '[.. | objects | select(.name? == "pr_revert")][0].inputSchema.properties | keys == ["apply","issue","number","repo"]' "$EVIDENCE/mrv-a-tools.out"
+$V mcp --as reverter --toolsets core,admin mrv-a-plan pr_revert "{\"repo\":\"$R\",\"issue\":\"$N2\"}"
+jq -e --arg e "$E" '.applied == false and .canRevert and ([.items[] | [.name, .state]] == [["North","ready"],["South","blocked"]]) and .items[1].laterEdits[0].user.username == $e' "$EVIDENCE/mrv-a-plan.out"
+$V mcp --as reverter --toolsets core,admin mrv-a-apply pr_revert "{\"repo\":\"$R\",\"issue\":\"$N2\",\"apply\":true}"
+jq -e '.applied and .operation.state == "completed" and ([.items[] | [.name, .state]] == [["North","done"],["South","blocked"]])' "$EVIDENCE/mrv-a-apply.out"
+$V mcp --as reverter --toolsets core,admin mrv-a-again pr_revert "{\"repo\":\"$R\",\"issue\":\"$N2\",\"apply\":true}"
+test $? -eq 1
+jq -e '.code == "CONFLICT" and (.message | endswith("A person can overwrite those edits in the browser."))' "$EVIDENCE/mrv-a-again.out"
+$V cli mrv-after-agent-south read A1:B2 --unit "$(unit South)" --trunk --json
+test "$(cell mrv-after-agent-south A1)" = "E again" && test "$(cell mrv-after-agent-south B2)" = 30
+$V cli mrv-after-agent-issue issue view "$N2" -R "$R" --json acceptance
+jq -e --arg a "$A" '.acceptance.kind == "reverted" and .acceptance.actor.username == $a' "$EVIDENCE/mrv-after-agent-issue.out"
+$V cli mrv-cli-plan pr revert "$(jq -r .number "$EVIDENCE/mrv-pr-raise.out")" -R "$R"
+grep -qx 'Plan only; run again with --yes to revert.' "$EVIDENCE/mrv-cli-plan.out"
+$V cli mrv-cli-yes pr revert --issue "$N" -R "$R" --yes
+test $? -eq 1
+grep -q '^CONFLICT: Every file left to revert was edited after the merge' "$EVIDENCE/mrv-cli-yes.err"
+$V cli mrv-landing-checks repo edit "$R" --landing checks --json landing
+$V mcp --as reverter --toolsets core,admin mrv-a-gated pr_revert "{\"repo\":\"$R\",\"issue\":\"$N2\",\"apply\":true}"
+test $? -eq 1
+jq -e '.code == "AGENT_NOT_ALLOWED" and (.message | startswith("A revert changes Trunk without a merge."))' "$EVIDENCE/mrv-a-gated.out"
+$V cli mrv-landing-review repo edit "$R" --landing review --json landing
+AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e agent-browser close
+```
+
+Open the merged pull request `$ORIGIN/spaces/$T/pulls/<number in mrv-pr-raise.out>`, click `Review revert` and
+screenshot `mrv-pr-page.png`: its `Revert` section lists North and South.
+
+Pass when every command exits as shown: the plan names Erin on South with a time today and lists each file once with its
+action, the narrow page has no horizontal scroll, the first revert brings Old back, Notes and North back to their
+content before the task and Summary into Trash while South keeps E's edit, the Issue reopens with `reverted`, the
+overwrite returns South to its content before the task, the agent's `pr_revert` has no force argument, restores North,
+leaves South blocked with E's edit and is told only a person can overwrite it, the agent's revert is refused while the
+repository requires checks, and the second Issue's verdict is `reverted` by A.
+
 ## Gotchas
 
 - The MCP-mode gotchas in [MCP gateway](mcp.md#gotchas) apply.
+- In MI16, a uvw daemon that already loaded a Doc can fail its first `inspect document --trunk` after a revert with
+  `COLLABORATION_PROTOCOL_ERROR: Historical restore requires reloading the Unit and cannot be pulled in place`. The
+  next call loads the Unit again and reads the restored content.
 - MP12 measures the model as well as the product. Quote `transcript.jsonl` when it goes wrong, as
   [stories](../references/stories.md) says. A story's first `error` lines can be opencode's own `fetch` and
   `execute` wrapper, which never reach Workspace.

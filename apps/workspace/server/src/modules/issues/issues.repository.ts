@@ -1,7 +1,7 @@
 import type { NodeAccess, SpaceAccess } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
-import type { IssueEventKind, IssueState, IssueStateReason, IssueVerdictKind } from "./issues.types.js";
+import type { IssueEventKind, IssueState, IssueStateReason, IssueVerdictKind, RequestedVerdictKind } from "./issues.types.js";
 
 export interface IssueRow {
   readonly created_via: WriteSource | null;
@@ -135,8 +135,17 @@ export interface RecordVerdict {
   readonly userId: string;
   readonly spaceId: string;
   readonly number: number;
-  readonly kind: IssueVerdictKind;
+  readonly kind: RequestedVerdictKind;
   readonly body: string;
+  readonly now: number;
+}
+
+export interface RecordReverted {
+  readonly id: string;
+  readonly userId: string;
+  readonly spaceId: string;
+  readonly number: number;
+  readonly operationId: string;
   readonly now: number;
 }
 
@@ -152,6 +161,8 @@ export interface IssuesRepository {
   createIssue(input: CreateIssue): Promise<IssueDetail>;
   updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
   recordVerdict(input: RecordVerdict): Promise<IssueDetail>;
+  /** Records a `reverted` verdict unless this Operation already did, and reopens the Issue if it is closed. */
+  recordReverted(input: RecordReverted): Promise<void>;
   /** Up to `limit` submitted Issues whose acceptance deadline passed by `now`, in random order. */
   listDueIssues(now: number, limit: number): Promise<DueIssue[]>;
   /** Accepts the Issue by deadline in one transaction if it is still due at `now`, and returns its Space ID. */

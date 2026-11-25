@@ -50,6 +50,7 @@ async function serve(product: ProductDatabase, collaboration: CollaborationDatab
     await startupStageAsync("application.initialize", () => application.initialize());
     jobs.push(startOperationRecovery(application.resources));
     jobs.push(startOperationRecovery(application.copies));
+    jobs.push(startOperationRecovery(application.reverts));
     jobs.push(startBlobMaintenance(application.blobs, {
       drafts: application.htmlViewDrafts,
       skillDrafts: application.skillDrafts,

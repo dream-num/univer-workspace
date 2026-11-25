@@ -217,7 +217,8 @@ Issue:
 
 IssueVerdictKind:
   type: string
-  enum: [submitted, accepted, sent_back]
+  enum: [submitted, accepted, sent_back, reverted]
+  description: "`reverted`: a revert took the Issue's merged pull requests out of Trunk."
 
 IssueAcceptance:
   type: object
@@ -253,7 +254,8 @@ CreateIssueVerdict:
   required: [kind]
   properties:
     kind:
-      $ref: "#/IssueVerdictKind"
+      type: string
+      enum: [submitted, accepted, sent_back]
     body:
       type: string
       maxLength: 65536
@@ -439,6 +441,7 @@ IssueEventKind:
     - submitted
     - accepted
     - sent_back
+    - reverted
 
 IssueTimelineComment:
   type: object
@@ -489,7 +492,7 @@ IssueTimelineEvent:
         `labelId`, `name` and `color`; `assigned` and `unassigned` carry
         `userId`, `username` and `displayName`; `node_referenced` and
         `node_unreferenced` carry `nodeId` and `name`. The verdicts `submitted`,
-        `accepted` and `sent_back` carry `body`.
+        `accepted` and `sent_back` carry `body`, and `reverted` carries an empty `body`.
     createdAt:
       type: string
       format: date-time

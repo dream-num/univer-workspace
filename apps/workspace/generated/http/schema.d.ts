@@ -2337,6 +2337,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/{spaceId}/issues/{number}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Show what reverting every merged pull request linked to an Issue would do.
+         * @description Each Unit returns to its Trunk revision before the first of these merges on it. A Unit is `blocked` when a
+         *     Trunk revision after that merge is not one of the merges, and its `laterEdits` name who wrote them and when.
+         *     A file the merges added goes to Trash, and a file they removed comes back from its Trash batch. A replaced
+         *     page or Blob cannot be reverted and is listed `unavailable`. Whoever may accept the Issue may revert it, and
+         *     needs edit access to every Unit it restores. `refusal` says in plain words why the current User cannot.
+         */
+        get: operations["planIssueRevert"];
+        put?: never;
+        /**
+         * Take every merged pull request linked to an Issue out of Trunk.
+         * @description Starts one `revertWorktrees` Operation that brings removed files back, restores changed Units, then moves added
+         *     files to Trash. A `blocked` Unit is skipped and stays `blocked` unless `force` names it with the `headRevision`
+         *     the plan showed; only a person signed in to the browser may send `force`. If someone edits a Unit after the
+         *     revert reads it, the revert reads the head again and stops that Unit as `blocked` when the edit is not its own.
+         *     When at least one item ends `done`, an Issue revert records a `reverted` verdict and reopens the Issue if it was
+         *     closed. When none does, because every Unit was edited or refused mid-revert, the Operation is `failed` with
+         *     `CONFLICT`, its items say why, and the Issue is left as it was. A replay with the same Idempotency-Key and body
+         *     returns the Operation.
+         *
+         *     In a Team Space whose `landing` is `checks`, an agent that does not own it cannot revert, because a revert
+         *     changes Trunk without a merge: `403 AGENT_NOT_ALLOWED`.
+         */
+        post: operations["revertIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces/{spaceId}/issues/{number}/access-changes": {
         parameters: {
             query?: never;
@@ -2628,6 +2669,34 @@ export interface paths {
          *     not count toward the 50. While a merge runs, `ready` and `reopen` answer `409 CONFLICT`.
          */
         post: operations["mergeWorktree"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/worktrees/{worktreeId}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Show what reverting a merged pull request would do.
+         * @description Lists each file the merge changed, added or removed and what a revert does to it, from server facts only.
+         *     Whoever may merge the pull request may revert it. `refusal` says in plain words why the current User cannot.
+         */
+        get: operations["planWorktreeRevert"];
+        put?: never;
+        /**
+         * Take a merged pull request's changes out of Trunk.
+         * @description Starts one `revertWorktrees` Operation, the same as the Issue revert with this one pull request. A replay with
+         *     the same Idempotency-Key and body returns the Operation.
+         */
+        post: operations["revertWorktree"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4053,7 +4122,7 @@ export interface components {
             target: components["schemas"]["CopyToPersonalSpace"] | components["schemas"]["CopyToWorktree"];
         };
         /** @enum {string} */
-        OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource" | "copyNode";
+        OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource" | "copyNode" | "revertWorktrees";
         /** @enum {string} */
         OperationState: "pending" | "completed" | "failed";
         OperationError: {
@@ -4290,8 +4359,11 @@ export interface components {
             /** @description Requires the triage capability. Nodes must be in the Space and not in Trash. */
             nodeIds?: string[];
         };
-        /** @enum {string} */
-        IssueVerdictKind: "submitted" | "accepted" | "sent_back";
+        /**
+         * @description `reverted`: a revert took the Issue's merged pull requests out of Trunk.
+         * @enum {string}
+         */
+        IssueVerdictKind: "submitted" | "accepted" | "sent_back" | "reverted";
         IssueAcceptance: {
             kind: components["schemas"]["IssueVerdictKind"];
             /** @description Who recorded the verdict; `null` for an `accepted` verdict the Space's acceptance deadline recorded. */
@@ -4367,7 +4439,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        IssueEventKind: "closed" | "reopened" | "renamed" | "labeled" | "unlabeled" | "assigned" | "unassigned" | "node_referenced" | "node_unreferenced" | "submitted" | "accepted" | "sent_back";
+        IssueEventKind: "closed" | "reopened" | "renamed" | "labeled" | "unlabeled" | "assigned" | "unassigned" | "node_referenced" | "node_unreferenced" | "submitted" | "accepted" | "sent_back" | "reverted";
         IssueTimelineEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -4387,7 +4459,7 @@ export interface components {
              *     `labelId`, `name` and `color`; `assigned` and `unassigned` carry
              *     `userId`, `username` and `displayName`; `node_referenced` and
              *     `node_unreferenced` carry `nodeId` and `name`. The verdicts `submitted`,
-             *     `accepted` and `sent_back` carry `body`.
+             *     `accepted` and `sent_back` carry `body`, and `reverted` carries an empty `body`.
              */
             payload: {
                 [key: string]: unknown;
@@ -4413,9 +4485,78 @@ export interface components {
             updatedAt: string;
         };
         CreateIssueVerdict: {
-            kind: components["schemas"]["IssueVerdictKind"];
+            /** @enum {string} */
+            kind: "submitted" | "accepted" | "sent_back";
             /** @description Required and not blank for `submitted` and `sent_back`; optional for `accepted`. */
             body?: string;
+        };
+        /**
+         * @description `restore` returns a Unit the merges changed to the revision before the first of them on it. `trash` moves a file
+         *     or page the merges added to Trash. `recover` restores from Trash a file the merges removed. `none` is a change a
+         *     revert cannot undo, such as a replaced page.
+         * @enum {string}
+         */
+        RevertAction: "restore" | "trash" | "recover" | "none";
+        /**
+         * @description A plan's items are `ready`, `blocked` (Trunk has edits after the merge that are not the merges' own),
+         *     `done` (nothing left to do), `unavailable` (cannot be done, with the reason) or `refused` (the actor may not do
+         *     it). A finished revert's items are `done`, `blocked`, `unavailable` or `failed`.
+         * @enum {string}
+         */
+        RevertItemState: "ready" | "blocked" | "done" | "unavailable" | "refused" | "failed";
+        RevertLaterEdit: {
+            /** @description Who wrote these Trunk revisions; `null` when that User no longer exists. */
+            user: components["schemas"]["PublicUser"] | null;
+            revisions: number;
+            /** Format: date-time */
+            lastEditedAt: string | null;
+        };
+        RevertItem: {
+            action: components["schemas"]["RevertAction"];
+            state: components["schemas"]["RevertItemState"];
+            name: string;
+            nodeId: string | null;
+            unitId: string | null;
+            unitType: components["schemas"]["UnitType"] | null;
+            /** @description For `restore`, the Trunk revision the Unit returns to. */
+            targetRevision: number | null;
+            /** @description For `restore`, Trunk head when the item was read. A force overwrites later edits through it and no further. */
+            headRevision: number | null;
+            /** @description For a `blocked` Unit, who edited it on Trunk after the first merge, other than the merges themselves. */
+            laterEdits: components["schemas"]["RevertLaterEdit"][];
+            /** @description Plain words for why the item is not `ready` or `done`. */
+            reason: string | null;
+        };
+        RevertPlan: {
+            /** @description The merged pull requests the revert takes out of Trunk. */
+            pullRequests: {
+                id: string;
+                number: number | null;
+                title: string;
+            }[];
+            /** @description Back from Trash first, then restored, then moved to Trash, in the order a revert does them. */
+            items: components["schemas"]["RevertItem"][];
+            capabilities: {
+                revert: boolean;
+                /** @description True only for a person signed in to the browser, and only while an item is `blocked`. */
+                force: boolean;
+            };
+            /** @description Why the actor cannot revert, in plain words; `null` when `capabilities.revert` is true. */
+            refusal: string | null;
+        };
+        RevertRequest: {
+            /**
+             * @description Blocked Units to overwrite, each with the `headRevision` its plan showed. Only a person signed in to the browser
+             *     may send it. A Unit edited again after that revision stays `blocked`.
+             */
+            force?: {
+                unitId: string;
+                headRevision: number;
+            }[];
+        };
+        RevertResponse: {
+            operation: components["schemas"]["OperationView"];
+            items: components["schemas"]["RevertItem"][];
         };
         IssueSharedNode: {
             id: string;
@@ -8868,6 +9009,86 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    planIssueRevert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertPlan"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revertIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevertRequest"];
+            };
+        };
+        responses: {
+            /** @description A replay of a finished revert. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertResponse"];
+                };
+            };
+            /** @description The revert finished. Each item says what it did. `operation.state` is `failed` when nothing was reverted. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertResponse"];
+                };
+            };
+            /** @description The revert remains pending and is resumed. */
+            202: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getIssueAccessChanges: {
         parameters: {
             query?: never;
@@ -9451,6 +9672,83 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+        };
+    };
+    planWorktreeRevert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertPlan"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revertWorktree: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevertRequest"];
+            };
+        };
+        responses: {
+            /** @description A replay of a finished revert. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertResponse"];
+                };
+            };
+            /** @description The revert finished. Each item says what it did. `operation.state` is `failed` when nothing was reverted. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertResponse"];
+                };
+            };
+            /** @description The revert remains pending and is resumed. */
+            202: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     discardWorktree: {

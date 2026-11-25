@@ -41,7 +41,7 @@ export function verifyV31Migration(open: (filename: string) => SqliteDatabase): 
       old.close();
       const migrated = open(filename);
       const db = migrated.connection;
-      assert.equal(version(db), 33);
+      assert.equal(version(db), 34);
       assert.deepEqual(snapshot(db), before);
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM worktree_checks").get()?.n, 0);
       assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -68,7 +68,7 @@ export function verifyV31Migration(open: (filename: string) => SqliteDatabase): 
       backup.close();
       const restarted = open(filename);
       assert.deepEqual(snapshot(restarted.connection), before);
-      assert.equal(version(restarted.connection), 33);
+      assert.equal(version(restarted.connection), 34);
       restarted.close();
       assert.equal(backups().length, 1);
     }
@@ -77,7 +77,7 @@ export function verifyV31Migration(open: (filename: string) => SqliteDatabase): 
     broken.exec("PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 2)");
     const before = snapshot(broken);
     broken.close();
-    assert.throws(() => open(filename), /V31 to V33 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V31 to V34 migration failed.*rolled back.*backup/);
     const backup = readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v31-backup-"))!;
     for (const name of ["rollback.sqlite", backup]) {
       const db = new DatabaseSync(join(root, name), { readOnly: true });

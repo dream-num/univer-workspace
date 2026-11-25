@@ -542,10 +542,37 @@ accepts every submitted Issue already past the new deadline at the next check. T
 about once a minute, so an acceptance can come up to a minute after the deadline.
 
 The timeline merges comments, events and verdicts in chronological order. A verdict appears as
-an event whose `kind` is `submitted`, `accepted` or `sent_back` and whose payload holds `body`; an
-acceptance by deadline has a `null` actor. Event payloads are
+an event whose `kind` is `submitted`, `accepted`, `sent_back` or `reverted` and whose payload holds
+`body`; an acceptance by deadline has a `null` actor. Event payloads are
 snapshots (label name and color, user names, file names), so they stay readable after a
 label is deleted or a file is renamed.
+
+## Reverting merged pull requests
+
+`GET /api/worktrees/{worktreeId}/revert` plans a revert of one merged pull request, and
+`GET /api/spaces/{spaceId}/issues/{number}/revert` plans one of every merged pull request linked
+to the Issue. The plan reads only server facts and changes nothing. Each Unit the merges changed
+goes back to its Trunk revision before the first of them on it, as a new revision. A file or
+page the merges added moves to Trash, and a file they removed comes back from its Trash batch. A
+replaced page or file is `unavailable`, because its earlier bytes are deleted. A Unit is
+`blocked` when any Trunk revision after that first merge is not one of the merges, and its
+`laterEdits` name who wrote them, how many and when.
+
+Whoever may merge the pull request, or accept the Issue (`Issue.capabilities.close`), may revert,
+with edit access to every Unit it restores and the Trash capability for every file it moves.
+`refusal` says in plain words why not. In a Team Space whose `landing` is `checks`, an agent that
+does not own it gets `403 AGENT_NOT_ALLOWED`, because a revert changes Trunk without a merge.
+
+`POST` on the same path, with `Idempotency-Key`, starts one `revertWorktrees` Operation. Blocked
+Units stay as they are unless `force` names each with the `headRevision` its plan showed, and only
+a person signed in to the browser may send `force`. A Unit edited after that revision stays
+`blocked`. The revert restores at Trunk head: if someone edits a Unit in between, it reads the
+head again, and stops that Unit as `blocked` when the edit is not its own. An Issue revert that
+reverted at least one item writes a `reverted` verdict and reopens the Issue if it was closed; a
+pull request revert writes no verdict. When no item ends `done`, the Operation is `failed` with
+`CONFLICT` and the Issue stays as it was. The response lists what happened to each item, or answers `202` while the Operation is
+pending, and recovery finishes it. A revert replaces whole Units: comments and history stay, and
+history keeps both the merge and the restore.
 
 ## Collaboration protocol
 

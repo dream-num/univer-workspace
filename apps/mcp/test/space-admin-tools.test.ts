@@ -229,6 +229,20 @@ describe("space, unit, repository admin, label and merge tools", () => {
       return Response.json({ worktree: worktree("merged") });
     }
     if (at("POST", "/api/worktrees/wt-3/discard")) return Response.json({ worktree: worktree("discarded") });
+    const revertItem = {
+      action: "restore", state: "blocked", name: "North", nodeId: "n1", unitId: "u1", unitType: "sheet", targetRevision: 1, headRevision: 4,
+      laterEdits: [{ user: { id: "e", username: "eve", displayName: "Eve", avatarUrl: null }, revisions: 1, lastEditedAt: null }],
+      reason: "Edited on Trunk after this task's merge.",
+    };
+    if (at("GET", "/api/spaces/team-1/issues/7/revert")) {
+      return Response.json({ pullRequests: [{ id: "wt-3", number: 3, title: "Fix" }], items: [revertItem], capabilities: { revert: true, force: false }, refusal: null });
+    }
+    if (at("POST", "/api/spaces/team-1/issues/7/revert")) {
+      return Response.json({ operation: { id: "op-2", state: "failed", error: { code: "CONFLICT", message: "Nothing was reverted." } }, items: [revertItem] }, { status: 201 });
+    }
+    if (at("POST", "/api/worktrees/wt-3/revert")) {
+      return Response.json({ operation: { id: "op-1", state: "completed" }, items: [revertItem, { ...revertItem, action: "trash", state: "done", laterEdits: [], reason: null }] }, { status: 201 });
+    }
     const labels = [
       { id: "l1", name: "bug", color: "red", description: "", openIssueCount: 2 },
       { id: "l2", name: "docs", color: "blue", description: "d", openIssueCount: 0 },
@@ -771,6 +785,29 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(description("pr_discard")).toContain("Unless the user explicitly asked you to discard it");
     expect(description("pr_merge")).toContain("The server instructions say when to merge");
     expect(description("pr_merge")).not.toContain("Unless the user");
+  });
+
+  it("plans an Issue's revert without writing, reverts one pull request without force, and needs exactly one target", async () => {
+    const client = await connect();
+    prState = "merged";
+    const plan = await client.callTool({ name: "pr_revert", arguments: { repo: "bob/team", issue: "7" } });
+    expect(plan.structuredContent).toMatchObject({
+      applied: false, canRevert: true, refusal: null, pullRequests: [{ number: 3 }],
+      items: [{ state: "blocked", laterEdits: [{ user: { username: "eve" }, revisions: 1 }] }],
+    });
+    expect(writesOf()).toEqual([]);
+    const done = await client.callTool({ name: "pr_revert", arguments: { repo: "bob/team", number: 3, apply: true } });
+    expect(done.structuredContent).toMatchObject({ applied: true, operation: { id: "op-1", state: "completed" }, items: [{ state: "blocked" }, { action: "trash", state: "done" }] });
+    expect(writesOf()).toEqual([{ method: "POST", path: "/api/worktrees/wt-3/revert", body: undefined }]);
+    expect(requests.find((request) => request.path === "/api/worktrees/wt-3/revert")?.key).toMatch(/^[0-9a-f-]{36}$/u);
+    const nothing = await client.callTool({ name: "pr_revert", arguments: { repo: "bob/team", issue: "7", apply: true } });
+    expect(nothing.structuredContent).toMatchObject({
+      applied: true, operation: { state: "failed", error: { code: "CONFLICT", message: "Nothing was reverted." } }, items: [{ state: "blocked" }],
+    });
+    for (const target of [{}, { number: "3", issue: "7" }]) {
+      expect(toolError(await client.callTool({ name: "pr_revert", arguments: { repo: "bob/team", ...target } }))).toMatchObject({ code: "workspace-argument-invalid" });
+    }
+    expect(writesOf()).toHaveLength(2);
   });
 
   it("rejects every write, publish and merge tool under read-only scopes before any request", async () => {
