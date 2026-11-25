@@ -271,6 +271,10 @@ if (args[1] === 'export') {
     assert.equal(exportedBy('deepseek/deepseek-flash#high'), '\n');
     assert.equal(exportedBy('deepseek/deepseek-flash#high', { VERIFY_UVW_OPENCODE_CREDENTIAL: 'opencode' }), `${credential}\n`);
     assert.equal(readFileSync(calls, 'utf8').split('\n').filter(line => line.startsWith('auth export opencode')).length, 1);
+    writeFileSync(credential, '');
+    assert.equal(exportedBy('console-deepseek/deepseek-flash#high'), `${credential}\n`);
+    assert.match(readFileSync(credential, 'utf8'), /model-access-secret/);
+    assert.equal(readFileSync(calls, 'utf8').split('\n').filter(line => line.startsWith('auth export opencode')).length, 2);
 
     for (const [label, extra, reason] of [['s-none', {}, ''], ['s-unset', { VERIFY_UVW_STORY_ENV: 'DEEPSEEK_API_KEY MISSING_KEY' }, ', and your shell does not set MISSING_KEY']]) {
       const refused = story('deepseek/deepseek-flash#high', label, extra);

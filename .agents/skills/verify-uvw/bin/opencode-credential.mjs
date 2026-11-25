@@ -16,17 +16,18 @@ export function modelIntegration(model, override) {
   return INTEGRATIONS.find(([pattern]) => pattern.test(provider))?.[1] ?? provider;
 }
 
+const holdsSecret = path => { try { return credentialSecrets(JSON.parse(readFileSync(path, 'utf8'))).length > 0; } catch { return false; } };
+
 /** The integration's stored credential, exported once per run into `home/`; undefined when opencode stores none. */
 export function exportCredential(run, integration) {
   if (!/^[A-Za-z0-9._-]+$/.test(integration)) throw new Error(`invalid opencode integration ${JSON.stringify(integration)}`);
   const credential = join(run, 'home', `opencode-credential-${integration}.json`);
-  if (existsSync(credential)) return credential;
+  // An export cut short leaves a file without a secret, so only a complete one is reused.
+  if (existsSync(credential) && holdsSecret(credential)) return credential;
   const file = openSync(credential, 'w', 0o600);
   const exported = spawnSync('opencode', ['auth', 'export', integration, '--standalone'], { stdio: ['ignore', file, 'ignore'] });
   closeSync(file);
-  let secrets = [];
-  try { secrets = credentialSecrets(JSON.parse(readFileSync(credential, 'utf8'))); } catch {}
-  if (exported.status === 0 && secrets.length) return credential;
+  if (exported.status === 0 && holdsSecret(credential)) return credential;
   rmSync(credential);
 }
 
