@@ -12,7 +12,7 @@ export const expectedTools = {
   'core': [
     'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
     'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
+    'issue_comment', 'issue_set_state', 'issue_verdict', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_check', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
@@ -30,7 +30,7 @@ export const expectedTools = {
   'core,files': [
     'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
     'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
+    'issue_comment', 'issue_set_state', 'issue_verdict', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_check', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
@@ -41,7 +41,7 @@ export const expectedTools = {
   'core,admin': [
     'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
     'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
+    'issue_comment', 'issue_set_state', 'issue_verdict', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_check', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
@@ -58,7 +58,7 @@ export const expectedTools = {
   'all': [
     'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
     'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-    'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
+    'issue_comment', 'issue_set_state', 'issue_verdict', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_check', 'pr_merge', 'search',
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
@@ -72,7 +72,7 @@ export const expectedTools = {
 export const restrictedTools = [
   'whoami', 'repo_list', 'repo_view', 'fork_create', 'fork_list', 'fork_view', 'fork_delete',
   'issue_list', 'issue_view', 'issue_create', 'issue_edit',
-  'issue_comment', 'issue_set_state', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_merge', 'search',
+  'issue_comment', 'issue_set_state', 'issue_verdict', 'pr_list', 'pr_view', 'pr_create', 'pr_edit', 'pr_ready', 'pr_check', 'pr_merge', 'search',
   'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
   'file_upload_create', 'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create',
   'skill_draft_get', 'html_view_styles', 'html_view_read', 'html_view_draft_get', 'blob_get', 'blob_upload',

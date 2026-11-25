@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { expectedTools, restrictedTools } from './mcp-availability.mjs';
+// The gateway tests in apps/mcp prove these lists equal what the gateway serves, so a new tool fails here until the recipes list it.
+import { adminNames, coreNames, filesNames } from '../../../../apps/mcp/test/tool-names.ts';
 
 const helper = fileURLToPath(new URL('./verify-uvw', import.meta.url));
 const compose = fileURLToPath(new URL('../../../../apps/mcp/docker/compose.verify.yml', import.meta.url));
@@ -87,8 +89,16 @@ test('MB expectations cover all combinations and exclude renderer tools', () => 
     assert.equal(new Set(names).size, names.length);
     if (sets !== 'all') assert.deepEqual(names, expectedTools.all.filter(name => sets.split(',').some(set => expectedTools[set].includes(name))));
   }
-  assert.equal(expectedTools.all.length, 66);
-  assert.equal(restrictedTools.length, 53);
+  assert.deepEqual(expectedTools.all, [...coreNames, ...filesNames, ...adminNames].filter(name => !['screenshot', 'print_pdf', 'lint'].includes(name)));
+  assert.equal(restrictedTools.length, 55);
   assert(restrictedTools.every(name => expectedTools.all.includes(name)));
   assert(!restrictedTools.includes('execute'));
+});
+
+test('M7 pins the tool lists the gateway serves', () => {
+  const recipe = readFileSync(new URL('../features/mcp.md', import.meta.url), 'utf8');
+  const pinned = name => JSON.parse(recipe.match(new RegExp(`^${name}='(.+)'$`, 'm'))[1]);
+  assert.deepEqual(pinned('CORE'), coreNames);
+  assert.deepEqual(pinned('FILES'), filesNames);
+  assert.deepEqual(pinned('ADMIN'), adminNames);
 });
