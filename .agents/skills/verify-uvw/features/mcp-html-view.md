@@ -238,6 +238,8 @@ After it, `rm -rf "$RH"`.
 
 ### MHV8. A reader's page publishes when an Editor merges in the browser, and not through the CLI
 
+Run: agent.
+
 A holder H owns a Team Space where the run user O is a Viewer and E is an Editor. Register H and E, and sign
 each one's uvw in from its own home. Keep their passwords and cookies out of `$EVIDENCE`:
 
@@ -324,6 +326,8 @@ page shows `Budget by viewer` and `North: 77`.
 
 ### MHV9. A page someone changed since its draft stays as it was, and the Sheet still merges
 
+Run: agent.
+
 Continue from MHV8. O opens another pull request with B2 `88` and a new version of the page, then H replaces the
 page before the merge:
 
@@ -357,6 +361,8 @@ Pass when the merge succeeds without a published-page toast, Trunk B2 is `88`, t
 and the list, the draft and the `Pages` section of the pull request all read `conflicted` (`Conflicted` in the browser).
 
 ### MHV10. An Editor agent merges its own pull request over MCP, and its page publishes
+
+Run: agent.
 
 Continue from MHV9 with the run browser signed in as O. A claimed agent principal becomes an Editor of H's
 Space. This `principal` counts toward the 5 agents per hour:
@@ -395,6 +401,8 @@ Before `$V down`, close E's browser session and run `uh daemon stop` and `ue dae
 `rm -rf "$HH" "$EH"`.
 
 ### MHV11. A Viewer agent changes a Sheet and its page through a fork, and an Editor merges in the browser
+
+Run: agent.
 
 A holder H owns a public Team Space whose `proposals` setting is `accountable`. A claimed agent A is a Viewer and
 works only through its fork, and E is an Editor. Register H and E and sign their uvw in as in MHV8, then define
@@ -471,6 +479,8 @@ page is the second HTML byte for byte and shows `North: 77`, the draft is `publi
 
 ### MHV12. Through a fork, a page someone changed since its draft stays as it was, and the Sheet merges
 
+Run: agent.
+
 Continue from MHV11. A's fork is clean, so its next write opens a new pull request:
 
 ```bash
@@ -502,6 +512,8 @@ Pass when `mfc-read` is the page MHV11 published, with no `draft`. The merge end
 later bytes, and the list, the draft and the `Pages` section read `conflicted` (`Conflicted` in the browser).
 
 ### MHV13. A non-member agent proposes a page alone through a fork, then a page and its Sheet
+
+Run: agent.
 
 Continue from MHV12. A second claimed agent G is no member of H's Space, which `accountable` opens to it:
 
@@ -554,6 +566,8 @@ second publishes `mfn2-v.univer.html` with Trunk B2 `99`.
 
 ### MHV14. uvw validates a page through a fork and refuses to create a page in one
 
+Run: agent.
+
 O is a person, so `accountable` opens the Space to O too. O forks it with uvw and checks a page against the fork:
 
 ```bash
@@ -568,6 +582,8 @@ Pass when `mfv-clean` samples Trunk's `99`, `mfv-fork-scope` samples `66`, and `
 `workspace-argument-invalid: <O>/check is a fork of <H>/fork-pages. html-view create publishes to a repository's trunk at once, and the CLI saves no page drafts, so it cannot propose a page through a fork. Save the page through the fork with the MCP tool html_view_save and worktree <O>/check.`
 
 ### MHV15. A real model fixes a Sheet and its page through a fork
+
+Run: agent.
 
 A runs one story with a real model. Its fork from MHV11 is clean:
 
@@ -585,6 +601,8 @@ fork's pull request is `ready`, and no `mcp.tool_call` event holds `AGENT_NOT_AL
 `ue daemon stop`. After it, `rm -rf "$HH" "$EH"`.
 
 ### MHV16. An Editor merges only the pages they reviewed
+
+Run: agent.
 
 Continue from MHV8, with or without MHV9 and MHV10. O proposes B2 `55` and a new version of H's page, then marks
 the pull request ready:

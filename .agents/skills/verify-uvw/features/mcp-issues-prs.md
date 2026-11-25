@@ -238,6 +238,8 @@ SDK's plain validation text) and the event records `tool_error` with the same co
 
 ### MI12. Submit an Issue, send it back, then accept it
 
+Run: agent.
+
 The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
 fork pull request linked to the Issue and submits it with `issue_verdict`. O sends it back in the browser with a
 reason, A finds it with `search` and `acceptance` and submits again, and O accepts it in the browser, which closes it
@@ -309,6 +311,8 @@ timeline, A finds the sent-back Issue with `acceptance`, resubmits, and O's brow
 completed with one `issue-closed` activity event.
 
 ### MI13. Judge the whole task in the acceptance panel
+
+Run: agent.
 
 The run user O claims an agent A, makes it an Editor of a Team Space with three Sheets on Trunk, and assigns it an
 Issue. A opens three pull requests linked to the Issue, two that change two Sheets and one that adds a Doc, and merges
@@ -430,6 +434,8 @@ horizontal scroll and its comparison shows both sides' cells, and E's panel says
 claimed it can see this part.` while E's response has `personalSharing: null` and not the Notes Node ID.
 
 ### MI14. Check results in the acceptance panel
+
+Run: agent.
 
 The run user O holds a Team Space with a Sales Sheet on Trunk and declares two checks in `.agents/checks.md`. A claimed
 Editor agent A and a claimed Viewer agent V each open a pull request linked to one Issue, and each reports both checks
@@ -770,6 +776,8 @@ event records `tool_error` with the same code.
 
 ### MP11. Reviewable pull requests
 
+Run: agent.
+
 MP11 and MP12 share one setup. Two claimed agent principals count 2 of the 5 agents per hour. A3 owns a
 repository R with a Budget Sheet on Trunk, makes B3 a Viewer, and assigns B3 an Issue. The run user owns
 `private-x`, which neither agent can see, with a ready pull request shared with its members:
@@ -830,6 +838,8 @@ in `private-x`, and the CLI diff is empty.
 
 ### MP12. Agents find their own work
 
+Run: agent.
+
 Continue from MP11's setup. Each prompt is the fixed sentence below and carries no task:
 
 ```bash
@@ -854,6 +864,8 @@ A3 and the pull request's author is B3, and no event or transcript result holds 
 a model reason, rerun with `--model console-deepseek/deepseek-flash#max` under an `-attempt2` label and report both.
 
 ### MP13. A fork's pull request serves an Issue
+
+Run: agent.
 
 The run user O owns a Team Space and opens an Issue assigned to a claimed agent A, a Viewer there. A works through a
 fork, links the pull request its first write opens with `pr_edit`, and both sides show the link in MCP, uvw and the
@@ -911,7 +923,7 @@ $V principal budget mcp-budget-principal
 A=$(jq -r '.agent.username' "$EVIDENCE/principal-budget.json")
 $V mcp --as budget mcp-budget-before whoami
 jq -e '.budget == {openWorktrees: {used: 0, limit: 10}, merges: {used: 0, limit: 50}}' "$EVIDENCE/mcp-budget-before.out"
-(echo "BEGIN EXCLUSIVE;"; sleep 15; echo "COMMIT;") | sqlite3 "$(dirname "$EVIDENCE")/data/univer-collaboration.sqlite" &
+{ echo "BEGIN EXCLUSIVE;"; sleep 15; echo "COMMIT;"; } | sqlite3 "$(dirname "$EVIDENCE")/data/univer-collaboration.sqlite" &
 sleep 2
 $V mcp --as budget mcp-budget-failed pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task F\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-failed\"}"
 test $? -eq 1
@@ -953,6 +965,8 @@ denial counter for `openWorktree` reads 2, the replay with the tenth key returns
 leaves 9 open and 1 merge in `whoami`, the next creation succeeds, and the run user's `whoami` has no `budget`.
 
 ### MP15. Check results on a pull request
+
+Run: agent.
 
 The run user O holds a Team Space R and declares two checks in `.agents/checks.md` on its Trunk. A claimed agent A, a
 Viewer, proposes a change and reports both checks with `pr_check`. A person E sees them in the browser, marked as not
@@ -1046,6 +1060,8 @@ screenshot marks them out of date, B's results count and both checks read `passe
 report on the merged pull request exits 1 with `CONFLICT`.
 
 ### MP16. Pull requests that delete a file
+
+Run: agent.
 
 The run user O puts two Sheets, `Archive` and `Direct`, on the Trunk of its Personal Space. One pull request deletes
 `Archive` and merges, and uvw and MCP read it before and after O deletes the file permanently. Two open pull requests,

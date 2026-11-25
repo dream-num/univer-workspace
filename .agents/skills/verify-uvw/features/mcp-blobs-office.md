@@ -286,6 +286,8 @@ Pass when both oversized requests receive HTTP 413 through the normalized MCP ro
 
 ### MF10. A Viewer agent replaces a PDF and a PNG through a fork, and an Editor merges in the browser
 
+Run: agent.
+
 A holder H owns a public Team Space whose `proposals` setting is `accountable`, with a PDF, a PNG, a page and a
 Sheet on Trunk. A claimed agent A is a Viewer and works only through its fork, and E is an Editor. Register H and
 E and sign their uvw in as in [MHV8](mcp-html-view.md#mhv8-a-readers-page-publishes-when-an-editor-merges-in-the-browser-and-not-through-the-cli),
@@ -408,6 +410,8 @@ files are A's bytes, the upstream `etag` equals the `etag` of `mff-published`, w
 `clean`.
 
 ### MF11. Through a fork, a file someone replaced since its draft stays as it was, and the Sheet merges
+
+Run: agent.
 
 Continue from MF10. A's fork is clean, so its next write opens a new pull request. A changes B2 and replaces the PDF
 again, and then H replaces the PDF:
