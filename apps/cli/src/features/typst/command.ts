@@ -20,9 +20,7 @@ export function createWorkspaceCompileTypstCommand(
   feature: Pick<WorkspaceCompileTypstFeature, "execute">,
 ): Command {
   const command = new Command("compile-typst")
-    .description(
-      "Deprecated. Compile a Typst bundle and optionally create one staged Workspace Doc. This early experiment remains available for compatibility without ongoing maintenance.",
-    )
+    .description("Deprecated. Compile a Typst bundle and optionally create one staged Workspace Doc")
     .argument("<bundle>", "bundle directory or typst.json path")
     .option("--apply", "create the compiled Doc as a staged Worktree Unit")
     .option("--worktree <id>")

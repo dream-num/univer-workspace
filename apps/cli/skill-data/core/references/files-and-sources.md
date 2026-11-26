@@ -114,9 +114,7 @@ Preview external sprite sheets over HTTP. `file://` blocks cross-file references
 
 ## Typst bundles
 
-**Deprecated.** Workspace Typst compilation was an early experiment. It remains available for compatibility and will receive no further maintenance.
-
-The two-page example in the `doc` Skill (`uvw skills get doc`) shows the ZIP tree and complete manifest. Extract the ZIP and pass its root directory or `typst.json` to the CLI. The manifest lists `"pages": ["01.typ", "02.typ"]` and `"prelude": ["shared.typ"]`. Keep both pages beside the manifest so `#image("assets/mark.png", width: 24pt, height: 12pt)` resolves to the image in the root `assets/` directory. The compiler embeds PNG, JPEG, GIF, WebP, or SVG files as native Doc images.
+For `compile-typst` (deprecated), pass the bundle directory or `typst.json`. See the `doc` Skill for the manifest and image layout.
 
 ```bash
 uvw compile-typst paper/typst.json --out review/doc.js \

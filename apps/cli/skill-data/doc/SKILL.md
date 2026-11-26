@@ -141,32 +141,9 @@ are not hard page breaks.
 
 ## Typst, tables, pagination, and reference fidelity
 
-**Deprecated.** Workspace Typst compilation was an early experiment. It remains available for compatibility and will receive no further maintenance.
+Typst compilation is a deprecated experiment and remains available without ongoing maintenance.
 
-For a two-page bundle with a shared definition and an image, place these entries directly at the ZIP root:
-
-```text
-typst.json
-01.typ
-02.typ
-shared.typ
-assets/
-  mark.png
-```
-
-`typst.json` lists the pages in reading order. The optional `prelude` is an array of file paths applied to each page.
-
-```json
-{
-  "schemaVersion": 1,
-  "targetUnitId": "report",
-  "title": "巡检报告",
-  "pages": ["01.typ", "02.typ"],
-  "prelude": ["shared.typ"]
-}
-```
-
-For example, define `#let project = [巡检报告]` in `shared.typ` and use `#project` in either page. Both page files sit beside `typst.json`, so each can use `#image("assets/mark.png", width: 24pt, height: 12pt)`. Image paths resolve from the page that uses them. Keep image-bearing pages at the bundle root with this compiler.
+In the root `typst.json`, set `schemaVersion` to `1`, choose a local `targetUnitId`, and list `pages` in order (e.g. `["01.typ", "02.typ"]`). Optional fields include `title` and a `prelude` array (e.g. `["shared.typ"]`).
 
 Run `compile-typst` on the Typst bundle in build-only mode for a generated program, diagnostics, and preview PNGs. Then apply the same bundle to the destination Space in the Worktree. Follow the `core` Skill for bundle and output handling.
 
@@ -178,7 +155,9 @@ is not the Workspace content address. On apply, the server allocates and returns
 final Workspace screenshot. The compiler loads only the official bundled
 `@univerjs-pro/doc-typst-native-binding`; do not install or fall back to a system `typst`.
 
-Put shared definitions in the manifest prelude rather than using `#import` or `#include`. Use PNG, JPEG, GIF, WebP, or SVG assets with explicit dimensions, for example 240pt by 120pt. Follow the `core` Skill for bundle image references. The compiler embeds the asset and inserts a
+Put shared definitions in the manifest prelude rather than using `#import` or `#include`. Use PNG, JPEG, GIF, WebP, or SVG assets with explicit dimensions.
+Keep pages that use images beside the root `typst.json` and load images from `assets/` with `#image("assets/mark.png", width: 24pt, height: 12pt)`.
+The compiler embeds the asset and inserts a
 native Doc image with deterministic dimensions; it does not emit a table placeholder. Review any
 warning about mismatched `cover` / `contain` geometry or unavailable alternative-text authoring
 against the direct Typst PNG. A fixed left/right layout must pass every cell as an argument of one
