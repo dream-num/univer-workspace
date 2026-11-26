@@ -92,7 +92,7 @@ describe("MCP core Skill tool bindings", () => {
   it("keeps page sharing guidance in the creator and leaves visibility to the user", async () => {
     const content = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     expect(content).toContain(
-      "A person's connection and an unclaimed agent cannot make a repository public. For public links, give the repository `url` and ask the user to make it public in browser settings. Explain that this publishes everything in it.",
+      "A person's connection cannot make a repository public: give the user its `url` to do so in browser settings, which publishes everything in it. An unclaimed agent cannot either: give the user a claim link from `claim`.",
     );
     expect(content).not.toContain("`repo_edit` to make a repository public");
   });
