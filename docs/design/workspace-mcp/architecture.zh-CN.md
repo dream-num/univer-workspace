@@ -83,7 +83,7 @@ Workspace Server 的现状：
 - 单个 Node 进程承载 HTTP API、协同 OT、WebSocket、快照物化 worker pool、Office 交换和后台任务（`apps/workspace/server/src/main.ts:11-42`、`app.ts`）。
 - 存储是本地 SQLite（WAL）和本地磁盘 BlobStore，挂在一个 Docker 卷上（`apps/workspace/Dockerfile:67`）。
 - 新旧版本不能同时写同一个 SQLite。升级说明要求单副本、`Recreate` 策略（`apps/workspace/README.md:419-447`）。
-- OAuth 授权码、CLI 待批准登录、导出任务、WebSocket 票据都只存在进程内存（`app.ts:372`、`modules/identity/identity.service.ts:193-194`、`modules/exchange/exchange.service.ts:148-150`）。
+- 导出任务、WebSocket 票据都只存在进程内存（`modules/exchange/exchange.service.ts:148-150`）。OAuth 授权码与 CLI 待批准登录在写下本节时也是，产品库 V36 起存在 `sign_in_codes`。
 
 分开部署的理由：
 

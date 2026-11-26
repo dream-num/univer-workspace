@@ -220,7 +220,13 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and a restart keeps it. Each accepted event stores the limit's name, the source bucket (an IPv4 address, an IPv6 `/64`
   prefix, or `unknown`) and the time, and no request content or User. Each counted event deletes the events older than
   one hour.
-- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, per-source rate limit events, and user-authored
+- Product V36 (PostgreSQL product schema version 16) adds the `sign_in_codes` table through a backed-up V35 → V36
+  startup migration that backfills nothing. OAuth authorization codes, consent tokens, agent claim codes and CLI
+  browser authorizations live there, so any replica redeems a code another issued. A row stores the SHA-256 hash of
+  the code and never the code, the User it acts for, its expiry, and for an OAuth code the authorization request; a
+  zero-click guest's request includes the source IP its creation limit counts. An expired row stays until a later
+  code of the same kind deletes it.
+- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, per-source rate limit events, sign-in code hashes, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
 - The Browser Agents module keeps agent session records and model request records, which include document content returned by tools, and
@@ -228,7 +234,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   key the user chooses not to remember. Model requests go from the browser straight to the provider; no Workspace
   endpoint, log, URL, session record, or model request record receives the key. Model request records use a separate
   browser IndexedDB database per Workspace user and redact the provider key before storage.
-- Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
+- Short-lived pending CLI browser authorizations are bounded rows of `sign_in_codes`; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are
   environment or build configuration and must not be committed to the repository.

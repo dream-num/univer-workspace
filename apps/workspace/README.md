@@ -197,8 +197,9 @@ waits or polls. If necessary, the user can first sign in with an Email code, Git
 Google, Discord, or a password and return to the approval page. The CLI receives a separate
 normal `workspace_session`; it never
 receives the browser cookie, Workspace password, or provider access token.
-Pending authorization requests are process-local and intentionally disappear
-on server restart; completed CLI sessions remain normal persisted login sessions.
+The product database holds a pending authorization request as hashes of its two codes, so any server
+replica approves or completes it and a restart keeps it; completed CLI sessions remain normal persisted
+login sessions.
 
 `POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
 
@@ -230,10 +231,10 @@ loopback `http` (`127.0.0.1`, `[::1]` or `localhost`) skips the login page and t
 are enabled. Authorize answers `302` to the client's callback with `code`, `state` and `iss` and sets no
 cookie. The code carries every requested scope and stands for a guest agent named after the client, as
 above. Redeeming it at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is
-never redeemed creates nothing. The pending guest lives in the same process-local, one-minute,
-single-use code as any authorization, so a second redemption creates no second agent, revokes the first
-grant as for any replayed code, and a restart drops an unredeemed code. While 10,000 codes wait
-unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
+never redeemed creates nothing. The pending guest lives in the same one-minute, single-use code as any
+authorization, which the product database holds, so any server replica redeems it, and a second
+redemption on any replica creates no second agent and revokes the first grant as for any replayed code.
+While 10,000 codes wait unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
 no code, and a code a signed-in user approves is never refused this way. The source limit, the metadata
 fetch and their refusals are the guest card's, answered as JSON from authorize. A source that reaches the
 limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
@@ -253,8 +254,8 @@ that do not call Workspace, such as `api_find`. It reads an unclaimed agent from
 
 A person claims an agent to keep its files. The unclaimed agent calls `POST /api/agents/claim-codes`,
 which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (`/claim/<code>` on this
-origin) to the person. The code is held in server memory for ten minutes, so a restart drops it, and it
-claims the agent once. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
+origin) to the person. The code lasts ten minutes and claims the agent once. The product database holds
+its hash, so any server replica accepts it and a restart keeps it. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
 claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
 CLI login and a token session get `403`. On that `403` the page offers Sign out and continue, because a browser
 that took the guest agent card is still signed in as the agent. A guest that got its code with no page leaves the browser signed out. It signs out and shows sign-in on the same page,
@@ -898,3 +899,21 @@ wait for its backup, migration and health checks before restoring service. Back 
 Failed migration rolls back; successful restarts do not repeat migration or backup. V34 code refuses a V35 database, so
 a code rollback needs the backup taken before the upgrade: stop V35 and restore it, which loses what was written since.
 Never run V34 and V35 writers on the same SQLite file.
+
+### Sign-in codes in the product database, and product database V36
+
+OAuth authorization codes, consent tokens, agent claim codes and CLI browser authorizations live in the product
+database table `sign_in_codes`, so a code one replica issues, another redeems, and a restart keeps the codes that
+have not expired. The table stores only the SHA-256 hash of each code. A code is used once on whichever replica
+gets it first, and a replayed MCP authorization code revokes the grant its first redemption issued, as before. The
+lifetimes, the limits and the errors are unchanged, and the limits now count across replicas. Storing a code deletes
+up to 100 expired codes of its kind. Replicas compare a code's expiry with their own clocks, so a clock that runs
+ahead ends a code early by that much.
+
+V35→V36 adds the empty `sign_in_codes` table and its two indexes, and changes no other table and copies no data. On
+PostgreSQL the same step moves `workspace_product_schema` from version 15 to 16. Codes that the old instances held
+in memory end with those instances; a person or agent in the middle of a sign-in starts it again. Stop every old
+instance, start one V36 instance, and wait for its backup, migration and health checks before restoring service.
+Back up PostgreSQL before the upgrade. Failed migration rolls back; successful restarts do not repeat migration or
+backup. V35 code refuses a V36 database, so a code rollback needs the backup taken before the upgrade: stop V36 and
+restore it, which loses what was written since. Never run V35 and V36 writers on the same SQLite file.

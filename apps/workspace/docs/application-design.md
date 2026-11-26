@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V35 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V36 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -43,14 +43,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/sqlite/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/sqlite/migrations` 准备阶段：
 
-- Fresh：创建 V35；
-- V35：校验 Schema 指纹；
-- V34/V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V35；
-- V0：一致性备份后直接迁移到 V35；
+- Fresh：创建 V36；
+- V36：校验 Schema 指纹；
+- V35/V34/V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V36；
+- V0：一致性备份后直接迁移到 V36；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V35 Query。
+Worktree 等业务模块只编译和运行 V36 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -133,7 +133,7 @@ Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多
 启动时以同一个 `config.database` 打开产品库和协同库，再构造应用 Service。协同工厂为 PostgreSQL 建立独立连接池，显式创建四个 SDK 适配器。Core 将 Sheet 块写入 S3，Worktree、History 和 Comment 继续使用 PostgreSQL。SQLite 后端先执行 `prepareCollaborationDatabase`
 （自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3，SDK 1.5.2 增加 Core 和 Worktree v3→v4）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
-Unit 创建事实、迁移副本验证和原子替换。组件版本见 [数据模型](data-model.md)。SQLite 产品数据库先准备到 V35，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Unit 创建事实、迁移副本验证和原子替换。组件版本见 [数据模型](data-model.md)。SQLite 产品数据库先准备到 V36，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -153,10 +153,10 @@ Unit 加入继续使用现有资源权限检查；Link Sharing 变更保留既�
 节点移动和删除不新增主动断连，既有订阅可能继续接收更新，断开后重连会重新鉴权。
 没有新增票据代理、匿名连接登记、轮询、持久化 Session 或数据库迁移。
 
-Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
-保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
-Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
-取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。CLI Session 在有效期过半后被使用时续期为一个完整有效期，
+Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在产品数据库的
+`sign_in_codes` 里保存有容量上限、十分钟过期的待授权请求，只存两个码的哈希，任意副本都能确认和兑换；
+已登录 Browser 确认人类可核对的验证码后，高熵 Device Code 只能兑换一次，并为 CLI 创建独立、持久化的
+`login_sessions` 行。Server 重启不影响未过期的请求和已经签发的 CLI Session。CLI Session 在有效期过半后被使用时续期为一个完整有效期，
 所以持续工作的 CLI 不需要再次 Browser 确认。闲置的 CLI Session 在当前有效期结束时失效，即闲置半个到一个有效期后失效。
 用户修改密码时，Server 在同一个事务里删除该用户会续期的 `agent` Session（CLI、OAuth `session` scope 和 Discord bot-login 签发的），
 发起修改的 Session 除外，并关闭它们的实时连接。Browser Cookie、密码、邮箱验证码、
@@ -178,8 +178,8 @@ Cookie Session 与 token exchange 都经过同一个检查，被封禁的 agent 
 
 认领由 `modules/identity/agent-claims.ts` 负责，是 CLI Device Flow 的反向：未认领 agent 的任意 Session 调用
 `POST /api/agents/claim-codes` 取得认领码，人的浏览器 Session 用 `GET`、`POST /api/agents/claim` 查看和认领。
-认领码只在当前进程内保存，10 分钟有效，过期后再保留 10 分钟以便回答 410，每个 agent 最多 10 个有效码，
-全进程最多 10000 个有效码，已过期的码不占容量。410 与 404 按读取时的时间判断，不依赖其他 agent 取码。
+认领码的哈希存在产品数据库的 `sign_in_codes` 里，任意副本都能查看和认领，10 分钟有效，过期后再保留 10 分钟以便回答 410，
+每个 agent 最多 10 个有效码，所有副本合计最多 10000 个有效码，已过期的码不占容量。410 与 404 按读取时的时间判断，不依赖其他 agent 取码。
 认领码只能用一次，因为认领是一次条件更新：`owner_user_id` 为空且未封禁时才写入主人、
 `claimed_at` 并清空 `expires_at`，两个人同时认领只有一个成功，同一个人重复认领直接返回。人在设置里用
 `GET /api/agents` 列出自己的 agent，用 `POST /api/agents/{agentId}/stop` 停用其中一个，停用就是写 `banned_at`。

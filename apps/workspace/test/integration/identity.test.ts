@@ -219,7 +219,7 @@ describe("identity", () => {
         password: "correct horse battery staple",
       });
       const browserCookie = `${identity.cookieName}=${browserSession.cookieValue}`;
-      const started = identity.startCliAuthorization();
+      const started = await identity.startCliAuthorization();
 
       expect(started).toMatchObject({
         userCode: expect.stringMatching(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/u),
@@ -252,7 +252,7 @@ describe("identity", () => {
       expect(tableCount(database, "login_sessions")).toBe(2);
       await expect(identity.exchangeCliAuthorization(started.deviceCode)).rejects.toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_INVALID" }));
 
-      const expiring = identity.startCliAuthorization();
+      const expiring = await identity.startCliAuthorization();
       currentTime += 10 * 60 * 1000;
       await expect(identity.exchangeCliAuthorization(expiring.deviceCode)).rejects.toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_EXPIRED" }));
     } finally {
@@ -390,7 +390,7 @@ describe("identity", () => {
       expectSessionSource(database.connection, repeated.issuedSession!.cookieValue, "browser");
       expect(tableCount(database, "external_identities")).toBe(1);
       const githubCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
-      const cliLogin = identity.startCliAuthorization();
+      const cliLogin = await identity.startCliAuthorization();
       expect(
         await identity.approveCliAuthorization(githubCookie, cliLogin.userCode)
       ).toMatchObject({ user: { username: "octocat" } });

@@ -46,7 +46,7 @@ interface CimdClient {                                // 抓取并校验后的�
 
 CIMD 客户端不写 `oauth_clients`，不改 schema，不占 `MCP_MAX_REGISTERED_CLIENTS`。
 `oauth_grants.client_id` 直接存 URL；该列没有外键，`issueGrant` 里更新 `oauth_clients.last_used_at` 的语句对 URL 不命中任何行，无害。
-文档缓存在进程内存里。Workspace Server 的授权码本来就存在内存里（`authorizationStore`），是单进程部署，内存缓存不引入新的多实例问题。
+文档缓存在进程内存里。它不是正确性状态：每个副本可以各自重新抓取，所以内存缓存不引入多实例问题。
 
 ### 3.2 `client_id` 语法（草案第 3 节）
 

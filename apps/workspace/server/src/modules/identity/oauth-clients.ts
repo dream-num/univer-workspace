@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AgentCreation, User } from "./identity.types.js";
+import type { AgentCreation } from "./identity.types.js";
 
 const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
@@ -46,7 +46,7 @@ export interface IssuedAuthorization {
  * nobody redeems leaves no agent behind.
  */
 export type AuthorizationSubject =
-  | { readonly kind: "user"; readonly user: User }
+  | { readonly kind: "user"; readonly userId: string }
   | { readonly kind: "guest"; readonly agent: AgentCreation };
 
 export function requireOAuthState(value: unknown): string {

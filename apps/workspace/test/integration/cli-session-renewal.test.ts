@@ -49,7 +49,7 @@ for (const { name, open } of backends) {
         (await identity.getSession(`${identity.cookieName}=${cookieValue}`)).authenticated;
 
       const browser = await identity.registerWithPassword({ username: "renewal-user", displayName: "Renewal User", password: PASSWORD });
-      const started = identity.startCliAuthorization();
+      const started = await identity.startCliAuthorization();
       await identity.approveCliAuthorization(`${identity.cookieName}=${browser.cookieValue}`, started.userCode);
       const approved = await identity.exchangeCliAuthorization(started.deviceCode);
       if (approved.status !== "authorized") throw new Error("Expected an approved CLI session");

@@ -76,7 +76,7 @@ Doc 和 Slide 可以在同一编辑器内读取引用的 Sheet。编辑器在加
 
 ### CLI 登录与 Agent 访问
 
-**CLI 登录。** 默认由用户在浏览器批准登录。`uvw auth login` 创建有效期十分钟的一次性授权请求，输出 `/cli-login` 地址和验证码，将待完成的请求保存到本地后退出。用户可以先用邮箱验证码、GitHub、Google、Discord 或密码登录，再回到授权页核对并批准验证码。随后由 Agent 运行 `uvw auth login --complete` 兑换一次。两条命令都不会等待或轮询。CLI 获得独立的 `workspace_session`，用户的浏览器 Cookie、Workspace 密码和第三方访问令牌都不会交给 CLI。服务器重启会清除待批准的请求，已建立的 CLI 会话会持久保存。
+**CLI 登录。** 默认由用户在浏览器批准登录。`uvw auth login` 创建有效期十分钟的一次性授权请求，输出 `/cli-login` 地址和验证码，将待完成的请求保存到本地后退出。用户可以先用邮箱验证码、GitHub、Google、Discord 或密码登录，再回到授权页核对并批准验证码。随后由 Agent 运行 `uvw auth login --complete` 兑换一次。两条命令都不会等待或轮询。CLI 获得独立的 `workspace_session`，用户的浏览器 Cookie、Workspace 密码和第三方访问令牌都不会交给 CLI。待批准的请求以两个码的哈希存在产品数据库里，任意服务副本都能批准和兑换，服务器重启不会清除它；已建立的 CLI 会话会持久保存。
 
 浏览器 Agents 模块可凭交互式 `workspace_session` Cookie 调用 `POST /api/auth/agent-token`。请求可用 `{ "scopes": ["read"] }`、`{ "scopes": ["read", "write"] }` 或 `{ "scopes": ["read", "publish"] }`，权限顺序不限，不可重复。成功返回 `201`、`{ token, expiresAt, scopes, resource }` 以及 `Cache-Control: no-store`。有效期一小时的 `uvw_at_` 令牌属于第一方 `univer-workspace-agents` 客户端，绑定到 `PUBLIC_ORIGIN` 下的 `/mcp`，该地址必须列入 `MCP_RESOURCE_URLS`。缺少 MCP OAuth 配置或同源资源时返回 `503`，没有 Cookie 返回 `401`，使用令牌兑换的会话返回 `403`，申请了无效权限返回 `400`。
 

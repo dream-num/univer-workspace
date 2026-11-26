@@ -1,8 +1,8 @@
 # Univer Workspace 数据模型
 
 产品库支持 SQLite 和 PostgreSQL，两个后端分别维护 schema 版本和外键约束。
-SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 35`。
-PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 15 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 36`。
+PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 16 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 `DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。Core 使用 `core-s3` V1：快照引用保存在 `snapshots.block_ids`，`sheet_blocks` 记录 Unit 与块 ID，块内容由协同适配器写入 S3。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
@@ -26,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-SQLite 启动入口先将产品数据库准备到 V35，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V36，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
@@ -34,7 +34,7 @@ Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V35，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V36，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -112,7 +112,7 @@ agent 认证成功时 `last_active_at` 写为当前时间；未认领 agent 同�
 页面不顺延。
 
 人认领 agent 时，一次条件更新在 `owner_user_id` 为空且 `banned_at` 为空时写入 `owner_user_id`、
-`claimed_at` 并把 `expires_at` 置空，所以同一个 agent 只能被认领一次。认领码只在进程内存中，不落库。
+`claimed_at` 并把 `expires_at` 置空，所以同一个 agent 只能被认领一次。认领码的哈希存在 [`sign_in_codes`](#sign_in_codes) 里，认领不消耗它。
 主人是该 agent Personal Space 的 Owner，权限从这一列推出，不写 `space_members` 或 `node_grants`。
 
 `banned_at` 由运维命令 `db:ban-agent` 或主人停用该 agent 时写入，已有值不被覆盖，两种来源不加区分。
@@ -869,11 +869,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V35，不备份；
-2. 完整 V35：校验指纹后正常启动，不重复备份；
-3. 完整 V34/V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V35；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V35；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V35；
+1. 不存在或空文件：创建 V36，不备份；
+2. 完整 V36：校验指纹后正常启动，不重复备份；
+3. 完整 V35/V34/V33/V32/V31/V30/V29/V28/V27/V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V36；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V36；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V36；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -1269,3 +1269,46 @@ SQLite 沿用一致性备份、版本化迁移、指纹、外键和完整性校�
 advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回滚，仍为版本 14；服务器不替 PostgreSQL 创建备份。升级前停旧实例，
 启动单个 V35 实例完成迁移，再恢复服务。重启不重复迁移或备份。V34 的代码拒绝打开 V35 数据库，代码回退必须先停 V35，再恢复
 升级前的备份；备份之后写入的数据会丢失。禁止新旧进程同时写同一库。离线 SQLite → PostgreSQL 迁移原样复制这张表。
+
+## 一次性登录码（V36）
+
+### `sign_in_codes`
+
+登录流程里只用一次的码。四种码共用这张表，因为它们的形状相同：一个只存哈希的码、一个过期时间、一次性的使用状态和按种类的容量。
+`kind` 区分四种：`oauth_code`（OAuth authorization code，60 秒，包括 zero-click guest 的码）、`consent`（同意页的 consent token，
+5 分钟）、`claim`（agent 认领码，10 分钟）和 `cli`（CLI 浏览器授权，10 分钟）。从 V36 起这些码不再存在进程内存里，一个副本签发的码
+任意副本都能兑换，重启不丢未过期的码。
+
+| 列 | 含义 |
+| --- | --- |
+| `kind`、`code_hash` | 主键。`code_hash` 是码的 SHA-256（base64url），与 Session token 的哈希方式相同。表里没有任何码的原文。 |
+| `user_code_hash` | 仅 `cli`：人在浏览器里输入的验证码的哈希，唯一。`code_hash` 是 CLI 持有的 Device Code 的哈希。 |
+| `subject_user_id` | 码代表的 User。`claim` 是 agent；`consent` 是打开同意页的人；`cli` 在批准前为空，批准后是批准的人；`oauth_code` 是签发时登录的人，zero-click guest 的码在兑换创建 agent 后写入。 |
+| `payload_json` | `oauth_code` 存 code challenge、redirect URI、client id、scope、resource 和 subject，guest 的 subject 含 client 名称与创建限速所用的来源 IP；`consent` 存授权请求，不含 client 记录，因为 static client 带 secret；`claim` 与 `cli` 为 `{}`。 |
+| `state` | `pending`、`consumed` 或 `replayed`，只有 MCP 的 `oauth_code` 离开 `pending`。 |
+| `grant_id` | 仅 `oauth_code`：兑换签发的 `oauth_grants` 行。 |
+| `created_at`、`expires_at` | 毫秒时间戳。 |
+
+不建外键。每种码只用一次，由一条语句决定谁成功，所以两个副本同时处理同一个码时只有一方成功：
+
+- MCP 客户端兑换 `oauth_code` 时，一条条件 `UPDATE ... RETURNING` 把 `pending` 改为 `consumed`，此后每次兑换把它改为 `replayed`。
+  成功的一方签发 grant 后写入 `subject_user_id` 与 `grant_id`。重放的一方读到 grant 就撤销它；grant 还没写入时，成功的一方写入时
+  看到 `replayed`，自己撤销。行保留到码过期，作为重放记录。校验不通过或创建 agent 被限速的兑换删除该行，不留重放记录。
+- static client 兑换 `oauth_code`、提交 `consent`、CLI 兑换 `cli` 时，`DELETE` 删到行的一方成功。
+- 批准 `cli` 是一条条件更新，`subject_user_id` 为空或已是批准人时才写入，所以第二个人批准得到 409。
+- 认领不消耗 `claim`：认领是 `agents` 上的条件更新，同一个人可以用同一个码重复打开页面。
+
+写入一个码时在一个事务里依次：删除本种类至多 100 个已过期的行（`claim` 过期后多留 10 分钟，用于回答 410）；`claim` 删除该 agent
+最旧的码，使它的有效码不超过 10 个；guest 的 `oauth_code`、`claim` 与 `cli` 在本种类未过期的 `pending` 行达到 10000 时拒绝；
+最后插入。SQLite 用 `BEGIN IMMEDIATE`；PostgreSQL 用可串行化事务，冲突的一方重放后数到对方的行，删除过期行在事务之外。
+所以每种上限在所有副本间只有一份。没有后台清理：过期的行等同种类的下一次写入删除。`sign_in_codes_expiry (kind, expires_at, state)`
+支持容量计数与删除，`sign_in_codes_subject (kind, subject_user_id, expires_at)` 支持每个 agent 的上限。
+
+过期按处理请求的副本自己的时钟判断，与 `source_rate_events` 相同。副本的时钟快多少，码在这个副本上就早多少失效，慢多少就多活多少。
+
+SQLite V35→V36 与 PostgreSQL 版本 15→16 只新增这张空表和两个索引，不复制数据、不建外键、不重建任何表，其它行、对象身份及恢复状态
+保持原样。旧实例内存里的码随旧实例结束，进行到一半的登录需要重新开始。SQLite 沿用一致性备份、版本化迁移、指纹、外键和完整性校验，
+失败事务回滚至 V35，备份保留，启动失败。PostgreSQL 在启动的 advisory-lock 事务里建表并写入版本 16 和新指纹，失败整体回滚，仍为
+版本 15；服务器不替 PostgreSQL 创建备份。升级前停旧实例，启动单个 V36 实例完成迁移，再恢复服务。重启不重复迁移或备份。V35 的代码
+拒绝打开 V36 数据库，代码回退必须先停 V36，再恢复升级前的备份；备份之后写入的数据会丢失。禁止新旧进程同时写同一库。离线
+SQLite → PostgreSQL 迁移原样复制这张表。

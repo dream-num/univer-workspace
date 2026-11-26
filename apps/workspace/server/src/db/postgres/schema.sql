@@ -968,3 +968,20 @@ CREATE INDEX source_rate_events_source
   ON source_rate_events(action, source, created_at);
 CREATE INDEX source_rate_events_expiry
   ON source_rate_events(created_at);
+
+CREATE TABLE sign_in_codes (
+  kind TEXT NOT NULL CHECK (kind IN ('oauth_code', 'consent', 'claim', 'cli')),
+  code_hash TEXT NOT NULL,
+  user_code_hash TEXT UNIQUE,
+  subject_user_id TEXT,
+  payload_json TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'consumed', 'replayed')),
+  grant_id TEXT,
+  created_at BIGINT NOT NULL,
+  expires_at BIGINT NOT NULL,
+  PRIMARY KEY (kind, code_hash)
+);
+CREATE INDEX sign_in_codes_expiry
+  ON sign_in_codes(kind, expires_at, state);
+CREATE INDEX sign_in_codes_subject
+  ON sign_in_codes(kind, subject_user_id, expires_at);

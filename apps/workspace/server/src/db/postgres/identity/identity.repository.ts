@@ -16,8 +16,13 @@ import type {
   IdentityConflict,
   IdentityRepository,
   NamedUser,
+  NewSignInCode,
+  SignInCode,
+  SignInCodeKind,
+  SignInCodeLimits,
   StoredAgent,
 } from "../../../modules/identity/identity.repository.js";
+import { signInCodeSql, toSignInCode } from "../../sign-in-codes.js";
 
 export class PostgresIdentityRepository implements IdentityRepository {
   constructor(private readonly _database: PostgresDatabase) {}
@@ -711,6 +716,44 @@ export class PostgresIdentityRepository implements IdentityRepository {
       .prepare("SELECT COUNT(*) AS count FROM source_rate_events WHERE action = ?::text AND source = ?::text AND created_at > ?")
       .get(action, source, since);
     return Number(row?.count ?? 0);
+  }
+
+  async putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<"stored" | "full" | "duplicate"> {
+    // Outside the transaction, as in takeSourceEvent: puts that prune the same rows wait on each other.
+    await this._database.prepare(signInCodeSql.prune).run(code.kind, limits.expiredBefore);
+    // Serializable isolation commits only one of two concurrent puts that both saw room; the other replays and counts it.
+    return this._database.transaction(async (database) => {
+      if (limits.perSubject !== undefined) {
+        await database.prepare(signInCodeSql.evictOldestOfSubject).run(code.kind, code.subjectUserId, code.createdAt, limits.perSubject - 1);
+      }
+      if (limits.capacity !== undefined) {
+        const row = await database.prepare(signInCodeSql.countPending).get(code.kind, code.createdAt);
+        if (Number(row?.count ?? 0) >= limits.capacity) return "full";
+      }
+      const inserted = await database.prepare(signInCodeSql.insert)
+        .run(code.kind, code.codeHash, code.userCodeHash, code.subjectUserId, code.payload, code.createdAt, code.expiresAt);
+      return inserted.changes > 0 ? "stored" : "duplicate";
+    });
+  }
+
+  async findSignInCode(kind: SignInCodeKind, hash: string, by?: "user_code_hash"): Promise<SignInCode | null> {
+    return toSignInCode(await this._database.prepare(by ? signInCodeSql.findByUserCode : signInCodeSql.find).get(kind, hash));
+  }
+
+  async deleteSignInCode(kind: SignInCodeKind, codeHash: string): Promise<boolean> {
+    return (await this._database.prepare(signInCodeSql.delete).run(kind, codeHash)).changes > 0;
+  }
+
+  async redeemSignInCode(kind: SignInCodeKind, codeHash: string, now: number): Promise<SignInCode | null> {
+    return toSignInCode(await this._database.prepare(signInCodeSql.redeem).get(kind, codeHash, now));
+  }
+
+  async recordSignInGrant(codeHash: string, userId: string, grantId: string): Promise<boolean> {
+    return (await this._database.prepare(signInCodeSql.recordGrant).get(userId, grantId, codeHash))?.state === "replayed";
+  }
+
+  async approveSignInCode(codeHash: string, userId: string): Promise<boolean> {
+    return (await this._database.prepare(signInCodeSql.approve).run(userId, codeHash)).changes > 0;
   }
 
   async updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User> {

@@ -88,6 +88,37 @@ export interface ExecutorAccessEntry extends NamedUser {
   readonly grantedAt: number;
 }
 
+export type SignInCodeKind = "oauth_code" | "consent" | "claim" | "cli";
+
+/** A `sign_in_codes` row. `codeHash` is `hashSessionSecret` of the code. The code itself is never stored. */
+export interface SignInCode {
+  readonly kind: SignInCodeKind;
+  readonly codeHash: string;
+  /** `cli` only: the hash of the code a person types in the browser. */
+  readonly userCodeHash: string | null;
+  /** The User the code acts for, once known. */
+  readonly subjectUserId: string | null;
+  readonly payload: string;
+  readonly state: "pending" | "consumed" | "replayed";
+  /** `oauth_code` only: the grant its redemption issued. */
+  readonly grantId: string | null;
+  readonly createdAt: number;
+  readonly expiresAt: number;
+}
+
+export type NewSignInCode = Pick<SignInCode, "kind" | "codeHash" | "userCodeHash" | "subjectUserId" | "payload" | "createdAt" | "expiresAt">;
+
+export interface SignInCodeLimits {
+  /** Codes of the kind that expired at or before this are deleted first, at most `SIGN_IN_CODE_PRUNE_BATCH` per call. */
+  readonly expiredBefore: number;
+  /** Refuse while this many pending, unexpired codes of the kind exist. */
+  readonly capacity?: number;
+  /** Leave room for the new code among this many unexpired codes of its subject, deleting the oldest. */
+  readonly perSubject?: number;
+}
+
+export const SIGN_IN_CODE_PRUNE_BATCH = 100;
+
 export interface IdentityRepository {
   isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean>;
   /** The User whose ID and the User whose username equal `target` ignoring ASCII case; the same User when both match. */
@@ -195,6 +226,23 @@ export interface IdentityRepository {
     readonly createdAt: number;
   }, since: number, limit: number): Promise<boolean>;
   countSourceEvents(action: string, source: string, since: number): Promise<number>;
+  /**
+   * Stores a pending sign-in code after applying `limits`, or answers "full" at capacity and "duplicate" when one
+   * of its hashes is taken. The count and the insert are one atomic decision across replicas.
+   */
+  putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<"stored" | "full" | "duplicate">;
+  findSignInCode(kind: SignInCodeKind, hash: string, by?: "user_code_hash"): Promise<SignInCode | null>;
+  /** Of concurrent callers, exactly one deletes the code and gets true. */
+  deleteSignInCode(kind: SignInCodeKind, codeHash: string): Promise<boolean>;
+  /**
+   * Moves a pending code to `consumed` for its first caller, and a redeemed code to `replayed` for every later
+   * caller until it expires. Returns the code after the move, so exactly one of concurrent callers sees `consumed`.
+   */
+  redeemSignInCode(kind: SignInCodeKind, codeHash: string, now: number): Promise<SignInCode | null>;
+  /** Records the grant a redeemed `oauth_code` issued, and returns whether the code was replayed meanwhile. */
+  recordSignInGrant(codeHash: string, userId: string, grantId: string): Promise<boolean>;
+  /** Makes the User the subject of a `cli` code. False when another User already is, or the code is gone. */
+  approveSignInCode(codeHash: string, userId: string): Promise<boolean>;
   /** Updates supplied fields only. A provider may fill fields only while their observed values still match. */
   updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User>;
   renewSession(sessionId: string, expiresAt: number): Promise<void>;

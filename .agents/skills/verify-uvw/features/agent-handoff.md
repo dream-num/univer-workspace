@@ -227,7 +227,8 @@ bot1's `pr_ready` and `pr_merge` merge its pull request.
 - The claim code is a one-time credential. Evidence files from `mcp ... claim` and `uvw claim` contain it
   in plain text. After use, run `$V secret-check`: it fails on each `/claim/<code>` and prints the `perl` command
   that replaces the codes.
-- Claim codes live in server memory: a restart drops them. Each `claim` mints a new one; `share` never does.
+- The product database holds claim codes as hashes, so a restart keeps them and any server replica accepts them. Each
+  `claim` mints a new one; `share` never does.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
 - The MCP tool lists change on the first request after the claim: unclaimed agents have `claim`, claimed agents
   do not. See [MH1 and MH2](#mh1-unclaimed-agent).

@@ -3,16 +3,12 @@ import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityRepository, StoredAgent } from "./identity.repository.js";
 import type { IdentityModule } from "./identity.service.js";
 import type { AgentClaimCode, AgentView, User } from "./identity.types.js";
+import { hashSessionSecret } from "./session-token.js";
 
 const CLAIM_CODE_TTL_MS = 10 * 60 * 1000;
 const EXPIRED_CODE_ANSWERED_FOR_MS = CLAIM_CODE_TTL_MS;
 const CLAIM_CODES_PER_AGENT = 10;
 const CLAIM_CODE_CAPACITY = 10_000;
-
-interface PendingClaim {
-  readonly agentUserId: string;
-  readonly expiresAt: number;
-}
 
 export interface AgentClaims {
   createCode(cookieHeader: string | undefined): Promise<AgentClaimCode>;
@@ -24,33 +20,12 @@ export interface AgentClaims {
 
 export function createAgentClaims(options: {
   readonly identity: Pick<IdentityModule, "requireSession" | "requireInteractiveSession">;
-  readonly repository: Pick<IdentityRepository, "findAgents" | "claimAgent" | "banClaimedAgent">;
+  readonly repository: Pick<IdentityRepository, "findAgents" | "claimAgent" | "banClaimedAgent" | "putSignInCode" | "findSignInCode">;
   readonly onAgentStopped: (agentUserId: string) => void;
   readonly now?: () => number;
 }): AgentClaims {
   const { identity, repository } = options;
   const now = options.now ?? (() => Date.now());
-  const pending = new Map<string, PendingClaim>();
-
-  function sweep(agentUserId: string): number {
-    const at = now();
-    let oldest: string | undefined;
-    let mine = 0;
-    let live = 0;
-    for (const [code, claim] of pending) {
-      if (claim.expiresAt + EXPIRED_CODE_ANSWERED_FOR_MS <= at) pending.delete(code);
-      else if (claim.expiresAt > at) {
-        live += 1;
-        if (claim.agentUserId === agentUserId) {
-          oldest ??= code;
-          mine += 1;
-        }
-      }
-    }
-    if (oldest === undefined || mine < CLAIM_CODES_PER_AGENT) return live;
-    pending.delete(oldest);
-    return live - 1;
-  }
 
   async function requireHuman(cookieHeader: string | undefined): Promise<User> {
     const { user, writeSource } = await identity.requireInteractiveSession(cookieHeader);
@@ -64,13 +39,13 @@ export function createAgentClaims(options: {
   }
 
   async function claimable(code: unknown, humanId: string): Promise<{ readonly agent: StoredAgent; readonly claimed: boolean }> {
-    const claim = typeof code === "string" ? pending.get(code) : undefined;
+    const claim = typeof code === "string" ? await repository.findSignInCode("claim", hashSessionSecret(code)) : null;
     const at = now();
     if (!claim || claim.expiresAt + EXPIRED_CODE_ANSWERED_FOR_MS <= at) throw invalidCode();
     if (claim.expiresAt <= at) {
       throw new ApplicationError("AGENT_CLAIM_EXPIRED", 410, "This claim link has expired. Ask the agent for a new one.");
     }
-    const [agent] = await repository.findAgents({ userId: claim.agentUserId });
+    const [agent] = await repository.findAgents({ userId: claim.subjectUserId! });
     if (agent?.ownerUserId === humanId) return { agent, claimed: true };
     if (!agent || agent.banned) throw invalidCode();
     if (agent.ownerUserId !== null) throw alreadyClaimed();
@@ -84,11 +59,15 @@ export function createAgentClaims(options: {
         throw new ApplicationError("FORBIDDEN", 403, "Only an agent can ask to be claimed.");
       }
       if (user.claimed) throw alreadyClaimed();
-      if (sweep(user.id) >= CLAIM_CODE_CAPACITY) {
+      const at = now();
+      const code = randomBytes(16).toString("base64url");
+      const stored = await repository.putSignInCode(
+        { kind: "claim", codeHash: hashSessionSecret(code), userCodeHash: null, subjectUserId: user.id, payload: "{}", createdAt: at, expiresAt: at + CLAIM_CODE_TTL_MS },
+        { expiredBefore: at - EXPIRED_CODE_ANSWERED_FOR_MS, perSubject: CLAIM_CODES_PER_AGENT, capacity: CLAIM_CODE_CAPACITY },
+      );
+      if (stored !== "stored") {
         throw new ApplicationError("AGENT_CLAIM_UNAVAILABLE", 503, "Claim links are temporarily unavailable. Try again shortly.");
       }
-      const code = randomBytes(16).toString("base64url");
-      pending.set(code, { agentUserId: user.id, expiresAt: now() + CLAIM_CODE_TTL_MS });
       return { code, claimUrl: `/claim/${code}`, expiresIn: CLAIM_CODE_TTL_MS / 1000 };
     },
 

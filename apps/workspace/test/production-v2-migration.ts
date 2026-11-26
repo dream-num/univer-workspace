@@ -106,7 +106,7 @@ try {
     const version = migrated.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 35);
+    assert.equal(version.user_version, 36);
     const deletion = migrated.connection
       .prepare("SELECT reason FROM object_deletion_jobs")
       .get() as { readonly reason: string };
