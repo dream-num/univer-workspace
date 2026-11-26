@@ -141,9 +141,32 @@ are not hard page breaks.
 
 ## Typst, tables, pagination, and reference fidelity
 
-For a formal document authored from Typst, use a lightweight Typst Source Bundle instead of copying generated Facade JavaScript. The bundle contains a manifest with schema version 1, a compiler target Unit ID, ordered page sources, an optional prelude, and optional assets. Follow the `core` Skill for bundle structure and source handling.
+**Deprecated.** Workspace Typst compilation was an early experiment. It remains available for compatibility and will receive no further maintenance.
 
-It may also declare `title` and `prelude`. Compile once for review, then apply the same result:
+For a two-page bundle with a shared definition and an image, place these entries directly at the ZIP root:
+
+```text
+typst.json
+01.typ
+02.typ
+shared.typ
+assets/
+  mark.png
+```
+
+`typst.json` lists the pages in reading order. The optional `prelude` is an array of file paths applied to each page.
+
+```json
+{
+  "schemaVersion": 1,
+  "targetUnitId": "report",
+  "title": "巡检报告",
+  "pages": ["01.typ", "02.typ"],
+  "prelude": ["shared.typ"]
+}
+```
+
+For example, define `#let project = [巡检报告]` in `shared.typ` and use `#project` in either page. Both page files sit beside `typst.json`, so each can use `#image("assets/mark.png", width: 24pt, height: 12pt)`. Image paths resolve from the page that uses them. Keep image-bearing pages at the bundle root with this compiler.
 
 Run `compile-typst` on the Typst bundle in build-only mode for a generated program, diagnostics, and preview PNGs. Then apply the same bundle to the destination Space in the Worktree. Follow the `core` Skill for bundle and output handling.
 

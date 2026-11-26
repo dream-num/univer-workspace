@@ -39,7 +39,7 @@ Other Skills name operations without `uvw`. Each is the `uvw` command of the sam
 
 For Sheet `read`, the shared content modes map to CLI options. Omit content flags for `both`, use `--values` for `display`, `--formulas` for `formula`, `--styles` for `style`, and `--formulas --styles` for `formula+style`. Request typed stored values with `--json`. For `find`, repeat `--sheet <name>` for multiple sheets.
 
-For local inputs, output paths, structured JSON, overwrite controls, browser setup, and file-backed sources, read [CLI files and sources](references/files-and-sources.md). It covers Office exchange, screenshots and PDFs, Slide SVG assets and resources, Typst bundles, Markdown maps and assets, Blob transfer, and HTML View sources.
+For local inputs, output paths, structured JSON, overwrite controls, browser setup, and file-backed sources, read [CLI files and sources](references/files-and-sources.md). It covers Office exchange, screenshots and PDFs, Slide SVG assets and resources, deprecated Typst bundles, Markdown maps and assets, Blob transfer, and HTML View sources.
 
 ## SVG resources
 
