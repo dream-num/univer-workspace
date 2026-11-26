@@ -600,15 +600,18 @@ describe("gateway authentication", () => {
       behavior.exchangeBody = { error: "invalid_grant" };
     }
     const responses = failures.map(() => gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} }));
+    // The calls reach Workspace in any order, so each released failure answers whichever call arrived in that place.
+    const open = new Set(responses.keys());
+    const nextAnswer = async () => open.delete(await Promise.race([...open].map((i) => responses[i]!.then(() => i))));
     try {
       await allStarted.promise;
       failures[0]!.resolve();
       await exchangeStarted.promise;
       exchangeGate.resolve();
-      await responses[0];
+      await nextAnswer();
       for (let i = 1; i < failures.length; i += 1) {
         failures[i]!.resolve();
-        await responses[i];
+        await nextAnswer();
       }
       for (const response of await Promise.all(responses)) {
         expect(response.status).toBe(401);
