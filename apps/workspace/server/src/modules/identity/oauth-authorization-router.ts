@@ -64,7 +64,7 @@ export function createOAuthAuthorizationRouter(options: {
   readonly secureCookies: boolean;
   readonly oauthClients: OAuthClientConfig | null;
   readonly codes: SignInCodeStore;
-  readonly agents: Pick<IdentityRepository, "claimAgent" | "findAgents">;
+  readonly agents: Pick<IdentityRepository, "findAgents">;
   readonly guestAuthorizationCapacity?: number | undefined;
   readonly mcpOAuth?: McpOAuthConfig | null;
   readonly resolveClientMetadata: ResolveClientMetadata;
@@ -472,13 +472,9 @@ export function createOAuthAuthorizationRouter(options: {
   }
 
   async function createAgent(subject: Exclude<AuthorizationSubject, { readonly kind: "user" }>): Promise<User> {
+    if (subject.kind === "owned_agent") return (await options.identity.createAgent({ ...subject.agent, ownerUserId: subject.ownerUserId })).user;
     const { user } = await options.identity.createAgent(subject.agent);
-    if (subject.kind === "guest") {
-      recordLoopEvent("workspace.guest_agent", { entry: "auth_token" }, { user_id: user.id });
-    } else if (!(await options.agents.claimAgent(user.id, subject.ownerUserId, Date.now()))) {
-      // Only a ban or a claim between the two writes gets here; the agent is left as an unclaimed guest with no grant.
-      throw new Error("A new agent could not be claimed for the person who chose it.");
-    }
+    recordLoopEvent("workspace.guest_agent", { entry: "auth_token" }, { user_id: user.id });
     return user;
   }
 

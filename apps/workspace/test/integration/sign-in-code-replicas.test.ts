@@ -168,6 +168,8 @@ for (const { name, storage } of backends) {
         FROM agents a JOIN spaces s ON s.owner_user_id = a.user_id WHERE a.user_id = '${id}'`);
       expect(await state(owned)).toEqual(await state(guest.id));
       expect(await state(owned)).toEqual([expect.objectContaining({ space_type: "personal", expires_at: null, banned_at: null })]);
+      expect(await rows(`SELECT CASE WHEN claimed_at = created_at THEN 'yes' ELSE 'no' END AS born_owned FROM agents WHERE user_id = '${owned}'`), "the agent row is written owned in one write")
+        .toEqual([{ born_owned: "yes" }]);
       const listed = (await (await send(a, "GET", "/api/agents", undefined, cookie)).json()) as { agents: { id: string; stopped: boolean }[] };
       expect(listed.agents.map((agent) => agent.id).sort()).toEqual([owned, guest.id].sort());
     });

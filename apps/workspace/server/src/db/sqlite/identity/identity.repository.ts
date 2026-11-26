@@ -7,6 +7,7 @@ import type {
   StoredPrincipal,
   StoredSession,
   StoredCredential,
+  NewAgentAccount,
   NewPasswordUser,
   NewEmailUser,
   StoredEmailLoginCode,
@@ -240,7 +241,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly originLabel: string;
     readonly createdAt: number;
-    readonly expiresAt: number;
+    readonly account: NewAgentAccount;
   }): Promise<void> {
     this._database.transaction((database) => {
       database
@@ -270,18 +271,21 @@ export class SqliteIdentityRepository implements IdentityRepository {
           input.createdAt,
           input.createdAt
         );
+      const { account } = input;
       database
         .prepare(
           `INSERT INTO agents
-            (user_id, origin_label, created_at, last_active_at, expires_at)
-           VALUES (?, ?, ?, ?, ?)`
+            (user_id, owner_user_id, claimed_at, origin_label, created_at, last_active_at, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.user.id,
+          account.kind === "owned" ? account.ownerUserId : null,
+          account.kind === "owned" ? input.createdAt : null,
           input.originLabel,
           input.createdAt,
           input.createdAt,
-          input.expiresAt
+          account.kind === "temporary" ? account.expiresAt : null
         );
     });
   }

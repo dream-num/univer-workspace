@@ -20,6 +20,7 @@ import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
 import type {
   IdentityRepository,
+  NewAgentAccount,
   SignInCodePut,
   StoredSession,
 } from "./identity.repository.js";
@@ -626,7 +627,9 @@ export function createIdentityModule(options: {
       const clientName = explicitLabel ? undefined : agentClientLabel(input.clientName) || undefined;
       const label = explicitLabel || clientName || DEFAULT_AGENT_LABEL;
       const createdAt = now();
-      const expiresAt = createdAt + AGENT_TTL_MS;
+      const account: NewAgentAccount = input.ownerUserId === undefined
+        ? { kind: "temporary", expiresAt: createdAt + AGENT_TTL_MS }
+        : { kind: "owned", ownerUserId: input.ownerUserId };
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const username = agentUsername(label);
         const user: User = {
@@ -645,13 +648,13 @@ export function createIdentityModule(options: {
             },
             originLabel: label,
             createdAt,
-            expiresAt,
+            account,
           });
         } catch (error) {
           if (await repository.isIdentityConflict(error, "username")) continue;
           throw error;
         }
-        return { user, expiresAt };
+        return { user, expiresAt: account.kind === "temporary" ? account.expiresAt : null };
       }
       throw new ApplicationError(
         "CONFLICT",

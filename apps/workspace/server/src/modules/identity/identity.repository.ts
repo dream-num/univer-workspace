@@ -86,6 +86,11 @@ export interface StoredAgent {
   readonly files: number;
 }
 
+/** The two legal states of an `agents` row's account: the CHECK ties `owner_user_id` and `claimed_at` together. */
+export type NewAgentAccount =
+  | { readonly kind: "temporary"; readonly expiresAt: number }
+  | { readonly kind: "owned"; readonly ownerUserId: string };
+
 export interface ExecutorAccessEntry extends NamedUser {
   readonly grantedAt: number;
 }
@@ -163,7 +168,7 @@ export interface IdentityRepository {
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly originLabel: string;
     readonly createdAt: number;
-    readonly expiresAt: number;
+    readonly account: NewAgentAccount;
   }): Promise<void>;
   findExternalIdentity(
     provider: ExternalIdentityProvider,
