@@ -149,6 +149,30 @@ it.each([
   }
 });
 
+it.each([
+  ["en-US", "Loading page…"],
+  ["zh-CN", "正在加载页面…"],
+])("covers the frame with a %s loading state until the view reports its Sheets loaded", async (language, message) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const status = () => [...container.querySelectorAll('[role="status"]')].map((element) => element.textContent);
+  try {
+    await act(async () => root.render(createElement(LanguageProvider, null,
+      createElement(HtmlView, { source: "<p>Page</p>", immersive: true, actionsContainer: null }))));
+    expect(status()).toContain(message);
+    const props: ComponentProps<typeof WorkspaceHtmlViewer> = mocks.render.mock.lastCall![0];
+    await act(async () => props.onLoadingChanged?.(false));
+    expect(status()).not.toContain(message);
+    await act(async () => props.onLoadingChanged?.(true));
+    expect(status()).toContain(message);
+    await act(async () => props.onError?.("Handshake timed out."));
+    expect(status()).not.toContain(message);
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
 it("preserves other source loading errors", async () => {
   const failure = new Error("Resource access was revoked.");
   mocks.GET.mockRejectedValueOnce(failure);
