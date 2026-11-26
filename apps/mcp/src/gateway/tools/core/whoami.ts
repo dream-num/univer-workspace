@@ -18,7 +18,7 @@ export function guestAgentNotice(principal: ToolPrincipal, authKind: ToolContext
 
 /** A person who meant to connect as themselves may have taken the consent page's default, a new agent they own. */
 export function ownedAgentNotice(owner: AgentOwner | undefined): string {
-  return `This agent belongs to ${owner ? `${owner.name} (@${owner.username})` : "the person who claimed it"} and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.`;
+  return `This agent belongs to ${owner ? `${owner.name} (@${owner.username})` : "the person who claimed it"} and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves.`;
 }
 
 /** share is listed whatever the scopes, but refuses a connection without publish. */

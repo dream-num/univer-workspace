@@ -726,7 +726,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"480e10b4ac64979de89280e41251430b725a06ce046065eeba9a91b404d89b4d"`);
+    expect(digest).toMatchInlineSnapshot(`"5a9e4b6ff1e3b772bc8356bfe85ed0a14eca71797bcf21c2e1cb253c907f7bb4"`);
   });
 
   it("says in pr_view's own output schema what to do with each freshness label, for clients that drop server instructions", async () => {
@@ -738,6 +738,15 @@ describe("gateway over real HTTP and the MCP client", () => {
     ])
       expect(schema).toContain(sentence);
     expect(schema).not.toContain("server instructions");
+  });
+
+  it("says in repo_edit and repo_create to make a repository public only when the user asks", async () => {
+    const tools = (await (await connect({ pin: "2026-07-28" }, "?toolsets=admin")).listTools()).tools;
+    const tool = (name: string) => tools.find((candidate) => candidate.name === name);
+    expect(tool("repo_edit")?.description).toContain(
+      "Make a repository public only when the user asks for that. Anyone with the link can then read everything in it.",
+    );
+    expect(JSON.stringify(tool("repo_create")?.inputSchema)).toContain("Let anyone with the link read it. Set it only when the user asks for that.");
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
