@@ -189,11 +189,14 @@ describe("file links", () => {
     expect((await shareNode(spaces, origin, { node: "n1", caller: person, turnOn })).access).toBe(access);
   });
 
-  it("tells a delegated session to have the user share in the browser", async () => {
-    const { spaces } = clients((call) =>
-      call.method === "PUT"
-        ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+  const tokenSessionWrite = (type: "personal" | "team") => clients((call) =>
+    call.method === "PUT"
+      ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+      : call.path === "/api/spaces/s1" ? Response.json(view(type === "team" ? {} : { type, slug: "personal", fullName: "me/personal" }))
         : Response.json(node(sheet)));
+
+  it("tells a delegated session to have the user share in the browser", async () => {
+    const { spaces } = tokenSessionWrite("personal");
     await expect(shareNode(spaces, origin, { node: "n1", caller: person, link: "viewer" })).rejects.toMatchObject({
       code: "INTERACTIVE_SESSION_REQUIRED",
       message: expect.stringContaining(`share the file in the browser: ${origin}/nodes/n1`),
@@ -257,6 +260,15 @@ describe("file links", () => {
       expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
     },
   );
+
+  it("tells a person's token session the way to open a Team Space file when the server first refuses its write", async () => {
+    const { spaces } = tokenSessionWrite("team");
+    await expect(shareNode(spaces, origin, { node: "n1", caller: person, link: "viewer" })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `${inTeam} ${addMember} ask the user to make the repository public in its settings in the browser: ${origin}/spaces/s1/settings`,
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
 
   it("passes other Link Sharing refusals through and rejects a malformed response", async () => {
     const gone = clients((call) =>

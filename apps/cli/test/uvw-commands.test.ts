@@ -1277,6 +1277,7 @@ describe("uvw share", () => {
     const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner: sharedBy, role });
     const spaces = {
       createAgentClaimCode: vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 600 })),
+      get: vi.fn(async () => ({ id: "s1", name: "Personal", type: "personal" })),
       getLinkSharing: vi.fn(async () => sharing(false, "viewer")),
       getNode: vi.fn(async (nodeId: string) => ({ name: "Budget", nodeId })),
       updateLinkSharing: vi.fn(

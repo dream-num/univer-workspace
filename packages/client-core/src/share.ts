@@ -73,6 +73,12 @@ export async function shareNode(
           });
   } catch (error) {
     if (!(error instanceof WorkspaceApplicationError)) throw error;
+    // Only Personal Space files have Link Sharing, in the Browser too. For a Team Space file the server answers NOT_FOUND,
+    // or INTERACTIVE_SESSION_REQUIRED first when a person's token session writes.
+    if (error.code === "NOT_FOUND" || error.code === "INTERACTIVE_SESSION_REQUIRED") {
+      const space = await spaces.get(spaceId);
+      if (space.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
+    }
     if (error.code === "INTERACTIVE_SESSION_REQUIRED") {
       throw workspaceError(
         error.code,
@@ -86,11 +92,6 @@ export async function shareNode(
         `Only the owner of this file can read or change its Link Sharing. To read the file itself, pass its link as the Unit with trunk: ${url}`,
         { url },
       );
-    }
-    // The server keeps Link Sharing only for Personal Space files, and answers NOT_FOUND for a Team Space file the caller can read.
-    if (error.code === "NOT_FOUND") {
-      const space = await spaces.get(spaceId);
-      if (space.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
     }
     throw error;
   }
