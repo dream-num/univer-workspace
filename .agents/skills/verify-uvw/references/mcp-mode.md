@@ -53,7 +53,9 @@ and replaces logs, so save what you need from the logs first. Run `user` again a
 
 ## Credentials
 
-`$V user` also creates an MCP session, a fresh opencode directory and a personal access token (PAT). The
+`$V user` also signs the run user in twice and creates a fresh opencode directory and a personal access token (PAT).
+`home/mcp-session` is a CLI login, which `--auth dev` sends through the gateway. `home/browser-session` is a
+browser sign-in, which minting a PAT and the consent page need; it never goes to the gateway. The
 gateway exchanges the PAT with Workspace (confidential client `univer-workspace-mcp-gateway`, whose
 secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. In MCP mode
 `$V env` adds `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL` to the

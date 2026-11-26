@@ -77,7 +77,7 @@ try {
   proof.target = target;
   if (mode === 'auth') {
     const pat = async name => {
-      const response = await fetch(origin + '/api/auth/tokens', { method: 'POST', headers: { cookie: 'workspace_session=' + secret('mcp-session'), origin, 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+      const response = await fetch(origin + '/api/auth/tokens', { method: 'POST', headers: { cookie: 'workspace_session=' + secret('browser-session'), origin, 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
       assert.equal(response.status, 201);
       return await response.json();
     };
@@ -117,7 +117,7 @@ try {
     const html = `<!DOCTYPE html><html><head><title>Totals</title></head><body><output data-univer-cell-text="${unit.unitId}:${data.output.value.sheetId}:B2"></output></body></html>`;
     proof.html = html;
     const pat = async name => {
-      const response = await fetch(origin + '/api/auth/tokens', { method: 'POST', headers: { cookie: 'workspace_session=' + secret('mcp-session'), origin, 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+      const response = await fetch(origin + '/api/auth/tokens', { method: 'POST', headers: { cookie: 'workspace_session=' + secret('browser-session'), origin, 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
       assert.equal(response.status, 201);
       return await response.json();
     };

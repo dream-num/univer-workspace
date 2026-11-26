@@ -70,6 +70,7 @@ test('run secrets cover the human, the principals, the model credential, story s
     for (const directory of ['home/principals', 'home/stories/codex-human/.codex', `home/${sessions}`, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}`, 'evidence/story']) mkdirSync(join(run, directory), { recursive: true });
     writeFileSync(join(run, 'user.pw'), 'human-password');
     writeFileSync(join(run, 'home/mcp-session'), 'human-session\n');
+    writeFileSync(join(run, 'home/browser-session'), 'human-browser-session\n');
     writeFileSync(join(run, 'home/principals/a1.token'), 'principal-token\n');
     writeFileSync(join(run, 'home/principals/a1.id'), 'principal-id\n');
     writeFileSync(join(run, 'home/opencode-credential-opencode.json'), JSON.stringify([{ value: { access: 'model-access', refresh: 'model-refresh' } }]));
@@ -78,7 +79,7 @@ test('run secrets cover the human, the principals, the model credential, story s
     const stored = cookie => JSON.stringify({ sessions: { 'http://127.0.0.1:1': { cookie, subject: { id: 'subject-id-1' } } } });
     writeFileSync(join(run, `home/${sessions}/session.json`), stored('human-cli-session'));
     writeFileSync(join(run, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}/session.json`), stored('story-session'));
-    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-env-key', 'story-env-region', 'story-session']);
+    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-browser-session', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-env-key', 'story-env-region', 'story-session']);
 
     writeFileSync(join(run, 'evidence/story/transcript.jsonl'), 'agent principal-id said hello\n');
     assert.equal(check().status, 0, check().stdout);

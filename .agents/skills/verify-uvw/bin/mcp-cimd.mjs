@@ -11,7 +11,7 @@ const [run, origin, resource, command] = process.argv.slice(2);
 assert.ok(['vscode', 'reject', 'disabled'].includes(command), 'Usage: mcp-cimd.mjs <run> <origin> <resource> vscode|reject|disabled');
 const claude = 'https://claude.ai/oauth/claude-code-client-metadata';
 const vscode = 'https://vscode.dev/oauth/client-metadata.json';
-const cookie = `workspace_session=${readFileSync(join(run, 'home/mcp-session'), 'utf8').trim()}`;
+const cookie = `workspace_session=${readFileSync(join(run, 'home/browser-session'), 'utf8').trim()}`;
 const evidence = join(run, 'evidence');
 const save = (label, record) => {
   writeFileSync(join(evidence, `${label}.json`), JSON.stringify(record, null, 2) + '\n');

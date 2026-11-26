@@ -282,12 +282,12 @@ Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
 next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only
 from a fixed allowlist (currently `cursor`), so this registers Cursor's exact list, then drives
 consent with the `cursor://` callback as the run user. A browser cannot follow a `cursor://` redirect,
-so `curl` sends the run's `workspace_session` from `home/mcp-session` and evidence keeps only
+so `curl` sends the run's browser `workspace_session` from `home/browser-session` and evidence keeps only
 statuses and redacted `Location` shapes. Run after `user` with MCP enabled.
 
 ```bash
 CURSOR_CB='cursor://anysphere.cursor-mcp/oauth/callback'
-COOKIE="workspace_session=$(cat "$RUN/home/mcp-session")"
+COOKIE="workspace_session=$(cat "$RUN/home/browser-session")"
 curl -sS -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
   -d "{\"client_name\":\"Cursor\",\"redirect_uris\":[\"$CURSOR_CB\",\"https://www.cursor.com/agents/mcp/oauth/callback\",\"http://localhost:8787/callback\"]}" \
   -w '\n%{http_code}\n' > "$EVIDENCE/mcp-cursor-register.txt"

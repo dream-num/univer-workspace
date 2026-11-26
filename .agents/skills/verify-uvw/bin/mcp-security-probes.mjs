@@ -132,7 +132,7 @@ async function ensureUserB(ctx) {
     if (r.status !== 201) throw new Error(`register user B returned ${r.status}`);
     writeFileSync(pw, password, { mode: 0o600 });
   }
-  const login = await api(ctx, '/api/auth/cli/password/login', { method: 'POST', body: JSON.stringify({ username, password: readFileSync(pw, 'utf8') }) });
+  const login = await api(ctx, '/api/auth/password/login', { method: 'POST', body: JSON.stringify({ username, password: readFileSync(pw, 'utf8') }) });
   if (!login.ok) throw new Error(`login user B returned ${login.status}`);
   const session = login.headers.getSetCookie().map(c => /^workspace_session=([^;]+)/.exec(c)?.[1]).find(Boolean);
   const made = await api(ctx, '/api/auth/tokens', { method: 'POST', headers: { cookie: `workspace_session=${session}` }, body: JSON.stringify({ name: `verify-uvw-${ctx.env.RUN_ID}-b` }) });
