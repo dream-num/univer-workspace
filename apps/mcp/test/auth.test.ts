@@ -350,7 +350,7 @@ describe("gateway authentication", () => {
     expect(await names()).not.toContain("claim");
     expect(await share()).toMatchObject({
       code: "workspace-argument-invalid",
-      message: `${inTeam} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).`,
+      message: `${inTeam} The person who claimed you can already open every repository and file you own, private ones included, so to show them this file, give them its link: ${identityOrigin}/nodes/n1. They need no membership. To let anyone else open it, add the people the user names as members with repo_member_write (uvw repo member add in the CLI). Make the repository public with repo_edit (uvw repo edit --visibility public in the CLI) only when the user asks for that.`,
     });
     expect(gateway.events().map(({ principal_category }) => principal_category)).toEqual(["agent_unclaimed", "agent_claimed"]);
     expect(gateway.exchanges).toHaveLength(1);
