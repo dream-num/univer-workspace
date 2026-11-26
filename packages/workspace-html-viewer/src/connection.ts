@@ -71,11 +71,11 @@ export function connectHtmlView(
       inspecting = state.inspecting;
       options.onInspectChanged?.(inspecting);
     }
-    const nextLoading = state.phase === "connecting" || (state.phase === "ready" && declaresSources &&
-      (state.sources.length === 0 || state.sources.some((source) => source.phase === "loading")));
-    if (nextLoading !== loading) {
-      loading = nextLoading;
-      options.onLoadingChanged?.(loading);
+    // Loading ends once, so a Sheet the page asks for later never covers a page already in use.
+    if (loading && state.phase !== "connecting" && !(state.phase === "ready" && declaresSources &&
+      (state.sources.length === 0 || state.sources.some((source) => source.phase === "loading")))) {
+      loading = false;
+      options.onLoadingChanged?.(false);
     }
   });
   return {

@@ -86,7 +86,7 @@ it("derives unload protection and inspection state from SDK state, without repea
   expect(connection.hasPendingChanges()).toBe(false);
   expect(onInspectChanged).toHaveBeenLastCalledWith(false);
 });
-it("reports loading after the handshake until every Sheet the frame asked for has loaded or failed", () => {
+it("reports loading after the handshake until every Sheet the frame asked for has loaded or failed, and never again after", () => {
   const onLoadingChanged = vi.fn();
   connectHtmlView(container, {
     source: '<span data-univer-cell-text="a:s:B2"></span><span data-univer-cell-text="b:s:B2"></span>',
@@ -99,6 +99,8 @@ it("reports loading after the handshake until every Sheet the frame asked for ha
   notify(state({ sources: [{ unitId: "a", phase: "ready" }, { unitId: "b", phase: "loading" }] }));
   expect(onLoadingChanged.mock.calls).toEqual([[true]]);
   notify(state({ sources: [{ unitId: "a", phase: "ready" }, { unitId: "b", phase: "error", error: "denied" }] }));
+  expect(onLoadingChanged.mock.calls).toEqual([[true], [false]]);
+  notify(state({ sources: [{ unitId: "a", phase: "ready" }, { unitId: "c", phase: "loading" }] }));
   expect(onLoadingChanged.mock.calls).toEqual([[true], [false]]);
 });
 it("stops loading at the handshake for a page that binds no Sheet, or when the connection closes", () => {
