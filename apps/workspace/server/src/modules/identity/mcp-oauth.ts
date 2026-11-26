@@ -167,12 +167,6 @@ export function parseMcpResourceUrls(raw: string): string[] {
   return resources;
 }
 
-/** An `http` redirect URI on `127.0.0.1`, `[::1]` or `localhost`: the browser hands its code to a program on its own machine. */
-export function isLoopbackRedirectUri(raw: unknown): boolean {
-  const url = typeof raw === "string" ? parseUrl(raw) : null;
-  return url !== null && isLoopback(url);
-}
-
 function isLoopback(url: URL): boolean {
   return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname);
 }

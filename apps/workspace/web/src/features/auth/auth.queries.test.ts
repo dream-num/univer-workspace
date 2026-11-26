@@ -2,7 +2,6 @@ import { QueryClient } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
 import {
-  isOAuthAuthorizeReturnTo,
   requireAuthenticatedSession,
   sessionQueryKey,
   validLoginReturnTo,
@@ -18,22 +17,6 @@ describe("validLoginReturnTo", () => {
     [undefined, undefined],
   ])("normalizes %j to %j", (value, expected) => {
     expect(validLoginReturnTo(value)).toBe(expected);
-  });
-});
-
-describe("isOAuthAuthorizeReturnTo", () => {
-  it.each([
-    ["/api/auth/authorize?client_id=c&scope=read", true],
-    ["/api/auth/authorize/consent?client_id=c", true],
-    ["/api/auth/authorize", true],
-    ["/home", false],
-    ["/api/auth/authorized", false],
-    ["/nodes/one?next=/api/auth/authorize", false],
-    ["https://example.com/api/auth/authorize?client_id=c", false],
-    ["//example.com/api/auth/authorize", false],
-    [undefined, false],
-  ])("answers %j with %j", (value, expected) => {
-    expect(isOAuthAuthorizeReturnTo(value)).toBe(expected);
   });
 });
 

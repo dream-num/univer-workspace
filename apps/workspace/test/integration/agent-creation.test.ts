@@ -148,7 +148,7 @@ describe("POST /api/auth/guest", () => {
   });
 });
 
-describe("POST /api/auth/authorize/guest", () => {
+describe("POST /api/auth/authorize/guest, the connect page's try button", () => {
   it("names the guest after the registered OAuth client, cleaned, bounded and told apart by a suffix", async () => {
     const { origin } = await start({
       agentCreateLimitPerHour: 100,
@@ -167,9 +167,14 @@ describe("POST /api/auth/authorize/guest", () => {
         response_type: "code", client_id: clientId, redirect_uri: "http://127.0.0.1:9/callback", resource: RESOURCE,
         code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256",
       }).toString();
-      const response = await post(origin, "/api/auth/authorize/guest", { oauthAuthorization });
-      expect(response.status).toBe(200);
-      const code = new URL(((await response.json()) as { redirectUrl: string }).redirectUrl).searchParams.get("code")!;
+      const response = await fetch(`${origin}/api/auth/authorize/guest`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ oauthAuthorization }),
+        redirect: "manual",
+      });
+      expect(response.status).toBe(303);
+      const code = new URL(response.headers.get("location")!).searchParams.get("code")!;
       const issued = await fetch(`${origin}/api/auth/token`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },

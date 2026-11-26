@@ -77,7 +77,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     return ((await response.json()) as { user: { id: string } }).user.id;
   };
   const reader = await register("reader", `/nodes/${node.id}?view=immersive`);
-  await register("consenting", "/api/auth/authorize/consent?client_id=cli");
+  await register("consenting", "/api/auth/authorize?client_id=cli&scope=read");
   await register("direct");
   const claimPage = `${origin}/claim/c0de-in-path`;
   const claimer = await post("/api/auth/password/register", { username: "claimer", displayName: "claimer", password: "correct horse battery staple" }, { referer: claimPage });

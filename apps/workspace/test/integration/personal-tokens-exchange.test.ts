@@ -145,13 +145,12 @@ describe("token-issued sessions", () => {
       code_challenge: "c".repeat(43),
       scope: "identity",
     });
-    await forbidden(await fetch(`${origin}/api/auth/authorize/consent?${consentQuery}`, { headers: { cookie: downstream } }));
-    expect((await fetch(`${origin}/api/auth/authorize/consent?${consentQuery}`, { headers: { cookie: alice.cookie } })).status).toBe(200);
+    expect((await fetch(`${origin}/api/auth/authorize?${consentQuery}`, { headers: { cookie: alice.cookie } })).status).toBe(200);
     const consentPost = (cookie: string) =>
       fetch(`${origin}/api/auth/authorize/consent`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-        body: new URLSearchParams({ consent_token: "any", decision: "allow" }),
+        body: new URLSearchParams({ consent_token: "any" }),
         redirect: "manual",
       });
     await forbidden(await consentPost(downstream));

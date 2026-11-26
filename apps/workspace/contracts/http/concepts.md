@@ -50,7 +50,7 @@ cookie, password, Email verification code, or external OAuth access token.
 
 Actions taken for a person need a person signed in to Workspace in a browser:
 creating an access token or a Browser Agents token, approving a CLI login,
-authorizing an OAuth client on the consent page, claiming and managing agents,
+authorizing an OAuth client on the connect page, claiming and managing agents,
 linking a login method, changing a password, and publishing or rejecting HTML View
 and Skill drafts. An agent, a CLI login or a session issued by token exchange gets
 `403 INTERACTIVE_SESSION_REQUIRED`.
@@ -69,39 +69,39 @@ while in use, and never acts for a person. Both endpoints share one per-source-I
 limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. The anonymous session
 reports `guestAuthEnabled: false` when the deployment creates no agents.
 
-The sign-in page offers a guest agent when it was opened from an MCP client's
-authorization. `POST /api/auth/authorize/guest` takes that authorization's query
-string as `oauthAuthorization` and returns the `redirectUrl` the browser opens: the
-client's callback with a code for a new guest agent, named after the dynamically
-registered or metadata-document client, as in `Claude Code · 7f3k`. It reads no
-session and sets no cookie, so the browser stays signed out. It issues the code as
-authorize does for a browser with no session, under the limits below, and lets each
-source start 10 client metadata fetches per hour, returning `429` past that budget.
-When every metadata fetch guests may start is in use, or the source already has
-another in flight, it returns `503 CLIENT_METADATA_BUSY` with `Retry-After` and
-fetches nothing. A configured client such as the Workspace Agent gets `400`, because
-it needs a person signed in.
+`GET /api/auth/authorize` answers an MCP client (DCR or CIMD) with one connect page in two
+states. It treats a session whose User is an agent as no session, and leaves that cookie as it is.
 
-`GET /api/auth/authorize` treats a session whose User is an agent as signed out and
-sends the browser to the sign-in page. It makes a guest agent with no page for a
-browser with no session, when guests are enabled and a DCR or CIMD client's `redirect_uri` is loopback
-`http`. It redirects to the client with a code and sets no cookie. Redeeming that code
-at `POST /api/auth/token` creates the agent under the same limit, and returns
-`429 temporarily_unavailable` with no agent past it. Authorize applies the limit and
-the metadata fetch budget above before redirecting. While 10,000 codes wait unredeemed,
-it redirects such a guest to the client with `error=temporarily_unavailable` and no code.
-A source that got 20 such codes in the last minute, redeemed or not, is redirected the
-same way, and the `error_description` says too many sign-ins came from this address.
+A person signed in in a browser connects with one button. The default is the agent the person owns
+that was made for a client of this name, otherwise a new agent that the person owns. Redeeming the
+code for a new agent creates it under the same limit, names it after the client, and writes it owned
+by the person in one write, with no expiry. Other buttons connect as another of up to five agents the
+person owns and has not stopped, most recently active first, or as the person (`self`). Choosing an
+existing agent creates nothing. The server checks at the submit and again when the code is redeemed
+that the person still owns the agent and has not stopped it. When this browser's address may create
+no agent, the page offers no new agent and says why, and submitting `new_agent` anyway returns
+`429 AGENT_CREATE_RATE_LIMITED` with a message that names the other choices.
 
-A signed-in person who approves an MCP client on the consent page chooses whom it connects
-as. The default is a new agent that the person owns: redeeming the code creates it under the
-same limit, names it after the client, and claims it for that person, so it starts in the state
-of a guest agent the person claimed. The other choice, `self`, connects as the person. When this browser's address may create no agent, the
-page disables the new agent and says so, and choosing it returns `429 AGENT_CREATE_RATE_LIMITED`
-with a message that names the other choices. The page also lists up to five agents the person owns
-and has not stopped, and preselects the most recently active one created for a client of this name.
-Choosing one connects as that agent and creates nothing. The server checks at the submit and again
-when the code is redeemed that the person still owns it and has not stopped it.
+The page offers two access tiers, `AccessTier`. When the client's request includes `write`, the
+"Let it change content" switch is on by default and grants `read write publish worktree:merge`.
+Switched off, or for a request without `write`, the code carries only `read`.
+
+With no person signed in, the page offers "Sign in to connect", which returns to the same URL after
+sign-in, and a deny link to the client's callback. When guest agents are enabled it also offers
+"Try without signing in". That button posts the authorization's query string as
+`oauthAuthorization` to `POST /api/auth/authorize/guest`, which answers `303` to the client's
+callback with a code for a new guest agent named after the client, as in `Claude Code · 7f3k`. The
+code carries the same tier as a person's default. The endpoint reads no session and sets no cookie,
+so the browser stays signed out. Redeeming the code at `POST /api/auth/token` creates the agent
+under the same limit, and returns `429 temporarily_unavailable` with no agent past it. While 10,000
+codes wait unredeemed, the callback gets `error=temporarily_unavailable` and no code. A source that
+got 20 such codes in the last minute, redeemed or not, gets the same answer, and the
+`error_description` says too many sign-ins came from this address. With guest agents enabled, a
+CIMD document is fetched anonymously for the signed-out page and for the trial, and each source may
+start 10 such fetches per hour. A refused fetch sends the page to the sign-in page, and the trial
+answers it with an HTML page (`429`, or `503 CLIENT_METADATA_BUSY` with `Retry-After`). With guest
+agents off, a signed-out CIMD request goes to the sign-in page and fetches nothing. A configured client such as the Workspace
+Agent needs a person signed in, so it gets no trial and the endpoint refuses it with `400`.
 
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).
 An agent also carries `claimed`. The token exchange of a claimed agent also carries `owner`, the

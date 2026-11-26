@@ -376,6 +376,11 @@ McpScope:
   type: string
   enum: [read, write, publish, "worktree:merge"]
 
+AccessTier:
+  type: string
+  enum: [read, read_write]
+  description: What a person lets a connection do. `read` grants the `read` scope, and `read_write` grants `read write publish worktree:merge`.
+
 AgentTokenScopes:
   type: array
   minItems: 1
@@ -441,17 +446,7 @@ GuestAuthorizationCreate:
   properties:
     oauthAuthorization:
       type: string
-      description: The query string of the `/api/auth/authorize` request the guest continues, without the leading `?`.
-
-GuestAuthorization:
-  type: object
-  additionalProperties: false
-  required: [redirectUrl]
-  properties:
-    redirectUrl:
-      type: string
-      format: uri
-      description: The client's `redirect_uri` with a code, or with an RFC 6749 `error`, `error_description`, `state` and `iss`.
+      description: The query string of the `/api/auth/authorize` request the connect page shows, without the leading `?`.
 
 AgentIdentity:
   type: object

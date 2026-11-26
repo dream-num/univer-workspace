@@ -23,13 +23,84 @@ afterEach(async () => {
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
 
-describe("authorizing an MCP client as a guest agent from the sign-in page", () => {
-  it("answers what authorize would, sets no cookie, and lets the client redeem the code for an unclaimed agent named after it", async () => {
+const ALL_SCOPES = "read write publish worktree:merge";
+
+describe("the connect page with nobody signed in", () => {
+  it("shows a page for loopback and other callbacks alike, with no code and no cookie, and lets only its callback receive the forms", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => ({
+      body: JSON.stringify({ client_id: id, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback", "cursor://app/cb"] }),
+    }));
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument });
+    const registered = await register(origin, "opencode", [CALLBACK, "https://client.example.test/cb"]);
+    for (const [fields, source, name] of [
+      [{ client_id: registered }, "http://127.0.0.1:9", "opencode"],
+      [{ client_id: registered, redirect_uri: "https://client.example.test/cb" }, "https://client.example.test", "opencode"],
+      [{ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }, "http://127.0.0.1:51063", "Claude Code (client.example.test)"],
+      [{ client_id: CIMD, redirect_uri: "cursor://app/cb" }, "cursor:", "Claude Code (client.example.test)"],
+    ] as const) {
+      const authorized = await authorize(origin, fields);
+      expect(authorized.status, JSON.stringify(fields)).toBe(200);
+      expect(authorized.headers.get("location")).toBeNull();
+      expect(authorized.headers.get("set-cookie")).toBeNull();
+      expect(authorized.headers.get("cache-control")).toBe("no-store");
+      expect(authorized.headers.get("content-security-policy")).toContain(`form-action 'self' ${source};`);
+      const page = await authorized.text();
+      expect(page).toContain(`<strong>${name}</strong> wants to work in Univer Workspace.`);
+      expect(page).not.toContain("consent_token");
+      expect(page).toContain('<form method="post" action="/api/auth/authorize/guest">');
+      const signIn = new URL(/<a class="primary" href="([^"]+)">Sign in to connect<\/a>/u.exec(page)![1]!.replaceAll("&amp;", "&"), origin);
+      expect(signIn.pathname).toBe("/login");
+      expect(signIn.searchParams.get("returnTo")).toMatch(/^\/api\/auth\/authorize\?/u);
+      const deny = new URL(/<a class="link" href="([^"]+)">Deny<\/a>/u.exec(page)![1]!.replaceAll("&amp;", "&"));
+      expect(Object.fromEntries(deny.searchParams)).toEqual({ error: "access_denied", iss: ISSUER, state: STATE });
+    }
+    expect(fetchDocument, "a signed-out page fetches the metadata document once and then uses the cache").toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a signed-out browser to sign in when the anonymous metadata fetch is refused", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async () => {
+      throw new ClientMetadataDocumentError(true, "Client metadata fetch exceeded 5 seconds.");
+    });
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument });
+    for (let i = 0; i < 10; i++) expect((await authorize(origin, { client_id: `${CIMD}/slow/${i}`, redirect_uri: "http://127.0.0.1:51063/callback" })).status).toBe(503);
+    const refused = await authorize(origin, { client_id: `${CIMD}/new`, redirect_uri: "http://127.0.0.1:51063/callback" });
+    expect(refused.status).toBe(302);
+    expect(refused.headers.get("location")).toMatch(/^\/login\?returnTo=%2Fapi%2Fauth%2Fauthorize%3F/u);
+    expect(fetchDocument).not.toHaveBeenCalledWith(`${CIMD}/new`);
+  });
+
+  it("offers no trial when guests are off, and sends a metadata-document client to sign in without fetching", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>();
+    const origin = await start({ agentCreateLimitPerHour: 0, fetchDocument });
+    const page = await authorize(origin, { client_id: await register(origin, "opencode") });
+    expect(page.status).toBe(200);
+    expect(await page.text()).not.toContain("Try without signing in");
+    const cimd = await authorize(origin, { client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" });
+    expect(cimd.headers.get("location")).toMatch(/^\/login\?/u);
+    const refused = await tryWithoutSignIn(origin, authorizeQuery({ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }));
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("content-type")).toContain("text/html");
+    expect(await refused.text()).toMatch(/turned off/u);
+    expect(fetchDocument).not.toHaveBeenCalled();
+  });
+
+  it("shows the trial as unavailable to a source at its agent creation limit", async () => {
+    const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument: vi.fn<FetchClientMetadataDocument>() });
+    const registered = await register(origin, "opencode");
+    expect((await redeem(origin, registered, await tryWithoutSignIn(origin, authorizeQuery({ client_id: registered })))).status).toBe(200);
+    const page = await (await authorize(origin, { client_id: registered })).text();
+    expect(page).toContain('<button type="button" class="button" disabled>Try without signing in</button>');
+    expect(page).toContain("Too many agents were created from this address.");
+  });
+});
+
+describe("trying an MCP client without signing in", () => {
+  it("answers the form with a 303 to the client, sets no cookie, and lets the client redeem the code for an unclaimed agent named after it", async () => {
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => {
       if (id === `${CIMD}/offline`) throw new ClientMetadataDocumentError(true, "offline");
       return { body: JSON.stringify({ client_id: CIMD, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"] }) };
     });
-    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument });
+    const origin = await start({ agentCreateLimitPerHour: 4, fetchDocument });
     const registered = await register(origin, "opencode");
     const refused: Array<[Record<string, string | undefined>, number]> = [
       [{ client_id: registered, redirect_uri: "http://127.0.0.1:10/elsewhere" }, 400],
@@ -40,13 +111,22 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
       [{ client_id: STATIC_ID, redirect_uri: STATIC_REDIRECT }, 400],
     ];
     for (const [fields, status] of refused) {
-      const answer = await guestAuthorization(origin, authorizeQuery(fields));
+      const answer = await tryWithoutSignIn(origin, authorizeQuery(fields));
       expect(answer.status, JSON.stringify(fields)).toBe(status);
       expect(answer.headers.get("set-cookie")).toBeNull();
+      expect(answer.headers.get("location")).toBeNull();
+      expect(answer.headers.get("content-type")).toContain("text/html");
+      expect(await answer.text(), "the page leads back to the connect page").toContain('href="/api/auth/authorize?');
     }
-    expect((await guestAuthorization(origin, 42)).status).toBe(400);
-    const staticClient = await guestAuthorization(origin, new URLSearchParams({ client_id: STATIC_ID, redirect_uri: STATIC_REDIRECT, state: STATE, code_challenge: CHALLENGE }).toString());
-    expect(await staticClient.json()).toMatchObject({ error: { code: "INVALID_INPUT", message: expect.stringMatching(/needs a person signed in/u) } });
+    const staticClient = await tryWithoutSignIn(origin, new URLSearchParams({ client_id: STATIC_ID, redirect_uri: STATIC_REDIRECT, state: STATE, code_challenge: CHALLENGE }).toString());
+    expect(await staticClient.text()).toMatch(/needs a person signed in/u);
+    const json = await fetch(`${origin}/api/auth/authorize/guest`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ oauthAuthorization: authorizeQuery({ client_id: registered }) }),
+      redirect: "manual",
+    });
+    expect(json.status, "the endpoint takes only the page's form").toBe(400);
 
     const redirected: Array<[Record<string, string | undefined>, string]> = [
       [{ client_id: registered, resource: "https://wrong.example.test/mcp" }, "invalid_target"],
@@ -54,31 +134,31 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
       [{ client_id: registered, code_challenge_method: "plain" }, "invalid_request"],
     ];
     for (const [fields, error] of redirected) {
-      const answer = await guestAuthorization(origin, authorizeQuery(fields));
-      expect(answer.status).toBe(200);
-      const target = new URL(((await answer.json()) as { redirectUrl: string }).redirectUrl);
+      const answer = await tryWithoutSignIn(origin, authorizeQuery(fields));
+      expect(answer.status).toBe(303);
+      const target = new URL(answer.headers.get("location")!);
       expect(Object.fromEntries(target.searchParams)).toMatchObject({ error, state: STATE, iss: ISSUER });
       expect(target.searchParams.has("code")).toBe(false);
     }
 
-    for (const [fields, callback, name] of [
-      [{ client_id: registered }, CALLBACK, /^opencode · [a-z0-9]{4}$/u],
-      [{ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }, "http://127.0.0.1:51063/callback", /^Claude Code · [a-z0-9]{4}$/u],
+    for (const [fields, callback, scope, name] of [
+      [{ client_id: registered }, CALLBACK, ALL_SCOPES, /^opencode · [a-z0-9]{4}$/u],
+      [{ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }, "http://127.0.0.1:51063/callback", ALL_SCOPES, /^Claude Code · [a-z0-9]{4}$/u],
+      [{ client_id: registered, scope: "read publish" }, CALLBACK, "read", /^opencode · [a-z0-9]{4}$/u],
     ] as const) {
-      const answer = await guestAuthorization(origin, authorizeQuery(fields));
-      expect(answer.status).toBe(200);
+      const answer = await tryWithoutSignIn(origin, authorizeQuery(fields));
+      expect(answer.status).toBe(303);
       expect(answer.headers.get("set-cookie")).toBeNull();
       expect(answer.headers.get("cache-control")).toBe("no-store");
-      const redirectUrl = ((await answer.json()) as { redirectUrl: string }).redirectUrl;
-      const target = new URL(redirectUrl);
+      const target = new URL(answer.headers.get("location")!);
       expect(`${target.origin}${target.pathname}`).toBe(callback);
-      expect(Object.fromEntries(target.searchParams)).toEqual({ code: expect.stringMatching(/^[\w-]{32}$/u), state: STATE, iss: ISSUER, scope: "read write" });
+      expect(Object.fromEntries(target.searchParams), "read and write gives every scope; without write only read").toEqual({ code: expect.stringMatching(/^[\w-]{32}$/u), state: STATE, iss: ISSUER, scope });
 
-      const issued = await redeem(origin, fields.client_id, redirectUrl);
+      const issued = await redeem(origin, fields.client_id, answer);
       expect(issued.status).toBe(200);
       const { access_token: accessToken } = (await issued.json()) as { access_token: string };
       expect(await (await principalOf(origin, accessToken)).json()).toMatchObject({
-        scope: "read write",
+        scope,
         user: { kind: "agent", claimed: false, displayName: expect.stringMatching(name) },
       });
     }
@@ -90,23 +170,14 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
       body: JSON.stringify({ client_id: id, redirect_uris: ["http://127.0.0.1/callback"] }),
     }));
     const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument });
-    const continueWith = (clientId: string) => guestAuthorization(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }));
+    const continueWith = (clientId: string) => tryWithoutSignIn(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }));
     const first = await continueWith(`${CIMD}/first`);
-    expect(first.status).toBe(200);
-    expect((await redeem(origin, `${CIMD}/first`, ((await first.json()) as { redirectUrl: string }).redirectUrl)).status).toBe(200);
+    expect(first.status).toBe(303);
+    expect((await redeem(origin, `${CIMD}/first`, first)).status).toBe(200);
     const limited = await continueWith(`${CIMD}/second`);
     expect(limited.status).toBe(429);
-    expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
+    expect(await limited.text()).toContain("AGENT_CREATE_RATE_LIMITED");
     expect(fetchDocument.mock.calls.map(([id]) => id)).toEqual([`${CIMD}/first`]);
-  });
-
-  it("fetches nothing for a metadata-document client when guests are off", async () => {
-    const fetchDocument = vi.fn<FetchClientMetadataDocument>();
-    const origin = await start({ agentCreateLimitPerHour: 0, fetchDocument });
-    const refused = await guestAuthorization(origin, authorizeQuery({ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }));
-    expect(refused.status).toBe(429);
-    expect(((await refused.json()) as { error: { message: string } }).error.message).toMatch(/turned off/u);
-    expect(fetchDocument).not.toHaveBeenCalled();
   });
 
   it("tells the caller nothing about why a client metadata document failed", async () => {
@@ -123,8 +194,8 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
     const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument });
     const refusals: Array<{ status: number; message: string; retryAfter: string | null }> = [];
     for (const clientId of Object.keys(details)) {
-      const refused = await guestAuthorization(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }));
-      refusals.push({ status: refused.status, message: ((await refused.json()) as { error: { message: string } }).error.message, retryAfter: refused.headers.get("retry-after") });
+      const refused = await tryWithoutSignIn(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }));
+      refusals.push({ status: refused.status, message: messageOf(await refused.text()), retryAfter: refused.headers.get("retry-after") });
     }
     expect(refusals.map(({ status }) => status)).toEqual([400, 503, 400]);
     expect(new Set(refusals.map(({ message }) => message)).size).toBe(1);
@@ -141,7 +212,7 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
     });
     const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument, trustProxy: true });
     const continueWith = (clientId: string, source: string) =>
-      guestAuthorization(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }), source);
+      tryWithoutSignIn(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }), source);
     const holders = Array.from({ length: 8 }, (_, i) => continueWith(`${CIMD}/held/${i}`, `192.0.2.${i + 1}`));
     await vi.waitFor(() => expect(fetchDocument).toHaveBeenCalledTimes(8));
 
@@ -150,9 +221,9 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
     await Promise.all(holders);
     expect(busy.status).toBe(503);
     expect(busy.headers.get("retry-after")).toBe("5");
-    expect(await busy.json()).toMatchObject({ error: { code: "CLIENT_METADATA_BUSY" } });
+    expect(await busy.text()).toContain("CLIENT_METADATA_BUSY");
     expect(fetchDocument).not.toHaveBeenCalledWith(`${CIMD}/new`);
-    expect((await continueWith(`${CIMD}/new`, "198.51.100.1")).status).toBe(200);
+    expect((await continueWith(`${CIMD}/new`, "198.51.100.1")).status).toBe(303);
   });
 
   it("stops a source that keeps starting metadata fetches before it starts another, without limiting its signed-in users", async () => {
@@ -162,22 +233,23 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
     });
     const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument, trustProxy: true });
     const continueWith = (clientId: string, source: string) =>
-      guestAuthorization(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }), source);
-    expect((await continueWith(`${CIMD}/cached`, "192.0.2.10")).status).toBe(200);
+      tryWithoutSignIn(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }), source);
+    expect((await continueWith(`${CIMD}/cached`, "192.0.2.10")).status).toBe(303);
     for (let i = 0; i < 10; i++) expect((await continueWith(`${CIMD}/slow/${i}`, "192.0.2.1")).status).toBe(503);
 
     const limited = await continueWith(`${CIMD}/new`, "192.0.2.1");
     expect(limited.status).toBe(429);
-    expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
+    expect(await limited.text()).toContain("AGENT_CREATE_RATE_LIMITED");
     expect(fetchDocument).not.toHaveBeenCalledWith(`${CIMD}/new`);
     const signedIn = await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: `${CIMD}/signed-in`, redirect_uri: "http://127.0.0.1:51063/callback" })}`, {
       headers: { cookie: await signIn(origin), "x-forwarded-for": "192.0.2.1" },
       redirect: "manual",
     });
-    expect(signedIn.headers.get("location")).toMatch(/^\/api\/auth\/authorize\/consent\?/u);
+    expect(signedIn.status).toBe(200);
+    expect(await signedIn.text()).toContain("consent_token");
     expect(fetchDocument).toHaveBeenCalledWith(`${CIMD}/signed-in`);
-    expect((await continueWith(`${CIMD}/cached`, "192.0.2.1")).status).toBe(200);
-    expect((await continueWith(`${CIMD}/new`, "192.0.2.2")).status).toBe(200);
+    expect((await continueWith(`${CIMD}/cached`, "192.0.2.1")).status).toBe(303);
+    expect((await continueWith(`${CIMD}/new`, "192.0.2.2")).status).toBe(303);
   });
 
   it("keeps signed-in authorization able to fetch a client metadata document while anonymous guests wait on theirs", async () => {
@@ -191,14 +263,14 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
     const query = (clientId: string) => authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" });
     const answered: number[] = [];
     const guests = Array.from({ length: 32 }, (_, i) =>
-      guestAuthorization(origin, query(`${CIMD}/held/${i}`), `192.0.2.${i + 1}`).then((response) => answered.push(response.status)));
+      tryWithoutSignIn(origin, query(`${CIMD}/held/${i}`), `192.0.2.${i + 1}`).then((response) => answered.push(response.status)));
     await vi.waitFor(() => expect(fetchDocument.mock.calls.length + answered.length).toBe(32));
 
     const signedIn = await fetch(`${origin}/api/auth/authorize?${query(`${CIMD}/signed-in`)}`, { headers: { cookie: await signIn(origin) }, redirect: "manual" });
     release();
     await Promise.all(guests);
-    expect(signedIn.status).toBe(302);
-    expect(signedIn.headers.get("location")).toMatch(/^\/api\/auth\/authorize\/consent\?/u);
+    expect(signedIn.status).toBe(200);
+    expect(await signedIn.text()).toContain("consent_token");
   });
 
   it("names the guest after a metadata-document client under the display-name rules", async () => {
@@ -212,8 +284,8 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
     }));
     const origin = await start({ agentCreateLimitPerHour: 10, fetchDocument });
     const continueAs = async (clientId: string) => {
-      const answer = await guestAuthorization(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }));
-      const issued = await redeem(origin, clientId, ((await answer.json()) as { redirectUrl: string }).redirectUrl);
+      const answer = await tryWithoutSignIn(origin, authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }));
+      const issued = await redeem(origin, clientId, answer);
       const { access_token: accessToken } = (await issued.json()) as { access_token: string };
       return ((await (await principalOf(origin, accessToken)).json()) as { user: { username: string; displayName: string } }).user;
     };
@@ -232,23 +304,138 @@ describe("authorizing an MCP client as a guest agent from the sign-in page", () 
 
     expect(await continueAs(`${CIMD}/blank`)).toMatchObject({ displayName: "agent", username: expect.stringMatching(/^agent-[a-z0-9]{4}$/u) });
   });
+
+  it("creates the guest when the code is redeemed, once, within the creation limit", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>();
+    const origin = await start({ agentCreateLimitPerHour: 2, fetchDocument });
+    const registered = await register(origin, "opencode");
+    const trial = () => tryWithoutSignIn(origin, authorizeQuery({ client_id: registered }));
+    const unredeemed = await trial();
+    const first = await trial();
+    const issued = await redeem(origin, registered, first);
+    expect(issued.status).toBe(200);
+    const { access_token: accessToken } = (await issued.json()) as { access_token: string };
+    const replayed = await redeem(origin, registered, first);
+    expect(replayed.status).toBe(400);
+    expect(await replayed.json()).toMatchObject({ error: "invalid_grant" });
+    expect((await principalOf(origin, accessToken)).status).toBe(400);
+
+    expect((await redeem(origin, registered, await trial())).status).toBe(200);
+    const limited = await tryWithoutSignIn(origin, authorizeQuery({ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }));
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("location")).toBeNull();
+    expect(limited.headers.get("set-cookie")).toBeNull();
+    expect(fetchDocument).not.toHaveBeenCalled();
+
+    const late = await redeem(origin, registered, unredeemed);
+    expect(late.status).toBe(429);
+    expect(await late.json()).toEqual({ error: "temporarily_unavailable", error_description: "Too many agents were created from this address. Try again later." });
+  });
+
+  it("creates nothing for a request that would fail", async () => {
+    const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument: vi.fn<FetchClientMetadataDocument>() });
+    const registered = await register(origin, "opencode");
+    const trial = (fields: Record<string, string | undefined>) => tryWithoutSignIn(origin, authorizeQuery(fields));
+    for (const [fields, error] of [
+      [{ client_id: registered, resource: "https://wrong.example.test/mcp" }, "invalid_target"],
+      [{ client_id: registered, code_challenge_method: "plain" }, "invalid_request"],
+      [{ client_id: registered, scope: "read admin" }, "invalid_scope"],
+    ] as const) {
+      const location = new URL((await trial(fields)).headers.get("location")!);
+      expect(location.searchParams.get("error")).toBe(error);
+      expect(location.searchParams.has("code")).toBe(false);
+    }
+    for (const fields of [{ client_id: registered, redirect_uri: "http://127.0.0.1:10/elsewhere" }, { client_id: "00000000-0000-4000-8000-000000000000" }]) {
+      const refused = await trial(fields);
+      expect(refused.status).toBe(400);
+      expect(refused.headers.get("location")).toBeNull();
+    }
+    expect((await redeem(origin, registered, await trial({ client_id: registered }), "x".repeat(43))).status).toBe(400);
+
+    expect((await redeem(origin, registered, await trial({ client_id: registered }))).status).toBe(200);
+    expect((await trial({ client_id: registered })).status).toBe(429);
+  });
+
+  it("tells the client to try again, and issues nothing, while too many codes wait unredeemed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: vi.fn<FetchClientMetadataDocument>(), guestAuthorizationCapacity: 2 });
+    const registered = await register(origin, "opencode");
+    const trial = () => tryWithoutSignIn(origin, authorizeQuery({ client_id: registered }));
+    const codeOf = (answer: Response) => new URL(answer.headers.get("location")!).searchParams.get("code");
+    const first = await trial();
+    const second = await trial();
+    expect([codeOf(first), codeOf(second)]).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
+
+    const refused = await trial();
+    expect(refused.status).toBe(303);
+    expect(refused.headers.get("set-cookie")).toBeNull();
+    const location = new URL(refused.headers.get("location")!);
+    expect(`${location.origin}${location.pathname}`).toBe(CALLBACK);
+    expect(Object.fromEntries(location.searchParams)).toEqual({
+      error: "temporarily_unavailable",
+      error_description: expect.stringMatching(/try again/iu),
+      state: STATE,
+      iss: ISSUER,
+    });
+
+    expect((await redeem(origin, registered, first)).status).toBe(200);
+    const third = await trial();
+    expect(codeOf(third)).toMatch(/^[\w-]{32}$/u);
+    expect(codeOf(await trial())).toBeNull();
+
+    vi.setSystemTime(Date.now() + 61_000);
+    const fresh = [await trial(), await trial()];
+    expect(fresh.map(codeOf)).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
+    expect((await redeem(origin, registered, third)).status).toBe(400);
+
+    const cookie = await signIn(origin);
+    const page = await (await authorize(origin, { client_id: registered }, cookie)).text();
+    const consentToken = /name="consent_token" value="([^"]+)"/u.exec(page)![1]!;
+    const allowed = await fetch(`${origin}/api/auth/authorize/consent`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+      body: new URLSearchParams({ consent_token: consentToken, connect_as: "self" }),
+      redirect: "manual",
+    });
+    expect(codeOf(allowed), "a person's code is never refused for capacity").toMatch(/^[\w-]{32}$/u);
+
+    for (const answer of fresh) expect((await redeem(origin, registered, answer)).status).toBe(200);
+  });
 });
 
 describe("a browser that holds only an agent's cookie", () => {
-  it("is signed out for authorize, which sends it to the sign-in page and never makes a code for that agent", async () => {
-    const fetchDocument = vi.fn<FetchClientMetadataDocument>();
-    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument });
+  it("is signed out for the connect page, which never makes a code for that agent and leaves its cookie as it was", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => ({
+      body: JSON.stringify({ client_id: id, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"] }),
+    }));
+    const origin = await start({ agentCreateLimitPerHour: 5, fetchDocument });
     const registered = await register(origin, "opencode", [CALLBACK, "https://client.example.test/cb"]);
     const cookies = { legacy: await legacyAgentCookie(origin), cli: cookieOf(await fetch(`${origin}/api/auth/guest`, { method: "POST" })) };
     for (const [kind, cookie] of Object.entries(cookies)) {
       for (const fields of [{ client_id: registered }, { client_id: registered, redirect_uri: "https://client.example.test/cb" }, { client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }]) {
         const authorized = await authorize(origin, fields, cookie);
-        expect(authorized.status, `${kind} ${fields.client_id}`).toBe(302);
-        expect(authorized.headers.get("location")).toMatch(/^\/login\?returnTo=%2Fapi%2Fauth%2Fauthorize%3F/u);
+        expect(authorized.status, `${kind} ${fields.client_id}`).toBe(200);
+        expect(authorized.headers.get("set-cookie")).toBeNull();
+        const page = await authorized.text();
+        expect(page).toContain("Sign in to connect");
+        expect(page).not.toContain("consent_token");
       }
+      const tried = await tryWithoutSignIn(origin, authorizeQuery({ client_id: registered }), undefined, cookie);
+      expect(tried.status).toBe(303);
+      expect(tried.headers.get("set-cookie")).toBeNull();
+      const { access_token: accessToken } = (await (await redeem(origin, registered, tried)).json()) as { access_token: string };
+      const [agent, guest] = await Promise.all([
+        (await fetch(`${origin}/api/session`, { headers: { cookie } })).json() as Promise<{ user: { id: string } }>,
+        (await principalOf(origin, accessToken)).json() as Promise<{ user: { id: string; kind: string } }>,
+      ]);
+      expect(guest.user.kind).toBe("agent");
+      expect(guest.user.id, "the trial makes a new agent, not the one in the cookie").not.toBe(agent.user.id);
     }
-    expect(fetchDocument, "a metadata document is fetched only for a person").not.toHaveBeenCalled();
-    const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: registered })}`, { headers: { cookie: cookies.legacy } });
+    const consent = await fetch(`${origin}/api/auth/authorize/consent`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: cookies.legacy },
+      body: new URLSearchParams({ consent_token: "any", connect_as: "self" }),
+    });
     expect({ status: consent.status, body: await consent.json() }).toMatchObject({ status: 403, body: { error: { code: "INTERACTIVE_SESSION_REQUIRED" } } });
   });
 
@@ -273,152 +460,15 @@ describe("a browser that holds only an agent's cookie", () => {
   });
 });
 
-describe("authorizing a loopback client from a browser with no session", () => {
-  const claudeCode = () => vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => ({
-    body: JSON.stringify({ client_id: id, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"] }),
-  }));
-
-  it("sends the client a code for a new guest agent, with no page and no session", async () => {
-    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode() });
-    const registered = await register(origin, "opencode");
-    const clients: Array<[Record<string, string | undefined>, string, string, RegExp]> = [
-      [{ client_id: registered, scope: undefined }, CALLBACK, "read write publish worktree:merge", /^opencode · [a-z0-9]{4}$/u],
-      [{ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }, "http://127.0.0.1:51063/callback", "read write", /^Claude Code · [a-z0-9]{4}$/u],
-    ];
-    for (const [fields, callback, scope, name] of clients) {
-      const authorized = await authorize(origin, fields);
-      expect(authorized.status).toBe(302);
-      expect(authorized.headers.get("set-cookie")).toBeNull();
-      const location = new URL(authorized.headers.get("location")!);
-      expect(`${location.origin}${location.pathname}`).toBe(callback);
-      expect(location.searchParams.get("code")).toMatch(/^[\w-]{32}$/u);
-      expect(location.searchParams.get("state")).toBe(STATE);
-      expect(location.searchParams.get("iss")).toBe(ISSUER);
-      expect(location.searchParams.get("scope")).toBe(scope);
-
-      const issued = await redeem(origin, fields.client_id!, authorized);
-      expect(issued.status).toBe(200);
-      const tokens = (await issued.json()) as { access_token: string; refresh_token: string; scope: string };
-      expect(tokens).toMatchObject({ access_token: expect.stringMatching(/^uvw_at_/u), refresh_token: expect.stringMatching(/^uvw_rt_/u), scope });
-      const principal = await principalOf(origin, tokens.access_token);
-      expect(principal.status).toBe(200);
-      expect(await principal.json()).toMatchObject({ scope, user: { kind: "agent", displayName: expect.stringMatching(name) } });
-    }
-  });
-
-  it("leaves a client that is not loopback to the sign-in page, and a signed-in browser to the consent page", async () => {
-    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode() });
-    const registered = await register(origin, "opencode", [CALLBACK, "https://client.example.test/cb"]);
-    const remote = await authorize(origin, { client_id: registered, redirect_uri: "https://client.example.test/cb" });
-    expect(remote.status).toBe(302);
-    expect(remote.headers.get("location")).toMatch(/^\/login\?returnTo=%2Fapi%2Fauth%2Fauthorize%3F/u);
-    expect(remote.headers.get("set-cookie")).toBeNull();
-    const signedIn = await authorize(origin, { client_id: registered }, await signIn(origin));
-    expect(signedIn.status).toBe(302);
-    expect(signedIn.headers.get("location")).toMatch(/^\/api\/auth\/authorize\/consent\?/u);
-
-    const guestsOff = await start({ agentCreateLimitPerHour: 0, fetchDocument: claudeCode() });
-    const off = await authorize(guestsOff, { client_id: await register(guestsOff, "opencode") });
-    expect(off.headers.get("location")).toMatch(/^\/login\?/u);
-  });
-
-  it("creates the guest when the code is redeemed, once, within the creation limit", async () => {
-    const fetchDocument = claudeCode();
-    const origin = await start({ agentCreateLimitPerHour: 2, fetchDocument });
-    const registered = await register(origin, "opencode");
-    const unredeemed = await authorize(origin, { client_id: registered });
-    const first = await authorize(origin, { client_id: registered });
-    const issued = await redeem(origin, registered, first);
-    expect(issued.status).toBe(200);
-    const { access_token: accessToken } = (await issued.json()) as { access_token: string };
-    const replayed = await redeem(origin, registered, first);
-    expect(replayed.status).toBe(400);
-    expect(await replayed.json()).toMatchObject({ error: "invalid_grant" });
-    expect((await principalOf(origin, accessToken)).status).toBe(400);
-
-    const second = await authorize(origin, { client_id: registered });
-    expect((await redeem(origin, registered, second)).status).toBe(200);
-    const limited = await authorize(origin, { client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" });
-    expect(limited.status).toBe(429);
-    expect(limited.headers.get("location")).toBeNull();
-    expect(limited.headers.get("set-cookie")).toBeNull();
-    expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
-    expect(fetchDocument).not.toHaveBeenCalled();
-
-    const late = await redeem(origin, registered, unredeemed);
-    expect(late.status).toBe(429);
-    expect(await late.json()).toEqual({ error: "temporarily_unavailable", error_description: "Too many agents were created from this address. Try again later." });
-  });
-
-  it("creates nothing for a request that would fail", async () => {
-    const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument: claudeCode() });
-    const registered = await register(origin, "opencode");
-    const redirected: Array<[Record<string, string | undefined>, string]> = [
-      [{ client_id: registered, resource: "https://wrong.example.test/mcp" }, "invalid_target"],
-      [{ client_id: registered, code_challenge_method: "plain" }, "invalid_request"],
-      [{ client_id: registered, scope: "read admin" }, "invalid_scope"],
-    ];
-    for (const [fields, error] of redirected) {
-      const refused = await authorize(origin, fields);
-      const location = new URL(refused.headers.get("location")!);
-      expect(location.searchParams.get("error")).toBe(error);
-      expect(location.searchParams.has("code")).toBe(false);
-    }
-    for (const fields of [{ client_id: registered, redirect_uri: "http://127.0.0.1:10/elsewhere" }, { client_id: "00000000-0000-4000-8000-000000000000" }]) {
-      const refused = await authorize(origin, fields);
-      expect(refused.status).toBe(400);
-      expect(refused.headers.get("location")).toBeNull();
-    }
-    const wrongVerifier = await redeem(origin, registered, await authorize(origin, { client_id: registered }), "x".repeat(43));
-    expect(wrongVerifier.status).toBe(400);
-
-    expect((await redeem(origin, registered, await authorize(origin, { client_id: registered }))).status).toBe(200);
-    expect((await authorize(origin, { client_id: registered })).status).toBe(429);
-  });
-
-  it("tells the client to try again, and issues nothing, while too many codes wait unredeemed", async () => {
-    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
-    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode(), guestAuthorizationCapacity: 2 });
-    const registered = await register(origin, "opencode");
-    const codeOf = (authorized: Response) => new URL(authorized.headers.get("location")!).searchParams.get("code");
-    const first = await authorize(origin, { client_id: registered });
-    const second = await authorize(origin, { client_id: registered });
-    expect([codeOf(first), codeOf(second)]).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
-
-    const refused = await authorize(origin, { client_id: registered });
-    expect(refused.status).toBe(302);
-    expect(refused.headers.get("set-cookie")).toBeNull();
-    const location = new URL(refused.headers.get("location")!);
-    expect(`${location.origin}${location.pathname}`).toBe(CALLBACK);
-    expect(Object.fromEntries(location.searchParams)).toEqual({
-      error: "temporarily_unavailable",
-      error_description: expect.stringMatching(/try again/iu),
-      state: STATE,
-      iss: ISSUER,
-    });
-
-    expect((await redeem(origin, registered, first)).status).toBe(200);
-    const third = await authorize(origin, { client_id: registered });
-    expect(codeOf(third)).toMatch(/^[\w-]{32}$/u);
-    expect(codeOf(await authorize(origin, { client_id: registered }))).toBeNull();
-
-    vi.setSystemTime(Date.now() + 61_000);
-    const fresh = [await authorize(origin, { client_id: registered }), await authorize(origin, { client_id: registered })];
-    expect(fresh.map(codeOf)).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
-    expect((await redeem(origin, registered, third)).status).toBe(400);
-
-    const cookie = await signIn(origin);
-    const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: registered })}`, { headers: { cookie } });
-    const consentToken = /name="consent_token" value="([^"]+)"/u.exec(await consent.text())![1]!;
-    const allowed = await fetch(`${origin}/api/auth/authorize/consent`, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-      body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read", connect_as: "self" }),
-      redirect: "manual",
-    });
-    expect(codeOf(allowed)).toMatch(/^[\w-]{32}$/u);
-
-    for (const authorized of fresh) expect((await redeem(origin, registered, authorized)).status).toBe(200);
+describe("a static client", () => {
+  it("still needs a person: signed out it goes to sign in, and the trial form refuses it", async () => {
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: vi.fn<FetchClientMetadataDocument>() });
+    const query = new URLSearchParams({ client_id: STATIC_ID, redirect_uri: STATIC_REDIRECT, state: STATE, code_challenge: CHALLENGE });
+    const authorized = await fetch(`${origin}/api/auth/authorize?${query}`, { redirect: "manual" });
+    expect(authorized.headers.get("location")).toMatch(/^\/login\?returnTo=%2Fapi%2Fauth%2Fauthorize%3F/u);
+    const tried = await tryWithoutSignIn(origin, query.toString());
+    expect(tried.status).toBe(400);
+    expect(await tried.text()).toMatch(/needs a person signed in/u);
   });
 });
 
@@ -452,12 +502,22 @@ async function start(options: { agentCreateLimitPerHour: number; fetchDocument: 
   return `http://127.0.0.1:${address.port}`;
 }
 
-function guestAuthorization(origin: string, oauthAuthorization: unknown, forwardedFor?: string): Promise<Response> {
+/** The connect page's try button: a form post of the authorize query string. */
+function tryWithoutSignIn(origin: string, oauthAuthorization: string, forwardedFor?: string, cookie?: string): Promise<Response> {
   return fetch(`${origin}/api/auth/authorize/guest`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(forwardedFor === undefined ? {} : { "x-forwarded-for": forwardedFor }) },
-    body: JSON.stringify({ oauthAuthorization }),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      ...(forwardedFor === undefined ? {} : { "x-forwarded-for": forwardedFor }),
+      ...(cookie === undefined ? {} : { cookie }),
+    },
+    body: new URLSearchParams({ oauthAuthorization }),
+    redirect: "manual",
   });
+}
+
+function messageOf(page: string): string {
+  return /<div class="request"><p>([^<]*)<\/p>/u.exec(page)![1]!;
 }
 
 async function legacyAgentCookie(origin: string): Promise<string> {

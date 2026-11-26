@@ -134,7 +134,7 @@ describe("HandToAgentDialog", () => {
     await open();
     expect(control("MCP (recommended)").getAttribute("aria-pressed")).toBe("true");
     expect(control("Command line (uvw)").getAttribute("aria-pressed")).toBe("false");
-    expect(document.body.textContent).toContain("Continue as a guest agent");
+    expect(document.body.textContent).toContain("Try without signing in");
 
     await act(async () => control("Copy MCP server URL").click());
     expect(mocks.writeText).toHaveBeenLastCalledWith(`${window.location.origin}/mcp`);
@@ -145,10 +145,10 @@ describe("HandToAgentDialog", () => {
     expect(mocks.toast.success).toHaveBeenLastCalledWith("Prompt copied. Paste it into your agent.");
   });
 
-  it("offers the guest agent sign-in only to a reader who is not signed in", async () => {
+  it("offers the trial without signing in only to a reader who is not signed in", async () => {
     await open(true);
     expect(control("MCP (recommended)").getAttribute("aria-pressed")).toBe("true");
-    expect(document.body.textContent).not.toContain("Continue as a guest agent");
+    expect(document.body.textContent).not.toContain("Try without signing in");
   });
 
   it("copies the CLI prompt once the reader chooses the command line", async () => {

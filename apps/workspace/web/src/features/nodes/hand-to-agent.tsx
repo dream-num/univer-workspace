@@ -130,7 +130,7 @@ export function HandToAgentChoice({ nodeId, task, way, onWayChange }: {
       <pre className="max-h-56 min-h-24 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap break-words">
         {handToAgentPrompt(window.location.origin, nodeId, task, way)}
       </pre>
-      {way === "mcp" && anonymous ? <p className="text-xs text-muted-foreground">{t("handToAgentSignIn", { label: t("continueAsGuestAgent") })}</p> : null}
+      {way === "mcp" && anonymous ? <p className="text-xs text-muted-foreground">{t("handToAgentSignIn")}</p> : null}
     </div>
   );
 }

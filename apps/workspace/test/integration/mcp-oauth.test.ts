@@ -127,7 +127,6 @@ describe("MCP OAuth", () => {
   it("runs the opencode flow: discovery, registration, scoped consent, code, exchange, refresh rotation and replay", async () => {
     // The token service reads the clock it was created with, so the fake clock is installed first.
     vi.useFakeTimers({ toFake: ["Date"] });
-    // With guests on, a signed-out browser would get a guest agent's code instead of the sign-in page.
     const origin = await start({ guests: false });
     const metadata = await fetch(`${origin}/.well-known/oauth-authorization-server`);
     expect(metadata.status).toBe(200);
@@ -166,35 +165,27 @@ describe("MCP OAuth", () => {
     const query = authorizeQuery({ client_id: clientId, redirect_uri: redirectUri });
 
     const anonymous = await fetch(`${origin}/api/auth/authorize?${query}`, { redirect: "manual" });
-    expect(anonymous.status).toBe(302);
-    const returnTo = new URL(anonymous.headers.get("location")!, origin).searchParams.get("returnTo")!;
+    expect(anonymous.status, "a signed-out browser gets the connect page").toBe(200);
+    const signIn = /<a class="primary" href="([^"]+)">Sign in to connect<\/a>/u.exec(await anonymous.text())![1]!.replaceAll("&amp;", "&");
+    const returnTo = new URL(signIn, origin).searchParams.get("returnTo")!;
     expect(Object.fromEntries(new URL(returnTo, origin).searchParams)).toEqual(Object.fromEntries(query));
 
     const alice = await registerUser(origin, "alice");
-    const authorized = await fetch(`${origin}${returnTo}`, { headers: { cookie: alice }, redirect: "manual" });
-    expect(authorized.status).toBe(302);
-    const consentUrl = authorized.headers.get("location")!;
-    expect(consentUrl).toMatch(/^\/api\/auth\/authorize\/consent\?/u);
-    expect(Object.fromEntries(new URL(consentUrl, origin).searchParams)).toEqual(Object.fromEntries(query));
-
-    const consent = await fetch(`${origin}${consentUrl}`, { headers: { cookie: alice } });
-    expect(consent.status).toBe(200);
+    const consent = await fetch(`${origin}${returnTo}`, { headers: { cookie: alice }, redirect: "manual" });
+    expect(consent.status, "after sign-in the same URL shows the page with no redirect").toBe(200);
     expect(consent.headers.get("content-security-policy")).toContain("form-action 'self' http://127.0.0.1:61234;");
     const page = await consent.text();
     expect(page).toContain("<strong>opencode</strong>");
     expect(page).toContain(RESOURCE);
-    expect(page.match(/type="checkbox" name="scope" value="[^"]+" checked/gu)).toHaveLength(4);
-    const consentToken = consentTokenOf(page);
-
-    const empty = await submitConsent(origin, alice, consentToken, []);
-    expect(empty.status).toBe(400);
-    const allowed = await submitConsent(origin, alice, consentToken, ["read", "write", "publish"]);
+    expect(page).toContain('<input type="checkbox" name="access" value="read_write" checked>');
+    expect(page).not.toContain('name="scope"');
+    const allowed = await submitConsent(origin, alice, consentTokenOf(page));
     expect(allowed.status).toBe(303);
     const callback = new URL(allowed.headers.get("location")!);
     expect(`${callback.origin}${callback.pathname}`).toBe(redirectUri);
     expect(callback.searchParams.get("state")).toBe(STATE);
     expect(callback.searchParams.get("iss")).toBe(ISSUER);
-    expect(callback.searchParams.get("scope")).toBe("read write publish");
+    expect(callback.searchParams.get("scope")).toBe(ALL_SCOPES);
     const code = callback.searchParams.get("code")!;
 
     const tokens = await token(origin, {
@@ -213,19 +204,19 @@ describe("MCP OAuth", () => {
       token_type: "Bearer",
       expires_in: 3600,
       refresh_token: expect.stringMatching(/^uvw_rt_/u),
-      scope: "read write publish",
+      scope: ALL_SCOPES,
     });
 
     const exchanged = await exchange(origin, issued.access_token);
     expect(exchanged.status).toBe(200);
-    expect(await exchanged.json()).toMatchObject({ scope: "read write publish", subject: { kind: "oauth", client_id: clientId } });
+    expect(await exchanged.json()).toMatchObject({ scope: ALL_SCOPES, subject: { kind: "oauth", client_id: clientId } });
     expect((await exchange(origin, issued.access_token, "https://other.example.test/mcp")).status).toBe(400);
 
     expect(await (await refresh(origin, clientId, issued.refresh_token, "https://other.example.test/mcp")).json()).toMatchObject({ error: "invalid_grant" });
     const rotated = await refresh(origin, clientId, issued.refresh_token);
     expect(rotated.status).toBe(200);
     const second = (await rotated.json()) as { access_token: string; refresh_token: string; scope: string };
-    expect(second.scope).toBe("read write publish");
+    expect(second.scope).toBe(ALL_SCOPES);
     expect(second.refresh_token).not.toBe(issued.refresh_token);
     expect((await exchange(origin, issued.access_token)).status).toBe(400);
     expect((await exchange(origin, second.access_token)).status).toBe(200);
@@ -239,25 +230,25 @@ describe("MCP OAuth", () => {
     expect(await (await refresh(origin, clientId, second.refresh_token)).json()).toMatchObject({ error: "invalid_grant" });
   });
 
-  it("asks a signed-in person to choose a new agent or themselves, and names the way out when no agent can be created", async () => {
+  it("names the way out when no agent can be created, and still connects the person as themselves", async () => {
     const origin = await start({ guests: false });
     const clientId = await registeredClientId(origin);
     const alice = await registerUser(origin, "alice");
     const redirectUri = OPENCODE_REGISTRATION.redirect_uris[0]!;
-    const page = await (await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri })}`, { headers: { cookie: alice } })).text();
-    expect(page).toContain('name="connect_as" value="new_agent" disabled');
-    expect(page).toContain('name="connect_as" value="self" checked');
-    expect(page).toContain("Choose Yourself.");
+    const page = await (await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri })}`, { headers: { cookie: alice } })).text();
+    expect(page).not.toContain('value="new_agent"');
+    expect(page).toContain('name="connect_as" value="self">Connect as myself</button>');
+    expect(page).toContain("Too many agents were created from this address.");
     const consentToken = consentTokenOf(page);
 
-    const unchosen = await submitConsent(origin, alice, consentToken, ["read"], "allow", null);
+    const unchosen = await submitConsent(origin, alice, consentToken, { connect_as: undefined });
     expect({ status: unchosen.status, body: await unchosen.json() }).toMatchObject({ status: 400, body: { error: { code: "INVALID_INPUT", field: "connect_as" } } });
-    const refused = await submitConsent(origin, alice, consentToken, ["read"], "allow", "new_agent");
+    const refused = await submitConsent(origin, alice, consentToken, { connect_as: "new_agent" });
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({
       status: 429,
-      body: { error: { code: "AGENT_CREATE_RATE_LIMITED", message: expect.stringContaining("Go back and choose Yourself") } },
+      body: { error: { code: "AGENT_CREATE_RATE_LIMITED", message: expect.stringContaining("Go back and connect as yourself") } },
     });
-    const allowed = await submitConsent(origin, alice, consentToken, ["read"], "allow", "self");
+    const allowed = await submitConsent(origin, alice, consentToken, { connect_as: "self" });
     expect(allowed.status).toBe(303);
     const tokens = await token(origin, {
       grant_type: "authorization_code", code: new URL(allowed.headers.get("location")!).searchParams.get("code")!, code_verifier: VERIFIER,
@@ -265,6 +256,26 @@ describe("MCP OAuth", () => {
     });
     const exchanged = await exchange(origin, ((await tokens.json()) as { access_token: string }).access_token);
     expect(await exchanged.json()).toMatchObject({ user: { kind: "human", username: "alice" } });
+  });
+
+  it("grants every scope with the content toggle on and read with it off, and only read to a request without write", async () => {
+    const origin = await start();
+    const clientId = await registeredClientId(origin);
+    const alice = await registerUser(origin, "alice");
+    const redirectUri = OPENCODE_REGISTRATION.redirect_uris[0]!;
+    const pageFor = async (scope: string) =>
+      (await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, scope })}`, { headers: { cookie: alice } })).text();
+    const grantedScope = async (scope: string, fields: Record<string, string | undefined>) =>
+      new URL((await submitConsent(origin, alice, consentTokenOf(await pageFor(scope)), fields)).headers.get("location")!).searchParams.get("scope");
+
+    for (const connectAs of ["new_agent", "self"]) {
+      expect(await grantedScope("read write", { connect_as: connectAs }), connectAs).toBe(ALL_SCOPES);
+      expect(await grantedScope(ALL_SCOPES, { connect_as: connectAs, access: undefined }), connectAs).toBe("read");
+    }
+    const readOnly = await pageFor("read publish");
+    expect(readOnly).not.toContain('name="access"');
+    expect(readOnly).toContain("It can read, and cannot change anything.");
+    expect(await grantedScope("read publish", { access: "read_write" }), "a forged toggle cannot widen a read-only request").toBe("read");
   });
 
   it("binds codes to client, redirect, PKCE and resource, and revokes the grant when a code is replayed", async () => {
@@ -329,7 +340,7 @@ describe("MCP OAuth", () => {
     const redirectUri = "http://127.0.0.1:53379/callback";
     const queried = `${RESOURCE}?toolsets=core,files`;
     const consentFor = (resource: string) =>
-      fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, resource })}`, {
+      fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, resource })}`, {
         headers: { cookie: alice },
         redirect: "manual",
       });
@@ -395,16 +406,14 @@ describe("MCP OAuth", () => {
     await rejectedInPlace({ client_id: "00000000-0000-0000-0000-000000000000" }, "OAUTH_CLIENT_UNAVAILABLE");
 
     const defaulted = await authorize({ scope: undefined, state: undefined });
-    expect(defaulted.status).toBe(302);
-    const consentQuery = new URL(defaulted.headers.get("location")!, origin).searchParams;
-    expect(consentQuery.get("scope")).toBe(ALL_SCOPES);
-    expect(consentQuery.has("state")).toBe(false);
+    expect(defaulted.status).toBe(200);
+    const defaultedCallback = new URL((await submitConsent(origin, alice, consentTokenOf(await defaulted.text()))).headers.get("location")!);
+    expect(defaultedCallback.searchParams.get("scope"), "no scope asks for all four").toBe(ALL_SCOPES);
+    expect(defaultedCallback.searchParams.has("state")).toBe(false);
 
-    const native = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: "com.example.app:/oauth" })}`, {
-      headers: { cookie: alice },
-    });
+    const native = await authorize({ redirect_uri: "com.example.app:/oauth" });
     expect(native.headers.get("content-security-policy")).toContain("form-action 'self' com.example.app:;");
-    const denied = await submitConsent(origin, alice, consentTokenOf(await native.text()), ALL_SCOPES.split(" "), "deny");
+    const denied = await submitConsent(origin, alice, consentTokenOf(await native.text()), { decision: "deny" });
     expect(denied.headers.get("location")).toBe(`com.example.app:/oauth?error=access_denied&iss=${encodeURIComponent(ISSUER)}&state=${STATE}`);
   });
 
@@ -419,17 +428,12 @@ describe("MCP OAuth", () => {
 
     const alice = await registerUser(origin, "alice");
     const query = authorizeQuery({ client_id: client.client_id, redirect_uri: redirectUri });
-    const authorized = await fetch(`${origin}/api/auth/authorize?${query}`, {
+    const consent = await fetch(`${origin}/api/auth/authorize?${query}`, {
       headers: { cookie: alice }, redirect: "manual",
     });
-    expect(authorized.status).toBe(302);
-    const consentUrl = new URL(authorized.headers.get("location")!, origin);
-    expect(consentUrl.pathname).toBe("/api/auth/authorize/consent");
-    expect(Object.fromEntries(consentUrl.searchParams)).toEqual(Object.fromEntries(query));
-    const consent = await fetch(consentUrl, { headers: { cookie: alice } });
     expect(consent.status).toBe(200);
     expect(consent.headers.get("content-security-policy")).toContain("form-action 'self' cursor:;");
-    const denied = await submitConsent(origin, alice, consentTokenOf(await consent.text()), [], "deny");
+    const denied = await submitConsent(origin, alice, consentTokenOf(await consent.text()), { decision: "deny" });
     expect(denied.status).toBe(303);
     expect(denied.headers.get("location")).toBe(`${redirectUri}?error=access_denied&iss=${encodeURIComponent(ISSUER)}&state=${STATE}`);
   });
@@ -555,16 +559,14 @@ describe("MCP OAuth", () => {
       client_id: clientId, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"],
       grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
     }) });
-    // With guests on, a signed-out browser would get a guest agent's code, fetching the document as a guest does.
+    // With guests on, a signed-out browser would fetch the document anonymously to show the connect page.
     const origin = await start({ fetchDocument, maxRegisteredClients: 1, guests: false });
     await registeredClientId(origin);
     const redirectUri = "http://127.0.0.1:61234/callback";
     const query = authorizeQuery({ client_id: clientId, redirect_uri: redirectUri });
-    for (const route of ["/authorize", "/authorize/consent"]) {
-      const anonymous = await fetch(`${origin}/api/auth${route}?${query}`, { redirect: "manual" });
-      expect(anonymous.status).toBe(302);
-      expect(anonymous.headers.get("location")).toMatch(/^\/login\?/u);
-    }
+    const anonymous = await fetch(`${origin}/api/auth/authorize?${query}`, { redirect: "manual" });
+    expect(anonymous.status).toBe(302);
+    expect(anonymous.headers.get("location")).toMatch(/^\/login\?/u);
     expect(fetchDocument).not.toHaveBeenCalled();
     const alice = await registerUser(origin, "alice");
     const consent = await fetch(`${origin}/api/auth/authorize?${query}`, { headers: { cookie: alice } });
@@ -573,8 +575,9 @@ describe("MCP OAuth", () => {
     expect(page).toContain("Claude Code (client.example.test)");
     expect(fetchDocument).toHaveBeenCalledTimes(1);
     fetchDocument.mockRejectedValue(new Error("offline"));
-    const allowed = await submitConsent(origin, alice, consentTokenOf(page), ["read"]);
+    const allowed = await submitConsent(origin, alice, consentTokenOf(page), { access: undefined });
     const callback = new URL(allowed.headers.get("location")!);
+    expect(callback.searchParams.get("scope"), "the toggle off gives read only").toBe("read");
     expect(callback.searchParams.get("iss")).toBe(ISSUER);
     expect(callback.searchParams.get("state")).toBe(STATE);
     const issued = await token(origin, { grant_type: "authorization_code", client_id: clientId, code: callback.searchParams.get("code")!,
@@ -603,14 +606,14 @@ describe("MCP OAuth", () => {
     });
     const origin = await start({ fetchDocument });
     const alice = await registerUser(origin, "alice");
-    const get = (fields: Record<string, string>) => fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: "cursor://app/cb", ...fields })}`, { headers: { cookie: alice }, redirect: "manual" });
+    const get = (fields: Record<string, string>) => fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: clientId, redirect_uri: "cursor://app/cb", ...fields })}`, { headers: { cookie: alice }, redirect: "manual" });
     const failed = await get({ resource: "https://wrong.test/mcp" });
     const error = new URL(failed.headers.get("location")!);
     expect(error.searchParams.get("error")).toBe("invalid_target");
     expect(error.searchParams.get("iss")).toBe(ISSUER);
     const page = await (await get({})).text();
     expect(page).toContain("&lt;script&gt;bad&lt;/script&gt; (client.example.test)");
-    const denied = await submitConsent(origin, alice, consentTokenOf(page), [], "deny");
+    const denied = await submitConsent(origin, alice, consentTokenOf(page), { decision: "deny" });
     const target = new URL(denied.headers.get("location")!);
     expect(target.searchParams.get("error")).toBe("access_denied");
     expect(target.searchParams.get("iss")).toBe(ISSUER);
@@ -636,7 +639,7 @@ describe("MCP OAuth", () => {
 
     const named = await consentPage(await registered({ ...OPENCODE_REGISTRATION, client_name: "\u202EClaude\nCode\u200B\u0000" }), OPENCODE_REGISTRATION.redirect_uris[0]!);
     expect(named).toContain("<title>Connect Claude Code | Univer Workspace</title>");
-    expect(named).toContain("<p><strong>Claude Code</strong> wants to use Univer Workspace");
+    expect(named).toContain("<p><strong>Claude Code</strong> wants to work in Univer Workspace");
     expect(named).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u200B\u202A-\u202E\u2066-\u2069]/u);
     expect(await consentPage(await registered({ ...OPENCODE_REGISTRATION, client_name: "\u202E\u2066\n" }), OPENCODE_REGISTRATION.redirect_uris[0]!))
       .toContain("<strong>An unnamed application</strong>");
@@ -663,11 +666,11 @@ describe("MCP OAuth", () => {
     const origin = await start({ staticConsent: true });
     const alice = await registerUser(origin, "alice");
     for (const decision of ["allow", "deny"]) {
-      const page = await fetch(`${origin}/api/auth/authorize/consent?${new URLSearchParams({
+      const page = await fetch(`${origin}/api/auth/authorize?${new URLSearchParams({
         client_id: STATIC_ID, redirect_uri: STATIC_REDIRECT, state: STATE, code_challenge: CHALLENGE, scope: "identity",
       })}`, { headers: { cookie: alice } });
       expect(page.status).toBe(200);
-      const result = await submitConsent(origin, alice, consentTokenOf(await page.text()), [], decision);
+      const result = await submitConsent(origin, alice, consentTokenOf(await page.text()), { decision });
       const target = new URL(result.headers.get("location")!);
       expect(target.searchParams.has("iss")).toBe(false);
       expect(target.searchParams.has(decision === "allow" ? "code" : "error")).toBe(true);
@@ -706,10 +709,10 @@ function authorizeQuery(fields: Record<string, string | undefined>): URLSearchPa
 }
 
 async function authorizeCode(origin: string, cookie: string, clientId: string, redirectUri: string, resource = RESOURCE): Promise<string> {
-  const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, resource })}`, {
+  const consent = await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, resource })}`, {
     headers: { cookie },
   });
-  const allowed = await submitConsent(origin, cookie, consentTokenOf(await consent.text()), ALL_SCOPES.split(" "));
+  const allowed = await submitConsent(origin, cookie, consentTokenOf(await consent.text()));
   return new URL(allowed.headers.get("location")!).searchParams.get("code")!;
 }
 
@@ -717,9 +720,10 @@ function consentTokenOf(page: string): string {
   return /name="consent_token" value="([^"]+)"/u.exec(page)![1]!;
 }
 
-function submitConsent(origin: string, cookie: string, consentToken: string, scopes: readonly string[], decision = "allow", connectAs: string | null = "self"): Promise<Response> {
-  const body = new URLSearchParams({ consent_token: consentToken, decision, ...(connectAs === null ? {} : { connect_as: connectAs }) });
-  for (const scope of scopes) body.append("scope", scope);
+/** Submits the connect page as its buttons do: with the content toggle on and connecting as the person, unless `fields` says otherwise. */
+function submitConsent(origin: string, cookie: string, consentToken: string, fields: Record<string, string | undefined> = {}): Promise<Response> {
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries({ consent_token: consentToken, access: "read_write", connect_as: "self", ...fields })) if (value !== undefined) body.set(key, value);
   return fetch(`${origin}/api/auth/authorize/consent`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },

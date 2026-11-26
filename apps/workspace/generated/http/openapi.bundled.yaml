@@ -596,50 +596,62 @@ paths:
       description: |
         Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
         registered `redirect_uri`, a 32 to 256 character base64url `state`, and
-        a `scope` from the client's configured scopes (default `identity`).
+        a `scope` from the client's configured scopes (default `identity`). A
+        static client needs a person signed in in a browser, so a browser
+        without one goes to the sign-in page. A client with `requiresConsent`,
+        such as the Workspace Agent or the Space plugin, gets a consent page
+        with Allow and Deny; any other static client gets its code at once.
 
         When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
         (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
         clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
-        disables it. CIMD metadata is fetched only after a person signs in,
-        when a browser continues as a guest agent (POST /api/auth/authorize/guest), or for
-        a guest agent with no page as described below; invalid
-        documents return 400 and temporary fetch failures return 503 here, never a
-        client redirect. CIMD names are displayed with their URL hostname. They must send
-        `response_type=code`, `code_challenge_method=S256` and a `resource`
-        equal to one of `MCP_RESOURCE_URLS`, optionally followed by a query such as
-        `?toolsets=all`; the grant is bound to the listed URL. `scope` is a subset of `read`,
-        `write`, `publish` and `worktree:merge` (default all four) and `state`
-        is optional, 1 to 1024 printable ASCII characters. A loopback
-        `redirect_uri` matches a registered one with any port (RFC 8252); every
-        other URI matches exactly. A session whose User is an agent counts as
-        signed out, and the browser goes to the sign-in page. A signed-in person
-        always sees a consent page that lists the requested scopes, each of which can be unchecked; the code
-        carries only the checked scopes. A signed-in person also chooses whether
-        the client connects as a new agent that they own or as themselves.
+        disables it. They must send `response_type=code`, `code_challenge_method=S256`
+        and a `resource` equal to one of `MCP_RESOURCE_URLS`, optionally followed by
+        a query such as `?toolsets=all`; the grant is bound to the listed URL. `scope`
+        is a subset of `read`, `write`, `publish` and `worktree:merge` (default all
+        four) and `state` is optional, 1 to 1024 printable ASCII characters. A
+        loopback `redirect_uri` matches a registered one with any port (RFC 8252);
+        every other URI matches exactly.
 
-        A browser with no session gets no page when guest agents are enabled and
-        the MCP client's `redirect_uri` is loopback `http` (`127.0.0.1`, `[::1]`
-        or `localhost`, any port). The response redirects to the client with a
-        code for a new guest agent, named after the client, that carries every
-        requested scope, and sets no cookie. The agent is created when the code
-        is redeemed, under the per-source limit POST /api/auth/guest uses, so a
-        code nobody redeems creates nothing. A source at that limit gets 429
-        before anything is fetched, and a CIMD document is fetched and refused
-        as POST /api/auth/authorize/guest fetches and refuses it, answering here in JSON.
-        While 10,000 codes wait unredeemed, such a guest gets
-        `temporarily_unavailable` and no code; a code a signed-in user approves
-        is never refused this way. A source that got 20 such codes in the last
-        minute, redeemed or not, gets the same answer, with an
-        `error_description` that says too many sign-ins came from this address.
-        With any other `redirect_uri` the browser goes to the sign-in page,
-        which offers that guest path. An unknown client or unregistered
-        `redirect_uri` is answered here with 400; once both are verified, other
-        errors redirect to the client with RFC 6749 `error` (`invalid_request`,
-        `invalid_scope`, `invalid_target`, `unsupported_response_type`,
-        `temporarily_unavailable` or `access_denied`), `error_description` and
-        `state`. Every MCP success, error
-        and deny callback includes `iss` (RFC 9207); static callbacks are unchanged.
+        An MCP client always gets the connect page, in one of two states. A
+        session whose User is an agent counts as no session, and the page leaves
+        its cookie as it is.
+
+        - A person signed in in a browser connects with one button: as the agent
+          they own that was made for a client of this name, otherwise as a new
+          agent they own. Other buttons connect as another of up to five agents
+          the person owns and has not stopped, most recently active first, or as
+          the person (`self`), or deny. When the per-source agent creation limit
+          refuses this browser's address, the page offers no new agent and says
+          why. When the request includes `write`, a "Let it change content"
+          switch is on by default; on grants `read write publish worktree:merge`
+          and off grants `read`. A request without `write` gets no switch and
+          can only read. The form posts to POST /api/auth/authorize/consent with
+          a single-use consent token bound to the person for five minutes.
+        - With no person signed in, the page offers "Sign in to connect", which
+          returns to this URL after sign-in, and a deny link to the client's
+          callback with `access_denied`. When guest agents are enabled it also
+          offers "Try without signing in", a form post to POST
+          /api/auth/authorize/guest, shown disabled with the reason to a source
+          at the agent creation limit. This state issues no code and writes no
+          session.
+
+        A CIMD client's metadata document is fetched before the page: for the
+        signed-in person, or anonymously under the limits POST
+        /api/auth/authorize/guest describes when nobody is signed in and guest
+        agents are enabled. A refused anonymous fetch goes to the sign-in page,
+        and so does a signed-out CIMD request while guest agents are off, which
+        fetches nothing. CIMD names are displayed with their URL hostname. An
+        invalid document returns 400 and a temporary fetch failure 503, as an
+        HTML page and never a client redirect; a signed-out browser is not told
+        the cause. An unknown client or unregistered `redirect_uri` is answered
+        here with 400; once both are verified, other errors redirect to the
+        client with RFC 6749 `error` (`invalid_request`, `invalid_scope`,
+        `invalid_target` or `unsupported_response_type`), `error_description`
+        and `state`. Every MCP success, error and deny callback includes `iss`
+        (RFC 9207); static callbacks are unchanged. Every page has
+        Cache-Control: no-store, X-Frame-Options: DENY and a CSP whose
+        `form-action` names only Workspace and the client's callback.
       security:
         - {}
         - sessionCookie: []
@@ -695,8 +707,14 @@ paths:
           schema:
             type: string
       responses:
+        '200':
+          description: The connect page for an MCP client, signed in or signed out, or the consent page of a static client with `requiresConsent`.
+          content:
+            text/html:
+              schema:
+                type: string
         '302':
-          description: Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error.
+          description: Redirect to Workspace sign-in, to a static client's redirect_uri with a one-time code, or to an MCP client's redirect_uri with an OAuth error.
           headers:
             Location:
               required: true
@@ -712,90 +730,84 @@ paths:
               schema:
                 type: string
         '403':
-          description: INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: AGENT_CREATE_RATE_LIMITED, for a guest agent with no page. This source created too many agents or started too many metadata fetches in the last hour. No client redirect.
+          description: INTERACTIVE_SESSION_REQUIRED. A person's CLI login or a session issued by token exchange is refused. A session whose User is an agent gets the signed-out page instead.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. For a guest agent with no page, JSON OAUTH_CLIENT_UNAVAILABLE, or CLIENT_METADATA_BUSY with Retry-After.
+          description: A CIMD fetch failed temporarily, or a signed-in person's fetch found capacity busy, with no usable cached document. No client redirect; retry later.
           content:
             text/html:
               schema:
                 type: string
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/authorize/guest:
     post:
       tags:
         - Authentication
       operationId: authorizeAsGuestAgent
-      summary: Authorize an MCP client as a new guest agent, without signing the browser in.
+      summary: Try an MCP client as a new guest agent, without signing in.
       description: |
-        The sign-in page's guest choice. Takes the query string of a
-        `/api/auth/authorize` request from a dynamically registered or Client
-        ID Metadata Document client and answers with the URL the browser opens
-        next. With a valid request, that is the client's `redirect_uri` with a
-        code for a new guest agent, as authorize issues it for a browser with no
-        session: the code carries every requested scope, and redeeming it at
-        POST /api/auth/token creates the agent under the per-source creation
-        limit, named after the client, as in `Claude Code · 7f3k`. The server
-        reads the name from the registration or the metadata document, cleans it
-        as `PasswordRegistration.displayName` describes, keeps only the local
-        part of an email address, cuts it to 40 characters between whole
-        graphemes, and appends ` · ` and the username's four-character suffix.
-        A code nobody redeems creates nothing. A request authorize would refuse
-        with a redirect gets that OAuth error redirect instead, and the same
-        limits apply: 20 such codes per source per minute and 10,000 unredeemed
-        codes, answered with `temporarily_unavailable`. A source at the creation
-        limit is refused with 429 before anything is fetched. A Client ID
-        Metadata Document is fetched now: guests may start 8 of the 32 metadata
-        fetches the server runs at once, one in flight per source, and each
-        source may start 10 per hour, failed ones included. A cached document or
-        a fetch already in flight costs nothing. The endpoint reads no session
-        and sets no cookie. All responses have Cache-Control: no-store.
+        The target of the connect page's "Try without signing in" form. Takes
+        the query string of a `/api/auth/authorize` request from a dynamically
+        registered or Client ID Metadata Document client and answers 303 to the
+        client's `redirect_uri`. With a valid request the callback carries a
+        code for a new guest agent. The code carries `read write publish
+        worktree:merge` when the request includes `write`, and `read` otherwise.
+        Redeeming it at POST /api/auth/token creates the agent under the
+        per-source creation limit, named after the client, as in `Claude Code ·
+        7f3k`. The server reads the name from the registration or the metadata
+        document, cleans it as `PasswordRegistration.displayName` describes,
+        keeps only the local part of an email address, cuts it to 40 characters
+        between whole graphemes, and appends ` · ` and the username's
+        four-character suffix. A code nobody redeems creates nothing. A request
+        authorize would refuse with a redirect gets that OAuth error redirect
+        instead. The callback gets `temporarily_unavailable` and no code when
+        the source got 20 such codes in the last minute, redeemed or not, or
+        while 10,000 codes wait unredeemed. A source at the creation limit is
+        refused before anything is fetched. A Client ID Metadata Document is
+        fetched now: guests may start 8 of the 32 metadata fetches the server
+        runs at once, one in flight per source, and each source may start 10
+        per hour, failed ones included. A cached document or a fetch already in
+        flight costs nothing. The endpoint reads no session and sets no cookie.
+        An error that cannot go to the client is an HTML page that names its
+        code and links back to the connect page. All responses have
+        Cache-Control: no-store.
       security: []
       requestBody:
         required: true
         content:
-          application/json:
+          application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/GuestAuthorizationCreate'
       responses:
-        '200':
-          description: Where the browser goes next.
+        '303':
+          description: To the client's redirect_uri with a code, or with an RFC 6749 `error`, `error_description`, `state` and `iss`.
           headers:
+            Location:
+              required: true
+              schema:
+                type: string
             Cache-Control:
               schema:
                 type: string
                 const: no-store
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GuestAuthorization'
         '400':
           description: |
-            INVALID_INPUT. `oauthAuthorization` is missing, or names a configured client, such as the
-            Workspace Agent, that needs a person signed in. OAUTH_CLIENT_UNAVAILABLE, INVALID_REDIRECT_URI
-            or INVALID_INPUT for an unknown client, an unregistered redirect, an invalid `state` or an
-            invalid metadata document. No client redirect.
+            INVALID_INPUT. The body is not a form with `oauthAuthorization`, or it names a configured
+            client, such as the Workspace Agent, that needs a person signed in. OAUTH_CLIENT_UNAVAILABLE,
+            INVALID_REDIRECT_URI or INVALID_INPUT for an unknown client, an unregistered redirect, an
+            invalid `state` or an invalid metadata document. No client redirect.
           content:
-            application/json:
+            text/html:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
         '429':
           description: AGENT_CREATE_RATE_LIMITED. Guest agents are turned off, too many agents were created from this source IP in the last hour, or the source started 10 metadata fetches in the last hour.
           content:
-            application/json:
+            text/html:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
         '503':
           description: |
             OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now.
@@ -807,75 +819,35 @@ paths:
               schema:
                 type: integer
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/authorize/consent:
-    get:
-      tags:
-        - Authentication
-      operationId: getOAuthConsent
-      summary: Show the interactive OAuth consent form.
-      description: |
-        Uses the same client, redirect, PKCE and resource validation as authorize.
-        CIMD metadata is resolved only after a person signs in. The form saves the
-        verified request with a single-use consent token bound to the signed-in user
-        for five minutes. CIMD clients show their name and metadata URL hostname.
-        For a signed-in person, an MCP client's form offers `connect_as`: up to
-        five agents the person owns and has not stopped, most recently active
-        first, a new agent that the person owns, or the person (`self`). It
-        preselects the most recently active of those agents that was created for
-        a client of this name, otherwise the new agent. When the per-source agent
-        creation limit refuses this browser's address, the new agent is disabled
-        with that reason, and `self` is preselected unless an agent is.
-      security:
-        - {}
-        - sessionCookie: []
-      parameters:
-        - $ref: '#/components/parameters/0'
-        - $ref: '#/components/parameters/1'
-        - $ref: '#/components/parameters/2'
-        - $ref: '#/components/parameters/3'
-        - $ref: '#/components/parameters/4'
-        - $ref: '#/components/parameters/5'
-        - $ref: '#/components/parameters/6'
-        - $ref: '#/components/parameters/7'
-      responses:
-        '200':
-          description: The consent form, with individually selectable MCP scopes.
-          content:
             text/html:
               schema:
                 type: string
-        '302':
-          $ref: '#/components/responses/302'
-        '400':
-          $ref: '#/components/responses/400'
-        '403':
-          $ref: '#/components/responses/403'
-        '503':
-          $ref: '#/components/responses/503'
+  /api/auth/authorize/consent:
     post:
       tags:
         - Authentication
       operationId: submitOAuthConsent
-      summary: Allow or deny a saved authorization request.
+      summary: Connect or deny a saved authorization request.
       description: |
-        Consumes the form's saved request without fetching CIMD metadata again.
-        Only checked MCP scopes are granted; at least one must be selected to allow.
-        An MCP allow also needs `connect_as`. `self` makes the code act for the
-        signed-in person. `new_agent` makes it act for a new
-        agent that the person owns: redeeming the code creates the agent under the
-        per-source agent creation limit, named after the client, and claims it
-        for the person, so it is in the state of a guest agent that person claimed.
-        A code nobody redeems creates no agent. Any other value is the id of an
-        agent the person owns and has not stopped, and makes the code act for that
-        agent; it creates nothing and counts toward no limit. The token endpoint
-        checks again that the person still owns the agent and has not stopped it.
-        An id that is not such an agent gets the same 400, whether or not a User
-        has it. A 400, 403 or 429 keeps the consent token valid, so the person can
-        go back and choose again.
-        Both successful and denied MCP callbacks include `iss`; static callbacks do not.
+        The form of the connect page and of a static client's consent page.
+        Consumes the saved request without fetching CIMD metadata again.
+        `decision=deny` refuses; without it the request is allowed. For an MCP
+        client, `access=read_write` grants `read write publish worktree:merge`
+        when the saved request includes `write`; otherwise, or without
+        `access`, the code carries `read`. An MCP allow also needs
+        `connect_as`. `self` makes the code act for the signed-in person.
+        `new_agent` makes it act for a new agent that the person owns:
+        redeeming the code creates the agent under the per-source agent
+        creation limit, named after the client, owned by the person from the
+        same write, with no expiry. A code nobody redeems creates no agent. Any
+        other value is the id of an agent the person owns and has not stopped,
+        and makes the code act for that agent; it creates nothing and counts
+        toward no limit. The token endpoint checks again that the person still
+        owns the agent and has not stopped it. An id that is not such an agent
+        gets the same 400, whether or not a User has it. A 400, 403 or 429
+        keeps the consent token valid, so the person can go back and choose
+        again. Both successful and denied MCP callbacks include `iss`; static
+        callbacks do not.
       security:
         - sessionCookie: []
       requestBody:
@@ -886,7 +858,6 @@ paths:
               type: object
               required:
                 - consent_token
-                - decision
               properties:
                 consent_token:
                   type: string
@@ -895,14 +866,13 @@ paths:
                   enum:
                     - allow
                     - deny
-                scope:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/McpScope'
+                  description: '`deny` refuses. The connect page sends it only from its Deny button; the static consent page sends `allow` or `deny`.'
+                access:
+                  $ref: '#/components/schemas/AccessTier'
                 connect_as:
                   type: string
                   minLength: 1
-                  description: '`new_agent`, `self`, or the id of an agent the signed-in person owns. Required to allow an MCP client. Ignored for static clients and on deny.'
+                  description: '`new_agent`, `self`, or the id of an agent the signed-in person owns, sent by the button the person clicks. Required to allow an MCP client. Ignored for static clients and on deny.'
       responses:
         '303':
           description: Redirect to the verified callback with a one-time code or access_denied, the original state, and iss for MCP clients.
@@ -922,7 +892,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: AGENT_CREATE_RATE_LIMITED. `new_agent` was chosen while this browser's address may create no agent. The message names the way out, choosing Yourself or an agent the person already owns, or trying again later.
+          description: AGENT_CREATE_RATE_LIMITED. `new_agent` was submitted while this browser's address may create no agent. The message names the way out, connecting as the person or as an agent the person already owns, or trying again later.
           content:
             application/json:
               schema:
@@ -6898,24 +6868,13 @@ components:
       properties:
         oauthAuthorization:
           type: string
-          description: The query string of the `/api/auth/authorize` request the guest continues, without the leading `?`.
-    GuestAuthorization:
-      type: object
-      additionalProperties: false
-      required:
-        - redirectUrl
-      properties:
-        redirectUrl:
-          type: string
-          format: uri
-          description: The client's `redirect_uri` with a code, or with an RFC 6749 `error`, `error_description`, `state` and `iss`.
-    McpScope:
+          description: The query string of the `/api/auth/authorize` request the connect page shows, without the leading `?`.
+    AccessTier:
       type: string
       enum:
         - read
-        - write
-        - publish
-        - worktree:merge
+        - read_write
+      description: What a person lets a connection do. `read` grants the `read` scope, and `read_write` grants `read write publish worktree:merge`.
     TokenExchangeRequest:
       type: object
       required:
@@ -7056,6 +7015,13 @@ components:
         error_description:
           type: string
           description: Present for MCP token errors, including unknown or missing clients.
+    McpScope:
+      type: string
+      enum:
+        - read
+        - write
+        - publish
+        - worktree:merge
     AuthorizationServerMetadata:
       type: object
       additionalProperties: false
@@ -10546,64 +10512,6 @@ components:
         check:
           $ref: '#/components/schemas/WorktreeCheck'
   parameters:
-    '0':
-      name: client_id
-      in: query
-      description: Static configured ID, DCR client ID, or HTTPS CIMD URL (at most 2000 characters, non-root path, no credentials, query, fragment or dot segments). CIMD identity is compared verbatim.
-      required: true
-      schema:
-        type: string
-    '1':
-      name: redirect_uri
-      in: query
-      required: true
-      schema:
-        type: string
-    '2':
-      name: state
-      in: query
-      required: false
-      description: Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients.
-      schema:
-        type: string
-    '3':
-      name: code_challenge
-      in: query
-      required: true
-      schema:
-        type: string
-        pattern: ^[A-Za-z0-9_-]{43,128}$
-    '4':
-      name: scope
-      in: query
-      required: false
-      schema:
-        type: string
-    '5':
-      name: response_type
-      in: query
-      required: false
-      description: Required for MCP clients.
-      schema:
-        type: string
-        enum:
-          - code
-    '6':
-      name: code_challenge_method
-      in: query
-      required: false
-      description: Required for MCP clients.
-      schema:
-        type: string
-        enum:
-          - S256
-    '7':
-      name: resource
-      in: query
-      required: false
-      description: Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly after removing a query string such as `?toolsets=all`.
-      schema:
-        type: string
     Cursor:
       $ref: '#/components/parameters/CursorParameter'
     Limit:
@@ -10741,37 +10649,6 @@ components:
           - desc
         default: desc
   responses:
-    '302':
-      description: Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error.
-      headers:
-        Location:
-          required: true
-          schema:
-            type: string
-    '400':
-      description: Unknown client, invalid redirect or invalid CIMD document. No client redirect.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-        text/html:
-          schema:
-            type: string
-    '403':
-      description: INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    '503':
-      description: CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. For a guest agent with no page, JSON OAUTH_CLIENT_UNAVAILABLE, or CLIENT_METADATA_BUSY with Retry-After.
-      content:
-        text/html:
-          schema:
-            type: string
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
     BadRequest:
       description: Invalid request.
       content:

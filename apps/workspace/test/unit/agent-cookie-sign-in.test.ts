@@ -73,13 +73,11 @@ async function waitFor(check: () => void) {
     try { check(); return; } catch (error) { if (attempt === 99) throw error; }
   }
 }
-const buttons = () => [...container.querySelectorAll("button")].map((button) => button.textContent);
 
-it("keeps a browser that holds only an agent's cookie on the sign-in page, with the guest card, instead of returning to authorize", async () => {
+it("keeps a browser that holds only an agent's cookie on the sign-in page instead of returning to authorize", async () => {
   const returnTo = "/api/auth/authorize?client_id=client&scope=read";
   const router = await open(LoginRoute, "/login", `/login?returnTo=${encodeURIComponent(returnTo)}`);
-  await waitFor(() => expect(buttons()).toContain("Continue as a guest agent"));
-  expect(container.querySelector("#auth-username")).not.toBeNull();
+  await waitFor(() => expect(container.querySelector("#auth-username")).not.toBeNull());
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
   expect(assign).not.toHaveBeenCalled();
   expect(router.state.location.pathname).toBe("/login");
