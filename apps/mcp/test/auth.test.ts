@@ -441,6 +441,23 @@ describe("gateway authentication", () => {
     }
   });
 
+  it("tells an agent that cannot read file contents to hand over a copy through claim only with the publish scope claim needs", async () => {
+    const agent = { id: "user-1", username: "claude-code-g3wq", displayName: "Claude Code · g3wq", avatarUrl: null, kind: "agent", claimed: false };
+    const gateway = await start({ ...exchangeEnv, MCP_EXECUTOR_ALLOWED_USER_IDS: "workspace" }, {
+      executor: true,
+      user: () => agent,
+      product: (path) => (path === "/api/session" ? { body: { authenticated: true, user: agent } } : undefined),
+    });
+    const restricted = "Editing document contents is not enabled for this account; ask the user to edit in the browser.";
+    const copy = "make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim";
+    const withPublish = (await gateway.connect("uvw_at_guest")).getInstructions()!;
+    expect(withPublish).toContain(`${restricted} Reading them is not enabled either.`);
+    expect(withPublish).toContain(copy);
+    const withoutPublish = (await gateway.connect("uvw_at_merge")).getInstructions()!;
+    expect(withoutPublish).toContain(`${restricted}\n\n`);
+    expect(withoutPublish).not.toContain("call claim");
+  });
+
   it("asks Workspace nothing more for a claimed agent's or a person's tool lists", async () => {
     const gateway = await start(exchangeEnv);
     for (const bearer of ["uvw_pat_claimed", "uvw_pat_full"]) {

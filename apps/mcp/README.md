@@ -24,7 +24,7 @@ operator granted with `db:executor-access` receive them (see [Executor access](#
 listed users receive them. `*` admits every user, which is acceptable only where every user of the Workspace is trusted,
 such as an internal staging deployment.
 Other users retain every tool that does not need the executor, and their server instructions
-ask them to edit document contents in the browser. An unclaimed agent is also told to give the user an editable copy
+ask them to edit document contents in the browser. An unclaimed agent with the `publish` scope that `claim` needs is also told to give the user an editable copy
 instead, with its claim link and the copy's link, and to tell the user to open the claim link first: the copy is
 theirs to edit once they claim it, and until then its link opens only if the agent shared it. The executor checks each grant on its own: against its list before
 contacting Workspace, and in `workspace` mode against the access Workspace reports for the grant's session.
