@@ -20,6 +20,9 @@ export interface HtmlViewHostOptions {
   onLoadingChanged?: (loading: boolean) => void;
 }
 
+// A frame whose CDN never answers never fires load. This covers a slow CDN stylesheet; past it the person sees what the frame has.
+const FRAME_LOAD_LIMIT_MS = 10_000;
+
 /** Adapts SDK state and authorized workbook metadata to the React consumers. */
 export function connectHtmlView(
   container: HTMLElement,
@@ -57,6 +60,26 @@ export function connectHtmlView(
   // The frame asks for its Sheets only after it has parsed, which its own scripts and stylesheets can delay.
   const declaresSources = getHtmlViewUnitIds(parseHtmlView(options.source)).length > 0;
   let loading = true;
+  let sourcesSettled = false;
+  // A stylesheet the page's <head> waits for keeps the frame blank after its Sheets load; the frame's load event waits for it too.
+  const frame = findFrame(container);
+  let frameLoaded = frame === null;
+  const onFrameLoad = () => {
+    frameLoaded = true;
+    endLoading();
+  };
+  frame?.addEventListener("load", onFrameLoad, { once: true });
+  const frameLimit = setTimeout(onFrameLoad, FRAME_LOAD_LIMIT_MS);
+  const stopWaitingForFrame = () => {
+    clearTimeout(frameLimit);
+    frame?.removeEventListener("load", onFrameLoad);
+  };
+  function endLoading() {
+    if (!loading || !sourcesSettled || !frameLoaded) return;
+    loading = false;
+    stopWaitingForFrame();
+    options.onLoadingChanged?.(false);
+  }
   options.onLoadingChanged?.(true);
   const unsubscribe = view.subscribe((state) => {
     const { drafts, writes, confirmation } = state.pending;
@@ -72,11 +95,11 @@ export function connectHtmlView(
       options.onInspectChanged?.(inspecting);
     }
     // Loading ends once, so a Sheet the page asks for later never covers a page already in use.
-    if (loading && state.phase !== "connecting" && !(state.phase === "ready" && declaresSources &&
-      (state.sources.length === 0 || state.sources.some((source) => source.phase === "loading")))) {
-      loading = false;
-      options.onLoadingChanged?.(false);
-    }
+    sourcesSettled = state.phase !== "connecting" && !(state.phase === "ready" && declaresSources &&
+      (state.sources.length === 0 || state.sources.some((source) => source.phase === "loading")));
+    // A closed connection shows its error, not a page, so there is no paint to wait for.
+    if (state.phase === "closed") frameLoaded = true;
+    endLoading();
   });
   return {
     prepareToLeave: view.prepareToLeave,
@@ -100,9 +123,19 @@ export function connectHtmlView(
     dispose() {
       if (disposed) return;
       disposed = true;
+      stopWaitingForFrame();
       unsubscribe();
       view.dispose();
       engines.clear();
     },
   };
+}
+
+function findFrame(root: ParentNode | null): HTMLIFrameElement | null {
+  for (const child of root?.children ?? []) {
+    if (child instanceof HTMLIFrameElement) return child;
+    const found = findFrame(child.shadowRoot) ?? findFrame(child);
+    if (found) return found;
+  }
+  return null;
 }
