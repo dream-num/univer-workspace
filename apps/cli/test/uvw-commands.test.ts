@@ -1266,7 +1266,7 @@ describe("uvw share", () => {
   const expiresAt = "2026-12-14T00:00:00.000Z";
 
   const claimUrl = `${ORIGIN}/claim/c0de`;
-  const claimHint = "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.";
+  const claimHint = "To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.";
   const privateAccess = (file: string) =>
     `Only this agent can open the link until a person claims it. To let anyone with the link read it, run \`uvw share ${file} --link viewer\`.`;
 
@@ -1289,20 +1289,20 @@ describe("uvw share", () => {
     return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN, whoami), spaces, whoami };
   }
 
-  it("reads the Link Sharing of a file link or Node ID without changing it", async () => {
+  it("reads the Link Sharing of a file link or Node ID without changing it or making a claim code", async () => {
     const { command, spaces } = share();
     const text = await run(command, [url]);
     expect(text.trimEnd()).toBe([
       `Budget  ${url}`,
       `Link Sharing: off. ${privateAccess(url)}`,
-      `Claim link: ${claimUrl}`,
       claimHint,
     ].join("\n"));
     expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
-      access: privateAccess("node-1"), claimHint, claimUrl, expiresAt, link: "off", name: "Budget", owner, url,
+      access: privateAccess("node-1"), claimHint, expiresAt, link: "off", name: "Budget", owner, url,
     });
     expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
     expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
+    expect(spaces.createAgentClaimCode).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1316,7 +1316,7 @@ describe("uvw share", () => {
     expect(text.includes(expiresAt)).toBe(link !== "off");
     expect(text.includes("--link viewer")).toBe(link === "off");
     expect(JSON.parse(await run(command, [url, "--link", link, "--json"]))).toEqual({
-      access: expect.any(String), claimHint, claimUrl, expiresAt, link, name: "Budget", owner, url,
+      access: expect.any(String), claimHint, expiresAt, link, name: "Budget", owner, url,
     });
     expect(JSON.parse(await run(command, [url, "--link", link, "--json", "url,link"]))).toEqual({ link, url });
     expect(spaces.updateLinkSharing).toHaveBeenCalledWith("node-1", written);
@@ -1344,14 +1344,6 @@ describe("uvw share", () => {
     });
     expect(spaces.getNode).not.toHaveBeenCalled();
     expect(whoami).not.toHaveBeenCalled();
-  });
-
-  it("leaves the claim link out when the Workspace cannot make one", async () => {
-    const { command, spaces } = share();
-    spaces.createAgentClaimCode.mockRejectedValue(workspaceError("NOT_FOUND", "The resource was not found.", { status: 404 }));
-    const text = await run(command, [url]);
-    expect(text).toContain("Link Sharing: off");
-    expect(text).not.toContain("Claim link");
   });
 
   it("prints a claim link that lasts ten minutes with uvw claim", async () => {

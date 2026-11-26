@@ -40,7 +40,7 @@ export interface Authentication {
   readonly session: string;
   readonly obtainedAt: number;
   readonly expiresAt: number;
-  /** Null means the gateway reads the identity from the Workspace session itself. */
+  /** Null means the gateway reads the identity from the Workspace session itself, on every request. */
   readonly identity: { readonly subject: WorkspaceSubject; readonly executorAccess: boolean } | null;
   readonly scopes: ReadonlySet<ToolScope> | null;
   readonly authKind: "pat" | "oauth" | "dev";
@@ -104,11 +104,9 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
       session: access_token,
       obtainedAt: Date.now(),
       expiresAt: Date.now() + expires_in * 1000,
-      identity: {
-        subject:
-          user.kind === "agent"
-            ? { ...identity, kind: user.kind, claimed: user.claimed === true }
-            : identity,
+      // A person can claim an unclaimed agent at any moment, so its next call reads the claim from the session.
+      identity: user.kind === "agent" && user.claimed !== true ? null : {
+        subject: user.kind === "agent" ? { ...identity, kind: user.kind, claimed: true } : identity,
         executorAccess: executor_access === true,
       },
       scopes: new Set(

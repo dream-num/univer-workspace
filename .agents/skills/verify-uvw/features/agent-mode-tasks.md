@@ -53,7 +53,7 @@ $V mcp --as b3 mp12-claim-b3 claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as the run user, click `Claim agent`, and replace the codes as
-[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache.
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says.
 
 ```bash
 A3U=$(jq -r .agent.username "$EVIDENCE/principal-a3.json"); B3U=$(jq -r .agent.username "$EVIDENCE/principal-b3.json")
@@ -186,8 +186,7 @@ $V mcp --as acceptor mia-claim claim '{}'
 ```
 
 Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
-`mia-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's
-cache. Then:
+`mia-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
 R="$O/issue-accept"

@@ -37,7 +37,7 @@ sequenceDiagram
     actor L as 🧑 Leo
     participant A as 🤖 Leo's AI assistant
     Note over G: Makes a Sheet in a pull request<br/>and merges it
-    G->>M: share: file link and claim link
+    G->>M: share and claim: file link and claim link
     rect rgba(128, 128, 128, 0.25)
     Note over M: Claims the agent
     end
@@ -91,7 +91,7 @@ An MCP client on your computer, such as Claude Code, gets a guest agent with no 
 
 ![The sign-in page an MCP client opens, with the Continue as a guest agent card beside the account sign-in form](images/agent-handoff/guest-agent-card.png)
 
-The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent, through the claim link that `share` and `claim` return. The agent works in a pull request, merges it, and shares the file:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent, through the claim link that `claim` returns. The agent works in a pull request, merges it, and shares the file:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -100,6 +100,7 @@ execute     { "worktree": "<worktree id>", "unit": "<unitId>", "code": "<Facade 
 pr_ready    { "repo": "<agent>/personal", "number": 1 }
 pr_merge    { "repo": "<agent>/personal", "number": 1 }
 share       { "node": "<nodeId>", "link": "viewer" }
+claim       {}
 ```
 
 With the CLI, `uvw auth guest` creates the agent and prints its repository:
@@ -112,18 +113,18 @@ uvw execute --worktree <worktree id> --unit <unitId> --script budget.js
 uvw pr ready 1 -R <agent>/personal
 uvw pr merge 1 -R <agent>/personal
 uvw share <nodeId> --link viewer
+uvw claim
 ```
 
-MCP `share` returns the link, who can open it, and a claim link:
+MCP `share` returns the link and who can open it, and points the agent to `claim`:
 
 ```text
 Q3 team budget  https://space.univer.ai/nodes/<nodeId>
 Link Sharing: viewer. Anyone with the link can read the file without signing in. The link stops working on 2026-12-18T15:23:53.488Z unless claude-code-g3wq stays active.
-Claim link: https://space.univer.ai/claim/<code>
-Give the claim link to the user so they can keep this file. It works once, within 10 minutes.
+To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.
 ```
 
-`uvw share` 0.7.0 prints the same facts more briefly.
+`claim` then returns the claim link, `{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<in 10 minutes>" }`. It works once, within 10 minutes. `uvw share` prints the same facts more briefly, and `uvw claim` prints the claim link.
 
 Until a person claims it, a guest agent keeps at most 20 files of up to 10 MiB each, its files expire after 30 days without use, and its share page marks it **Unverified agent**. It cannot read anyone's private files or join a Team Space.
 
@@ -141,7 +142,7 @@ flowchart TB
 
 The claim page names the agent and counts its files, and **Claim agent** completes the claim. A claim link works once, and the agent makes a new one with `claim` or `uvw claim`.
 
-After the claim, `share` returns no expiry date and no claim link, and the share page drops the **Unverified agent** mark.
+After the claim, `share` returns no expiry date and no claim hint, and the share page drops the **Unverified agent** mark.
 
 ## One file brings the next
 

@@ -69,13 +69,13 @@ $V mcp --as budget mcp-budget-before whoami
 jq -e '.budget == {openWorktrees: {used: 0, limit: 10}, merges: {used: 0, limit: 50}}' "$EVIDENCE/mcp-budget-before.out"
 { echo "BEGIN EXCLUSIVE;"; sleep 15; echo "COMMIT;"; } | sqlite3 "$(dirname "$EVIDENCE")/data/univer-collaboration.sqlite" &
 sleep 2
-$V mcp --as budget mcp-budget-failed pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task F\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-failed\"}"
+$V mcp --as budget mcp-budget-failed pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task F\",\"idempotency_key\":\"mcp-budget-key-$VERIFY_UVW_RUN-failed\"}"
 test $? -eq 1
 wait
 $V mcp --as budget mcp-budget-after-failure whoami
 jq -e '.budget.openWorktrees.used == 0' "$EVIDENCE/mcp-budget-after-failure.out"
 for n in $(seq 1 10); do
-  $V mcp --as budget "mcp-budget-pr-$n" pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task $n\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-$n\"}" || break
+  $V mcp --as budget "mcp-budget-pr-$n" pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task $n\",\"idempotency_key\":\"mcp-budget-key-$VERIFY_UVW_RUN-$n\"}" || break
 done
 $V mcp --as budget mcp-budget-full whoami
 jq -e '.budget.openWorktrees == {used: 10, limit: 10}' "$EVIDENCE/mcp-budget-full.out"
@@ -83,14 +83,14 @@ $V mcp --as budget mcp-budget-over pr_create "{\"repo\":\"$A/personal\",\"title\
 test $? -eq 1
 jq -e '.code == "AGENT_QUOTA_EXCEEDED" and (.message | contains("at most 10 open pull requests. Merge or discard one"))' "$EVIDENCE/mcp-budget-over.out"
 jq -e '.outcome == "tool_error" and .error_code == "AGENT_QUOTA_EXCEEDED" and .principal_category == "agent_unclaimed"' "$EVIDENCE/mcp-budget-over.event.json"
-$V mcp --as budget mcp-budget-failed-replay pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task F\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-failed\"}"
+$V mcp --as budget mcp-budget-failed-replay pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task F\",\"idempotency_key\":\"mcp-budget-key-$VERIFY_UVW_RUN-failed\"}"
 test $? -eq 1
 jq -e '.code == "AGENT_QUOTA_EXCEEDED"' "$EVIDENCE/mcp-budget-failed-replay.out"
 $V mcp --as budget mcp-budget-failed-replay-whoami whoami
 jq -e '.budget.openWorktrees.used == 10' "$EVIDENCE/mcp-budget-failed-replay-whoami.out"
 $V metrics | grep 'workspace_ceiling_denials_total{action="openWorktree"' > "$EVIDENCE/mcp-budget-denials.txt"
 grep -F 'code="AGENT_QUOTA_EXCEEDED",principal_category="agent_unclaimed"} 2' "$EVIDENCE/mcp-budget-denials.txt"
-$V mcp --as budget mcp-budget-replay pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task 10\",\"idempotency_key\":\"mcp-budget-$VERIFY_UVW_RUN-10\"}"
+$V mcp --as budget mcp-budget-replay pr_create "{\"repo\":\"$A/personal\",\"title\":\"Task 10\",\"idempotency_key\":\"mcp-budget-key-$VERIFY_UVW_RUN-10\"}"
 diff <(jq -S '{id, number}' "$EVIDENCE/mcp-budget-pr-10.out") <(jq -S '{id, number}' "$EVIDENCE/mcp-budget-replay.out")
 N=$(jq -r '.number' "$EVIDENCE/mcp-budget-pr-1.out")
 $V mcp --as budget mcp-budget-ready pr_ready "{\"repo\":\"$A/personal\",\"number\":\"$N\"}"

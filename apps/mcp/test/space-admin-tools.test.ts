@@ -113,6 +113,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let sessionUser: Record<string, unknown> = user;
   let ownedByClaimedAgent = false;
   let checksRequired: string | null = null;
+  let teamFile = false;
 
   const fetcher: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -177,6 +178,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
         breadcrumbs: [{ id: "sheet", name: "Budget" }],
         navigationRootNodeId: null,
       });
+    }
+    if (target.pathname === "/api/nodes/sheet/link-sharing" && teamFile) {
+      return Response.json({ error: { code: "NOT_FOUND", message: "The resource was not found." } }, { status: 404 });
     }
     if (target.pathname === "/api/nodes/sheet/link-sharing" && request.method !== "GET" && humanTokenSession) {
       return Response.json(
@@ -298,6 +302,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     humanTokenSession = false;
     sessionUser = user;
     ownedByClaimedAgent = false;
+    teamFile = false;
     if (gateway !== undefined) {
       await gateway.close();
       gateway.server.closeAllConnections();
@@ -677,7 +682,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     ]);
   });
 
-  it("reads Link Sharing without a write, sets each link value and returns the drop with a claim link", async () => {
+  it("reads Link Sharing without a write, sets each link value and points an unclaimed owner to claim without making a claim code", async () => {
     sessionUser = { ...user, kind: "agent", claimed: false };
     const client = await connect();
     const share = async (args: Record<string, unknown>) => await client.callTool({ name: "share", arguments: args });
@@ -686,19 +691,17 @@ describe("space, unit, repository admin, label and merge tools", () => {
       name: "Budget",
       owner: { username: "budget-x7k2", kind: "agent", claimed: false },
       expiresAt: "2026-12-14T00:00:00.000Z",
-      claimUrl: `${origin}/claim/c0de`,
-      claimHint: "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.",
+      claimHint: "To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.",
     };
-    const claimCode = { method: "POST", path: "/api/agents/claim-codes", body: undefined };
     const access =
       "Only this agent can open the link until a person claims it. To let anyone with the link read it, call share with node sheet and link viewer.";
     const read = await share({ node: `${origin}/nodes/sheet` });
     expect(read.structuredContent).toEqual({ ...drop, link: "off", access });
     expect(read.content).toEqual([{
       type: "text",
-      text: `Budget  ${origin}/nodes/sheet\nLink Sharing: off. ${access}\nClaim link: ${drop.claimUrl}\n${drop.claimHint}`,
+      text: `Budget  ${origin}/nodes/sheet\nLink Sharing: off. ${access}\n${drop.claimHint}`,
     }]);
-    expect(writesOf()).toEqual([claimCode]);
+    expect(writesOf()).toEqual([]);
     for (const [link, body] of [
       ["editor", { enabled: true, role: "editor" }],
       ["viewer", { enabled: true, role: "viewer" }],
@@ -706,7 +709,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     ] as const) {
       requests = [];
       expect((await share({ node: "sheet", link })).structuredContent).toEqual({ ...drop, link, access: expect.any(String) });
-      expect(writesOf()).toEqual([{ method: "PUT", path: "/api/nodes/sheet/link-sharing", body }, claimCode]);
+      expect(writesOf()).toEqual([{ method: "PUT", path: "/api/nodes/sheet/link-sharing", body }]);
     }
     expect(toolError((await share({ node: "sheet", link: "owner" })))).toMatchObject({
       code: "workspace-argument-invalid",
@@ -758,6 +761,21 @@ describe("space, unit, repository admin, label and merge tools", () => {
     await client.listTools();
     const read = await client.callTool({ name: "share", arguments: { node: "sheet" } });
     expect(read.structuredContent).toMatchObject({ link: "off", access: expect.stringContaining("Only") });
+  });
+
+  it("makes no claim code when an unclaimed agent retries share on a Team Space file, so the link it gave keeps working", async () => {
+    sessionUser = { ...user, kind: "agent", claimed: false };
+    teamFile = true;
+    const client = await connect();
+    expect((await client.callTool({ name: "claim", arguments: {} })).structuredContent).toMatchObject({ claimUrl: `${origin}/claim/c0de` });
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      expect(toolError(await client.callTool({ name: "share", arguments: { node: "sheet", link: "viewer" } }))).toMatchObject({
+        code: "workspace-argument-invalid",
+        message: 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository bob/team. A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.',
+        detail: { url: `${origin}/nodes/sheet` },
+      });
+    }
+    expect(writesOf().filter(({ path }) => path === "/api/agents/claim-codes")).toHaveLength(1);
   });
 
   it("hands an unclaimed agent a claim link on this Workspace that lasts ten minutes", async () => {

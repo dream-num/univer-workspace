@@ -11,7 +11,7 @@ import {
 } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, oneOf, type JsonFieldsOption } from "../../command.js";
 
-export const SHARE_JSON_FIELDS = ["access", "claimHint", "claimUrl", "expiresAt", "link", "name", "owner", "url"] as const satisfies
+export const SHARE_JSON_FIELDS = ["access", "claimHint", "expiresAt", "link", "name", "owner", "url"] as const satisfies
   readonly (keyof WorkspaceShare)[];
 
 export const CLAIM_JSON_FIELDS = ["claimUrl", "expiresAt"] as const satisfies readonly (keyof WorkspaceClaimLink)[];
