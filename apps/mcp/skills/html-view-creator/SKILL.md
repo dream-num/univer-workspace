@@ -12,7 +12,7 @@ user-invocable: true
   Controls write input cells; subscriptions show recalculated results.
 - A draft is not live. Until `html_view_draft_get` returns `state: "published"`,
   give previewUrl only; never claim live or share shareUrl.
-- For sources new/changed in a pull request or fork, save with `repo` and `pr`, or `worktree`. IDs survive merge. Merge only as the server
+- For sources new/changed in a pull request or fork, dry-run and save with `repo` and `pr`, or `worktree`. IDs survive merge. Merge only as the server
   instructions say, and never use older merged data instead.
 - If `html_view_save` is unavailable, say this connection cannot draft pages and
   stop. Never substitute a Slide, Board or other Unit.
@@ -100,7 +100,7 @@ never compute Sheet metrics in page code, including totals, ratios, achievement 
 forecasts or derived chart series. When a needed metric is missing, add formula cells to
 the Sheet inside the session's pull request with `execute`. For a merged Sheet, open a
 pull request with `pr_create` and add the Sheet with `unit_add` first. Bind the new
-formula cells, then save the draft with `repo` and `pr`.
+formula cells, then save with `repo` and `pr`.
 
 Design floor: CSS color variables; text contrast 4.5:1, large text/control boundaries
 3:1; visible keyboard focus, labels and non-color cues; 4/8px spacing, 16px body,

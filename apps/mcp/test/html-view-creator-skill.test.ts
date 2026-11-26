@@ -129,7 +129,7 @@ describe("HTML View Creator Skill tool bindings", () => {
       "show error states on rejection", "setCellValue(reference, value)` then `flush()", "insertRowsWithValues",
       "getWriteMode(unitId)", "data-workspace-src", "never compute Sheet metrics in page code",
       "add formula cells to the Sheet inside the session's pull request with `execute`", "`pr_create`", "`unit_add`",
-      "save the draft with `repo` and `pr`", "Use these samples as the self-check"])
+      "then save with `repo` and `pr`", "Use these samples as the self-check"])
       expect(creator).toContain(rule);
     const authoring = (await readFile(new URL("../../cli/skill-data/html-view/references/authoring.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     for (const rule of ["before the returned Promise resolves", "exactly the requested dimensions", "padded with null",
@@ -166,6 +166,13 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(save.description).not.toContain("optional starting points");
     expect(tools.find(({ name }) => name === "html_view_styles")!.description).not.toContain("optional starting points");
     expect(save.description).not.toMatch(/wait|pick a style|choose by purpose/iu);
+  });
+
+  it("sends a dry run to the save's pull request, where its new Sheets exist", async () => {
+    const save = tools.find(({ name }) => name === "html_view_save")!;
+    expect(save.description).toContain("It reads the data the save would read, so pass the save's worktree, or repo and pr, too");
+    const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    expect(creator).toContain("For sources new/changed in a pull request or fork, dry-run and save with `repo` and `pr`, or `worktree`.");
   });
 
   it("rejects catalog drift from the design reference", () => {
