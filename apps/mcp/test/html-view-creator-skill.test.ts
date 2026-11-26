@@ -40,7 +40,8 @@ describe("HTML View Creator Skill tool bindings", () => {
     for (const resource of ["styles/<id>.md", "templates/<id>.univer.html"])
       expect(text).toContain(`skills_read {"name":"html-view","resource":"${resource}"}`);
     expect(text).toContain("goes live when its pull request merges, published as whoever merges it");
-    expect(text).toContain("Merge only as the server instructions say, and never use older merged data instead.");
+    expect(text).toContain("Merge per whoami notice (else server instructions); never use older merged data instead.");
+    expect(text, "clients that drop server instructions still reach the finish rule").not.toContain("as the server instructions say");
     expect(text).toContain("Ask mode cannot save");
     expect(text).toContain("Pass inline `html` by default");
     for (const attribute of ["cell-text", "cell-model", "cell-subscribe", "range-subscribe"])
