@@ -195,11 +195,8 @@ export interface IdentityModule {
   recordAgentPageView(nodeId: string): Promise<void>;
   /** Whether the cookie holds a valid session, without the cleanup and agent activity that reading one causes. */
   hasSession(cookieHeader: string | undefined): Promise<boolean>;
-  /**
-   * Like requireSession, but only for a person signed in to the browser: an action that acts for a person
-   * refuses an agent, a CLI or other `agent` write-source session, and a session issued for a token.
-   */
   requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal>;
+  readonly guestAuthEnabled: boolean;
 }
 
 export function createIdentityModule(options: {
@@ -239,6 +236,7 @@ export function createIdentityModule(options: {
     options.emailAuthEnabled ?? emailSender !== null;
   const trialDeployment = options.trialDeployment ?? false;
   const agentCreateLimitPerHour = options.agentCreateLimitPerHour ?? 5;
+  const guestAuthEnabled = agentCreateLimitPerHour > 0;
   const agentCreateLimiter = createSourceRateLimiter(repository, "agent_create", agentCreateLimitPerHour, now);
 
   function anonymousSession(): SessionView {
@@ -249,7 +247,7 @@ export function createIdentityModule(options: {
       discordOAuthEnabled,
       passwordAuthEnabled,
       emailAuthEnabled,
-      guestAuthEnabled: agentCreateLimitPerHour > 0,
+      guestAuthEnabled,
     };
   }
 
@@ -868,6 +866,7 @@ export function createIdentityModule(options: {
     requireSession,
     issueSession,
     requireInteractiveSession,
+    guestAuthEnabled,
 
     async logout(cookieHeader) {
       const token = readSessionToken(cookieHeader);

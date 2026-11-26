@@ -9,7 +9,6 @@ export function principalCategory(principal: PrincipalKind | null): PrincipalCat
   return principal.claimed ? "agent_claimed" : "agent_unclaimed";
 }
 
-/** A person in the Browser. The kind decides, because an agent session issued by the earlier guest card also has the browser write source. */
 export function personInBrowser(principal: Principal): boolean {
   return principal.user.kind === "human" && principal.writeSource === "browser" && !principal.tokenIssued;
 }

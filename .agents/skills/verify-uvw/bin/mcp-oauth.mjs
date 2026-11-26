@@ -55,7 +55,6 @@ if (command === 'login') {
     const value = args.shift();
     if (value === undefined) usage(`Missing value for ${flag}`);
     if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
-    // An owned agent's id goes into a CSS selector, so only the UUID shape Workspace gives a user passes.
     else if (flag === '--connect-as' && (['new_agent', 'self'].includes(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))) connectAs = value;
     else if (flag === '--client-id' && URL.canParse(value) && new URL(value).protocol === 'https:') clientId = value;
     else if (flag === '--client-name' && value.trim() !== '') clientName = value;
@@ -107,7 +106,6 @@ if (command === 'login') {
     browser('storage', 'local', 'set', 'univer-workspace-language', 'en-US');
     browser('reload');
     browser('wait', '--text', 'Username');
-    // An agent's cookie, as `uvw auth guest` gets it, which authorize must treat as signed out.
     if (agentCookie && JSON.parse(browser('eval', "fetch('/api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(r => r.status)")) !== 201) {
       throw new Error('POST /api/auth/guest did not create an agent in the browser');
     }
@@ -154,12 +152,10 @@ if (command === 'login') {
       browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
     }
     let timer;
-    // The card sends the browser straight to the callback; a consent page would leave this wait to time out.
     const answer = card
       ? (browser('wait', '--url', 'https://verify-uvw.invalid/callback?*'), new URL(browser('get', 'url').trim()))
       : await Promise.race([received, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No callback within 30 s')), 30000); })]).finally(() => clearTimeout(timer));
     if (card) browser('network', 'unroute');
-    // A guest code leaves the browser's session as it was: none, or the agent cookie from before.
     const browserUserAfter = guest ? sessionUser() : undefined;
     const browserKept = !guest || JSON.stringify(browserUserAfter) === JSON.stringify(browserUserBefore);
     if (answer.searchParams.get('state') !== state || !answer.searchParams.get('code')) throw new Error(`Callback carried ${answer.searchParams.get('error') ?? 'no code'} or a wrong state`);

@@ -157,7 +157,6 @@ export function createIdentityRouter(options: {
       throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
     }
     const { user } = await identity.createAgent({ label: agentLabel(request.body?.label), originIp: request.ip });
-    // Like a CLI login: it renews while in use, and never acts for a person.
     const issued = await identity.issueSession(user, "agent");
     setSessionCookie(response, identity, issued.cookieValue, options);
     recordLoopEvent("workspace.guest_agent", { entry: "auth_guest" }, { user_id: user.id });

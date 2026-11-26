@@ -110,11 +110,9 @@ export function createOAuthAuthorizationRouter(options: {
     );
   });
 
-  // Reads no session and sets none: the code goes to the client, and redeeming it creates the agent.
   router.post("/authorize/guest", async (request, response) => {
     response.set("cache-control", "no-store");
-    const anonymous = await options.identity.getSession(undefined);
-    if (!anonymous.authenticated && !anonymous.guestAuthEnabled) {
+    if (!options.identity.guestAuthEnabled) {
       throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
     }
     const authorization: unknown = request.body?.oauthAuthorization;
@@ -316,10 +314,6 @@ export function createOAuthAuthorizationRouter(options: {
     });
   }
 
-  /**
-   * Where the browser goes with a code for a new guest agent of an MCP client, or with the OAuth error the request earns:
-   * a guest grants nobody's data. Returns null for a static client, which needs a signed-in person.
-   */
   async function authorizeGuest(values: Record<string, unknown>, sourceIp: string | undefined): Promise<string | null> {
     const clientId = requireQueryString(values.client_id);
     const source = await resolveClientSource(clientId, clients, options.accessTokens, mcp);
@@ -678,7 +672,6 @@ function storedAuthorization(stored: SignInCode, code: string): IssuedAuthorizat
   return { ...(JSON.parse(stored.payload) as Omit<IssuedAuthorization, "code" | "expiresAt">), code, expiresAt: stored.expiresAt };
 }
 
-/** An agent's leftover cookie counts as signed out, so it never authorizes a client as that agent. */
 function signedInPerson(session: SessionView): session is AuthenticatedSession {
   return session.authenticated && session.user.kind === "human";
 }
@@ -741,11 +734,6 @@ function renderConsentPage(
   });
 }
 
-/**
- * The person chooses among the agents they own, a new agent unless `unavailable` says why this source cannot create one
- * now, and themselves. The page preselects the most recently active owned agent made for a client of this name, else a
- * new agent, else the person.
- */
 function renderMcpConsentPage(
   request: McpAuthorizationRequest,
   displayName: string,

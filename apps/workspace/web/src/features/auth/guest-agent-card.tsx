@@ -6,10 +6,6 @@ import { useI18n } from "../../shared/i18n";
 import { Alert, Button } from "../../shared/ui";
 import { isOAuthAuthorizeReturnTo, sessionQueryOptions } from "./auth.queries";
 
-/**
- * Renders nothing unless login returns to OAuth authorization and a guest is possible: no session on a deployment that
- * creates guest agents, or an agent's leftover cookie, which only exists where guests were on and authorize treats as signed out.
- */
 export function GuestAgentCard({ returnTo }: { readonly returnTo?: string }) {
   const { t } = useI18n();
   const session = useQuery(sessionQueryOptions);
@@ -24,13 +20,10 @@ export function GuestAgentCard({ returnTo }: { readonly returnTo?: string }) {
   });
   const error = guest.error as ApiError | null;
   const view = session.data;
+  const signedOutWithGuests = view?.authenticated === false && view.guestAuthEnabled;
+  const leftoverAgentCookie = view?.authenticated === true && view.user.kind === "agent";
 
-  if (
-    !returnTo ||
-    !isOAuthAuthorizeReturnTo(returnTo) ||
-    !view ||
-    (view.authenticated ? view.user.kind !== "agent" : !view.guestAuthEnabled)
-  ) {
+  if (!returnTo || !isOAuthAuthorizeReturnTo(returnTo) || !(signedOutWithGuests || leftoverAgentCookie)) {
     return null;
   }
 

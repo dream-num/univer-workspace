@@ -460,7 +460,6 @@ function guestAuthorization(origin: string, oauthAuthorization: unknown, forward
   });
 }
 
-/** A guest card's agent browser session from before agents stopped getting one; no route issues it now. */
 async function legacyAgentCookie(origin: string): Promise<string> {
   const application = applications.at(-1)!;
   const { agent } = (await (await fetch(`${origin}/api/agents`, { method: "POST" })).json()) as { agent: { id: string } };
