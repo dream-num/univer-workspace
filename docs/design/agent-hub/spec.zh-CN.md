@@ -178,7 +178,7 @@
 
 **F2.2 认领。**
 
-- `POST /api/agents/claim-codes`：未认领 agent 的会话调用，返回 `{ code, claimUrl, expiresIn }`。进程内保存，10 分钟有效，只能用一次，实现方式与 CLI Device Flow 相同。
+- `POST /api/agents/claim-codes`：未认领 agent 的会话调用，返回 `{ code, claimUrl, expiresIn }`。产品库 V36 起码的哈希存在 `sign_in_codes`，所有副本共用，10 分钟有效，只能用一次，实现方式与 CLI Device Flow 相同。
 - `/claim/<code>` 页面，见原型第 5 屏。要求人的浏览器会话，未登录时先登录再回来。
 - `POST /api/agents/claim`：人的浏览器会话调用。设置 `owner_user_id` 和 `claimed_at`，清空 `expires_at`。
 - 权限解析加一种关系：agent 的主人在该 agent 的 Personal Space 里是 `owner`。agent 不因此得到主人的任何权限。

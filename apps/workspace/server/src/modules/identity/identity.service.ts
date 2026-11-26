@@ -1,5 +1,5 @@
 import { agentActivityWindow, authenticateStoredPrincipal, AGENT_TTL_MS } from "./agent-activity.js";
-import { createSessionToken, secretMatches } from "./session-token.js";
+import { createSessionToken, hashSessionSecret, secretMatches } from "./session-token.js";
 import {
   createHash,
   createHmac,
@@ -70,14 +70,6 @@ const EMAIL_CODE_MAX_ATTEMPTS = 5;
 const DEFAULT_AGENT_LABEL = "agent";
 const MAX_AGENT_CLIENT_NAME_LENGTH = 40;
 
-interface PendingCliAuthorization {
-  readonly deviceCodeHash: string;
-  readonly userCode: string;
-  readonly expiresAt: number;
-  approvedUserId?: string;
-  exchanging?: boolean;
-}
-
 export interface IdentityModule {
   initialize(): Promise<void>;
   readonly cookieName: string;
@@ -102,7 +94,7 @@ export interface IdentityModule {
   createAgent(input: AgentCreation): Promise<CreatedAgent>;
   /** Throws the error `createAgent` would throw for a source over its limit, without counting a creation. */
   assertAgentCreationAllowed(originIp: string | undefined): Promise<void>;
-  startCliAuthorization(): CliAuthorizationStart;
+  startCliAuthorization(): Promise<CliAuthorizationStart>;
   approveCliAuthorization(
     cookieHeader: string | undefined,
     userCode: unknown
@@ -242,8 +234,6 @@ export function createIdentityModule(options: {
   const trialDeployment = options.trialDeployment ?? false;
   const agentCreateLimitPerHour = options.agentCreateLimitPerHour ?? 5;
   const agentCreateLimiter = createSourceRateLimiter(repository, "agent_create", agentCreateLimitPerHour, now);
-  const cliAuthorizations = new Map<string, PendingCliAuthorization>();
-  const cliAuthorizationDevices = new Map<string, string>();
 
   function anonymousSession(): SessionView {
     return {
@@ -752,27 +742,25 @@ export function createIdentityModule(options: {
       };
     },
 
-    startCliAuthorization() {
-      deleteExpiredCliAuthorizations();
-      if (cliAuthorizations.size >= CLI_AUTHORIZATION_CAPACITY) {
+    async startCliAuthorization() {
+      const at = now();
+      const deviceCode = randomBytes(32).toString("base64url");
+      let userCode: string;
+      let stored: "stored" | "full" | "duplicate";
+      do {
+        userCode = createCliUserCode();
+        stored = await repository.putSignInCode(
+          { kind: "cli", codeHash: hashSessionSecret(deviceCode), userCodeHash: hashSessionSecret(userCode), subjectUserId: null, payload: "{}", createdAt: at, expiresAt: at + CLI_AUTHORIZATION_TTL_MS },
+          { expiredBefore: at, capacity: CLI_AUTHORIZATION_CAPACITY },
+        );
+      } while (stored === "duplicate");
+      if (stored === "full") {
         throw new ApplicationError(
           "CLI_AUTHORIZATION_UNAVAILABLE",
           503,
           "CLI browser login is temporarily unavailable. Try again shortly."
         );
       }
-      const deviceCode = randomBytes(32).toString("base64url");
-      const deviceCodeHash = hashCliDeviceCode(deviceCode);
-      let userCode = createCliUserCode();
-      while (cliAuthorizations.has(userCode)) {
-        userCode = createCliUserCode();
-      }
-      cliAuthorizations.set(userCode, {
-        deviceCodeHash,
-        userCode,
-        expiresAt: now() + CLI_AUTHORIZATION_TTL_MS,
-      });
-      cliAuthorizationDevices.set(deviceCodeHash, userCode);
       const verificationUri = "/cli-login";
       return {
         deviceCode,
@@ -786,61 +774,37 @@ export function createIdentityModule(options: {
 
     async approveCliAuthorization(cookieHeader, inputUserCode) {
       const session = await requireInteractiveSession(cookieHeader);
-      const userCode = validCliUserCode(inputUserCode);
-      const authorization = cliAuthorizations.get(userCode);
+      const authorization = await repository.findSignInCode("cli", hashSessionSecret(validCliUserCode(inputUserCode)), "user_code_hash");
       if (!authorization) throw invalidCliAuthorization();
       if (authorization.expiresAt <= now()) {
-        deleteCliAuthorization(authorization);
+        await repository.deleteSignInCode("cli", authorization.codeHash);
         throw expiredCliAuthorization();
       }
-      if (
-        authorization.approvedUserId !== undefined &&
-        authorization.approvedUserId !== session.user.id
-      ) {
+      if (!(await repository.approveSignInCode(authorization.codeHash, session.user.id))) {
         throw new ApplicationError(
           "CONFLICT",
           409,
           "This CLI login request was already approved by another User."
         );
       }
-      authorization.approvedUserId = session.user.id;
       return authenticatedSession(session.user);
     },
 
     async exchangeCliAuthorization(inputDeviceCode) {
-      const deviceCode = validCliDeviceCode(inputDeviceCode);
-      const deviceCodeHash = hashCliDeviceCode(deviceCode);
-      const userCode = cliAuthorizationDevices.get(deviceCodeHash);
-      const authorization = userCode
-        ? cliAuthorizations.get(userCode)
-        : undefined;
-      if (
-        !authorization ||
-        !secretsEqual(deviceCodeHash, authorization.deviceCodeHash)
-      ) {
-        throw invalidCliAuthorization();
-      }
+      const deviceCodeHash = hashSessionSecret(validCliDeviceCode(inputDeviceCode));
+      const authorization = await repository.findSignInCode("cli", deviceCodeHash);
+      if (!authorization) throw invalidCliAuthorization();
       if (authorization.expiresAt <= now()) {
-        deleteCliAuthorization(authorization);
+        await repository.deleteSignInCode("cli", deviceCodeHash);
         throw expiredCliAuthorization();
       }
-      if (authorization.approvedUserId === undefined) {
+      if (authorization.subjectUserId === null) {
         return { status: "pending" };
       }
-      if (authorization.exchanging) throw invalidCliAuthorization();
-      authorization.exchanging = true;
-      try {
-        const user = await repository.findUser(authorization.approvedUserId);
-        if (!user) {
-          deleteCliAuthorization(authorization);
-          throw invalidCliAuthorization();
-        }
-        const issuedSession = await issueSession(user, "agent");
-        deleteCliAuthorization(authorization);
-        return { status: "authorized", issuedSession };
-      } finally {
-        delete authorization.exchanging;
-      }
+      const user = await repository.findUser(authorization.subjectUserId);
+      // The delete decides which of concurrent exchanges, on any replica, gets the session.
+      if (!(await repository.deleteSignInCode("cli", deviceCodeHash)) || !user) throw invalidCliAuthorization();
+      return { status: "authorized", issuedSession: await issueSession(user, "agent") };
     },
 
     async changePassword(cookieHeader, input) {
@@ -1212,18 +1176,6 @@ export function createIdentityModule(options: {
     return repository.updateUser(user.id, patch, now(), user);
   }
 
-  function deleteExpiredCliAuthorizations(): void {
-    for (const authorization of cliAuthorizations.values()) {
-      if (authorization.expiresAt <= now()) {
-        deleteCliAuthorization(authorization);
-      }
-    }
-  }
-
-  function deleteCliAuthorization(authorization: PendingCliAuthorization): void {
-    cliAuthorizations.delete(authorization.userCode);
-    cliAuthorizationDevices.delete(authorization.deviceCodeHash);
-  }
 }
 
 function createCliUserCode(): string {
@@ -1248,19 +1200,6 @@ function validCliDeviceCode(value: unknown): string {
     throw invalidCliAuthorization();
   }
   return value;
-}
-
-function hashCliDeviceCode(value: string): string {
-  return createHash("sha256").update(value).digest("base64url");
-}
-
-function secretsEqual(actual: string, expected: string): boolean {
-  const actualBytes = Buffer.from(actual);
-  const expectedBytes = Buffer.from(expected);
-  return (
-    actualBytes.length === expectedBytes.length &&
-    timingSafeEqual(actualBytes, expectedBytes)
-  );
 }
 
 function invalidCliAuthorization(): ApplicationError {

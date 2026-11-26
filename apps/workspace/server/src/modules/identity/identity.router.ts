@@ -176,9 +176,9 @@ export function createIdentityRouter(options: {
     response.status(201).json({ agent: { id: user.id, username: user.username } });
   });
 
-  router.post("/auth/cli/authorizations", (_request, response) => {
+  router.post("/auth/cli/authorizations", async (_request, response) => {
     response.set("Cache-Control", "no-store");
-    response.status(201).json(identity.startCliAuthorization());
+    response.status(201).json(await identity.startCliAuthorization());
   });
 
   router.post("/auth/cli/authorizations/approve", async (request, response) => {

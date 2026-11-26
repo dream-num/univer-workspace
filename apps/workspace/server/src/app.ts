@@ -72,7 +72,6 @@ import {
   type DiscordOAuthProvider,
   type GoogleOAuthProvider,
   type GitHubOAuthProvider,
-  type IssuedAuthorization,
   type IdentityModule,
 } from "./modules/identity/index.js";
 import {
@@ -480,7 +479,6 @@ export function createWorkspaceApplication(
       budget: access.budget,
     })
   );
-  const authorizationStore = new Map<string, IssuedAuthorization>();
   app.use(
     "/api/auth",
     createOAuthAuthorizationRouter({
@@ -488,7 +486,7 @@ export function createWorkspaceApplication(
       accessTokens,
       secureCookies: config.secureCookies,
       oauthClients,
-      authorizationStore,
+      codes: identityRepository,
       guestAuthorizationCapacity: dependencies.guestAuthorizationCapacity,
       mcpOAuth: mcpOAuth ?? null,
       resolveClientMetadata,

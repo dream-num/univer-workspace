@@ -619,10 +619,10 @@ export interface paths {
         /**
          * Create a link that lets a human claim the current agent.
          * @description Needs the login session of an unclaimed agent, from any credential. The
-         *     code lives in this server process for ten minutes and claims the agent
-         *     once; a restart invalidates it. An agent holds at most ten live codes, and
-         *     an eleventh replaces its oldest. All responses have Cache-Control:
-         *     no-store.
+         *     code lasts ten minutes and claims the agent once. The product database
+         *     holds its hash, so any server replica accepts it and a restart keeps it.
+         *     An agent holds at most ten live codes, and an eleventh replaces its
+         *     oldest. All responses have Cache-Control: no-store.
          */
         post: operations["createAgentClaimCode"];
         delete?: never;

@@ -4,10 +4,12 @@ import { parse as parseQuery } from "node:querystring";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import { recordLoopEvent } from "../../middleware/loop-metrics.js";
-import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord, type OAuthGrantRecord } from "./access-tokens.js";
+import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord } from "./access-tokens.js";
 import { deriveDisplayName } from "./display-name.js";
+import type { IdentityRepository, SignInCode } from "./identity.repository.js";
 import type { IdentityModule } from "./identity.service.js";
 import type { AgentCreation, User } from "./identity.types.js";
+import { hashSessionSecret } from "./session-token.js";
 import {
   authorizeRedirectTarget,
   defaultOAuthScope,
@@ -42,6 +44,7 @@ export const WORKSPACE_SESSION_TOKEN_TYPE = "urn:univer:params:oauth:token-type:
 export const DOWNSTREAM_SESSION_TTL_MS = 10 * 60 * 1000;
 const REGISTRATION_BODY_LIMIT = "16kb";
 const GUEST_AUTHORIZATION_CAPACITY = 10_000;
+const CONSENT_TTL_MS = 5 * 60_000;
 const MCP_STATE_PATTERN = /^[\x20-\x7E]{1,1024}$/u;
 const SCOPE_DESCRIPTIONS: Readonly<Record<McpScope, string>> = {
   read: "View your spaces, files, issues and worktrees",
@@ -55,20 +58,16 @@ export function createOAuthAuthorizationRouter(options: {
   readonly accessTokens: AccessTokenService;
   readonly secureCookies: boolean;
   readonly oauthClients: OAuthClientConfig | null;
-  readonly authorizationStore: Map<string, IssuedAuthorization>;
+  readonly codes: SignInCodeStore;
   readonly guestAuthorizationCapacity?: number | undefined;
   readonly mcpOAuth?: McpOAuthConfig | null;
   readonly resolveClientMetadata: ResolveClientMetadata;
 }): Router {
   const router = Router();
   const mcp = options.mcpOAuth ?? null;
-  // Codes already redeemed by MCP clients, kept until they would have expired: RFC 6749 section 4.1.2
-  // asks that a replayed code revoke the grant it produced.
-  const redeemedCodes = new Map<string, { readonly grant: Promise<OAuthGrantRecord | null>; readonly expiresAt: number }>();
   router.use(json({ limit: "1mb" }));
   router.use(urlencoded({ extended: false, limit: "1mb" }));
   const clients = new Map<string, OAuthClient>();
-  const consentTokens = new Map<string, { readonly userId: string; readonly request: AuthorizationRequest; readonly expiresAt: number }>();
   for (const client of options.oauthClients?.clients ?? []) {
     clients.set(client.clientId, client);
   }
@@ -95,7 +94,7 @@ export function createOAuthAuthorizationRouter(options: {
     }
 
     response.redirect(
-      issueAuthorization(options, authorizationRequest, { kind: "user", user: session.user })
+      await issueAuthorization(options, authorizationRequest, { kind: "user", userId: session.user.id })
     );
   });
 
@@ -108,9 +107,13 @@ export function createOAuthAuthorizationRouter(options: {
       return;
     }
     await options.identity.requireInteractiveSession(request.headers.cookie);
-    for (const [token, entry] of consentTokens) if (entry.expiresAt <= Date.now()) consentTokens.delete(token);
+    const now = Date.now();
     const consentToken = randomBytes(32).toString("base64url");
-    consentTokens.set(consentToken, { userId: session.user.id, request: authorizationRequest, expiresAt: Date.now() + 5 * 60_000 });
+    // A static client carries its secret, so the stored request leaves the client out.
+    await options.codes.putSignInCode(
+      { kind: "consent", codeHash: hashSessionSecret(consentToken), userCodeHash: null, subjectUserId: session.user.id, payload: JSON.stringify({ ...authorizationRequest, client: undefined }), createdAt: now, expiresAt: now + CONSENT_TTL_MS },
+      { expiredBefore: now },
+    );
     const callback = new URL(authorizationRequest.redirectUri);
     // A private-use scheme has an opaque origin; CSP names it as a scheme source instead.
     const callbackSource = callback.origin === "null" ? callback.protocol : callback.origin;
@@ -140,17 +143,19 @@ export function createOAuthAuthorizationRouter(options: {
         "consent_token",
       );
     }
-    const pending = consentTokens.get(token);
-    if (pending === undefined || pending.expiresAt <= Date.now() || pending.userId !== session.user.id) {
-      consentTokens.delete(token);
-      throw new ApplicationError(
-        "INVALID_INPUT",
-        400,
-        "The consent request is invalid, expired, or already used.",
-        "consent_token",
-      );
+    const tokenHash = hashSessionSecret(token);
+    const invalidConsent = () => new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      "The consent request is invalid, expired, or already used.",
+      "consent_token",
+    );
+    const pending = await options.codes.findSignInCode("consent", tokenHash);
+    if (pending === null || pending.expiresAt <= Date.now() || pending.subjectUserId !== session.user.id) {
+      await options.codes.deleteSignInCode("consent", tokenHash);
+      throw invalidConsent();
     }
-    let authorizationRequest = pending.request;
+    let authorizationRequest = JSON.parse(pending.payload) as ConsentedRequest;
     const allowed = request.body.decision === "allow";
     if (allowed && authorizationRequest.kind === "mcp") {
       const checked: unknown[] = [request.body.scope].flat();
@@ -161,12 +166,13 @@ export function createOAuthAuthorizationRouter(options: {
       }
       authorizationRequest = { ...authorizationRequest, scopes: granted };
     }
-    consentTokens.delete(token);
+    // The delete decides which of concurrent submissions, on any replica, uses the token.
+    if (!(await options.codes.deleteSignInCode("consent", tokenHash))) throw invalidConsent();
     if (!allowed) {
       response.redirect(303, authorizationErrorTarget(authorizationRequest.redirectUri, authorizationRequest.state, "access_denied", undefined, authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined));
       return;
     }
-    response.redirect(303, issueAuthorization(options, authorizationRequest, { kind: "user", user: session.user }));
+    response.redirect(303, await issueAuthorization(options, authorizationRequest, { kind: "user", userId: session.user.id }));
   });
 
   router.post("/token", async (request, response) => {
@@ -196,14 +202,11 @@ export function createOAuthAuthorizationRouter(options: {
     const code = requireQueryString(request.body.code);
     const codeVerifier = requireQueryString(request.body.code_verifier);
 
-    const authorization = options.authorizationStore.get(code);
-    if (authorization === undefined) {
-      throw new ApplicationError(
-        "INVALID_GRANT",
-        400,
-        "authorization code is invalid."
-      );
-    }
+    const invalidCode = () => new ApplicationError("INVALID_GRANT", 400, "authorization code is invalid.");
+    const codeHash = hashSessionSecret(code);
+    const stored = await options.codes.findSignInCode("oauth_code", codeHash);
+    if (stored === null || stored.state !== "pending") throw invalidCode();
+    const authorization = storedAuthorization(stored, code);
     const subject = requireOAuthAuthorization(authorization, {
       code,
       clientId: client.clientId,
@@ -211,9 +214,10 @@ export function createOAuthAuthorizationRouter(options: {
       codeVerifier,
       now: Date.now(),
     });
-    options.authorizationStore.delete(code);
-    if (subject.kind !== "user") throw new ApplicationError("INVALID_GRANT", 400, "authorization code is invalid.");
-    const user = subject.user;
+    // The delete decides which of concurrent redemptions, on any replica, gets the code.
+    if (!(await options.codes.deleteSignInCode("oauth_code", codeHash)) || subject.kind !== "user") throw invalidCode();
+    const [user] = await options.identity.findUsers([subject.userId]);
+    if (user === undefined) throw invalidCode();
 
     if (scopeIncludesSession(authorization.scope)) {
       const issued = await options.identity.issueSession(user, "agent");
@@ -279,7 +283,7 @@ export function createOAuthAuthorizationRouter(options: {
     const parsed = parseMcpAuthorizationRequest(mcp, client, request.query);
     response.redirect("errorRedirect" in parsed
       ? parsed.errorRedirect
-      : issueAuthorization(options, parsed, { kind: "guest", agent: { label: undefined, clientName: client.clientName, originIp: request.ip } }));
+      : await issueAuthorization(options, parsed, { kind: "guest", agent: { label: undefined, clientName: client.clientName, originIp: request.ip } }));
     return true;
   }
 
@@ -365,22 +369,27 @@ export function createOAuthAuthorizationRouter(options: {
       return;
     }
     const now = Date.now();
-    for (const [redeemed, entry] of redeemedCodes) if (entry.expiresAt <= now) redeemedCodes.delete(redeemed);
-    const replayed = redeemedCodes.get(code);
-    if (replayed !== undefined) {
-      redeemedCodes.delete(code);
-      const grant = await replayed.grant;
-      if (grant) await options.accessTokens.revokeGrant(grant.userId, grant.id);
-      fail(400, "invalid_grant", "The authorization code was already used; the tokens it produced are revoked.");
-      return;
-    }
-    const authorization = options.authorizationStore.get(code);
-    if (authorization?.resource === undefined) {
+    const codeHash = hashSessionSecret(code);
+    const stored = await options.codes.findSignInCode("oauth_code", codeHash);
+    const authorization = stored && storedAuthorization(stored, code);
+    // A static client's code has no resource and is not this grant's to redeem, so it stays usable.
+    const redeemed = authorization?.resource === undefined ? null : await options.codes.redeemSignInCode("oauth_code", codeHash, now);
+    if (!authorization || authorization.resource === undefined || redeemed === null) {
       fail(400, "invalid_grant", "The authorization code is invalid or expired.");
       return;
     }
-    // One attempt per code: a failed redemption does not leave the code usable.
-    options.authorizationStore.delete(code);
+    // RFC 6749 section 4.1.2 asks that a replayed code revoke the grant it produced. The redeemed code stays
+    // as the replay record until it would have expired.
+    if (redeemed.state === "replayed") {
+      if (redeemed.subjectUserId !== null && redeemed.grantId !== null) await options.accessTokens.revokeGrant(redeemed.subjectUserId, redeemed.grantId);
+      fail(400, "invalid_grant", "The authorization code was already used; the tokens it produced are revoked.");
+      return;
+    }
+    // One attempt per code: a failed redemption deletes it, so it is neither usable nor a replay record.
+    const failRedemption = async (status: number, error: string, description: string) => {
+      await options.codes.deleteSignInCode("oauth_code", codeHash);
+      fail(status, error, description);
+    };
     let subject: AuthorizationSubject;
     try {
       subject = requireOAuthAuthorization(authorization, {
@@ -391,30 +400,28 @@ export function createOAuthAuthorizationRouter(options: {
         now,
       });
     } catch {
-      fail(400, "invalid_grant", "The authorization code is expired or does not match this client, redirect_uri or code_verifier.");
+      await failRedemption(400, "invalid_grant", "The authorization code is expired or does not match this client, redirect_uri or code_verifier.");
       return;
     }
     if (resource !== undefined && resource !== authorization.resource) {
-      fail(400, "invalid_grant", "resource does not match the authorization request.");
+      await failRedemption(400, "invalid_grant", "resource does not match the authorization request.");
       return;
     }
-    const grantRequest = { clientId, scopes: authorization.scope.split(" "), resource: authorization.resource };
-    const issuing = (subject.kind === "user" ? Promise.resolve(subject.user) : createGuestAgent(subject.agent))
-      .then((user) => options.accessTokens.issueGrant({ ...grantRequest, userId: user.id }));
-    // A concurrent replay must wait for issuance before revoking the resulting grant.
-    redeemedCodes.set(code, {
-      grant: issuing.then((issued) => issued.grant, () => null),
-      expiresAt: authorization.expiresAt,
-    });
     let issued: IssuedGrant;
     try {
-      issued = await issuing;
+      const userId = subject.kind === "user" ? subject.userId : (await createGuestAgent(subject.agent)).id;
+      issued = await options.accessTokens.issueGrant({ clientId, scopes: authorization.scope.split(" "), resource: authorization.resource, userId });
     } catch (error) {
-      // No grant exists for a replay to revoke, and keeping the record would let anonymous redemptions grow it.
-      redeemedCodes.delete(code);
-      if (!(error instanceof ApplicationError && error.code === "AGENT_CREATE_RATE_LIMITED")) throw error;
-      fail(429, "temporarily_unavailable", error.message);
+      if (!(error instanceof ApplicationError && error.code === "AGENT_CREATE_RATE_LIMITED")) {
+        await options.codes.deleteSignInCode("oauth_code", codeHash);
+        throw error;
+      }
+      await failRedemption(429, "temporarily_unavailable", error.message);
       return;
+    }
+    // A replay that arrived before the grant was recorded found none to revoke, so this redemption revokes it.
+    if (await options.codes.recordSignInGrant(codeHash, issued.grant.userId, issued.grant.id)) {
+      await options.accessTokens.revokeGrant(issued.grant.userId, issued.grant.id);
     }
     sendGrant(response, issued);
   }
@@ -601,6 +608,16 @@ async function registerClient(accessTokens: AccessTokenService, config: McpOAuth
 
 type AuthorizationRequest = StaticAuthorizationRequest | McpAuthorizationRequest;
 
+/** A request as its consent token stores it. */
+type ConsentedRequest = Omit<StaticAuthorizationRequest, "client"> | Omit<McpAuthorizationRequest, "client">;
+
+type SignInCodeStore = Pick<IdentityRepository, "putSignInCode" | "findSignInCode" | "deleteSignInCode" | "redeemSignInCode" | "recordSignInGrant">;
+
+/** The authorization an `oauth_code` row holds, for the presented code that hashed to it. */
+function storedAuthorization(stored: SignInCode, code: string): IssuedAuthorization {
+  return { ...(JSON.parse(stored.payload) as Omit<IssuedAuthorization, "code" | "expiresAt">), code, expiresAt: stored.expiresAt };
+}
+
 /** A request from a static `OAUTH_CLIENTS_JSON` client; its rules are unchanged by MCP OAuth. */
 interface StaticAuthorizationRequest {
   readonly kind: "static";
@@ -784,31 +801,17 @@ function authorizePath(request: AuthorizationRequest): string {
   return `/api/auth/authorize?${authorizationQuery(request).toString()}`;
 }
 
-function issueAuthorization(
+async function issueAuthorization(
   options: {
-    readonly authorizationStore: Map<string, IssuedAuthorization>;
+    readonly codes: SignInCodeStore;
     readonly guestAuthorizationCapacity?: number | undefined;
   },
-  authorizationRequest: AuthorizationRequest,
+  authorizationRequest: ConsentedRequest,
   subject: AuthorizationSubject
-): string {
+): Promise<string> {
   const now = Date.now();
-  // Every code has the same lifetime and a Map iterates in insertion order, so the expired codes come first.
-  for (const [code, pending] of options.authorizationStore) {
-    if (pending.expiresAt > now) break;
-    options.authorizationStore.delete(code);
-  }
-  if (subject.kind === "guest" && options.authorizationStore.size >= (options.guestAuthorizationCapacity ?? GUEST_AUTHORIZATION_CAPACITY)) {
-    return authorizationErrorTarget(
-      authorizationRequest.redirectUri,
-      authorizationRequest.state,
-      "temporarily_unavailable",
-      "This Workspace holds too many unredeemed authorization codes. Try again in a minute.",
-      authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined,
-    );
-  }
   const scope = authorizationRequest.kind === "static" ? authorizationRequest.scope : authorizationRequest.scopes.join(" ");
-  const authorization = issueOAuthAuthorizationCode(
+  const { code, expiresAt, ...authorization } = issueOAuthAuthorizationCode(
     authorizationRequest.clientId,
     authorizationRequest.codeChallenge,
     authorizationRequest.redirectUri,
@@ -817,7 +820,20 @@ function issueAuthorization(
     now,
     authorizationRequest.kind === "mcp" ? authorizationRequest.resource : undefined,
   );
-  options.authorizationStore.set(authorization.code, authorization);
+  // Only a guest's code is refused at capacity, and every unredeemed code counts toward it.
+  const stored = await options.codes.putSignInCode(
+    { kind: "oauth_code", codeHash: hashSessionSecret(code), userCodeHash: null, subjectUserId: subject.kind === "user" ? subject.userId : null, payload: JSON.stringify(authorization), createdAt: now, expiresAt },
+    { expiredBefore: now, ...(subject.kind === "guest" ? { capacity: options.guestAuthorizationCapacity ?? GUEST_AUTHORIZATION_CAPACITY } : {}) },
+  );
+  if (stored !== "stored") {
+    return authorizationErrorTarget(
+      authorizationRequest.redirectUri,
+      authorizationRequest.state,
+      "temporarily_unavailable",
+      "This Workspace holds too many unredeemed authorization codes. Try again in a minute.",
+      authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined,
+    );
+  }
   return authorizeRedirectTarget(
     {
       redirectUri: authorizationRequest.redirectUri,
@@ -825,7 +841,7 @@ function issueAuthorization(
       scope,
       ...(authorizationRequest.kind === "mcp" ? { issuer: authorizationRequest.issuer } : {}),
     },
-    authorization.code
+    code
   );
 }
 

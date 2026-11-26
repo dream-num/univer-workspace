@@ -81,8 +81,8 @@ An agent also carries `claimed`. A banned agent's login session returns
 
 A human claims an agent to keep its files. The unclaimed agent calls
 `POST /api/agents/claim-codes` with any of its sessions and hands the returned
-`/claim/<code>` page to the human. The code lives in the server process for ten
-minutes and claims once. `GET /api/agents/claim?code=` shows the agent and
+`/claim/<code>` page to the human. The code lasts ten minutes, claims once, and
+works on any server replica. `GET /api/agents/claim?code=` shows the agent and
 `POST /api/agents/claim` claims it; both need a human's browser session. A used
 code answers `409 AGENT_ALREADY_CLAIMED` to anyone but its claimer, an old code
 `410 AGENT_CLAIM_EXPIRED`, an unknown one `404 AGENT_CLAIM_INVALID`. The claimer

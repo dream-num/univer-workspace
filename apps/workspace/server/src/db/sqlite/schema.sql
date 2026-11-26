@@ -809,7 +809,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 35;
+PRAGMA user_version = 36;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>
@@ -911,3 +911,20 @@ CREATE INDEX IF NOT EXISTS source_rate_events_source
   ON source_rate_events(action, source, created_at);
 CREATE INDEX IF NOT EXISTS source_rate_events_expiry
   ON source_rate_events(created_at);
+
+CREATE TABLE IF NOT EXISTS sign_in_codes (
+  kind TEXT NOT NULL CHECK (kind IN ('oauth_code', 'consent', 'claim', 'cli')),
+  code_hash TEXT NOT NULL,
+  user_code_hash TEXT UNIQUE,
+  subject_user_id TEXT,
+  payload_json TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'consumed', 'replayed')),
+  grant_id TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (kind, code_hash)
+);
+CREATE INDEX IF NOT EXISTS sign_in_codes_expiry
+  ON sign_in_codes(kind, expires_at, state);
+CREATE INDEX IF NOT EXISTS sign_in_codes_subject
+  ON sign_in_codes(kind, subject_user_id, expires_at);
