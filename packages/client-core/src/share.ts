@@ -2,8 +2,8 @@ import type { WorkspaceSubject } from "./auth.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import { resolveNodeReference } from "./repo-ref.js";
 import type { WorkspaceSpaceFeature } from "./space.js";
-import type { WorkspaceLinkSharing } from "./space-model.js";
-import { nodeUrl } from "./urls.js";
+import type { WorkspaceLinkSharing, WorkspaceSpace } from "./space-model.js";
+import { nodeUrl, repoUrl } from "./urls.js";
 
 export const SHARE_LINKS = ["off", "viewer", "editor"] as const;
 /** Link Sharing as one setting: off, or the access a signed-in user gets through the link. */
@@ -45,7 +45,7 @@ export async function createClaimLink(
 
 /** Reads the Link Sharing of a file, named by its link or Node ID, and sets it first when `link` is given. */
 export async function shareNode(
-  spaces: Pick<WorkspaceSpaceFeature, "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
+  spaces: Pick<WorkspaceSpaceFeature, "get" | "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
   origin: string,
   input: {
     readonly node: string;
@@ -60,7 +60,7 @@ export async function shareNode(
     readonly turnOn?: string;
   },
 ): Promise<WorkspaceShare> {
-  const { nodeId, name, resource } = await resolveNodeReference(spaces, input.node, origin);
+  const { nodeId, name, resource, spaceId } = await resolveNodeReference(spaces, input.node, origin);
   const url = nodeUrl(origin, nodeId);
   let sharing: WorkspaceLinkSharing;
   try {
@@ -73,6 +73,16 @@ export async function shareNode(
           });
   } catch (error) {
     if (!(error instanceof WorkspaceApplicationError)) throw error;
+    // Only Personal Space files have Link Sharing, in the Browser too. For a Team Space file the server answers NOT_FOUND,
+    // or INTERACTIVE_SESSION_REQUIRED first when a person's token session writes.
+    if (error.code === "NOT_FOUND" || error.code === "INTERACTIVE_SESSION_REQUIRED") {
+      // Someone else's Personal Space can hide from the caller, so a failed lookup keeps the server's own refusal.
+      const space = await spaces.get(spaceId).catch((lookup: unknown) => {
+        if (lookup instanceof WorkspaceApplicationError) return null;
+        throw lookup;
+      });
+      if (space?.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
+    }
     if (error.code === "INTERACTIVE_SESSION_REQUIRED") {
       throw workspaceError(
         error.code,
@@ -135,6 +145,38 @@ export function formatShare(shared: WorkspaceShare): string {
     ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
     ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
   ].join("\n");
+}
+
+async function teamSpaceRefusal(
+  spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
+  origin: string,
+  url: string,
+  name: string,
+  space: WorkspaceSpace,
+  caller: WorkspaceSubject,
+  turnOn: string | undefined,
+): Promise<WorkspaceApplicationError> {
+  const where = `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${space.fullName ?? space.name}.`;
+  if (caller.kind !== "agent" || caller.claimed) {
+    // Only a person's token session omits turnOn, and the server does not let it make a Space public either.
+    const publish = turnOn === undefined
+      ? `ask the user to make the repository public in its settings in the browser: ${repoUrl(origin, space.id)}/settings`
+      : "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).";
+    return workspaceError(
+      "workspace-argument-invalid",
+      `${where} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or ${publish}`,
+      { url },
+    );
+  }
+  const claim = await claimFields(spaces, origin);
+  const next = claim.claimUrl === undefined
+    ? "make a claim link with claim (uvw claim in the CLI) and give it to the user."
+    : `give the user this claim link, which works once within 10 minutes: ${claim.claimUrl}`;
+  return workspaceError(
+    "workspace-argument-invalid",
+    `${where} A person can open your repositories once they claim you, so ${next}`,
+    { url, ...claim },
+  );
 }
 
 async function claimFields(

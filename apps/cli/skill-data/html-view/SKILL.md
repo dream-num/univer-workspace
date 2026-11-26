@@ -117,8 +117,8 @@ read-only; page writes are rejected for them.
 If the user wants anyone with the link to open a private repository's page, ask
 before making the repository public: this immediately publishes everything in the
 repository. After approval, use CLI `repo edit <repo> --visibility public`. A person's MCP
-connection and an unclaimed agent cannot make a repository public: give the user the repository
-`url` and ask them to make it public in its settings in the browser.
+connection cannot make a repository public: the user does it in the browser from its `url`.
+An unclaimed agent cannot either: give the user a claim link from `claim` to open it.
 Keep source Sheets in the same public repository as the page, or list the
 `privateSourceUnitIds` to the user. These fields describe declared sources at
 creation time; script-created references and later permission changes still need

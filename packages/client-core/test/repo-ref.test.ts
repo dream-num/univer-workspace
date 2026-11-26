@@ -189,15 +189,30 @@ describe("file links", () => {
     expect((await shareNode(spaces, origin, { node: "n1", caller: person, turnOn })).access).toBe(access);
   });
 
-  it("tells a delegated session to have the user share in the browser", async () => {
-    const { spaces } = clients((call) =>
-      call.method === "PUT"
-        ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+  const tokenSessionWrite = (type: "personal" | "team") => clients((call) =>
+    call.method === "PUT"
+      ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+      : call.path === "/api/spaces/s1" ? Response.json(view(type === "team" ? {} : { type, slug: "personal", fullName: "me/personal" }))
         : Response.json(node(sheet)));
+
+  it("tells a delegated session to have the user share in the browser", async () => {
+    const { spaces } = tokenSessionWrite("personal");
     await expect(shareNode(spaces, origin, { node: "n1", caller: person, link: "viewer" })).rejects.toMatchObject({
       code: "INTERACTIVE_SESSION_REQUIRED",
       message: expect.stringContaining(`share the file in the browser: ${origin}/nodes/n1`),
       detail: { url: `${origin}/nodes/n1` },
+    });
+  });
+
+  it("keeps the browser step when a token session writes a file in a Personal Space it cannot look up", async () => {
+    const { spaces } = clients((call) =>
+      call.method === "PUT"
+        ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+        : call.path === "/api/spaces/s1" ? notFound()
+          : Response.json(node(sheet)));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: person, link: "off" })).rejects.toMatchObject({
+      code: "INTERACTIVE_SESSION_REQUIRED",
+      message: expect.stringContaining(`share the file in the browser: ${origin}/nodes/n1`),
     });
   });
 
@@ -213,7 +228,67 @@ describe("file links", () => {
     });
   });
 
+  const teamFile = (claimCode: () => Response) => clients((call) =>
+    call.path.endsWith("/link-sharing") ? notFound()
+      : call.path === "/api/spaces/s1" ? Response.json(view())
+        : call.path === "/api/agents/claim-codes" ? claimCode()
+          : Response.json(node(sheet)));
+  const inTeam = 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository me/docs.';
+
+  it("tells an unclaimed agent that a claim lets the user open a file in its Team Space, with a claim link", async () => {
+    const { spaces } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
+    for (const link of [undefined, "viewer"] as const) {
+      await expect(shareNode(spaces, origin, { node: "n1", caller: agent, ...(link === undefined ? {} : { link }) })).rejects.toMatchObject({
+        code: "workspace-argument-invalid",
+        message: `${inTeam} A person can open your repositories once they claim you, so give the user this claim link, which works once within 10 minutes: ${origin}/claim/c0de`,
+        detail: { url: `${origin}/nodes/n1`, claimUrl: `${origin}/claim/c0de` },
+      });
+    }
+  });
+
+  it("names the claim tool to an unclaimed agent when the Workspace cannot make a claim code", async () => {
+    const { spaces } = teamFile(() => Response.json({ error: { code: "AGENT_CLAIM_UNAVAILABLE", message: "Try again shortly." } }, { status: 503 }));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: agent })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `${inTeam} A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.`,
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
+
+  const addMember = "To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or";
+  it.each([
+    ["a person's token session", person, undefined, `ask the user to make the repository public in its settings in the browser: ${origin}/spaces/s1/settings`],
+    ["a person's interactive session", person, turnOn, "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
+    ["a claimed agent", { ...agent, claimed: true }, "call share with node n1 and link viewer", "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
+  ] as const)(
+    "tells %s to add a member or have the repository made public in the way it can",
+    async (_caller, caller, sessionTurnOn, publish) => {
+      const { spaces, calls } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
+      await expect(shareNode(spaces, origin, { node: "n1", caller, link: "viewer", ...(sessionTurnOn === undefined ? {} : { turnOn: sessionTurnOn }) })).rejects.toMatchObject({
+        code: "workspace-argument-invalid",
+        message: `${inTeam} ${addMember} ${publish}`,
+        detail: { url: `${origin}/nodes/n1` },
+      });
+      expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
+    },
+  );
+
+  it("tells a person's token session the way to open a Team Space file when the server first refuses its write", async () => {
+    const { spaces } = tokenSessionWrite("team");
+    await expect(shareNode(spaces, origin, { node: "n1", caller: person, link: "viewer" })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `${inTeam} ${addMember} ask the user to make the repository public in its settings in the browser: ${origin}/spaces/s1/settings`,
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
+
   it("passes other Link Sharing refusals through and rejects a malformed response", async () => {
+    const gone = clients((call) =>
+      call.path.endsWith("/link-sharing") ? notFound()
+        : call.path === "/api/spaces/s1" ? Response.json(view({ type: "personal", slug: "personal", fullName: "me/personal" }))
+          : Response.json(node(sheet)));
+    await expect(shareNode(gone.spaces, origin, { node: "n1", caller: person }))
+      .rejects.toMatchObject({ code: "NOT_FOUND", message: "The resource was not found." });
     const limited = clients((call) =>
       call.path.endsWith("/link-sharing")
         ? Response.json({ error: { code: "RATE_LIMITED", message: "Slow down." } }, { status: 429 })

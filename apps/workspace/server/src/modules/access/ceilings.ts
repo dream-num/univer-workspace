@@ -96,7 +96,7 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   },
   updateSpace: {
     code: "AGENT_NOT_ALLOWED",
-    message: "An unclaimed agent cannot make a Space public.",
+    message: `An unclaimed agent cannot make a Space public. Keep it private, ${CLAIM_LIFTS} Claiming also lets that person open every Space you own.`,
     forbids: (principal, { publicRead }) => principal === "agent_unclaimed" && publicRead,
   },
   // Checks stand in for the person who reviews a merge, so the agents they gate get no other way onto Trunk.
@@ -120,7 +120,7 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   // Anyone can create an agent, so an unclaimed one must not read the User directory.
   searchUsers: {
     code: "AGENT_NOT_ALLOWED",
-    message: "An unclaimed agent cannot search Users.",
+    message: `An unclaimed agent cannot search Users. Leave other Users out, ${CLAIM_LIFTS}`,
     forbids: (principal) => principal === "agent_unclaimed",
   },
   createFiles: {

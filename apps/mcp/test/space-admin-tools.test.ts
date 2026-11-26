@@ -716,7 +716,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(description).toContain("unit with trunk: true to read, find, inspect, outline or screenshot");
   });
 
-  it("refuses a file link of another Workspace and sends a person's token session to the browser", async () => {
+  it("refuses a file link of another Workspace and sends a person's token session to the settings of a Team Space", async () => {
     const client = await connect();
     expect(
       toolError(await client.callTool({ name: "share", arguments: { node: "https://elsewhere.example/nodes/sheet", link: "viewer" } })),
@@ -724,8 +724,8 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     humanTokenSession = true;
     const refused = await client.callTool({ name: "share", arguments: { node: "sheet", link: "viewer" } });
-    expect(toolError(refused)).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: `${origin}/nodes/sheet` } });
-    expect(refused.content).toMatchObject([{ type: "text", text: expect.stringContaining(`Ask the user to share the file in the browser: ${origin}/nodes/sheet`) }]);
+    expect(toolError(refused)).toMatchObject({ code: "workspace-argument-invalid", detail: { url: `${origin}/nodes/sheet` } });
+    expect(refused.content).toMatchObject([{ type: "text", text: expect.stringContaining(`ask the user to make the repository public in its settings in the browser: ${origin}/spaces/team-1/settings`) }]);
     expect((await client.callTool({ name: "share", arguments: { node: "sheet" } })).structuredContent).toMatchObject({
       link: "off",
     });

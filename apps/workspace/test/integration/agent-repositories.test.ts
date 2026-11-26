@@ -212,7 +212,11 @@ describe("unclaimed agent quotas", () => {
     for (const spaceId of [repo, unclaimed.spaceId]) {
       await expectRefused(send(origin, "PATCH", `/api/spaces/${spaceId}`, { publicRead: true }, unclaimed.cookie), "AGENT_NOT_ALLOWED");
     }
-    await expectRefused(send(origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, unclaimed.cookie), "AGENT_NOT_ALLOWED");
+    const refused = await send(origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, unclaimed.cookie);
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "AGENT_NOT_ALLOWED",
+      message: "An unclaimed agent cannot make a Space public. Keep it private, or give a person a claim link so they can claim you, which lifts this limit. Claiming also lets that person open every Space you own.",
+    } } });
 
     // Only the repository, below the ceiling, can publish these Spaces, so a reader can see the suspension.
     for (const spaceId of [repo, unclaimed.spaceId]) {

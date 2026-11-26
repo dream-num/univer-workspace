@@ -33,3 +33,15 @@ it("names the way out of each unclaimed-agent limit, and a claim lifts every one
   expect(() => assertCeiling("agent_claimed", "createFiles", { held: 20, adding: 1 })).not.toThrow();
   expect(() => assertCeiling("agent_claimed", "storeFile", { byteSize: 10 * 1024 * 1024 + 1 })).not.toThrow();
 });
+
+it("names a claim as the way out of an unclaimed agent's refusals to publish a Space or search Users", () => {
+  const claim = "or give a person a claim link so they can claim you, which lifts this limit.";
+  const refused = (message: string) => expect.objectContaining({ code: "AGENT_NOT_ALLOWED", status: 403, message });
+  expect(() => assertCeiling("agent_unclaimed", "updateSpace", { publicRead: true })).toThrow(refused(
+    `An unclaimed agent cannot make a Space public. Keep it private, ${claim} Claiming also lets that person open every Space you own.`,
+  ));
+  expect(() => assertCeiling("agent_unclaimed", "searchUsers", {}))
+    .toThrow(refused(`An unclaimed agent cannot search Users. Leave other Users out, ${claim}`));
+  expect(() => assertCeiling("agent_claimed", "updateSpace", { publicRead: true })).not.toThrow();
+  expect(() => assertCeiling("agent_claimed", "searchUsers", {})).not.toThrow();
+});

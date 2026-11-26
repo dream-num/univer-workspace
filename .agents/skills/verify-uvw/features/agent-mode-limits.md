@@ -173,7 +173,7 @@ $V principal ce-quota ce2-q
 Q=$(jq -r .agent.username "$EVIDENCE/principal-ce-quota.json")
 $V mcp --as ce-quota ce2-public repo_create '{"slug":"q0","public":true}'
 test $? -eq 1
-jq -e '.code == "AGENT_NOT_ALLOWED" and .message == "An unclaimed agent cannot make a Space public."' "$EVIDENCE/ce2-public.out"
+jq -e '.code == "AGENT_NOT_ALLOWED" and .message == "An unclaimed agent cannot make a Space public. Keep it private, or give a person a claim link so they can claim you, which lifts this limit. Claiming also lets that person open every Space you own."' "$EVIDENCE/ce2-public.out"
 for n in 1 2 3; do
   $V mcp --as ce-quota "ce2-repo-$n" repo_create "{\"slug\":\"q$n\"}" || break
 done
@@ -218,7 +218,7 @@ $V mcp --as ce-quota ce2-repo-4-claimed repo_create '{"slug":"q4"}'
 jq -e '.fullName == "'"$Q/q4"'"' "$EVIDENCE/ce2-repo-4-claimed.out"
 ```
 
-Pass when the public Team Space exits 1 with `AGENT_NOT_ALLOWED`; q1 to q3 are created and q4 exits 1 with
+Pass when the public Team Space exits 1 with `AGENT_NOT_ALLOWED` and names a claim as the way out; q1 to q3 are created and q4 exits 1 with
 `AGENT_QUOTA_EXCEEDED` naming 3 Team Spaces; f1 to f3 are created, and f4 exits 1 naming 3 forks and is created after
 `fork_delete`; the Personal Space pull request merges 10 Sheets and q1's pull request holds 10 more; the Sheet in q2
 exits 1 naming 20 files and is created after one Sheet moves to Trash; and after the claim q4 is created.
