@@ -10,7 +10,7 @@ import { redact as redactSecrets, runSecrets } from './secrets.mjs';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>|--client-name <name>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card [--agent-cookie]|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>|--client-name <name>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
@@ -46,11 +46,12 @@ const keepGrant = body => {
 
 if (command === 'login') {
   let scopes = ['read', 'write', 'publish', 'worktree:merge'];
-  let clientId, clientName, guest = false, card = false, connectAs;
+  let clientId, clientName, guest = false, card = false, agentCookie = false, connectAs;
   while (args.length) {
     const flag = args.shift();
     if (flag === '--guest') { guest = true; continue; }
     if (flag === '--guest-card') { guest = card = true; continue; }
+    if (flag === '--agent-cookie') { agentCookie = true; continue; }
     const value = args.shift();
     if (value === undefined) usage(`Missing value for ${flag}`);
     if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
@@ -61,11 +62,17 @@ if (command === 'login') {
   }
   if (!guest && !username) usage('No user to sign in as; run verify-uvw user, or pass --guest');
   if (card && clientId) usage('--guest-card registers its own client, so it takes no --client-id');
+  if (agentCookie && !card) usage('--agent-cookie gives the browser an agent session before the guest card, so it needs --guest-card');
   if (clientId && clientName) usage('--client-name names a client this login registers, so it takes no --client-id');
   // A guest connects only as itself. Without --connect-as the run user keeps what the page preselects: the agent it
   // owns that was made for a client of this name, else a new agent.
   if (guest && connectAs) usage('--connect-as is for the run user; a guest connects as itself');
   const noPage = guest && !card;
+  const sessionUser = () => {
+    browser('open', `${origin}/api/session`);
+    const session = JSON.parse(browser('get', 'text', 'body'));
+    return session.authenticated ? { kind: session.user.kind, username: session.user.username } : null;
+  };
   const callback = createServer();
   await new Promise(resolve => callback.listen(0, '127.0.0.1', resolve));
   // A loopback callback gets a signed-out browser a guest code with no page, so the card needs a callback that is not loopback.
@@ -99,6 +106,11 @@ if (command === 'login') {
     browser('storage', 'local', 'set', 'univer-workspace-language', 'en-US');
     browser('reload');
     browser('wait', '--text', 'Username');
+    // An agent's cookie, as `uvw auth guest` gets it, which authorize must treat as signed out.
+    if (agentCookie && JSON.parse(browser('eval', "fetch('/api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(r => r.status)")) !== 201) {
+      throw new Error('POST /api/auth/guest did not create an agent in the browser');
+    }
+    const browserUserBefore = guest ? sessionUser() : undefined;
     const limited = `this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`;
     if (noPage) {
       await browserAsync('open', authorize.href);
@@ -120,42 +132,42 @@ if (command === 'login') {
       browser('open', authorize.href);
     }
     let shownName = null, offered = null, submitted = null, choices = null, preselected = null, submittedAs = null;
-    if (!noPage) {
+    if (!guest) {
       browser('wait', '--text', 'Connect an AI assistant');
       const readChecks = () => JSON.parse(JSON.parse(browser('eval', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input[name=scope]')].map(i => [i.value, i.checked])))")));
       shownName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
       offered = readChecks();
       for (const scope of Object.keys(offered)) if (!scopes.includes(scope)) browser('click', `input[name=scope][value="${scope}"]`);
       submitted = readChecks();
-      if (!guest) {
-        choices = JSON.parse(JSON.parse(browser('eval', "JSON.stringify([...document.querySelectorAll('input[name=connect_as]')].map(i => i.value))")));
-        preselected = JSON.parse(browser('eval', "document.querySelector('input[name=connect_as]:checked')?.value ?? null"));
-        if (connectAs === 'new_agent' && JSON.parse(browser('eval', "document.querySelector('input[name=connect_as][value=new_agent]').disabled"))) {
-          throw new Error(`the consent page disables the new-agent option at the agent creation limit: ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises it'}`);
-        }
-        if (connectAs) browser('click', `input[name=connect_as][value=${connectAs}]`);
-        submittedAs = connectAs ?? preselected;
+      choices = JSON.parse(JSON.parse(browser('eval', "JSON.stringify([...document.querySelectorAll('input[name=connect_as]')].map(i => i.value))")));
+      preselected = JSON.parse(browser('eval', "document.querySelector('input[name=connect_as]:checked')?.value ?? null"));
+      if (connectAs === 'new_agent' && JSON.parse(browser('eval', "document.querySelector('input[name=connect_as][value=new_agent]').disabled"))) {
+        throw new Error(`the consent page disables the new-agent option at the agent creation limit: ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises it'}`);
       }
+      if (connectAs) browser('click', `input[name=connect_as][value=${connectAs}]`);
+      submittedAs = connectAs ?? preselected;
       browser('screenshot', `${evidence}-consent.png`);
       browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
     }
     let timer;
+    // The card sends the browser straight to the callback; a consent page would leave this wait to time out.
     const answer = card
       ? (browser('wait', '--url', 'https://verify-uvw.invalid/callback?*'), new URL(browser('get', 'url').trim()))
       : await Promise.race([received, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No callback within 30 s')), 30000); })]).finally(() => clearTimeout(timer));
     if (card) browser('network', 'unroute');
-    // The browser that got a guest code with no page must still have no session.
-    const browserSignedIn = noPage ? (browser('open', `${origin}/api/session`), JSON.parse(browser('get', 'text', 'body')).authenticated) : undefined;
+    // A guest code leaves the browser's session as it was: none, or the agent cookie from before.
+    const browserUserAfter = guest ? sessionUser() : undefined;
+    const browserKept = !guest || JSON.stringify(browserUserAfter) === JSON.stringify(browserUserBefore);
     if (answer.searchParams.get('state') !== state || !answer.searchParams.get('code')) throw new Error(`Callback carried ${answer.searchParams.get('error') ?? 'no code'} or a wrong state`);
     if (answer.searchParams.get('iss') !== origin) throw new Error('Callback issuer does not match Workspace');
     const token = await form('/api/auth/token', { grant_type: 'authorization_code', client_id: clientId, code: answer.searchParams.get('code'),
       code_verifier: verifier, redirect_uri: redirectUri, ...tokenResource });
-    const ok = token.status === 200 && typeof token.body.access_token === 'string' && (!noPage || browserSignedIn === false);
+    const ok = token.status === 200 && typeof token.body.access_token === 'string' && browserKept && (!guest || agentCookie === (browserUserBefore?.kind === 'agent'));
     if (ok) {
       keepGrant(token.body);
       keep('mcp-oauth-client-id', clientId);
     }
-    save({ guest, ...(guest ? { page: noPage ? 'none' : 'guest card and consent' } : { choices, preselected, connect_as: submittedAs }), ...(noPage ? { browser_signed_in_after: browserSignedIn } : {}), client_id: clientId, client_name: shownName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
+    save({ guest, ...(guest ? { page: noPage ? 'none' : 'guest card', browser_user_before: browserUserBefore, browser_user_after: browserUserAfter, browser_signed_in_after: browserUserAfter !== null } : { choices, preselected, connect_as: submittedAs }), client_id: clientId, client_name: shownName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
   } finally {
     callback.close();
   }

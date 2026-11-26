@@ -34,7 +34,7 @@ the event the server answers with and the head it posted on.
 
 Start every shell with `eval "$($V env)"`. The run user O holds a Team Space R with a Sheet `Sales` on Trunk and edits
 its B2 once, so revision 1 is an earlier version to restore. O moves a folder `Old` to Trash, as Trash Batch B. An agent
-A comes from `POST /api/auth/guest`, the Browser's `Continue as a guest agent`, and O claims it with the call the claim
+A comes from `POST /api/auth/guest`, the call `uvw auth guest` makes, and O claims it with the call the claim
 page makes. A is a Viewer of R. The cookie jars, A's claim code and O's password stay in `$UNIVER_HOME/tg`, which
 `$V down` deletes.
 

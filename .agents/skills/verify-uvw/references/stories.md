@@ -9,7 +9,7 @@ An agent principal is a User that never signed in. These commands speak as one; 
 $V principal <name> [label]                # POST /api/agents; prints id and username
 $V mcp --as <name> <label> <tool> [json]   # also mcp-tools, mcp-skills, mcp-resources, mcp-resource, mcp-instructions
 $V mcp-oauth login <label> --guest         # scripted loopback OAuth client that gets a guest agent with no page
-$V mcp-oauth login <label> --guest-card    # the same through the guest agent card, for a browser signed in as the guest
+$V mcp-oauth login <label> --guest-card [--agent-cookie]  # the same through the sign-in page's guest agent card
 $V mcp-oauth login <label>                 # the run user's consent page with its default, an agent the run user owns
 $V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'
 ```
@@ -27,8 +27,9 @@ limit on client metadata checks per source trips, too.
 by `user_id`, because the PAT id is never returned. `mcp-oauth login --guest` needs no `user`. It
 opens the authorize URL with no cookies, gets the code with no page, checks that the browser still has no
 session, and replaces the grant in `home/mcp-oauth-*`, so `mcp --auth oauth` then speaks as that
-guest. `--guest-card` uses a callback that is not loopback, saves `<label>-guest-card.png`, continues
-through the card and consent, and leaves the run's browser signed in as the guest.
+guest. `--guest-card` uses a callback that is not loopback, saves `<label>-guest-card.png`, clicks the card and
+needs the browser to reach the callback with no consent page and no session. `--agent-cookie` first gives the browser
+an agent's session from `POST /api/auth/guest`, and the login then needs that same session afterwards.
 
 **Stories.** `story` runs one real-model prompt as a verbatim argument. Clients `mcp` and
 `uvw` use `opencode run` with `console-deepseek/deepseek-flash#high` by default. Pass

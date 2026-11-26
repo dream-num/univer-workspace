@@ -71,7 +71,7 @@ $V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | -
 $V mcp-tools|mcp-skills|mcp-resources|mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
 $V mcp-token [--scopes read,write,...] [--name name]   # a new default PAT; prints only its id
-$V mcp-oauth login <label> [--guest|--guest-card|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
+$V mcp-oauth login <label> [--guest|--guest-card [--agent-cookie]|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
 $V mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]
 $V mcp-oauth revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
@@ -104,7 +104,9 @@ offered `choices`, the `preselected` value and the submitted `connect_as`. A jou
 `--connect-as self`. Each login that submits `new_agent` creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
 --guest` needs no `user`. Its loopback callback gets a guest agent's code with no page, and it fails unless
 the browser still has no session. `--guest-card` registers a callback that is not loopback instead, takes the
-guest agent card, saves `<label>-guest-card.png`, and leaves the run browser signed in as the guest. `refresh` rotates the pair, `reuse` replays the old refresh token, `revoke`
+guest agent card, saves `<label>-guest-card.png`, and fails unless the browser reaches the callback with no consent
+page and no session. With `--agent-cookie` the browser first gets an agent's session from `POST /api/auth/guest`,
+and must hold the same one afterwards. `<label>.json` records both as `browser_user_before` and `browser_user_after`. `refresh` rotates the pair, `reuse` replays the old refresh token, `revoke`
 calls RFC 7009 revocation, `direct` sends the access token straight to Workspace, and `exchange` performs
 the gateway's token exchange and signs the session out. Each writes `<label>.json` with token shapes only.
 Never record raw codes, tokens or `state` values.

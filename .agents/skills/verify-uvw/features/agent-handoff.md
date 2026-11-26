@@ -19,8 +19,9 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   `uvw auth guest`, then `uvw read A1:J50 --unit <link> --trunk`. `Copy prompt` shows
   `Prompt copied. Paste it into your agent.`
 - AH4 creates a guest agent. An MCP client whose callback is not loopback reaches the sign-in page through OAuth
-  and sees the card `Give the agent its own space` with `Continue as a guest agent`; the guest is named after the
-  OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
+  and sees the card `Give the agent its own space` with `Continue as a guest agent`, also when the browser holds only
+  an agent's cookie. The card goes straight back to the client with a code, with no consent page, and leaves the
+  browser's session as it was; the guest is named after the OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
   and repository `<username>/personal`.
 - AH5 mints a claim link: MCP `claim` (unclaimed agents only, listed after `share`) and `uvw claim`. For an
   unclaimed owner `share` returns `claimHint`, which points to them, and mints nothing. A link works once, within
@@ -124,14 +125,30 @@ used claim URL sees `This agent has already been claimed.`; `$ORIGIN/claim/not-a
 `Stop <display name>` (`Stop agent` for this guest), then `Stop` in `Stop this agent?`. The row shows `Stopped`,
 `$V open-anon ah-stopped "$ORIGIN/nodes/$AN"` reports 404, and the guest's uvw session is gone.
 
-### HO9. MCP guest and an agent-signed browser (AH4, AH7)
+### HO9. MCP guest from a browser that holds only an agent's cookie (AH4, AH7)
 
 Mode: mcp.
 
-`$V mcp-oauth login g1 --guest-card` registers a callback that is not loopback, saves
-`g1-guest-card.png` and leaves the run browser signed in as the guest. `$V mcp --auth oauth g1-whoami whoami`
-names it `verify-uvw g1 · <suffix>`. `$V mcp --auth oauth g1-claim claim '{}'` returns the link; opening it in
-the run browser shows `Sign out and continue`. Click it, sign in as the run user, and claim.
+`--agent-cookie` first signs the run browser in as another agent through `POST /api/auth/guest`, the call
+`uvw auth guest` makes. Authorize treats that cookie as signed out, so the client registered with a callback that is
+not loopback reaches the sign-in page and its card. The login saves `g1-guest-card.png`, clicks the card and fails
+unless the browser lands on the callback with no consent page and still holds the same agent's cookie.
+
+```bash
+$V mcp-oauth login g1 --guest-card --agent-cookie
+jq -e '.page == "guest card" and .browser_user_before.kind == "agent" and .browser_user_after == .browser_user_before and .token.status == 200' "$EVIDENCE/g1.json"
+$V mcp --auth oauth g1-whoami whoami
+jq -e '.subject.name | test("^verify-uvw g1 · [a-z0-9]{4}$")' "$EVIDENCE/g1-whoami.out"
+$V mcp --auth oauth g1-claim claim '{}' > /dev/null   # stdout would put the claim code in the run log
+```
+
+Open the `claimUrl` from `g1-claim.out` in the run browser, which still holds the other agent's cookie: it shows
+`An agent cannot claim an agent. Sign in with your own account.` and `Sign out and continue`. Click it, sign in as the
+run user, and claim. Replace the code in `g1-claim.*` as [MH1](#mh1-unclaimed-agent) says.
+
+Pass when `g1.json` records the guest card, the same agent before and after and a token, `whoami` names the guest
+after the client and not after the cookie's agent, and the claim page asks the cookie's agent to sign out before the
+run user claims the guest.
 
 ### HO10. A loopback MCP client from a signed-out browser (AH11)
 
