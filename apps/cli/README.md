@@ -137,8 +137,9 @@ Spaces of its own, and keeps at most 20 files across its repositories, of at mos
 first. A command that needs a session never creates a guest agent on its own. It exits with code 4
 and names `uvw auth login` and `uvw auth guest`.
 
-A guest session lasts as long as a Workspace session, 7 days by default, and use does not extend it.
-After the session ends, or after `uvw auth logout`, the CLI cannot sign in to the same agent again.
+A guest session renews like a login session: it lasts 7 days by default, and a guest agent in regular
+use stays signed in. Left unused, it ends after 3.5 to 7 days by default. After the session ends, or
+after `uvw auth logout`, the CLI cannot sign in to the same agent again.
 `uvw auth guest` then creates a new agent, and nobody but a person who claimed it can change the old
 agent's files. Links that the old agent shared keep working until the old agent expires, 30 days
 after it was last used or one of its links was last opened. A claimed agent never expires.

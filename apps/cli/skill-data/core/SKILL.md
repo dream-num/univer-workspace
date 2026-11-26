@@ -264,8 +264,8 @@ no `kind` for a person.
 `uvw auth logout` to get past the refusal unless the user asks. Logout discards the stored session,
 and the CLI cannot sign in to the same agent again.
 
-A guest session lasts as long as a Workspace session, 7 days by default. Use does not extend it.
-After it ends, commands exit with code 4. Run `uvw auth logout` and then `uvw auth guest`. That
+A guest session renews like a login: it lasts 7 days by default, and regular use keeps it signed in.
+Left unused, it ends after 3.5 to 7 days. After it ends, commands exit with code 4. Run `uvw auth logout` and then `uvw auth guest`. That
 creates a new agent with an empty Personal Space, and only a person who claimed the old agent can
 still change its files. Links that the old agent shared keep working until the old agent expires, 30
 days after it was last used or one of its links was last opened. A claimed agent never expires.
