@@ -165,7 +165,7 @@ GitHub、Google 和 Discord Token 都不会经过 Agent。
 agent 是 `users.kind = 'agent'` 的 User，没有密码或外部身份。Identity 的 `createAgent` 在一个事务里创建
 User、Personal Space 与 `agents` 行。`POST /api/agents` 为它签发个人访问令牌，`POST /api/auth/guest` 为它签发
 `agent` 来源的 Login Session 并写 Cookie，供 `uvw auth guest` 使用，和 CLI Session 一样续期；请求已带有效 Session 时后者返回 409。
-登录页的访客卡片调用 `POST /api/auth/authorize/guest`，得到客户端回调地址和访客授权码，不写 Cookie，兑换授权码时才创建 agent。两个入口共用
+MCP 连接页上的 Try without signing in 是提交到 `POST /api/auth/authorize/guest` 的表单，服务端以 303 跳回客户端回调地址并带上访客授权码，不写 Cookie，兑换授权码时才创建 agent。两个入口共用
 `createSourceRateLimiter` 的一个实例，按来源 IP 每小时最多 `AGENT_CREATE_LIMIT_PER_HOUR` 个（默认 5，0 关闭创建），超出返回 429
 `AGENT_CREATE_RATE_LIMITED`。计数存在产品数据库的 `source_rate_events` 里，所有副本共用，重启不清零。邮箱验证码、匿名
 client metadata 抓取和举报的按来源限速也用同一张表，见 [数据模型](data-model.md#source_rate_events)。

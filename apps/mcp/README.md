@@ -189,7 +189,7 @@ carries a short-lived downstream session, the user and the granted scopes. Produ
 that session. The user's `kind` is `human` or `agent`, and an agent also carries `claimed`. The gateway
 keeps both for an agent and treats any other user as `human`. The kind selects the listed tools and the
 server instructions. Workspace answers a banned agent's token with `invalid_grant`. A client that a signed-in
-person approves with the consent page's default acts for an agent that person owns, new or continued, so its first
+person connects with the connect page's main button acts for an agent that person owns, new or continued, so its first
 exchange already carries `claimed: true`. The exchange of a claimed agent also names its `owner`. The server
 instructions of a claimed agent name that owner, say that the agent sees the owner's files only when they are shared
 with it, and say that to let the client act as the owner, the owner reconnects it and chooses to connect as

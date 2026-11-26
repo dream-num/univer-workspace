@@ -21,7 +21,7 @@ flowchart TB
 ## 开始之前
 
 - MCP 无需安装。把 `https://space.univer.ai/mcp` 添加到你的 AI 助手，自己部署时用 `https://<你的 Workspace>/mcp`。各客户端的步骤见[连接 AI 助手](../README.zh-CN.md#连接-ai-助手mcp)。
-- 你已登录时，同意页默认让助手以一个归你所有的 Agent 连接：它之前用过的那个，或者一个新的。它一开始就是已认领的，和本文里已认领的 Agent 一样工作。选 **Yourself** 则让它以你的身份连接，本文把这种连接叫作你的 AI 助手。
+- 你已登录时，连接页的主按钮让助手以一个归你所有的 Agent 连接：它之前用过的那个，或者一个新的。它一开始就是已认领的，和本文里已认领的 Agent 一样工作。**Connect as myself** 则让它以你的身份连接，本文把这种连接叫作你的 AI 助手。
 - 文中的 `uvw` 命令需要 `univer-workspace-cli` 0.7.0 或更高版本，安装方法见 [Install](../apps/cli/README.md#install)（英文）。
 
 > [!NOTE]
@@ -57,7 +57,7 @@ sequenceDiagram
 
 | 决定                    | 谁，在哪里                                           | Agent 能不能做                                             |
 | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
-| 让 Agent 不用账号开始   | 人的电脑上的 MCP 客户端不需要任何人。其他 MCP 客户端在登录页显示 **以访客 Agent 继续** | Agent 也可以自己运行 `uvw auth guest`                      |
+| 让 Agent 不用账号开始   | 在连接页上点 **Try without signing in** 的人，在浏览器里 | Agent 也可以自己运行 `uvw auth guest`                      |
 | 认领 Agent              | 打开认领链接的人，在浏览器里                         | 不能                                                       |
 | 审阅并合入 Pull request | 作者或认领人，在 Team Space 里还有能编辑的成员，在浏览器里或用 `uvw pr merge` | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
 | 打开链接分享            | 文件的所有者，在浏览器里或用 `uvw share`             | Agent 可以分享自己的文件。你的 AI 助手通过 MCP 不能        |
@@ -88,11 +88,11 @@ Doc 或 Slide 用 `inspect`，并把 `target` 设为 `document` 或 `presentatio
 
 **从未用过 Workspace 的 Agent 得到自己的名字和空间，创建文件，并返回一个说明谁能打开的链接。**
 
-你电脑上的 MCP 客户端（例如 Claude Code）打开的浏览器没有登录 Workspace 时，客户端直接得到一个访客 Agent，没有任何页面。这样的客户端在 loopback 地址上接收回调，授权码只会交给这台电脑上的程序，访客 Agent 又碰不到任何人的数据，所以没有什么需要人批准。浏览器保持未登录。其他 MCP 客户端打开登录页，页面提供 **以访客 Agent 继续**：
+MCP 客户端打开的浏览器没有登录 Workspace 时，连接页提供 **Sign in to connect** 和 **Try without signing in**。点后者，客户端得到一个访客 Agent，浏览器保持未登录：
 
-![MCP 客户端打开的登录页，左边是"以访客 Agent 继续"卡片，右边是账号登录表单](images/agent-handoff/guest-agent-card.zh-CN.png)
+![没有人登录时的连接页。Claude Code (claude.ai) wants to work in Univer Workspace，页面提供 Sign in to connect，然后是 Try without signing in 和三行关于临时 Agent 的说明，最后是 Deny](images/agent-handoff/connect-signed-out.png)
 
-访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。没有页面时，人只能从 Agent 那里知道它。服务器说明要求 Agent 在第一次回复里说明：它是访客 Agent，因为浏览器没有 Workspace 会话；登录后重新连接，就能以自己的账号连接；否则可以用 `claim` 返回的认领链接把它留下。它的 `whoami` 结果也写明这些。Agent 在 Pull request 里工作，合入后分享文件：
+访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。服务器说明要求 Agent 在第一次回复里说明：它是访客 Agent，因为浏览器没有 Workspace 会话；登录后重新连接，就能以自己的账号连接；否则可以用 `claim` 返回的认领链接把它留下。它的 `whoami` 结果也写明这些。Agent 在 Pull request 里工作，合入后分享文件：
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }

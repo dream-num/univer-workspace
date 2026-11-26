@@ -2,7 +2,7 @@
 
 [English](agent-sign-in.md)
 
-你在 Claude Code 里只输入了一个地址 `https://space.univer.ai/mcp`，点一次浏览器里的 **Allow**，之后 agent 就能在 Workspace 里工作，默认是一个归你所有的新 agent，你也可以选择让它以你的身份工作。这篇文档讲这中间发生了什么。
+你在 Claude Code 里只输入了一个地址 `https://space.univer.ai/mcp`，在浏览器里点一个按钮，之后 agent 就能在 Workspace 里工作，默认是一个归你所有的 agent，你也可以选择让它以你的身份工作。这篇文档讲这中间发生了什么。
 
 这套流程用的是 OAuth 2.1，加上 MCP 授权规范带来的几个较新的机制：资源元数据发现、Client ID Metadata Document（CIMD）和 token exchange。它们在普通网站登录里很少出现，所以下文假设你第一次见到它们，每个机制都先说它解决什么问题，再给出 Workspace 里的真实请求。
 
@@ -29,7 +29,7 @@ OAuth 的术语和 Workspace 的组件一一对应：
 | 资源所有者（resource owner） | 你 | 在浏览器里登录，决定授予哪些权限 |
 | 客户端（client） | Claude Code、Claude、VS Code 等 MCP 客户端 | 发起授权，拿 token 调用工具 |
 | 资源服务器（resource server） | MCP 网关，`https://space.univer.ai/mcp` | 收 token，执行工具调用 |
-| 授权服务器（authorization server） | Workspace Server，`https://space.univer.ai` | 登录、同意页，签发和吊销 token |
+| 授权服务器（authorization server） | Workspace Server，`https://space.univer.ai` | 登录、连接页，签发和吊销 token |
 
 网关和 Workspace Server 是两个独立的服务。网关不连接数据库，它通过 Workspace 的 HTTP API 读写文件。后面的“两次换 token”一节会用到这一点。
 
@@ -51,11 +51,11 @@ sequenceDiagram
     C->>W: GET /.well-known/oauth-authorization-server
     W-->>C: 各端点地址，支持 CIMD 和 PKCE
     C->>U: 在浏览器打开 /api/auth/authorize
-    U->>W: 登录（未登录时客户端改为得到访客 agent，见第三步）
     W->>D: GET client_id 这个 URL
     D-->>W: client_name、redirect_uris
-    W-->>U: 同意页，勾选权限
-    U->>W: Allow
+    W-->>U: 连接页
+    U->>W: 登录后回到连接页（或不登录直接试用，见第三步）
+    U->>W: 连接
     W-->>C: 重定向到 localhost 回调，带 code、state、iss
     C->>W: POST /api/auth/token（code + code_verifier）
     W-->>C: access token（1 小时）和 refresh token（30 天）
@@ -140,9 +140,9 @@ Workspace 收到这样的 `client_id` 时，会去取这份文档，确认文档
 
 ### 为什么比 DCR 好
 
-DCR 里，客户端自己报名字。任何程序都可以注册一个叫 “Claude Code” 的客户端，同意页上的名字因此证明不了什么。每次安装、每台机器都会注册一个新客户端，数据库里的记录只增不减，Workspace 只能用 `MCP_MAX_REGISTERED_CLIENTS` 限制总数。
+DCR 里，客户端自己报名字。任何程序都可以注册一个叫 “Claude Code” 的客户端，连接页上的名字因此证明不了什么。每次安装、每台机器都会注册一个新客户端，数据库里的记录只增不减，Workspace 只能用 `MCP_MAX_REGISTERED_CLIENTS` 限制总数。
 
-CIMD 把身份绑在域名上。只有控制 `claude.ai` 的人才能在那个地址发布文档，所以同意页可以显示 **Claude Code (claude.ai)**，括号里的主机名来自 URL 本身，不是客户端自报的。Workspace 也不需要为它存任何记录。
+CIMD 把身份绑在域名上。只有控制 `claude.ai` 的人才能在那个地址发布文档，所以连接页可以显示 **Claude Code (claude.ai)**，括号里的主机名来自 URL 本身，不是客户端自报的。Workspace 也不需要为它存任何记录。
 
 有一点要清楚：CIMD 证明的是文档的发布者，不是你电脑上正在运行的那个程序。Claude Code 的回调地址是 `localhost`，本机上任何程序都可以拿着这个 `client_id` 发起一次登录。所以只批准你自己刚刚发起的连接。
 
@@ -152,7 +152,7 @@ Workspace 要根据一个陌生人给的 URL 发出请求。不加限制的话�
 
 这也意味着 Workspace Server 必须能访问外网。没有外网的私有部署要设置 `MCP_CIMD_ENABLED=0`。设置之后，授权服务器元数据不再声明支持 CIMD，客户端会改用 DCR。
 
-## 第三步：在浏览器里登录并同意
+## 第三步：在浏览器里连接
 
 客户端在浏览器里打开授权端点。请求里的参数各有用途：
 
@@ -173,37 +173,41 @@ https://space.univer.ai/api/auth/authorize
 - `state` 由客户端生成，回调时原样带回，防止别人把一次不是你发起的授权塞给你的客户端。
 - `code_challenge` 是 PKCE 的一半，下一节解释。
 
-你没有登录、而客户端像 Claude Code 一样在你的电脑上监听回调时，你看不到任何页面，下一段解释。其他情况下 Workspace 先跳到登录页。登录方式取决于部署，可以是密码，也可以是 GitHub、Discord 或 Google。如果你选了 GitHub，那是另一次独立的 OAuth，Workspace 在其中是客户端。它在你回到 Workspace 时就结束了，和 agent 拿到的 token 无关。
+Workspace 返回一个连接页。页面写出客户端的名字，并列出客户端伪造不了的信息：Server、浏览器要回到的地址和 Client ID。页面其余部分取决于你在这个浏览器里是否登录了 Workspace。浏览器里登录的只是 agent 时，按未登录处理，页面也不动这个 agent 的 cookie。
 
-浏览器没有 Workspace 会话时，客户端可以得到一个访客 agent，而不是某个人。访客 agent 是新建的 agent 账号，名字取自客户端的名字（CIMD 文档的 `client_name`，或 DCR 注册时报的名字），例如 “Claude Code · g3wq”，读不到任何人的私有文件。`redirect_uri` 是 loopback 的 `http` 地址（`127.0.0.1`、`[::1]` 或 `localhost`）时，Workspace 不显示任何页面，直接把浏览器送回回调，带上一个新访客 agent 的授权码，权限是客户端请求的全部 scope，浏览器保持未登录。这里不授出任何人的数据，授权码也只会交给这台电脑上的程序，所以没有什么需要批准。Workspace 在客户端用授权码换 token 时才创建 agent，客户端没用上的授权码不留下任何东西。默认每个地址每小时最多创建 5 个 agent（`AGENT_CREATE_LIMIT_PER_HOUR`），超过后浏览器显示 `AGENT_CREATE_RATE_LIMITED`。已有 10,000 个这样的授权码等着换 token，或者同一个地址一分钟内已经拿到 20 个时，客户端收到 `temporarily_unavailable` 而不是授权码，过一分钟再试即可。访客 agent 不会对自己的身份保持沉默：它的服务器说明和 `whoami` 结果都写明，Workspace 创建它是因为浏览器没有 Workspace 会话；你登录后重新连接，就能以自己的账号连接；否则可以认领它，把它留下。想得到一个归你所有的 agent，或者以自己的身份连接，先在这个浏览器里登录 Workspace 再连接。其他 `redirect_uri`，例如 `https` 地址，登录页提供 **Continue as a guest agent**，访客 agent 之后像登录用户一样确认同意页。关闭访客 agent 的部署总是显示登录页。访客 agent 能做什么、怎样被人认领，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
+### 未登录
 
-登录后是同意页：
+页面提供 **Sign in to connect**。登录方式取决于部署，可以是密码，也可以是 GitHub、Discord 或 Google，登录后回到同一个连接页。如果你选了 GitHub，那是另一次独立的 OAuth，Workspace 在其中是客户端。它在你回到 Workspace 时就结束了，和 agent 拿到的 token 无关。**Deny** 给客户端返回 `access_denied`。
 
-![本地 Workspace 的同意页。Claude Code (claude.ai) 请求使用 Workspace，页面列出 Server、Returns to 和 Client ID，提供已选中并标为 Recommended 的 A new agent that you own 和 Yourself 两个选项，下方是四项权限](images/agent-sign-in/consent.png)
+对 CIMD 客户端，Workspace 在有人登录之前就抓取它的文档，所以这个页面上的名字也是核验过的。这次抓取和访客共用每个地址的限额：每小时 10 次，同时只有一次。Workspace 拒绝抓取时，浏览器改去登录页。这里的错误页不说明文档哪里有问题。
 
-截图来自一个本地 Workspace，所以 Server 和回调地址都是 `127.0.0.1`。Client ID 是 Claude Code 的真实 CIMD 地址，名称和主机名由 Workspace 从这份文档里读出。
+除非部署关闭了访客 agent，页面还提供 **Try without signing in**。它让客户端得到一个访客 agent，而不是某个人。访客 agent 是新建的 agent 账号，名字取自客户端的名字（CIMD 文档的 `client_name`，或 DCR 注册时报的名字），例如 “Claude Code · g3wq”。它有一个空的个人空间，读不到任何人的私有文件。点这个按钮后，浏览器直接回到回调地址，带上授权码，浏览器保持未登录。客户端请求了 `write` 时，授权码带 `read write publish worktree:merge`，否则只带 `read`。Workspace 在客户端用授权码换 token 时才创建 agent，客户端没用上的授权码不留下任何东西。默认每个地址每小时最多创建 5 个 agent（`AGENT_CREATE_LIMIT_PER_HOUR`），达到上限时按钮不可点，页面说明原因。已有 10,000 个这样的授权码等着换 token，或者同一个地址一分钟内已经拿到 20 个时，客户端收到 `temporarily_unavailable` 而不是授权码，过一分钟再试即可。关闭访客 agent 时，CIMD 客户端直接去登录页。
 
-页面先问客户端以谁的身份连接，默认选中 **A new agent that you own**。客户端用授权码换 token 时，Workspace 创建这个 agent，以客户端命名，例如 “Claude Code · d8ik”，并且它已经被你认领：它有自己的空个人空间，只有你分享给它的文件它才能打开，并出现在 **我的 Agent** 里。它的文件不会过期，分享页也没有 **未验证的 Agent** 标记。**Yourself** 让客户端以你的身份连接，能打开你能打开的一切。新 agent 同样受每小时 5 个 agent 的限制。这个地址达到上限时，页面禁用这个选项、说明原因，并选中 **Yourself**。浏览器里登录的是 agent（例如访客 agent）时，页面不提供选择，客户端以这个 agent 自己的身份连接。
+访客 agent 不会对自己的身份保持沉默：它的服务器说明和 `whoami` 结果都写明，Workspace 创建它是因为浏览器没有 Workspace 会话；你登录后重新连接，就能以自己的账号连接；否则可以认领它，把它留下。访客 agent 能做什么、怎样被人认领，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
 
-页面还列出你已经拥有、没有停用的 agent，最多 5 个，最近活跃的在前。其中有一个是为同名客户端创建的时，页面改为选中它，所以客户端重新连接时（例如你删掉它再加回来，或者它的登录失效了），继续用同一个 agent 和它的文件，而不是再创建一个。选你已有的 agent 不创建任何东西，也不占创建限额。每个 agent 选项都写明，agent 在自己的空间里工作，只有你分享给它的文件它才能看到。agent 的服务器说明和 `whoami` 结果都写明你是它的主人，所以它找不到你的某个文件时，能告诉你原因。
+### 已登录
 
-页面上的四项权限就是 scope。你可以取消勾选任何一项，至少留一项：
+![已登录时的连接页。Claude Code (claude.ai) wants to work in Univer Workspace，页面列出 Server、Returns to 和 Client ID，说明客户端将作为你的一个新 agent 工作，下面是已打开的 Let it change content 开关和四行说明，然后是 Connect as a new agent 按钮、你的另一个 agent、Connect as myself 和 Deny](images/agent-sign-in/connect-page.png)
 
-| scope | 允许 agent |
-| --- | --- |
-| `read` | 查看 Space、文件、issue 和 worktree |
-| `write` | 在 worktree 里编辑，写 issue 和 label |
-| `publish` | 不经 worktree 直接修改文件和 Space |
-| `worktree:merge` | 合并和丢弃 worktree |
+截图是 Workspace 渲染的页面，填的是示例数据，所以 Server 和回调地址都是 `127.0.0.1`。Client ID 是 Claude Code 的真实 CIMD 地址。
 
-只留 `read` 和 `write` 时，agent 的修改都停在 pull request 里，由你在浏览器里审阅和合并。
+主按钮让客户端以一个归你所有的 agent 连接。你已经有一个为同名客户端创建的 agent 时，主按钮继续用它。所以客户端重新连接时（例如你删掉它再加回来，或者它的登录失效了），继续用同一个 agent 和它的文件，而不是再创建一个。否则主按钮是 **Connect as a new agent**。客户端用授权码换 token 时，Workspace 创建这个 agent，以客户端命名，例如 “Claude Code · d8ik”。它从一开始就归你：它有自己的空个人空间，只有你分享给它的文件它才能打开，并出现在 **我的 Agent** 里。它的文件不会过期，分享页也没有 **未验证的 Agent** 标记。新 agent 同样受每小时 5 个 agent 的限制。这个地址达到上限时，页面不提供新 agent，并说明原因。
+
+主按钮下面列出你拥有、没有停用的 agent，最多 5 个，最近活跃的在前，主按钮上的那个不重复列出。点其中一个，客户端就以这个 agent 连接，不创建任何东西，也不占创建限额。**Connect as myself** 让客户端以你的身份连接，能打开你能打开的一切。**Deny** 给客户端返回 `access_denied`。归你所有的 agent 的服务器说明和 `whoami` 结果都写明你是它的主人，所以它找不到你的某个文件时，能告诉你原因。
+
+客户端请求了 `write` 时，页面显示一个已打开的 **Let it change content** 开关，开关下的几行说明打开和关闭时 agent 分别能做什么。客户端没有请求 `write` 时没有开关。授权码按选择带上 scope：
+
+| 选择 | scope | 允许 agent |
+| --- | --- | --- |
+| 开关关闭，或没有开关 | `read` | 查看 Space、文件、issue 和 worktree |
+| 开关打开 | `read write publish worktree:merge` | 另外还能在 worktree 里编辑，写 issue 和 label，不经 worktree 直接修改文件和 Space，合并和丢弃 worktree |
 
 ## 第四步：用授权码换 token
 
-你点 **Allow** 后，浏览器跳回客户端的回调地址：
+你点一个连接按钮或 **Try without signing in** 后，浏览器跳回客户端的回调地址：
 
 ```text
-http://localhost:<端口>/callback?code=<授权码>&state=<原样带回>&iss=https://space.univer.ai&scope=<你勾选的权限>
+http://localhost:<端口>/callback?code=<授权码>&state=<原样带回>&iss=https://space.univer.ai&scope=<授予的 scope>
 ```
 
 客户端先核对 `state` 和 `iss`，再到 token 端点换 token：
@@ -297,11 +301,11 @@ Workspace 返回一个最长 10 分钟的 session，以及这张 token 代表的
 | 现象 | 卡在哪一步 | 怎么办 |
 | --- | --- | --- |
 | 客户端反复要求登录 | 第四步之后，客户端保存的 token 失效或损坏 | 在客户端里登出该服务再登录，例如 `claude mcp logout univer-workspace` |
-| 登录后浏览器显示 `invalid_client` 或 `temporarily_unavailable` 错误页 | 第二步，Workspace 取不到 CIMD 文档，或文档没有通过校验 | 私有部署确认 Workspace Server 能访问外网，或设置 `MCP_CIMD_ENABLED=0` |
+| 浏览器显示 `invalid_client` 或 `temporarily_unavailable` 错误页 | 第二步，Workspace 取不到 CIMD 文档，或文档没有通过校验 | 私有部署确认 Workspace Server 能访问外网，或设置 `MCP_CIMD_ENABLED=0` |
 | 自部署时出口走 fake-IP 代理，CIMD 总是失败 | 第二步，公网域名被解析到 `198.18.0.0/15`，被当成私有地址拒绝 | 设置 `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
-| 连上了，但缺少某些工具 | 第三步取消了某个 scope，或 URL 的 `?toolsets=` 没有包含它 | 重新授权并勾选，或检查 `?toolsets=` |
-| 客户端连上了，但身份是一个归你所有的 agent，不是你 | 第三步，同意页默认选中一个归你所有的 agent（新建的或已有的），除非你选 **Yourself** | 在客户端里登出该服务，重新连接，并选择 **Yourself** |
-| 客户端连上了，但身份是新的访客 agent，不是你 | 第三步，浏览器没有 Workspace 会话，客户端在你的电脑上监听回调 | 用 agent 给你的认领链接认领它；或者在客户端里登出该服务，在这个浏览器里登录 Workspace，再重新连接 |
+| 连上了，但缺少某些工具 | 第三步关闭了 **Let it change content**，或 URL 的 `?toolsets=` 没有包含它 | 在客户端里登出该服务，打开开关重新连接，或检查 `?toolsets=` |
+| 客户端连上了，但身份是一个归你所有的 agent，不是你 | 第三步，主按钮以一个归你所有的 agent 连接（新建的或已有的） | 在客户端里登出该服务，重新连接，并点 **Connect as myself** |
+| 客户端连上了，但身份是新的访客 agent，不是你 | 第三步，在未登录的连接页上点了 **Try without signing in** | 用 agent 给你的认领链接认领它；或者在客户端里登出该服务，重新连接，并点 **Sign in to connect** |
 | 配了 `Authorization` 头后 Claude Code 不再弹出登录 | Claude Code 看到头就跳过 OAuth | 二选一，不要同时配置 |
 
 ## 术语和出处

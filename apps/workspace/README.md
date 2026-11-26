@@ -202,7 +202,7 @@ replica approves or completes it and a restart keeps it; completed CLI sessions 
 login sessions.
 
 Every action taken for a person needs a person signed in to Workspace in a browser: creating a personal
-access token or a browser Agents token, approving a CLI login, the OAuth consent page, claiming and
+access token or a browser Agents token, approving a CLI login, the OAuth connect and consent pages, claiming and
 managing agents, linking a login method, changing a password, and publishing or rejecting HTML View and
 Skill drafts. An agent, a CLI login (the Workspace Agent's and the Space plugin's sessions included) and a
 session issued for a token get `403 INTERACTIVE_SESSION_REQUIRED`.
@@ -218,59 +218,64 @@ when none is configured. `POST /api/auth/guest` sets the `workspace_session` coo
 renews while in use and never acts for a person. It answers `409` when the request already carries a valid
 session, so it cannot replace a signed-in session.
 
-When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth sign-in, it shows a card
-that continues as a guest agent: to a browser with no session while guest agents are enabled, and to a
-browser that holds only an agent's cookie, which authorize treats as signed out. The card calls
-`POST /api/auth/authorize/guest` with the authorization's query string as `oauthAuthorization`, and opens
-the `redirectUrl` it answers: the client's callback with a code for a new guest agent, issued as authorize
-issues it for a browser with no session (below), or with the OAuth error authorize would send there. The
-endpoint reads no session and sets no cookie, so the browser stays signed out and no consent page follows.
-A static OAuth client, such as the Workspace Agent, answers `400`, because it needs a person signed in.
-A request authorize answers without a redirect, such as an unknown client or an unregistered
-`redirect_uri`, also answers `400` (or `503` while a client metadata document cannot be fetched). Nothing
-is created until the client redeems the code. A client metadata document is fetched at this point. A
-source already at the limit gets `429` before anything is fetched. Guests may start 8 of the 32
-metadata fetches the server runs at once, one in flight per source, so signed-in authorization keeps the
-other 24. Each source may start 10 fetches per hour, failed or slow ones included, and then gets `429`
-before anything is fetched. A cached document or a fetch already in flight costs nothing. When every
-guest fetch is in use, or this source already has another fetch in flight, the request answers
-`503 CLIENT_METADATA_BUSY` with `Retry-After` and fetches nothing. When that client named itself in its registration or its client metadata document, as Claude Code
-does, the server names the guest after it, as in `Claude Code · 7f3k`, so agents from one client stay
-distinguishable. The name follows the display-name rules: no email address, no control, invisible or
-direction-changing characters, at most 40 characters. Without a client name the guest is `agent`.
-
-A browser with no session that opens `/api/auth/authorize` for a DCR or CIMD client whose `redirect_uri` is
-loopback `http` (`127.0.0.1`, `[::1]` or `localhost`) skips the login page and the card while guest agents
-are enabled. Authorize answers `302` to the client's callback with `code`, `state` and `iss` and sets no
-cookie. The code carries every requested scope and stands for a guest agent named after the client, as
-above. Redeeming it at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is
-never redeemed creates nothing. The pending guest lives in the same one-minute, single-use code as any
-authorization, which the product database holds, so any server replica redeems it, and a second
-redemption on any replica creates no second agent and revokes the first grant as for any replayed code.
-While 10,000 codes wait unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
-no code, and a code a signed-in user approves is never refused this way. One source (the bucket the creation limit uses) gets
-at most 20 such codes a minute, redeemed or not, so it can hold no more than that share of the 10,000. Past that, authorize
-sends it back the same way with an `error_description` that says too many sign-ins came from this address. Every replica
-shares both counts through the product database. The source limit, the metadata
-fetch and their refusals are the guest card's, answered as JSON from authorize. A source that reaches the
-limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
-agent. A static OAuth client, or any other `redirect_uri`, keeps the login page.
-
-A signed-in person on the consent page of a DCR or CIMD client chooses `connect_as`. `new_agent`, preselected,
-approves a code that stands for a new agent this person owns. Redeeming it creates the agent named after the
-client, under the same source limit, then claims it for the person with the claim's own conditional update, so
-it starts in the state of a guest that person claimed. `self` approves a code for the person. When the source is
-at the limit, the page disables `new_agent`, says why and selects `self`, and a submit that still sends
-`new_agent` answers `429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. Authorize treats a session
-whose User is an agent as signed out and sends the browser to the login page, so an agent's cookie never
+`GET /api/auth/authorize` answers a DCR or CIMD client with a connect page in one of two states. A session
+whose User is an agent counts as no session, and the page leaves its cookie alone, so an agent's cookie never
 connects a client as that agent.
 
-The same page lists up to five agents the person owns and has not stopped, most recently active first. It
-preselects the most recently active one whose `origin_label` is this client's name, so a client that connects
-again continues its agent. Submitting an agent's id approves a code for that agent. It creates nothing and spends
-no creation, and the server checks at the submit and again at redemption that the person owns it and has not
-stopped it, answering an id that is not such an agent the same way whether or not a User has it. With an agent
-preselected, the limit leaves that agent selected instead of `self`.
+With no person signed in, the page offers **Sign in to connect**, which returns to the same URL, a **Deny** link
+to the client's callback with `access_denied`, and, while guest agents are enabled, **Try without signing in**.
+That button is a form post to `POST /api/auth/authorize/guest` with the authorization's query string as
+`oauthAuthorization`. The endpoint answers `303` to the client's callback with a code for a new guest agent, or
+with the OAuth error authorize would send there. It reads no session and sets no cookie, so the browser stays
+signed out. The code carries `read write publish worktree:merge` when the request names `write`, and `read`
+otherwise. An error that cannot go to the client is an HTML page that names its code and links back to the
+connect page. A static OAuth client, such as the Workspace Agent, gets `400`, because it needs a person signed
+in, and so do an unknown client and an unregistered `redirect_uri` (`503` while a client metadata document
+cannot be fetched). A source at the creation limit sees the button disabled with the reason, and a post that
+still arrives gets `429` before anything is fetched.
+
+Redeeming the code at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is never
+redeemed creates nothing. The pending guest lives in the same one-minute, single-use code as any
+authorization, which the product database holds, so any server replica redeems it, and a second redemption on
+any replica creates no second agent and revokes the first grant as for any replayed code. While 10,000 codes
+wait unredeemed, the endpoint sends the guest back to the callback with `error=temporarily_unavailable` and no
+code, and a code a signed-in person approves is never refused this way. One source (the bucket the creation
+limit uses) gets at most 20 such codes a minute, redeemed or not, so it can hold no more than that share of the
+10,000. Past that, the callback gets the same error with an `error_description` that says too many sign-ins
+came from this address. Every replica shares both counts through the product database. A source that reaches
+the limit between the trial and redemption gets `429 temporarily_unavailable` from the token endpoint and no
+agent.
+
+A CIMD client's metadata document is fetched before the page, anonymously when nobody is signed in and guest
+agents are enabled. Anonymous fetches may start 8 of the 32 metadata fetches the server runs at once, one in
+flight per source, so signed-in authorization keeps the other 24. Each source may start 10 anonymous fetches
+per hour, failed or slow ones included. A cached document or a fetch already in flight costs nothing. A refused
+anonymous fetch sends the browser to the login page, and so does a signed-out CIMD request while guest agents
+are off, which fetches nothing. The trial post resolves the client again under the same limits: a source past
+its hourly fetches gets `429`, and when every anonymous fetch is in use or this source already has another
+fetch in flight, it gets `503 CLIENT_METADATA_BUSY` with `Retry-After` and nothing is fetched. When the client
+named itself in its registration or its client metadata document, as Claude Code does, the server names the
+guest after it, as in `Claude Code · 7f3k`, so agents from one client stay distinguishable. The name follows the
+display-name rules: no email address, no control, invisible or direction-changing characters, at most 40
+characters. Without a client name the guest is `agent`.
+
+A person signed in in a browser connects with one button. It connects as the most recently active agent the
+person owns whose `origin_label` is this client's name, so a client that connects again continues its agent.
+Otherwise it connects as a new agent this person owns (`new_agent`). Redeeming that code creates the agent named
+after the client, under the same source limit, owned by the person from the same write, with no expiry. When
+the source is at the limit and no agent matches, the page offers no new agent, says why, and puts the person's
+most recently active agent on the main button. A submit that still sends `new_agent` answers
+`429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. The page also lists up to five agents the person
+owns and has not stopped, most recently active first, without repeating the one on the main button. Submitting
+an agent's id approves a code for that agent. It creates nothing and spends no creation, and the server checks
+at the submit and again at redemption that the person owns it and has not stopped it, answering an id that is
+not such an agent the same way whether or not a User has it. **Connect as myself** (`self`) approves a code for
+the person. When the request names `write`, a **Let it change content** switch (`access=read_write`) is on by
+default and grants `read write publish worktree:merge`. Off, or without `write`, the code carries `read`.
+
+A static OAuth client still needs a person signed in. A browser without one goes to the login page. A client
+with `requiresConsent`, such as the Workspace Agent or the Space plugin, then gets its consent page with Allow
+and Deny, and any other static client gets its code at once.
 
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent

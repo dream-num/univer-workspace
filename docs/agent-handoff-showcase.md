@@ -21,7 +21,7 @@ Everything below works on `main`. The screenshots come from a local Workspace wi
 ## Before you start
 
 - MCP needs no install. Add `https://space.univer.ai/mcp` to your assistant, or `https://<your-workspace>/mcp` for your own deployment. [Connect an AI assistant](../README.md#connect-an-ai-assistant-mcp) has the steps for each client.
-- When you are signed in, the consent page connects the assistant by default as an agent that you own: the one it used before, or a new one. It starts claimed, so it works like the claimed agents on this page. Choose **Yourself** to connect it as you. This page calls that connection your AI assistant.
+- When you are signed in, the connect page's main button connects the assistant as an agent that you own: the one it used before, or a new one. It starts claimed, so it works like the claimed agents on this page. **Connect as myself** connects it as you. This page calls that connection your AI assistant.
 - The `uvw` commands need `univer-workspace-cli` 0.7.0 or later. See [Install](../apps/cli/README.md#install).
 
 > [!NOTE]
@@ -57,7 +57,7 @@ People make these decisions:
 
 | Decision                          | Who, and where                                                                        | Can an agent do it?                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Start an agent without an account | Nobody, for an MCP client on the person's computer. Any other MCP client shows **Continue as a guest agent** on the sign-in page | An agent can also run `uvw auth guest` itself                                         |
+| Start an agent without an account | The person who clicks **Try without signing in** on the connect page, in the browser | An agent can also run `uvw auth guest` itself                                         |
 | Claim an agent                    | The person who opens the claim link, in the browser                                   | No                                                                                    |
 | Review and merge a pull request   | The author or the person who claimed the agent, or in a Team Space a member who can edit, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
 | Turn on Link Sharing              | The file's owner, in the browser or with `uvw share`                                  | An agent can share its own files. Your AI assistant cannot through MCP                |
@@ -88,11 +88,11 @@ For a Doc or a Slide, use `inspect` with `target` set to `document` or `presenta
 
 **An agent that has never used Workspace gets its own name and space, makes a file, and returns a link that says who can open it.**
 
-An MCP client on your computer, such as Claude Code, gets a guest agent with no page when the browser it opens is not signed in to Workspace. It takes its callback on a loopback address, so the code reaches only a program on that computer, and a guest grants nobody's data, so there is nothing to approve. The browser stays signed out. Any other MCP client opens the sign-in page, which offers **Continue as a guest agent**:
+When the browser an MCP client opens is not signed in to Workspace, the connect page offers **Sign in to connect** and **Try without signing in**. The second one gives the client a guest agent, and the browser stays signed out:
 
-![The sign-in page an MCP client opens, with the Continue as a guest agent card beside the account sign-in form](images/agent-handoff/guest-agent-card.png)
+![The connect page with nobody signed in. Claude Code (claude.ai) wants to work in Univer Workspace. The page offers Sign in to connect, then Try without signing in with three lines about the temporary agent, and Deny](images/agent-handoff/connect-signed-out.png)
 
-The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent. Its server instructions and its `whoami` result tell it to say in its first reply that it is a guest agent because the browser had no Workspace session, that the person can reconnect after signing in to connect under their own account, and that otherwise they can keep it through the claim link that `claim` returns. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, and shares the file:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. Its server instructions and its `whoami` result tell it to say in its first reply that it is a guest agent because the browser had no Workspace session, that the person can reconnect after signing in to connect under their own account, and that otherwise they can keep it through the claim link that `claim` returns. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, and shares the file:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
