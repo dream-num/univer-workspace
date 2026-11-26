@@ -251,14 +251,8 @@ for one hour after reservation. Never pass a local file path to a tool.
   office-import for Office input or blob for original files.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
-- `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at
-  its root, ordered `pages/*.typ`, an optional prelude and optional `assets/`.
-  The manifest requires at least
-  `{ "schemaVersion": 1, "targetUnitId": "report", "pages": ["pages/01.typ"] }`
-  and may declare `title` and `prelude`. Put shared definitions in the prelude
-  instead of `#import` or `#include`. Store PNG, JPEG, GIF, WebP or SVG images under
-  bundle-root `assets/` and reference them as
-  `#image("assets/name.png", width: 240pt, height: 120pt)`.
+- `compile_typst` (deprecated) takes bundle_upload_id for a typst-bundle ZIP.
+  See the `doc` Skill for the manifest and image layout.
   targetUnitId is a local compiler ID, not a Workspace Unit: compile_typst always
   creates a new Doc. Never put an existing unitId there. The result returns it as
   `compiledTargetUnitId`; use only the returned `unit.unitId` afterwards. Errors

@@ -114,13 +114,7 @@ Preview external sprite sheets over HTTP. `file://` blocks cross-file references
 
 ## Typst bundles
 
-Use a bundle root containing `typst.json`, ordered `pages/*.typ`, an optional prelude, and optional `assets/`. The manifest requires at least:
-
-```json
-{ "schemaVersion": 1, "targetUnitId": "report", "pages": ["pages/01.typ"] }
-```
-
-It can also declare `title` and `prelude`. Put shared definitions in the prelude instead of `#import` or `#include`. Store PNG, JPEG, GIF, WebP, or SVG images under bundle-root `assets/`, referenced as `#image("assets/name.png", width: 240pt, height: 120pt)`. The compiler embeds them as native images with deterministic dimensions, not table placeholders.
+For `compile-typst` (deprecated), pass the bundle directory or `typst.json`. See the `doc` Skill for the manifest and image layout.
 
 ```bash
 uvw compile-typst paper/typst.json --out review/doc.js \

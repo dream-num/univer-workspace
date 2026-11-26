@@ -718,6 +718,10 @@ describe("gateway over real HTTP and the MCP client", () => {
     for (const suffix of ["", "?toolsets=files", "?toolsets=admin", "?toolsets=all"]) {
       const client = await connect({ pin: "2026-07-28" }, suffix);
       const tools = (await client.listTools()).tools.map((tool) => {
+        if (tool.name === "compile_typst") {
+          expect(tool.description).toMatch(/^Deprecated\. /);
+          return { ...tool, description: tool.description!.slice("Deprecated. ".length) };
+        }
         if (tool.name !== "share") return tool;
         const { access, ...properties } = tool.outputSchema!.properties as Record<string, unknown>;
         expect(access).toEqual({ type: "string" });

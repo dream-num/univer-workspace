@@ -141,9 +141,9 @@ are not hard page breaks.
 
 ## Typst, tables, pagination, and reference fidelity
 
-For a formal document authored from Typst, use a lightweight Typst Source Bundle instead of copying generated Facade JavaScript. The bundle contains a manifest with schema version 1, a compiler target Unit ID, ordered page sources, an optional prelude, and optional assets. Follow the `core` Skill for bundle structure and source handling.
+Typst compilation is a deprecated experiment and remains available without ongoing maintenance.
 
-It may also declare `title` and `prelude`. Compile once for review, then apply the same result:
+In the root `typst.json`, set `schemaVersion` to `1`, choose a local `targetUnitId`, and list `pages` in order (e.g. `["01.typ", "02.typ"]`). Optional fields include `title` and a `prelude` array (e.g. `["shared.typ"]`).
 
 Run `compile-typst` on the Typst bundle in build-only mode for a generated program, diagnostics, and preview PNGs. Then apply the same bundle to the destination Space in the Worktree. Follow the `core` Skill for bundle and output handling.
 
@@ -155,7 +155,9 @@ is not the Workspace content address. On apply, the server allocates and returns
 final Workspace screenshot. The compiler loads only the official bundled
 `@univerjs-pro/doc-typst-native-binding`; do not install or fall back to a system `typst`.
 
-Put shared definitions in the manifest prelude rather than using `#import` or `#include`. Use PNG, JPEG, GIF, WebP, or SVG assets with explicit dimensions, for example 240pt by 120pt. Follow the `core` Skill for bundle image references. The compiler embeds the asset and inserts a
+Put shared definitions in the manifest prelude rather than using `#import` or `#include`. Use PNG, JPEG, GIF, WebP, or SVG assets with explicit dimensions.
+Keep pages that use images beside the root `typst.json` and load images from `assets/` with `#image("assets/mark.png", width: 24pt, height: 12pt)`.
+The compiler embeds the asset and inserts a
 native Doc image with deterministic dimensions; it does not emit a table placeholder. Review any
 warning about mismatched `cover` / `contain` geometry or unavailable alternative-text authoring
 against the direct Typst PNG. A fixed left/right layout must pass every cell as an argument of one
