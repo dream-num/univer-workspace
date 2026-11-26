@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AgentCreation } from "./identity.types.js";
 
-const CODE_TTL_MS = 60_000;
+export const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
 export const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const DEFAULT_SCOPES = ["identity"] as const;

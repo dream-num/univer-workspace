@@ -91,7 +91,7 @@ An MCP client on your computer, such as Claude Code, gets a guest agent with no 
 
 ![The sign-in page an MCP client opens, with the Continue as a guest agent card beside the account sign-in form](images/agent-handoff/guest-agent-card.png)
 
-The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent, through the claim link that `claim` returns. The agent works in a pull request, merges it, and shares the file:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent. Its server instructions tell it to say in its first reply that it is a guest agent because the browser had no Workspace session, that the person can reconnect after signing in to connect under their own account, and that otherwise they can keep it through the claim link that `claim` returns. Its `whoami` result says the same. The agent works in a pull request, merges it, and shares the file:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }

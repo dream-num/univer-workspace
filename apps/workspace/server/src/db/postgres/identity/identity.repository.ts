@@ -20,6 +20,7 @@ import type {
   SignInCode,
   SignInCodeKind,
   SignInCodeLimits,
+  SignInCodePut,
   StoredAgent,
 } from "../../../modules/identity/identity.repository.js";
 import { signInCodeSql, toSignInCode } from "../../sign-in-codes.js";
@@ -718,11 +719,17 @@ export class PostgresIdentityRepository implements IdentityRepository {
     return Number(row?.count ?? 0);
   }
 
-  async putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<"stored" | "full" | "duplicate"> {
+  async putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<SignInCodePut> {
+    const share = limits.perSource;
     // Outside the transaction, as in takeSourceEvent: puts that prune the same rows wait on each other.
     await this._database.prepare(signInCodeSql.prune).run(code.kind, limits.expiredBefore);
+    if (share !== undefined) await this._database.prepare(signInCodeSql.pruneSourceEvents).run(share.event.action, share.since);
     // Serializable isolation commits only one of two concurrent puts that both saw room; the other replays and counts it.
     return this._database.transaction(async (database) => {
+      if (share !== undefined) {
+        const row = await database.prepare(signInCodeSql.countSourceEvents).get(share.event.action, share.event.source, share.since);
+        if (Number(row?.count ?? 0) >= share.limit) return "source-full";
+      }
       if (limits.perSubject !== undefined) {
         await database.prepare(signInCodeSql.evictOldestOfSubject).run(code.kind, code.subjectUserId, code.createdAt, limits.perSubject - 1);
       }
@@ -732,7 +739,12 @@ export class PostgresIdentityRepository implements IdentityRepository {
       }
       const inserted = await database.prepare(signInCodeSql.insert)
         .run(code.kind, code.codeHash, code.userCodeHash, code.subjectUserId, code.payload, code.createdAt, code.expiresAt);
-      return inserted.changes > 0 ? "stored" : "duplicate";
+      if (inserted.changes === 0) return "duplicate";
+      if (share !== undefined) {
+        const { id, action, source, createdAt } = share.event;
+        await database.prepare(signInCodeSql.insertSourceEvent).run(id, action, source, createdAt);
+      }
+      return "stored";
     });
   }
 

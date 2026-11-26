@@ -26,6 +26,7 @@ const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string;
   uvw_pat_full: { scope: "read write publish worktree:merge nope", kind: "pat", id: "pat-1", clientId: null },
   uvw_pat_readonly: { scope: "read", kind: "pat", id: "pat-2", clientId: null },
   uvw_at_oauth: { scope: "read write", kind: "oauth", id: "grant-1", clientId: "chatgpt" },
+  uvw_at_guest: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-2", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
 };
 
 function deferred() {
@@ -348,6 +349,43 @@ describe("gateway authentication", () => {
     expect(gateway.events().map(({ principal_category }) => principal_category)).toEqual(["agent_unclaimed", "agent_claimed"]);
     expect(gateway.exchanges).toHaveLength(1);
     expect(products).not.toContain("/api/agents/claim-codes");
+  });
+
+  it("tells an unclaimed agent from a browser sign-in that it is a guest until a person claims it, and tells a PAT's agent and a person nothing", async () => {
+    const agent = { id: "user-1", username: "claude-code-g3wq", displayName: "Claude Code · g3wq", avatarUrl: null, kind: "agent", claimed: false };
+    const gateway = await start(exchangeEnv, {
+      user: () => agent,
+      product: (path) => (path === "/api/session" ? { body: { authenticated: true, user: agent } } : undefined),
+    });
+    const told = async (bearer: string) => {
+      const client = await gateway.connect(bearer);
+      const whoami = await client.callTool({ name: "whoami", arguments: {} });
+      expect(whoami.isError).not.toBe(true);
+      return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice };
+    };
+    const guest = await told("uvw_at_guest");
+    for (const fact of [
+      "This connection is a guest agent, which Workspace created because the browser had no Workspace session.",
+      "A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client.",
+      "Otherwise the user can keep this agent by claiming it with claim.",
+    ]) {
+      expect(guest.instructions).toContain(fact);
+      expect(guest.notice).toContain(fact);
+    }
+    expect(guest.instructions).toContain("Tell the user this in your first reply.");
+
+    const self = await told("uvw_pat_agent");
+    expect(self.instructions).toContain("works in its own Personal Space");
+    expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, undefined]);
+
+    agent.claimed = true;
+    const claimed = await told("uvw_at_guest");
+    expect(claimed.instructions).toContain("This connection is an agent identity that a person has claimed.");
+    expect([claimed.instructions.includes("guest agent"), claimed.notice]).toEqual([false, undefined]);
+
+    const person = await (await start(exchangeEnv)).connect("uvw_at_oauth");
+    expect(person.getInstructions()).not.toContain("guest agent");
+    expect((await person.callTool({ name: "whoami", arguments: {} })).structuredContent).not.toHaveProperty("notice");
   });
 
   it("asks Workspace nothing more for a claimed agent's or a person's tool lists", async () => {

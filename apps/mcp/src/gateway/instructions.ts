@@ -1,5 +1,6 @@
 import type { OpName } from "../shared/executor-protocol.js";
-import type { ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
+import type { ToolContext, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
+import { guestAgentNotice } from "./tools/core/whoami.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "./tools/schemas.js";
 
@@ -10,7 +11,9 @@ export function buildServerInstructions(
   executorRestricted: boolean,
   principal: ToolPrincipal,
   scopes: ReadonlySet<ToolScope>,
+  authKind?: ToolContext["authKind"],
 ): string {
+  const guest = guestAgentNotice(principal, authKind);
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
   const finishes = scopes.has("worktree:merge") && has("pr_merge");
@@ -79,6 +82,7 @@ export function buildServerInstructions(
   ];
   const instructions = [
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
+    ...(guest ? [`${guest} Tell the user this in your first reply.`] : []),
     ...(finishes ? [intro] : []),
     ...(executorRestricted
       ? [

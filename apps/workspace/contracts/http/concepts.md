@@ -74,6 +74,8 @@ at `POST /api/auth/token` creates the agent under the same limit, and returns
 `429 temporarily_unavailable` with no agent past it. Authorize applies the limit and
 the metadata fetch budget above before redirecting. While 10,000 codes wait unredeemed,
 it redirects such a guest to the client with `error=temporarily_unavailable` and no code.
+A source that got 20 such codes in the last minute, redeemed or not, is redirected the
+same way, and the `error_description` says too many sign-ins came from this address.
 
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).
 An agent also carries `claimed`. A banned agent's login session returns

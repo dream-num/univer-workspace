@@ -21,6 +21,7 @@ import type {
   SignInCode,
   SignInCodeKind,
   SignInCodeLimits,
+  SignInCodePut,
   StoredAgent,
 } from "../../../modules/identity/identity.repository.js";
 import { signInCodeSql, toSignInCode } from "../../sign-in-codes.js";
@@ -712,9 +713,16 @@ export class SqliteIdentityRepository implements IdentityRepository {
       .get(action, source, since) as { readonly count: number }).count;
   }
 
-  async putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<"stored" | "full" | "duplicate"> {
+  async putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<SignInCodePut> {
     return this._database.transaction((database) => {
       database.prepare(signInCodeSql.prune).run(code.kind, limits.expiredBefore);
+      const share = limits.perSource;
+      if (share !== undefined) {
+        const { action, source } = share.event;
+        database.prepare(signInCodeSql.pruneSourceEvents).run(action, share.since);
+        const { count } = database.prepare(signInCodeSql.countSourceEvents).get(action, source, share.since) as { readonly count: number };
+        if (count >= share.limit) return "source-full";
+      }
       if (limits.perSubject !== undefined) {
         database.prepare(signInCodeSql.evictOldestOfSubject).run(code.kind, code.subjectUserId, code.createdAt, limits.perSubject - 1);
       }
@@ -722,8 +730,13 @@ export class SqliteIdentityRepository implements IdentityRepository {
         const { count } = database.prepare(signInCodeSql.countPending).get(code.kind, code.createdAt) as { readonly count: number };
         if (count >= limits.capacity) return "full";
       }
-      return database.prepare(signInCodeSql.insert)
-        .run(code.kind, code.codeHash, code.userCodeHash, code.subjectUserId, code.payload, code.createdAt, code.expiresAt).changes > 0 ? "stored" : "duplicate";
+      if (database.prepare(signInCodeSql.insert)
+        .run(code.kind, code.codeHash, code.userCodeHash, code.subjectUserId, code.payload, code.createdAt, code.expiresAt).changes === 0) return "duplicate";
+      if (share !== undefined) {
+        const { id, action, source, createdAt } = share.event;
+        database.prepare(signInCodeSql.insertSourceEvent).run(id, action, source, createdAt);
+      }
+      return "stored";
     });
   }
 

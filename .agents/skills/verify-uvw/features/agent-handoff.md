@@ -41,6 +41,8 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH11 gives an MCP client on the person's computer a guest agent with no page. A browser with no session that
   opens authorize for a client with a loopback callback goes straight back to it with a code and gets no cookie.
   The code's token acts for a new guest agent named after the client, which can mint its claim link with `claim`.
+  Its server instructions and `whoami` say it is a guest agent because the browser had no Workspace session. One
+  address gets at most 20 such codes a minute; past that, authorize sends the client `temporarily_unavailable`.
 - MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
@@ -147,6 +149,10 @@ $V mcp-oauth login ho10 --guest
 jq -e '.page == "none" and .browser_signed_in_after == false and .callback_scope == "read write publish worktree:merge" and .token.status == 200' "$EVIDENCE/ho10.json"
 $V mcp --auth oauth ho10-whoami whoami
 jq -e '(.subject.name | test("^verify-uvw ho10 · [a-z0-9]{4}$")) and .budget != null' "$EVIDENCE/ho10-whoami.out"
+NOTICE='This connection is a guest agent, which Workspace created because the browser had no Workspace session.'
+jq -e --arg n "$NOTICE" '.notice | startswith($n) and contains("sign in to Workspace in that browser and reconnect the client") and contains("claiming it with claim")' "$EVIDENCE/ho10-whoami.out"
+$V mcp-instructions --auth oauth ho10-instructions
+jq -e --arg n "$NOTICE" '.instructions | contains($n) and contains("Tell the user this in your first reply.")' "$EVIDENCE/ho10-instructions.out"
 $V mcp-oauth exchange ho10-exchange oauth
 jq -e '.body.user.kind == "agent"' "$EVIDENCE/ho10-exchange.json"
 $V mcp --auth oauth ho10-claim claim '{}' > /dev/null   # stdout would put the claim code in the run log
@@ -156,7 +162,41 @@ perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "
 
 Pass when authorize answers `302` to the loopback callback with a code and no `Set-Cookie`, the scripted client gets
 its token with no page and leaves the browser with no session, `whoami` names the guest after the client with an
-agent's budget, the token exchange names a User of kind `agent`, and `claim` returns a claim link.
+agent's budget, `whoami` and the server instructions both say it is a guest agent because the browser had no
+Workspace session, the token exchange names a User of kind `agent`, and `claim` returns a claim link.
+
+### HO11. One address that keeps opening authorize (AH11)
+
+Mode: mcp-same-origin. Run: helper.
+
+Every request here comes from `127.0.0.1`, one source. Codes from HO10 in the last minute count too, so fewer than
+20 may succeed. The block waits out the minute at the end, so the next zero-click guest from this address works.
+
+```bash
+CB=http://127.0.0.1:61235/callback; H="$RUN/home/ho11-authorize.headers"; L="$RUN/home/ho11.locations"
+HO11_CLIENT=$(curl --fail-with-body -sS -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
+  -d "{\"client_name\":\"verify-uvw ho11 curl\",\"redirect_uris\":[\"$CB\"]}" | jq -r .client_id)
+ho11_authorize() {
+  curl -sS -o /dev/null -D "$H" -G "$ORIGIN/api/auth/authorize" --data-urlencode response_type=code \
+    --data-urlencode "client_id=$HO11_CLIENT" --data-urlencode "redirect_uri=$CB" --data-urlencode "state=$(openssl rand -hex 16)" \
+    --data-urlencode "resource=$MCP_URL" --data-urlencode code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM \
+    --data-urlencode code_challenge_method=S256
+  grep -i '^location: ' "$H" | tr -d '\r' | sed 's/^[Ll]ocation: //'
+}
+for attempt in $(seq 21); do ho11_authorize >> "$L"; done
+HO11_CODES=$(grep -c '[?&]code=' "$L")
+echo "codes issued in 21 requests: $HO11_CODES" > "$EVIDENCE/ho11-count.txt"
+test "$HO11_CODES" -le 20
+tail -1 "$L" > "$EVIDENCE/ho11-refused.location"
+node -e 'const u = new URL(process.argv[1]); process.exit(u.searchParams.get("error") === "temporarily_unavailable" && u.searchParams.get("error_description") === "Too many sign-ins came from this address. Try again shortly." && u.searchParams.has("code") === false ? 0 : 1)' "$(cat "$EVIDENCE/ho11-refused.location")"
+sleep 61
+ho11_authorize | grep -q '[?&]code='
+rm "$H" "$L"
+```
+
+Pass when between 1 and 20 of the 21 requests get a code, the last one goes back to the callback with
+`error=temporarily_unavailable`, the description `Too many sign-ins came from this address. Try again shortly.` and no
+code, and a minute later the same address gets a code again.
 
 ### MH1. Unclaimed agent
 
@@ -175,7 +215,8 @@ $V mcp --as bot1 mh-bot1-claim claim '{}'
 `mh-bot1.out` lists 56 tools: the 49 `core` tools with `claim` right after `share`,
 then `blob_upload`, `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write` and `space_node`, which an agent
 gets in `core` to set up its own repository and declare its checks. A person's default list has 49 and no `claim`. The instructions say the agent
-`works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
+`works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`, and they
+do not contain `guest agent`: bot1 made itself with `POST /api/agents`, so no browser sign-in created it.
 `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
 `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text, and
 `$V secret-check` fails on it and prints the command that replaces it.

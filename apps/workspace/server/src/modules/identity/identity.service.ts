@@ -20,6 +20,7 @@ import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
 import type {
   IdentityRepository,
+  SignInCodePut,
   StoredSession,
 } from "./identity.repository.js";
 import { deriveDisplayName, deriveUserDisplayName, personalSpaceName, validDisplayName } from "./display-name.js";
@@ -746,7 +747,7 @@ export function createIdentityModule(options: {
       const at = now();
       const deviceCode = randomBytes(32).toString("base64url");
       let userCode: string;
-      let stored: "stored" | "full" | "duplicate";
+      let stored: SignInCodePut;
       do {
         userCode = createCliUserCode();
         stored = await repository.putSignInCode(
