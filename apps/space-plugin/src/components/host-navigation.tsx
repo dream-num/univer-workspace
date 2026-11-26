@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Face } from '../client.js';
-import { installHostNavigation } from '../host-layout.js';
+import { desktopNavigationHost, identifyNavigationHost, installHostNavigation } from '../host-layout.js';
 import { Icon, iconButton } from './primitives.js';
 /** A root-scoped footer Slot supplies a lifecycle anchor; native navigation stays mounted. */
 export function HostNavigationBridge(
@@ -19,15 +19,30 @@ export function HostNavigationBridge(
       useState<ReturnType<typeof installHostNavigation>>(null),
     [collapsed, setCollapsed] = useState(false);
   useLayoutEffect(() => {
-    const installed = installHostNavigation(marker.current!, {
-      graph: (window as unknown as { __DSH_BOOT__?: unknown }).__DSH_BOOT__,
-      active: props.currentPanel,
-      toggle: props.toggleSidebar,
-      collapsed: setCollapsed,
-    });
-    setTargets(installed);
-    props.update({ hostNavigation: installed ? 'active' : 'unsupported' });
-    return () => installed?.dispose();
+    const graph = (window as unknown as { __DSH_BOOT__?: unknown }).__DSH_BOOT__;
+    // rc.5 switches to a modal drawer below 768px of frame width.
+    // Reserve the 52px rail only while that frame can stay in wide mode.
+    const wide = identifyNavigationHost(graph) === desktopNavigationHost
+      ? window.matchMedia('(min-width: 820px)')
+      : null;
+    let installed: ReturnType<typeof installHostNavigation>;
+    const syncWidth = () => {
+      installed?.dispose();
+      installed = wide?.matches === false ? null : installHostNavigation(marker.current!, {
+        graph,
+        active: props.currentPanel,
+        toggle: props.toggleSidebar,
+        collapsed: setCollapsed,
+      });
+      setTargets(installed);
+      props.update({ hostNavigation: installed ? 'active' : 'unsupported' });
+    };
+    syncWidth();
+    wide?.addEventListener('change', syncWidth);
+    return () => {
+      wide?.removeEventListener('change', syncWidth);
+      installed?.dispose();
+    };
   }, []);
   useLayoutEffect(() => {
     targets?.sync();
