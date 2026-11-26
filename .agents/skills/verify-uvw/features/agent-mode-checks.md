@@ -170,7 +170,7 @@ GH=$RUN/home/g-cli; mkdir -m 700 -p "$GH"
 gu() { UNIVER_HOME=$GH node apps/cli/dist/main.js "$@"; }
 gu config set workspace.origin "$ORIGIN"
 gu auth guest --json > "$EVIDENCE/mpl-g-guest.out"
-G=$(jq -r .agent.username "$EVIDENCE/mpl-g-guest.out"); GID=$(jq -r .agent.id "$EVIDENCE/mpl-g-guest.out")
+G=$(jq -r .agent.username "$EVIDENCE/mpl-g-guest.out"); G_ID=$(jq -r .agent.id "$EVIDENCE/mpl-g-guest.out")
 (umask 077 && gu claim --json > "$RUN/home/g-claim.private")
 ```
 
@@ -186,9 +186,9 @@ agent-browser wait --url '**/spaces/*'
 O connects an MCP client as G, its own agent, so every `$V mcp --auth oauth` call below acts as G:
 
 ```bash
-$V mcp-oauth login mpl-g --connect-as "$GID"
+$V mcp-oauth login mpl-g --connect-as "$G_ID"
 $V mcp --auth oauth mpl-g-whoami whoami '{}'
-jq -e --arg id "$GID" --arg o "$O" '.subject.id == $id and .owner.username == $o' "$EVIDENCE/mpl-g-whoami.out"
+jq -e --arg id "$G_ID" --arg o "$O" '.subject.id == $id and .owner.username == $o' "$EVIDENCE/mpl-g-whoami.out"
 $V cli mpl-member-g repo member add "$G" --role editor -R "$R" --json
 ```
 
