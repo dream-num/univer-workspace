@@ -158,13 +158,14 @@ Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session
 已登录 Browser 确认人类可核对的验证码后，高熵 Device Code 只能兑换一次，并为 CLI 创建独立、持久化的
 `login_sessions` 行。Server 重启不影响未过期的请求和已经签发的 CLI Session。CLI Session 在有效期过半后被使用时续期为一个完整有效期，
 所以持续工作的 CLI 不需要再次 Browser 确认。闲置的 CLI Session 在当前有效期结束时失效，即闲置半个到一个有效期后失效。
-用户修改密码时，Server 在同一个事务里删除该用户会续期的 `agent` Session（CLI、OAuth `session` scope 和 Discord bot-login 签发的），
-发起修改的 Session 除外，并关闭它们的实时连接。Browser Cookie、密码、邮箱验证码、
+用户在 Browser 里修改密码时，Server 在同一个事务里删除该用户会续期的 `agent` Session（CLI、OAuth `session` scope 和 Discord bot-login 签发的），
+并关闭它们的实时连接。Browser Cookie、密码、邮箱验证码、
 GitHub、Google 和 Discord Token 都不会经过 Agent。
 
 agent 是 `users.kind = 'agent'` 的 User，没有密码或外部身份。Identity 的 `createAgent` 在一个事务里创建
 User、Personal Space 与 `agents` 行。`POST /api/agents` 为它签发个人访问令牌，`POST /api/auth/guest` 为它签发
-`browser` 来源的 Login Session 并写 Cookie；请求已带有效 Session 时后者返回 409。两个入口共用
+`agent` 来源的 Login Session 并写 Cookie，供 `uvw auth guest` 使用，和 CLI Session 一样续期；请求已带有效 Session 时后者返回 409。
+登录页的访客卡片调用 `POST /api/auth/authorize/guest`，得到客户端回调地址和访客授权码，不写 Cookie，兑换授权码时才创建 agent。两个入口共用
 `createSourceRateLimiter` 的一个实例，按来源 IP 每小时最多 `AGENT_CREATE_LIMIT_PER_HOUR` 个（默认 5，0 关闭创建），超出返回 429
 `AGENT_CREATE_RATE_LIMITED`。计数存在产品数据库的 `source_rate_events` 里，所有副本共用，重启不清零。邮箱验证码、匿名
 client metadata 抓取和举报的按来源限速也用同一张表，见 [数据模型](data-model.md#source_rate_events)。

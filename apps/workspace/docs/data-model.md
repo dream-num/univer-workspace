@@ -143,20 +143,23 @@ Space 的任何角色。
 
 ### `login_sessions`
 
-持久化 Session ID、Secret Hash、User、创建与过期时间，以及可空的 `write_source`。原始 Cookie Secret 不入库。Browser
-授权 CLI 后会为 CLI 创建独立的普通 Session 行；十分钟内待确认的一次性授权请求仅存在于
-Server 进程内存，不进入产品数据库，进程重启后由用户重新发起。
+持久化 Session ID、Secret Hash、User、创建与过期时间，以及可空的 `write_source`。原始 Cookie Secret 不入库。人在 Browser
+里批准 CLI 登录后，为 CLI 创建独立的普通 Session 行；十分钟内待批准的授权请求是 [`sign_in_codes`](#sign_in_codes)
+里 `kind = 'cli'` 的行，任意副本都能批准和兑换，重启不丢失。
 
 `write_source`（V16，`TEXT`，可空）记录签发 Session 的入口：`browser` 表示 Workspace Web 登录路由，
-`agent` 表示任意非 Browser 入口；`NULL` 表示未知。CHECK 仅允许 `browser`、`agent` 或 `NULL`，
+`agent` 表示任意非 Browser 入口，包括 `uvw auth guest` 用的 `POST /api/auth/guest`；`NULL` 表示未知。agent 不再获得
+`browser` Session。此前登录页访客卡片签发的 agent `browser` Session 不迁移，到期失效。代表人的操作（签发令牌、批准 CLI
+登录、OAuth 同意页、认领 agent 等）只接受 `users.kind = 'human'`、`write_source = 'browser'` 且两个 `issued_for_*` 都为空的
+Session；授权页把 User 是 agent 的 Session 当作没登录。CHECK 仅允许 `browser`、`agent` 或 `NULL`，
 无默认值，不回填已有 Session。Session 签发流程写入 `write_source`，HTTP Worktree/Issue 创建复制到 `created_via`；
 摘要以 `createdVia` 暴露该值，`NULL` 返回 `unknown`。Worktree Operation payload 保存首次预留的来源，
 后续重试保留它。Session JSON 不暴露 `writeSource`。
 
 `write_source = 'agent'` 且 `issued_for_pat_id`、`issued_for_grant_id` 都为空的 Session 在剩余有效期不足一半时被认证使用，
 Server 把 `expires_at` 改写为当前时间加 `SESSION_TTL_MS`。只读的 Session 检查不续期。其他 Session 的 `expires_at`
-签发后不变，过期即失效。用户修改密码时，更新 `password_credentials` 的同一个事务删除该用户的这类 Session，
-发起修改的 Session 除外。Browser Session 和为 Token 签发的 Session 不受影响。
+签发后不变，过期即失效。修改密码只能由人的 Browser Session 发起；更新 `password_credentials` 的同一个事务删除该用户的
+这类 Session。Browser Session 和为 Token 签发的 Session 不受影响。
 
 `issued_for_pat_id`（V18，`TEXT`，可空，`REFERENCES personal_access_tokens(id) ON DELETE CASCADE`）与
 `issued_for_grant_id`（V18，`TEXT`，可空，`REFERENCES oauth_grants(id) ON DELETE CASCADE`）标记该 Session 是为哪个
@@ -1280,7 +1283,7 @@ advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回�
 ### `sign_in_codes`
 
 登录流程里只用一次的码。四种码共用这张表，因为它们的形状相同：一个只存哈希的码、一个过期时间、一次性的使用状态和按种类的容量。
-`kind` 区分四种：`oauth_code`（OAuth authorization code，60 秒，包括 zero-click guest 的码）、`consent`（同意页的 consent token，
+`kind` 区分四种：`oauth_code`（OAuth authorization code，60 秒，包括 zero-click 和登录页访客卡片签发的 guest 的码）、`consent`（同意页的 consent token，
 5 分钟）、`claim`（agent 认领码，10 分钟）和 `cli`（CLI 浏览器授权，10 分钟）。从 V36 起这些码不再存在进程内存里，一个副本签发的码
 任意副本都能兑换，重启不丢未过期的码。
 
@@ -1288,7 +1291,7 @@ advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回�
 | --- | --- |
 | `kind`、`code_hash` | 主键。`code_hash` 是码的 SHA-256（base64url），与 Session token 的哈希方式相同。表里没有任何码的原文。 |
 | `user_code_hash` | 仅 `cli`：人在浏览器里输入的验证码的哈希，唯一。`code_hash` 是 CLI 持有的 Device Code 的哈希。 |
-| `subject_user_id` | 码代表的 User。`claim` 是 agent；`consent` 是打开同意页的人；`cli` 在批准前为空，批准后是批准的人；`oauth_code` 是签发时登录的人，同意页上选了自己已有 agent 的码是那个 agent，兑换时才创建 agent 的码（zero-click guest 的码，和同意页上选了新 agent 的码）在兑换创建 agent 后写入。 |
+| `subject_user_id` | 码代表的 User。`claim` 是 agent；`consent` 是打开同意页的人；`cli` 在批准前为空，批准后是批准的人；`oauth_code` 是签发时登录的人，同意页上选了自己已有 agent 的码是那个 agent，兑换时才创建 agent 的码（guest 的码，和同意页上选了新 agent 的码）在兑换创建 agent 后写入。 |
 | `payload_json` | `oauth_code` 存 code challenge、redirect URI、client id、scope、resource 和 subject。要创建 agent 的 subject 含 client 名称与创建限速所用的来源 IP，同意页上选的新 agent 还含认领它的人。选了已有 agent 的码，subject 是 `{ kind: "user", userId: <agent>, ownerUserId: <人> }`，兑换时再查一次这个人仍拥有它且没有停用。`consent` 存授权请求，不含 client 记录，因为 static client 带 secret；MCP 请求另存 client 名称，供新 agent 命名。`claim` 与 `cli` 为 `{}`。 |
 | `state` | `pending`、`consumed` 或 `replayed`，只有 MCP 的 `oauth_code` 离开 `pending`。 |
 | `grant_id` | 仅 `oauth_code`：兑换签发的 `oauth_grants` 行。 |

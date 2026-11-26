@@ -201,22 +201,35 @@ The product database holds a pending authorization request as hashes of its two 
 replica approves or completes it and a restart keeps it; completed CLI sessions remain normal persisted
 login sessions.
 
-`POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
+Every action taken for a person needs a person signed in to Workspace in a browser: creating a personal
+access token or a browser Agents token, approving a CLI login, the OAuth consent page, claiming and
+managing agents, linking a login method, changing a password, and publishing or rejecting HTML View and
+Skill drafts. An agent, a CLI login (the Workspace Agent's and the Space plugin's sessions included) and a
+session issued for a token get `403 INTERACTIVE_SESSION_REQUIRED`.
+
+`POST /api/auth/agent-token` lets the browser Agents module use the `workspace_session` cookie of a person signed in to the browser to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, any other session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
 
 `POST /api/agents`, `POST /api/auth/guest` and a guest authorization code create an agent User without credentials: a User of kind
 `agent` with its own Personal Space that expires 30 days later. `POST /api/agents` takes an optional
 `{ "label" }` and returns `201` with `{ agent: { id, username }, token, mcpUrl, expiresAt }`. `token` is a
 personal access token with every MCP scope, and `mcpUrl` is the first URL in `MCP_RESOURCE_URLS`, or `null`
 when none is configured. `POST /api/auth/guest` sets the `workspace_session` cookie instead and returns
-`{ agent }`. It answers `409` when the request already carries a valid session, so it cannot replace a
-signed-in session. When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth
-sign-in, it shows a card that continues as a guest agent. The card calls `POST /api/auth/guest` with the
-authorization's query string as `oauthAuthorization` and then returns to the authorization, where the guest
-approves the consent page like any signed-in user. The server first checks that authorization as authorize
-would. One that authorize would refuse, such as a request without a valid `resource`, answers `400` (or
-`503` while a client metadata document cannot be fetched), creates no agent and does not count toward the
-limit. A client metadata document is fetched at this point, before the guest exists, and authorize reuses
-it. A source already at the limit gets `429` before anything is fetched. Guests may start 8 of the 32
+`{ agent }`. It serves `uvw auth guest`: the session has the `agent` write source of a CLI login, so it
+renews while in use and never acts for a person. It answers `409` when the request already carries a valid
+session, so it cannot replace a signed-in session.
+
+When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth sign-in, it shows a card
+that continues as a guest agent: to a browser with no session while guest agents are enabled, and to a
+browser that holds only an agent's cookie, which authorize treats as signed out. The card calls
+`POST /api/auth/authorize/guest` with the authorization's query string as `oauthAuthorization`, and opens
+the `redirectUrl` it answers: the client's callback with a code for a new guest agent, issued as authorize
+issues it for a browser with no session (below), or with the OAuth error authorize would send there. The
+endpoint reads no session and sets no cookie, so the browser stays signed out and no consent page follows.
+A static OAuth client, such as the Workspace Agent, answers `400`, because it needs a person signed in.
+A request authorize answers without a redirect, such as an unknown client or an unregistered
+`redirect_uri`, also answers `400` (or `503` while a client metadata document cannot be fetched). Nothing
+is created until the client redeems the code. A client metadata document is fetched at this point. A
+source already at the limit gets `429` before anything is fetched. Guests may start 8 of the 32
 metadata fetches the server runs at once, one in flight per source, so signed-in authorization keeps the
 other 24. Each source may start 10 fetches per hour, failed or slow ones included, and then gets `429`
 before anything is fetched. A cached document or a fetch already in flight costs nothing. When every
@@ -248,8 +261,9 @@ approves a code that stands for a new agent this person owns. Redeeming it creat
 client, under the same source limit, then claims it for the person with the claim's own conditional update, so
 it starts in the state of a guest that person claimed. `self` approves a code for the person. When the source is
 at the limit, the page disables `new_agent`, says why and selects `self`, and a submit that still sends
-`new_agent` answers `429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. A signed-in agent sees no choice
-and approves for itself.
+`new_agent` answers `429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. Authorize treats a session
+whose User is an agent as signed out and sends the browser to the login page, so an agent's cookie never
+connects a client as that agent.
 
 The same page lists up to five agents the person owns and has not stopped, most recently active first. It
 preselects the most recently active one whose `origin_label` is this client's name, so a client that connects
@@ -275,8 +289,8 @@ which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (
 origin) to the person. The code lasts ten minutes and claims the agent once. The product database holds
 its hash, so any server replica accepts it and a restart keeps it. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
 claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
-CLI login and a token session get `403`. On that `403` the page offers Sign out and continue, because a browser
-that took the guest agent card is still signed in as the agent. A guest that got its code with no page leaves the browser signed out. It signs out and shows sign-in on the same page,
+CLI login and a token session get `403 INTERACTIVE_SESSION_REQUIRED`. On that `403` the page offers Sign out
+and continue, for a browser that holds an agent's cookie. It signs out and shows sign-in on the same page,
 which comes back to the claim link. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
 the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
 code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
