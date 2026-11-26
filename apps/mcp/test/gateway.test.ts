@@ -726,7 +726,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"daf43ed290e78264b62b61d9524dcdbe748bcca393d5ab6427792550055e9ed3"`);
+    expect(digest).toMatchInlineSnapshot(`"40a47977beae489f8bd3da659cda5195ec7e60f91fb0791b6766e765603655f5"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {

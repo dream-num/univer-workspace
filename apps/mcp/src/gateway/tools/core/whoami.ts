@@ -21,13 +21,15 @@ export function ownedAgentNotice(owner: AgentOwner | undefined): string {
   return `This agent belongs to ${owner ? `${owner.name} (@${owner.username})` : "the person who claimed it"} and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.`;
 }
 
-// Some clients never give the model the server instructions, so an agent's whoami repeats what it must tell the user and how it finishes.
+// Some clients never give the model the server instructions, so an agent's whoami repeats, in the instructions' words, what it must tell the user and how it finishes.
+const linkAfterMerge =
+  "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.";
 const finish = {
-  agent_unclaimed:
-    "Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge.",
-  agent_claimed:
-    "Once a result is verified, mark its pull request ready with pr_ready and merge it with pr_merge, unless the person who claimed this agent asked to review the work or it needs their decision; then give them the pull request link and stop there.",
+  agent_unclaimed: `Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge. ${linkAfterMerge}`,
+  agent_claimed: `Once the result is verified, mark the pull request ready with pr_ready. If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. Otherwise, merge it with pr_merge. ${linkAfterMerge}`,
 } as const;
+const leaveMerging =
+  "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft. Give the user the pull request link so they can review it. Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
 
 function agentNotice(context: ToolContext): string | undefined {
   const principal = toolPrincipal(context.user);
@@ -35,7 +37,7 @@ function agentNotice(context: ToolContext): string | undefined {
   const notice = [
     guestAgentNotice(principal, context.authKind, context.scopes.has("publish")),
     principal === "agent_claimed" ? `${ownedAgentNotice(context.owner)} When the user expects you to see their files, tell them this.` : undefined,
-    context.scopes.has("worktree:merge") ? finish[principal] : undefined,
+    context.scopes.has("worktree:merge") ? finish[principal] : context.scopes.has("write") ? leaveMerging : undefined,
   ].filter((part) => part !== undefined);
   return notice.length ? notice.join(" ") : undefined;
 }

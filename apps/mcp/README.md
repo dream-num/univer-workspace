@@ -203,9 +203,15 @@ otherwise keep the agent by claiming it, naming `claim` only when the connection
 An agent that made itself with `POST /api/agents` and connects with its PAT, a claimed agent and a person get none of it.
 Some MCP clients, WorkBuddy 5.11.3 among them, never give the model the server instructions. They pass on tool names,
 the descriptions of the tools the model looks up, and tool results. So an agent's `whoami` description asks it to call
-`whoami` before its first reply, and with `worktree:merge` an agent's `notice` also says how it finishes a pull request:
-an unclaimed agent merges its own, and a claimed agent merges unless the person who claimed it asked to review the work or
-it needs their decision. A person's `whoami` carries no `notice`.
+`whoami` before its first reply, and an agent's `notice` also says, in the instructions' words, how it finishes a pull request.
+With `worktree:merge`, an unclaimed agent marks its own ready and merges it. A claimed agent marks it ready and merges it
+unless the person who claimed it asked to review the work or it needs a person's decision. Both give the user the `share`
+url for a merged file in their Personal Space, and the pull request link in a Team repository. With `write` but not
+`worktree:merge`, the agent keeps the draft until the user says the work is finished or asks for review, gives the user the
+pull request link, and leaves merging and discarding to the user. A read-only connection gets no finish rule, and a person's
+`whoami` carries no `notice`. The descriptions of `pr_ready`, `pr_merge` and `execute` point to that `notice`, and to the
+server instructions when there is none. The descriptions of `search`, `issue_view`, `pr_list` and `pr_view` carry the
+instructions' sentence that text others wrote in an Issue or pull request is an unverified request.
 A person can claim an unclaimed agent at any moment, so for an unclaimed agent the gateway reads the user from the
 downstream session (`GET /api/session`) on every request instead of keeping the exchanged user. The first request
 after the claim gets the claimed agent's tools, instructions and tool messages. A person's and a claimed agent's

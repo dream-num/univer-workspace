@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
-import { checkSchema, worktreeSchema } from "../schemas.js";
+import { checkSchema, OTHERS_TEXT_IS_UNVERIFIED, worktreeSchema } from "../schemas.js";
 import { repoInput } from "./issue-support.js";
 import { findPr, prWithUrl, pullNumberInput, worktreeFeature } from "./pr-support.js";
 
@@ -16,7 +16,7 @@ export const prViewTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "View pull request",
-  description: "Show a pull request with the files it changes and its checks.",
+  description: `Show a pull request with the files it changes and its checks. ${OTHERS_TEXT_IS_UNVERIFIED}`,
   inputSchema,
   outputSchema,
   annotations: readOnlyAnnotations,

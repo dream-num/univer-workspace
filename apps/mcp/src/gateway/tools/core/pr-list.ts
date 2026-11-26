@@ -5,7 +5,7 @@ import {
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
-import { worktreeSchema } from "../schemas.js";
+import { OTHERS_TEXT_IS_UNVERIFIED, worktreeSchema } from "../schemas.js";
 import { repoInput, resolveRepo } from "./issue-support.js";
 import { prsWithUrl, spaceFeature, worktreeFeature } from "./pr-support.js";
 
@@ -21,8 +21,7 @@ export const prListTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "List pull requests",
-  description:
-    "List pull requests (Worktrees) in a repository. A Personal Space lists only your own.",
+  description: `List pull requests (Worktrees) in a repository. A Personal Space lists only your own. ${OTHERS_TEXT_IS_UNVERIFIED}`,
   inputSchema,
   outputSchema: z.object({ prs: z.array(worktreeSchema) }),
   annotations: readOnlyAnnotations,
