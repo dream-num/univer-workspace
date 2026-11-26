@@ -2,8 +2,8 @@ import type { WorkspaceSubject } from "./auth.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import { resolveNodeReference } from "./repo-ref.js";
 import type { WorkspaceSpaceFeature } from "./space.js";
-import type { WorkspaceLinkSharing } from "./space-model.js";
-import { nodeUrl } from "./urls.js";
+import type { WorkspaceLinkSharing, WorkspaceSpace } from "./space-model.js";
+import { nodeUrl, repoUrl } from "./urls.js";
 
 export const SHARE_LINKS = ["off", "viewer", "editor"] as const;
 /** Link Sharing as one setting: off, or the access a signed-in user gets through the link. */
@@ -90,7 +90,7 @@ export async function shareNode(
     // The server keeps Link Sharing only for Personal Space files, and answers NOT_FOUND for a Team Space file the caller can read.
     if (error.code === "NOT_FOUND") {
       const space = await spaces.get(spaceId);
-      if (space.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space.fullName ?? space.name, input.caller);
+      if (space.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
     }
     throw error;
   }
@@ -147,14 +147,19 @@ async function teamSpaceRefusal(
   origin: string,
   url: string,
   name: string,
-  repo: string,
+  space: WorkspaceSpace,
   caller: WorkspaceSubject,
+  turnOn: string | undefined,
 ): Promise<WorkspaceApplicationError> {
-  const where = `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${repo}.`;
+  const where = `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${space.fullName ?? space.name}.`;
   if (caller.kind !== "agent" || caller.claimed) {
+    // Only a person's token session omits turnOn, and the server does not let it make a Space public either.
+    const publish = turnOn === undefined
+      ? `ask the user to make the repository public in its settings in the browser: ${repoUrl(origin, space.id)}/settings`
+      : "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).";
     return workspaceError(
       "workspace-argument-invalid",
-      `${where} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).`,
+      `${where} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or ${publish}`,
       { url },
     );
   }

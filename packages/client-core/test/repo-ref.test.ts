@@ -240,13 +240,18 @@ describe("file links", () => {
     });
   });
 
-  it.each([["a person", person], ["a claimed agent", { ...agent, claimed: true }]] as const)(
-    "tells %s to add a member or make the repository public to let a person open a Team Space file",
-    async (_caller, caller) => {
+  const addMember = "To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or";
+  it.each([
+    ["a person's token session", person, undefined, `ask the user to make the repository public in its settings in the browser: ${origin}/spaces/s1/settings`],
+    ["a person's interactive session", person, turnOn, "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
+    ["a claimed agent", { ...agent, claimed: true }, "call share with node n1 and link viewer", "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
+  ] as const)(
+    "tells %s to add a member or have the repository made public in the way it can",
+    async (_caller, caller, sessionTurnOn, publish) => {
       const { spaces, calls } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
-      await expect(shareNode(spaces, origin, { node: "n1", caller, link: "viewer" })).rejects.toMatchObject({
+      await expect(shareNode(spaces, origin, { node: "n1", caller, link: "viewer", ...(sessionTurnOn === undefined ? {} : { turnOn: sessionTurnOn }) })).rejects.toMatchObject({
         code: "workspace-argument-invalid",
-        message: `${inTeam} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).`,
+        message: `${inTeam} ${addMember} ${publish}`,
         detail: { url: `${origin}/nodes/n1` },
       });
       expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
