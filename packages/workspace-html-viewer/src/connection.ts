@@ -1,3 +1,4 @@
+import { getHtmlViewUnitIds, parseHtmlView } from "@univerjs-labs/html-view";
 import {
   renderHtmlView,
   type BindingEnginePort,
@@ -16,6 +17,7 @@ export interface HtmlViewHostOptions {
   onError?: (message: string) => void;
   onStatus?: (states: readonly CollaborationStatus[]) => void;
   onInspectChanged?: (inspecting: boolean) => void;
+  onLoadingChanged?: (loading: boolean) => void;
 }
 
 /** Adapts SDK state and authorized workbook metadata to the React consumers. */
@@ -52,6 +54,10 @@ export function connectHtmlView(
   let edited = false;
   let inspecting = false;
   options.onInspectChanged?.(false);
+  // The frame asks for its Sheets only after it has parsed, which its own scripts and stylesheets can delay.
+  const declaresSources = getHtmlViewUnitIds(parseHtmlView(options.source)).length > 0;
+  let loading = true;
+  options.onLoadingChanged?.(true);
   const unsubscribe = view.subscribe((state) => {
     const { drafts, writes, confirmation } = state.pending;
     if (drafts || writes) edited = true;
@@ -64,6 +70,12 @@ export function connectHtmlView(
     if (state.inspecting !== inspecting) {
       inspecting = state.inspecting;
       options.onInspectChanged?.(inspecting);
+    }
+    const nextLoading = state.phase === "connecting" || (state.phase === "ready" && declaresSources &&
+      (state.sources.length === 0 || state.sources.some((source) => source.phase === "loading")));
+    if (nextLoading !== loading) {
+      loading = nextLoading;
+      options.onLoadingChanged?.(loading);
     }
   });
   return {

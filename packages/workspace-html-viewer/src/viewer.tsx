@@ -61,6 +61,7 @@ export const WorkspaceHtmlViewer = forwardRef<WorkspaceHtmlViewerHandle, Workspa
           onError: (message) => callbacks.current.onError?.(message),
           onStatus: (states) => callbacks.current.onStatus?.(states),
           onInspectChanged: (value) => callbacks.current.onInspectChanged?.(value),
+          onLoadingChanged: (value) => callbacks.current.onLoadingChanged?.(value),
         });
         connection.current = current;
         return () => {

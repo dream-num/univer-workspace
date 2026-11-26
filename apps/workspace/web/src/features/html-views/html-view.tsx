@@ -10,7 +10,7 @@ import {
   type WorkspaceHtmlViewerHandle,
 } from "@univerjs/univer-workspace-html-viewer";
 import { useI18n } from "../../shared/i18n";
-import { Button } from "../../shared/ui";
+import { Button, Spinner } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError, HtmlViewUndeclaredSourceError, type HtmlViewEngine, type HtmlViewSourceWorktree } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
@@ -64,6 +64,7 @@ export function HtmlView({
   const unsynced = useRef(false);
   const [error, setError] = useState("");
   const [inspecting, setInspecting] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [blocked, setBlocked] = useState<readonly string[]>([]);
   useEffect(() => setBlocked([]), [source, allowedUnitIds]);
   const allowUnit = useMemo(() => allowedUnitIds && ((unitId: string) => {
@@ -148,13 +149,14 @@ export function HtmlView({
           {error}
         </p>
       ) : null}
-      <div ref={native.viewerRoot} className="flex min-h-0 flex-1 flex-col">
+      <div ref={native.viewerRoot} className="relative flex min-h-0 flex-1 flex-col">
         {user ? (
           <WorkspaceHtmlViewer
             ref={viewer}
             source={native.html}
             locale={language}
             onInspectChanged={setInspecting}
+            onLoadingChanged={setLoading}
             title={t("htmlViewTitle")}
             className="min-h-0 w-full flex-1 border-0"
             {...(allowedOrigins ? { allowedOrigins } : {})}
@@ -165,6 +167,14 @@ export function HtmlView({
               unsynced.current = states.some((state) => state !== CollaborationStatus.SYNCED && state !== CollaborationStatus.NOT_COLLAB);
             }}
           />
+        ) : null}
+        {loading && !error ? (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-background/85 backdrop-blur-[1px]">
+            <p role="status" className="m-0 flex items-center gap-2.5 text-sm text-muted-foreground">
+              <Spinner className="size-5 text-brand-600" />
+              {t("htmlViewLoading")}
+            </p>
+          </div>
         ) : null}
       </div>
       {trial && (

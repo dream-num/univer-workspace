@@ -15,6 +15,9 @@ source engines, and exposes the view's save and inspection controls through a re
 
 - `inspect.open()` / `inspect.close()` toggle the built-in inspection UI.
 - `onInspectChanged(boolean)` keeps the host's toolbar toggle in sync.
+- `onLoadingChanged(boolean)` is true until the page has parsed and every Sheet it asked
+  for has loaded or failed. The page's own scripts and stylesheets can keep the frame blank
+  until then. A page that binds no Sheet stops loading at the handshake.
 - `prepareToLeave()` commits drafts, waits for saving and pauses page writes; hosts
   keep the component mounted until it succeeds. Failures leave the page usable.
 - `resume()` resumes the same sandbox after a later host operation cancels departure;
@@ -39,7 +42,7 @@ Unavailable names use the SDK's `id: xxx` fallback.
 - Fetch Blob contents and resolve source Unit identities and permissions.
 - Resolve identity, license, permissions and collaboration endpoints, and inject
   the reference policy into `createWorkspaceHtmlEngine`.
-- Present errors, an inspection toggle and browser unload protection.
+- Present errors, a loading state, an inspection toggle and browser unload protection.
 - Await `prepareToLeave()` before leaving when `hasLocalChanges()` is true; changing
   source/loader or unmounting disposes the old view and is not an async save guard.
 - Implement route/tab/account lifecycle. Current hosts dispose the view after a

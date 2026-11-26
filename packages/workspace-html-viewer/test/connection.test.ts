@@ -86,6 +86,31 @@ it("derives unload protection and inspection state from SDK state, without repea
   expect(connection.hasPendingChanges()).toBe(false);
   expect(onInspectChanged).toHaveBeenLastCalledWith(false);
 });
+it("reports loading after the handshake until every Sheet the frame asked for has loaded or failed", () => {
+  const onLoadingChanged = vi.fn();
+  connectHtmlView(container, {
+    source: '<span data-univer-cell-text="a:s:B2"></span><span data-univer-cell-text="b:s:B2"></span>',
+    loadEngine,
+    onLoadingChanged,
+  });
+  const notify = sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void;
+  notify(state({ phase: "connecting" }));
+  notify(state());
+  notify(state({ sources: [{ unitId: "a", phase: "ready" }, { unitId: "b", phase: "loading" }] }));
+  expect(onLoadingChanged.mock.calls).toEqual([[true]]);
+  notify(state({ sources: [{ unitId: "a", phase: "ready" }, { unitId: "b", phase: "error", error: "denied" }] }));
+  expect(onLoadingChanged.mock.calls).toEqual([[true], [false]]);
+});
+it("stops loading at the handshake for a page that binds no Sheet, or when the connection closes", () => {
+  const unbound = vi.fn();
+  connectHtmlView(container, { source: "<p>Static</p>", loadEngine, onLoadingChanged: unbound });
+  (sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void)(state());
+  expect(unbound.mock.calls).toEqual([[true], [false]]);
+  const closed = vi.fn();
+  connectHtmlView(container, { source: '<span data-univer-cell-text="a:s:B2"></span>', loadEngine, onLoadingChanged: closed });
+  (sdk.view.subscribe.mock.calls[1]![0] as (state: HtmlViewState) => void)(state({ phase: "closed" }));
+  expect(closed.mock.calls).toEqual([[true], [false]]);
+});
 it("reports local changes for edits until nothing is pending, not for confirmation alone", () => {
   const connection = connectHtmlView(container, { source: "template", loadEngine });
   const notify = sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void;
