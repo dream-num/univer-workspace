@@ -205,8 +205,9 @@ Some MCP clients, WorkBuddy 5.11.3 among them, never give the model the server i
 the descriptions of the tools the model looks up, and tool results. So an agent's `whoami` description asks it to call
 `whoami` before its first reply, and an agent's `notice` also says, in the instructions' words, how it finishes a pull request.
 With `worktree:merge`, an unclaimed agent marks its own ready and merges it. A claimed agent marks it ready and merges it
-unless the person who claimed it asked to review the work or it needs a person's decision. Both give the user the `share`
-url for a merged file in their Personal Space, and the pull request link in a Team repository. With `write` but not
+unless the person who claimed it asked to review the work or it needs a person's decision. With the `publish` scope that
+`share` needs, both give the user the `share` url for a merged file in their Personal Space, and the pull request link in a
+Team repository. Without `publish`, they give the pull request link. With `write` but not
 `worktree:merge`, the agent keeps the draft until the user says the work is finished or asks for review, gives the user the
 pull request link, and leaves merging and discarding to the user. A read-only connection gets no finish rule, and a person's
 `whoami` carries no `notice`. The descriptions of `pr_ready`, `pr_merge` and `execute` point to that `notice`, and to the

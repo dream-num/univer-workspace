@@ -29,6 +29,7 @@ const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string;
   uvw_at_guest: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-2", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
   uvw_at_guest_read: { scope: "read", kind: "oauth", id: "grant-3", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
   uvw_at_owned: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-4", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
+  uvw_at_merge: { scope: "read write worktree:merge", kind: "oauth", id: "grant-5", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
 };
 const owner = { id: "user-9", username: "olivia", displayName: "Olivia", avatarUrl: null };
 
@@ -417,6 +418,14 @@ describe("gateway authentication", () => {
       notice: `${ownerFacts} When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
     });
     for (const sentence of handOver) expect(owned.instructions).toContain(sentence);
+
+    const noPublish = await told("uvw_at_merge");
+    const pullLink = "Then give the user the pull request link.";
+    expect(noPublish.notice, "share refuses a connection without publish, so neither names it").toBe(
+      `${ownerFacts} When the user expects you to see their files, tell them this. ${[...handOver.slice(0, -1), pullLink].join(" ")}`,
+    );
+    expect(noPublish.instructions).toContain(`Otherwise, merge it with pr_merge. 10) ${pullLink}`);
+    expect(noPublish.instructions).not.toContain("call share");
 
     const writeOnly = await told("uvw_at_oauth");
     expect(writeOnly.notice, "write access without worktree:merge keeps the draft and leaves merging to the user").toBe(

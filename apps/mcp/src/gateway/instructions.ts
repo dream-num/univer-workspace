@@ -1,6 +1,6 @@
 import type { OpName } from "../shared/executor-protocol.js";
 import type { AgentOwner, ToolContext, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
-import { guestAgentNotice, ownedAgentNotice } from "./tools/core/whoami.js";
+import { guestAgentNotice, linkAfterMerge, ownedAgentNotice } from "./tools/core/whoami.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION, OTHERS_TEXT_IS_UNVERIFIED } from "./tools/schemas.js";
 
@@ -58,14 +58,10 @@ export function buildServerInstructions(
             : [
                 `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
               ]),
+          linkAfterMerge(principal !== "human" && has("share") && scopes.has("publish")),
           ...(principal === "human"
-            ? ["Then give the user the pull request link."]
+            ? []
             : [
-                ...(has("share")
-                  ? [
-                      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.",
-                    ]
-                  : []),
                 principal === "agent_unclaimed"
                   ? "An unclaimed agent identity cannot make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it."
                   : "A file link from someone else gives an agent identity read access only. Tell the user so; a different link setting does not change it.",
