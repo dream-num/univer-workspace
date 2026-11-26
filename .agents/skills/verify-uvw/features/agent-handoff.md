@@ -14,14 +14,14 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH2 opens the `Hand to my agent` dialog on its `MCP (recommended)` tab: the server URL `$ORIGIN/mcp` with
   `Copy MCP server URL`, then an English prompt that reads the file with `read` or `inspect` and `trunk: true`,
   and falls back to a copy (`pr_create`, `unit_create` with `from`, `pr_ready`, `pr_merge`, `claim`) when those
-  tools are missing. A signed-out reader also sees that the agent may choose `Continue as a guest agent`.
+  tools are missing. A signed-out reader also sees that the agent's page may offer `Try without signing in`.
 - AH3 switches to `Command line (uvw)`: the prompt installs `univer-workspace-cli`, sets the origin, runs
   `uvw auth guest`, then `uvw read A1:J50 --unit <link> --trunk`. `Copy prompt` shows
   `Prompt copied. Paste it into your agent.`
-- AH4 creates a guest agent. An MCP client whose callback is not loopback reaches the sign-in page through OAuth
-  and sees the card `Give the agent its own space` with `Continue as a guest agent`, also when the browser holds only
-  an agent's cookie. The card goes straight back to the client with a code, with no consent page, and leaves the
-  browser's session as it was; the guest is named after the OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
+- AH4 creates a guest agent. An MCP client opens the connect page through OAuth, and a browser with no person
+  signed in, also one that holds only an agent's cookie, sees `Sign in to connect` and `Try without signing in`.
+  The trial goes straight back to the client with a code and leaves the browser's session as it was; the guest is
+  named after the OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
   and repository `<username>/personal`.
 - AH5 mints a claim link: MCP `claim` (unclaimed agents only, listed after `share`) and `uvw claim`. For an
   unclaimed owner `share` returns `claimHint`, which points to them, and mints nothing. A link works once, within
@@ -40,26 +40,28 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH10 lets the claimer decide the agent's pull requests: `uvw pr list -R <agent>/personal` and MCP `pr_list`
   work, merge works, and `pr create` in the agent's Space is refused. After the claim, `share` no longer prints
   an expiry or a claim link.
-- AH11 gives an MCP client on the person's computer a guest agent with no page. A browser with no session that
-  opens authorize for a client with a loopback callback goes straight back to it with a code and gets no cookie.
-  The code's token acts for a new guest agent named after the client, which can mint its claim link with `claim`.
-  Its server instructions and `whoami` say it is a guest agent because the browser had no Workspace session. One
-  address gets at most 20 such codes a minute; past that, authorize sends the client `temporarily_unavailable`.
-- AH12 gives an MCP client that a signed-in person approves a new agent that person owns, by default. The consent
-  page preselects `A new agent that you own` over `Yourself`. Redeeming the code creates the agent, named after the
-  client, already claimed: it is listed under `My agents` and has the claimed agent's tools and instructions, with
-  no `claim`. Those instructions and `whoami` name the person as its owner. Choosing `Yourself` connects as the person.
-- AH13 lets a person continue an agent they own. The consent page lists up to five of their agents, most recently
-  active first, and preselects the one made for a client of the same name. Continuing it creates no agent, so a
-  client that connects again keeps one agent and its files.
+- AH11 gives an MCP client a guest agent only after one click. A browser with no session that opens authorize gets
+  the signed-out connect page with no code and no cookie. `Try without signing in` posts a form that answers `303` to
+  the callback with a code. The code carries all four scopes when the client asked for `write`, and `read` otherwise.
+  Its token acts for a new guest agent named after the client, which can mint its claim link with `claim`. Its
+  server instructions and `whoami` say it is a guest agent because the browser had no Workspace session. One address
+  gets at most 20 such codes a minute; past that, the trial sends the client `temporarily_unavailable`.
+- AH12 gives an MCP client that a signed-in person connects a new agent that person owns, by default. The connect
+  page's main button is `Connect as a new agent`, above `Connect as myself`, and its `Let it change content` switch
+  is on. Redeeming the code creates the agent, named after the client, already claimed: it is listed under
+  `My agents` and has the claimed agent's tools and instructions, with no `claim`. Those instructions and `whoami`
+  name the person as its owner. `Connect as myself` connects as the person.
+- AH13 lets a person continue an agent they own. The connect page puts the agent made for a client of the same name
+  on its main button and offers no new agent then, and lists up to five of their agents, most recently active
+  first. Continuing it creates no agent, so a client that connects again keeps one agent and its files.
 - MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
 
 - Open a viewer-linked file you do not own, signed out or as another user, open `More actions` in the visitor bar
   and click `Hand to my agent`.
-- An agent runs `uvw auth guest`, or connects an MCP client from a browser that is not signed in, then calls
-  `claim` or `uvw claim` and gives you the link.
+- An agent runs `uvw auth guest`, or connects an MCP client from a browser that is not signed in through
+  `Try without signing in`, then calls `claim` or `uvw claim` and gives you the link.
 - Open the claim link in your browser, sign in, and click `Claim agent`. Manage agents from Account > `My agents`.
 
 ## Driving it with agent-browser and uvw
@@ -67,7 +69,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 Preconditions:
 
 - Baseline run with `$V user`.
-- Each `uvw auth guest`, `$V mcp-oauth login` that submits a new agent and `$V principal` creates an agent. `up` raises the limit on
+- Each `uvw auth guest`, `$V mcp-oauth login` that takes the trial or connects a new agent, and `$V principal` creates an agent. `up` raises the limit on
   agent creations per source IP per hour from the server's default of 5 to 100; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5`
   before `up` to run with the default ([agent principals](../references/stories.md)).
 - `$V uvw` holds the run user's session and `uvw auth guest` refuses while a session is stored
@@ -130,13 +132,13 @@ used claim URL sees `This agent has already been claimed.`; `$ORIGIN/claim/not-a
 Mode: mcp.
 
 `--agent-cookie` first signs the run browser in as another agent through `POST /api/auth/guest`, the call
-`uvw auth guest` makes. Authorize treats that cookie as signed out, so the client registered with a callback that is
-not loopback reaches the sign-in page and its card. The login saves `g1-guest-card.png`, clicks the card and fails
-unless the browser lands on the callback with no consent page and still holds the same agent's cookie.
+`uvw auth guest` makes. Authorize treats that cookie as signed out, so the client reaches the signed-out connect
+page. The login saves `g1-connect.png`, clicks `Try without signing in` and fails unless the browser lands on the
+callback and still holds the same agent's cookie.
 
 ```bash
-$V mcp-oauth login g1 --guest-card --agent-cookie
-jq -e '.page == "guest card" and .browser_user_before.kind == "agent" and .browser_user_after == .browser_user_before and .token.status == 200' "$EVIDENCE/g1.json"
+$V mcp-oauth login g1 --guest --agent-cookie
+jq -e '.page == "signed_out" and .trial == "offered" and .browser_user_before.kind == "agent" and .browser_user_after == .browser_user_before and .token.status == 200' "$EVIDENCE/g1.json"
 $V mcp --auth oauth g1-whoami whoami
 jq -e '.subject.name | test("^verify-uvw g1 · [a-z0-9]{4}$")' "$EVIDENCE/g1-whoami.out"
 $V mcp --auth oauth g1-claim claim '{}' > /dev/null   # stdout would put the claim code in the run log
@@ -146,32 +148,42 @@ Open the `claimUrl` from `g1-claim.out` in the run browser, which still holds th
 `An agent cannot claim an agent. Sign in with your own account.` and `Sign out and continue`. Click it, sign in as the
 run user, and claim. Replace the code in `g1-claim.*` as [MH1](#mh1-unclaimed-agent) says.
 
-Pass when `g1.json` records the guest card, the same agent before and after and a token, `whoami` names the guest
-after the client and not after the cookie's agent, and the claim page asks the cookie's agent to sign out before the
-run user claims the guest.
+Pass when `g1.json` records the signed-out page, the same agent before and after and a token, `g1-connect.png` shows
+`Sign in to connect` and `Try without signing in` rather than the cookie's agent, `whoami` names the guest after the
+client and not after the cookie's agent, and the claim page asks the cookie's agent to sign out before the run user
+claims the guest.
 
-### HO10. A loopback MCP client from a signed-out browser (AH11)
+### HO10. An MCP client from a signed-out browser takes the trial (AH11)
 
 Mode: mcp-same-origin. Run: helper.
 
-The client registers a loopback callback. Authorize answers it with a redirect, and redeeming the code creates the
-guest. A code nobody redeems creates nothing, so the first request below only reads the redirect. The headers stay
-in `home/` because they carry the code.
+The client registers a loopback callback. Authorize answers a browser with no session with the signed-out connect
+page and no code. `Try without signing in` posts the authorization to `POST /api/auth/authorize/guest`, which answers
+`303` to the callback with a code, and redeeming the code creates the guest. A code nobody redeems creates nothing, so
+the curl requests below only read the answers. The headers stay in `home/` because they carry the code.
 
 ```bash
-CB=http://127.0.0.1:61234/callback; H="$RUN/home/ho10-authorize.headers"; S=$(openssl rand -hex 16)
+CB=http://127.0.0.1:61234/callback; H="$RUN/home/ho10-authorize.headers"; P="$RUN/home/ho10-page.html"; S=$(openssl rand -hex 16)
 curl --fail-with-body -sS -o "$RUN/home/ho10-client.json" -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
   -d "{\"client_name\":\"verify-uvw ho10 curl\",\"redirect_uris\":[\"$CB\"]}"
-curl -sS -o /dev/null -D "$H" -G "$ORIGIN/api/auth/authorize" --data-urlencode response_type=code \
-  --data-urlencode "client_id=$(jq -r .client_id "$RUN/home/ho10-client.json")" --data-urlencode "redirect_uri=$CB" \
-  --data-urlencode "state=$S" --data-urlencode "resource=$MCP_URL" \
-  --data-urlencode code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM --data-urlencode code_challenge_method=S256
-head -1 "$H" | grep -q ' 302'
+HO10_QUERY=$(node -e 'console.log(new URLSearchParams({ response_type: "code", client_id: process.argv[1], redirect_uri: process.argv[2], state: process.argv[3], resource: process.argv[4], code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256" }).toString())' \
+  "$(jq -r .client_id "$RUN/home/ho10-client.json")" "$CB" "$S" "$MCP_URL")
+curl -sS -o "$P" -D "$H" "$ORIGIN/api/auth/authorize?$HO10_QUERY"
+head -1 "$H" | grep -q ' 200'
+grep -q -i "^content-security-policy: .*form-action 'self' http://127.0.0.1:61234;" "$H"
+test "$(grep -c -i -e '^set-cookie:' -e '^location:' "$H")" = 0
+grep -q 'action="/api/auth/authorize/guest"' "$P" && grep -q 'Sign in to connect' "$P"
+if grep -q 'consent_token' "$P"; then false; fi
+curl -sS -o /dev/null -D "$H" -X POST "$ORIGIN/api/auth/authorize/guest" --data-urlencode "oauthAuthorization=$HO10_QUERY"
+head -1 "$H" | grep -q ' 303'
 grep -q -i "^location: $CB?code=[A-Za-z0-9_-]\{32\}&iss=.*&state=$S&scope=" "$H"
 test "$(grep -c -i '^set-cookie:' "$H")" = 0
-rm "$H"
+curl -sS -o "$P" -D "$H" -X POST "$ORIGIN/api/auth/authorize/guest" -H 'content-type: application/json' \
+  -d "{\"oauthAuthorization\":\"$HO10_QUERY\"}"
+head -1 "$H" | grep -q ' 400' && grep -q -i '^content-type: text/html' "$H" && grep -q 'INVALID_INPUT' "$P"
+rm "$H" "$P"
 $V mcp-oauth login ho10 --guest
-jq -e '.page == "none" and .browser_signed_in_after == false and .callback_scope == "read write publish worktree:merge" and .token.status == 200' "$EVIDENCE/ho10.json"
+jq -e '.page == "signed_out" and .trial == "offered" and .browser_signed_in_after == false and .callback_scope == "read write publish worktree:merge" and .token.status == 200' "$EVIDENCE/ho10.json"
 $V mcp --auth oauth ho10-whoami whoami
 jq -e '(.subject.name | test("^verify-uvw ho10 · [a-z0-9]{4}$")) and .budget != null' "$EVIDENCE/ho10-whoami.out"
 NOTICE='This connection is a guest agent, which Workspace created because the browser had no Workspace session.'
@@ -183,43 +195,48 @@ jq -e '.body.user.kind == "agent"' "$EVIDENCE/ho10-exchange.json"
 $V mcp --auth oauth ho10-claim claim '{}' > /dev/null   # stdout would put the claim code in the run log
 jq -e '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}$")' "$EVIDENCE/ho10-claim.out"
 perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "$EVIDENCE"/ho10-claim.*
+$V mcp-oauth login ho10-read --guest --scope read
+jq -e '.trial == "offered" and .callback_scope == "read" and .token.body.scope == "read"' "$EVIDENCE/ho10-read.json"
 ```
 
-Pass when authorize answers `302` to the loopback callback with a code and no `Set-Cookie`, the scripted client gets
-its token with no page and leaves the browser with no session, `whoami` names the guest after the client with an
-agent's budget, `whoami` and the server instructions both say it is a guest agent because the browser had no
-Workspace session, the token exchange names a User of kind `agent`, and `claim` returns a claim link.
+Pass when authorize answers the signed-out browser `200` with the connect page, a CSP whose `form-action` names the
+callback, no code, no consent token, no `Location` and no `Set-Cookie`; the trial form answers `303` to the callback
+with a code for all four scopes and no `Set-Cookie`, and a JSON body gets a `400` HTML page; the scripted client gets
+its token through `Try without signing in` and leaves the browser with no session; `whoami` names the guest after the
+client with an agent's budget; `whoami` and the server instructions both say it is a guest agent because the browser
+had no Workspace session; the token exchange names a User of kind `agent`; `claim` returns a claim link; and a
+request without `write` gets a guest with `read` only, whose `ho10-read-connect.png` promises no claim link.
 
-### HO11. One address that keeps opening authorize (AH11)
+### HO11. One address that keeps taking the trial (AH11)
 
 Mode: mcp-same-origin. Run: helper.
 
 Every request here comes from `127.0.0.1`, one source. Codes from HO10 in the last minute count too, so fewer than
-20 may succeed. The block waits out the minute at the end, so the next zero-click guest from this address works.
+20 may succeed. The block waits out the minute at the end, so the next trial from this address works.
 
 ```bash
 CB=http://127.0.0.1:61235/callback; H="$RUN/home/ho11-authorize.headers"; L="$RUN/home/ho11.locations"
 HO11_CLIENT=$(curl --fail-with-body -sS -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
   -d "{\"client_name\":\"verify-uvw ho11 curl\",\"redirect_uris\":[\"$CB\"]}" | jq -r .client_id)
-ho11_authorize() {
-  curl -sS -o /dev/null -D "$H" -G "$ORIGIN/api/auth/authorize" --data-urlencode response_type=code \
-    --data-urlencode "client_id=$HO11_CLIENT" --data-urlencode "redirect_uri=$CB" --data-urlencode "state=$(openssl rand -hex 16)" \
-    --data-urlencode "resource=$MCP_URL" --data-urlencode code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM \
-    --data-urlencode code_challenge_method=S256
+ho11_try() {
+  local query
+  query=$(node -e 'console.log(new URLSearchParams({ response_type: "code", client_id: process.argv[1], redirect_uri: process.argv[2], state: process.argv[3], resource: process.argv[4], code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256" }).toString())' \
+    "$HO11_CLIENT" "$CB" "$(openssl rand -hex 16)" "$MCP_URL")
+  curl -sS -o /dev/null -D "$H" -X POST "$ORIGIN/api/auth/authorize/guest" --data-urlencode "oauthAuthorization=$query"
   grep -i '^location: ' "$H" | tr -d '\r' | sed 's/^[Ll]ocation: //'
 }
-for attempt in $(seq 21); do ho11_authorize >> "$L"; done
+for attempt in $(seq 21); do ho11_try >> "$L"; done
 HO11_CODES=$(grep -c '[?&]code=' "$L")
 echo "codes issued in 21 requests: $HO11_CODES" > "$EVIDENCE/ho11-count.txt"
 test "$HO11_CODES" -le 20
 tail -1 "$L" > "$EVIDENCE/ho11-refused.location"
 node -e 'const u = new URL(process.argv[1]); process.exit(u.searchParams.get("error") === "temporarily_unavailable" && u.searchParams.get("error_description") === "Too many sign-ins came from this address. Try again shortly." && u.searchParams.has("code") === false ? 0 : 1)' "$(cat "$EVIDENCE/ho11-refused.location")"
 sleep 61
-ho11_authorize | grep -q '[?&]code='
+ho11_try | grep -q '[?&]code='
 rm "$H" "$L"
 ```
 
-Pass when between 1 and 20 of the 21 requests get a code, the last one goes back to the callback with
+Pass when between 1 and 20 of the 21 trials get a code, the last one goes back to the callback with
 `error=temporarily_unavailable`, the description `Too many sign-ins came from this address. Try again shortly.` and no
 code, and a minute later the same address gets a code again.
 
@@ -227,12 +244,12 @@ code, and a minute later the same address gets a code again.
 
 Mode: mcp. Run: helper.
 
-`$V mcp-oauth login` signs the run browser in as the run user and approves the consent page with what it preselects.
-The second login chooses `Yourself`.
+`$V mcp-oauth login` signs the run browser in as the run user and clicks the connect page's main button, with the
+content switch left on. The second login clicks `Connect as myself`.
 
 ```bash
 $V mcp-oauth login ho12
-jq -e '.preselected == "new_agent" and .connect_as == "new_agent" and .token.status == 200' "$EVIDENCE/ho12.json"
+jq -e '.primary == "new_agent" and .connect_as == "new_agent" and .access == {offered: "toggle", default: "read_write", submitted: "read_write"} and .callback_scope == "read write publish worktree:merge" and .token.status == 200' "$EVIDENCE/ho12.json"
 $V mcp-oauth exchange ho12-exchange oauth
 jq -e '.body.user.kind == "agent" and .body.user.claimed == true' "$EVIDENCE/ho12-exchange.json"
 $V mcp --auth oauth ho12-whoami whoami
@@ -250,15 +267,17 @@ agent-browser find role menuitem click --name "My agents" && agent-browser wait 
 agent-browser get text body | grep -F "@$(jq -r '.body.user.username' "$EVIDENCE/ho12-exchange.json")"
 agent-browser screenshot "$EVIDENCE/ho12-my-agents.png"
 $V mcp-oauth login ho12-self --connect-as self
-jq -e '.preselected == "new_agent" and .connect_as == "self" and .token.status == 200' "$EVIDENCE/ho12-self.json"
+jq -e '.primary == "new_agent" and .connect_as == "self" and .token.status == 200' "$EVIDENCE/ho12-self.json"
 $V mcp-oauth exchange ho12-self-exchange oauth
 jq -e --arg user "verify-$VERIFY_UVW_RUN" '.body.user.kind == "human" and .body.user.username == $user' "$EVIDENCE/ho12-self-exchange.json"
 ```
 
-Pass when the consent page preselects the new agent and `ho12-consent.png` shows it above `Yourself`; the token acts
+Pass when the main button connects a new agent, `ho12-connect.png` shows `Connect as a new agent` above
+`Connect as myself` with `Let it change content` on and four lines of what the agent can do, and the code carries all
+four scopes; the token acts
 for an agent named after the client that is already claimed, whose instructions are the claimed agent's and which has
 no `claim` tool; `whoami` names the run user as its owner; `My agents` in `ho12-my-agents.png` lists it; and the
-`Yourself` login acts for the run user.
+`Connect as myself` login acts for the run user.
 
 ### HO13. Reconnecting a client continues the agent you own (AH13)
 
@@ -273,7 +292,7 @@ HO13_NAME="verify-uvw ho13"; OC=$RUN/home/o-cookies
 curl --fail-with-body -sS -c "$OC" -o /dev/null -X POST "$ORIGIN/api/auth/password/login" -H 'content-type: application/json' \
   -d "{\"username\":\"verify-$VERIFY_UVW_RUN\",\"password\":\"$(cat "$RUN/user.pw")\"}"
 $V mcp-oauth login ho13-first --client-name "$HO13_NAME"
-jq -e '.preselected == "new_agent" and .connect_as == "new_agent" and .token.status == 200' "$EVIDENCE/ho13-first.json"
+jq -e '.primary == "new_agent" and .connect_as == "new_agent" and .token.status == 200' "$EVIDENCE/ho13-first.json"
 $V mcp-oauth exchange ho13-first-exchange oauth
 HO13_AGENT=$(jq -r .body.user.id "$EVIDENCE/ho13-first-exchange.json")
 HO13_REPO="$(jq -r .body.user.username "$EVIDENCE/ho13-first-exchange.json")/personal"
@@ -284,7 +303,7 @@ $V mcp --auth oauth ho13-ready pr_ready "{\"repo\":\"$HO13_REPO\",\"number\":\"$
 $V mcp --auth oauth ho13-merge pr_merge "{\"repo\":\"$HO13_REPO\",\"number\":\"$HO13_N\"}"
 for attempt in second third; do
   $V mcp-oauth login "ho13-$attempt" --client-name "$HO13_NAME"
-  jq -e --arg id "$HO13_AGENT" '.preselected == $id and .connect_as == $id and (.choices | index("new_agent")) != null and .token.status == 200' "$EVIDENCE/ho13-$attempt.json"
+  jq -e --arg id "$HO13_AGENT" '.primary == $id and .connect_as == $id and (.choices | index("new_agent")) == null and .token.status == 200' "$EVIDENCE/ho13-$attempt.json"
   $V mcp-oauth exchange "ho13-$attempt-exchange" oauth
   jq -e --arg id "$HO13_AGENT" '.body.user.id == $id and .body.user.claimed == true' "$EVIDENCE/ho13-$attempt-exchange.json"
 done
@@ -297,14 +316,15 @@ jq -e --arg owner "Verify $VERIFY_UVW_RUN (@verify-$VERIFY_UVW_RUN)" '.instructi
 curl --fail-with-body -sS -b "$OC" "$ORIGIN/api/agents" > "$EVIDENCE/ho13-agents.json"
 jq -e --arg id "$HO13_AGENT" --arg name "$HO13_NAME · " '[.agents[] | select(.displayName | startswith($name)) | .id] == [$id]' "$EVIDENCE/ho13-agents.json"
 $V mcp-oauth login ho13-other --connect-as self
-jq -e --arg id "$HO13_AGENT" '.preselected == "new_agent" and (.choices | index($id)) != null and .connect_as == "self" and .token.status == 200' "$EVIDENCE/ho13-other.json"
+jq -e --arg id "$HO13_AGENT" '.primary == "new_agent" and (.choices | index($id)) != null and .connect_as == "self" and .token.status == 200' "$EVIDENCE/ho13-other.json"
 ```
 
-Pass when the second and third logins preselect the agent the first made, list `A new agent that you own` too, and
+Pass when the second and third logins have the agent the first made on the main button, offer no new agent, and
 exchange to that agent; `Kept sheet`, merged by the first connection, is still in its Personal Space; the run user
 owns exactly one agent named after the client; `whoami` and the server instructions name the run user as the owner;
-and a client of another name lists the agent but preselects a new one. `ho13-second-consent.png` shows the agent
-selected above `A new agent that you own` and `Yourself`, each agent option with the hint about its own space.
+and a client of another name lists the agent but puts a new one on the main button. `ho13-second-connect.png` shows
+`You're signed in as @<run user>. It will work as your agent <name>.`, the main button `Connect as <name>`, and
+`Connect as myself`, with no new agent.
 
 ### MH1. Unclaimed agent
 

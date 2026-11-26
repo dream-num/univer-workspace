@@ -8,28 +8,26 @@ An agent principal is a User that never signed in. These commands speak as one; 
 ```bash
 $V principal <name> [label]                # POST /api/agents; prints id and username
 $V mcp --as <name> <label> <tool> [json]   # also mcp-tools, mcp-skills, mcp-resources, mcp-resource, mcp-instructions
-$V mcp-oauth login <label> --guest         # scripted loopback OAuth client that gets a guest agent with no page
-$V mcp-oauth login <label> --guest-card [--agent-cookie]  # the same through the sign-in page's guest agent card
-$V mcp-oauth login <label>                 # the run user's consent page with its default, an agent the run user owns
+$V mcp-oauth login <label> --guest [--agent-cookie]  # scripted OAuth client that takes the connect page's trial
+$V mcp-oauth login <label>                 # the run user's connect page and its main button, an agent the run user owns
 $V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'
 ```
 
 `principal` keeps the token in `home/principals/<name>.token` (mode 0600) and never prints it;
 `principal-<name>.json` in `$EVIDENCE` records id, username and expiry. Names match
-`^[a-z0-9][a-z0-9_-]{0,31}$`; `human` means the run user. Every `principal`, `mcp-oauth login` that submits a new agent,
+`^[a-z0-9][a-z0-9_-]{0,31}$`; `human` means the run user. Every `principal`, `mcp-oauth login` that takes the trial or connects a new agent,
 first `story --oauth` of an identity, and `uvw auth guest` a model runs creates an agent, and Workspace answers 429
 past `AGENT_CREATE_LIMIT_PER_HOUR` creations per source IP per hour, which defaults to 5. `up` raises it to 100 and
 records it as `AGENT_CREATE_LIMIT` in `run.env`; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5` before `up` to run with the
-default. `principal` refuses with the run's limit. `mcp-oauth login --guest` and `story --oauth` stop on authorize's
-`AGENT_CREATE_RATE_LIMITED`, and `--guest-card` on the card's hourly-limit text. The server gives both when its fixed
-limit on client metadata checks per source trips, too.
+default. `principal` refuses with the run's limit. `mcp-oauth login --guest` and `story --oauth` stop when the connect
+page shows the trial disabled, when the trial answers `AGENT_CREATE_RATE_LIMITED`, or when authorize sends the browser
+to sign in after the server's fixed limit on anonymous client metadata checks per source trips.
 `mcp --as` authenticates with the principal's PAT, excludes `--auth`, and matches the usage event
 by `user_id`, because the PAT id is never returned. `mcp-oauth login --guest` needs no `user`. It
-opens the authorize URL with no cookies, gets the code with no page, checks that the browser still has no
-session, and replaces the grant in `home/mcp-oauth-*`, so `mcp --auth oauth` then speaks as that
-guest. `--guest-card` uses a callback that is not loopback, saves `<label>-guest-card.png`, clicks the card and
-needs the browser to reach the callback with no consent page and no session. `--agent-cookie` first gives the browser
-an agent's session from `POST /api/auth/guest`, and the login then needs that same session afterwards.
+opens the authorize URL with no cookies, saves `<label>-connect.png`, clicks `Try without signing in`, checks that the
+browser still has no session, and replaces the grant in `home/mcp-oauth-*`, so `mcp --auth oauth` then speaks as that
+guest. `--agent-cookie` first gives the browser an agent's session from `POST /api/auth/guest`, and the login then
+needs that same session afterwards.
 
 **Stories.** `story` runs one real-model prompt as a verbatim argument. Clients `mcp` and
 `uvw` use `opencode run` with `console-deepseek/deepseek-flash#high` by default. Pass
@@ -76,7 +74,7 @@ are copied. A missing file credential fails the story; keyring-only login is not
 | --- | --- | --- |
 | `mcp` or `codex` | `human` | the run user's PAT as bearer |
 | `mcp` or `codex` | a principal | that principal's token as bearer |
-| `mcp` | another name, with `--oauth` | no credential. The first story runs opencode's own `mcp auth`, which gets a guest agent with no page (`oauth-callback.json` in the story evidence); later stories of that identity reuse the grant |
+| `mcp` | another name, with `--oauth` | no credential. The first story runs opencode's own `mcp auth` and clicks `Try without signing in` on the connect page (`oauth-callback.json` in the story evidence); later stories of that identity reuse the grant |
 | `uvw` | `human` | `uvw` signed in as the run user |
 | `uvw` | another name | `uvw` with the origin configured and no session. The model signs in itself, and later stories of that identity keep its session |
 

@@ -22,7 +22,7 @@ const browser = (...args) => {
   catch { throw new Error(`agent-browser ${args[0]} failed`); }
 };
 const authorize = (clientId, redirect = 'http://127.0.0.1:41234/callback') => {
-  const url = new URL('/api/auth/authorize/consent', origin);
+  const url = new URL('/api/auth/authorize', origin);
   url.search = new URLSearchParams({ client_id: clientId, redirect_uri: redirect, response_type: 'code', resource,
     code_challenge_method: 'S256', code_challenge: createHash('sha256').update('verify-uvw-cimd-probe').digest('base64url') }).toString();
   return url;
@@ -40,7 +40,7 @@ if (command === 'vscode') {
   const text = browser('get', 'text', 'body');
   assert.match(text, /vscode\.dev/);
   browser('screenshot', join(evidence, 'mcp-cimd-vscode.png'));
-  save('mcp-cimd-vscode', { status: response.status, consent: text });
+  save('mcp-cimd-vscode', { status: response.status, page: text });
 } else if (command === 'reject') {
   const publicAddresses = await lookup('localtest.me', { all: true });
   const hostname = publicAddresses.some(({address}) => address === '127.0.0.1') ? 'localtest.me' : 'localhost';
@@ -60,18 +60,33 @@ if (command === 'vscode') {
     browser('screenshot', join(evidence, `mcp-cimd-reject-${label}.png`));
     save(`mcp-cimd-reject-${label}`, { client_id: clientId, status: response.status, location: null, body, ...(label === 'dns-loopback' ? { hostname, addresses, public_domain: 'localtest.me', public_domain_addresses: publicAddresses } : {}) });
   }
+  // With nobody signed in, authorize fetches the document anonymously, once, to name the client on the signed-out page.
   const before = fetchEvents();
-  // An anonymous authorize with a loopback callback takes the zero-click guest path (HO10), which fetches metadata.
-  for (const [path, redirect] of [['/api/auth/authorize', 'https://verify-uvw.invalid/callback'], ['/api/auth/authorize/consent', undefined]]) {
-    const url = authorize(`${claude}/anonymous-probe`, redirect);
-    url.pathname = path;
-    const response = await fetch(url, { redirect: 'manual' });
-    assert.equal(response.status, 302);
-    assert.equal(new URL(response.headers.get('location'), origin).pathname, '/login');
+  const anonymous = {};
+  for (const [label, clientId] of [['claude', claude], ['missing', `${claude}/anonymous-probe`]]) {
+    const response = await fetch(authorize(clientId), { redirect: 'manual' });
+    const body = await response.text();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const fetched = fetchEvents().slice(before.length).filter(event => event.client_id === clientId);
+    assert.equal(response.headers.get('location'), null, `${label}: a signed-out CIMD authorize answers with a page`);
+    assert.ok(fetched.length <= 1, `${label}: one anonymous fetch at most`);
+    if (label === 'claude') {
+      assert.equal(response.status, 200);
+      assert.match(body, /Claude Code \(claude\.ai\)/);
+      assert.match(body, /Sign in to connect/);
+      assert.doesNotMatch(body, /consent_token/);
+      assert.match(response.headers.get('content-security-policy') ?? '', /form-action 'self' http:\/\/127\.0\.0\.1:41234;/);
+    } else {
+      assert.ok([400, 503].includes(response.status), `${label}: ${response.status}`);
+      assert.equal(fetched.length, 1, 'a document missing from the cache is fetched');
+      assert.match(body, /The application's metadata document could not be checked\./);
+    }
+    anonymous[label] = { status: response.status, fetches: fetched };
   }
-  await new Promise(resolve => setTimeout(resolve, 100));
-  assert.deepEqual(fetchEvents(), before, 'Anonymous authorize and consent must not fetch metadata');
-  save('mcp-cimd-anonymous', { statuses: [302, 302], fetches_before: before.length, fetches_after: fetchEvents().length });
+  // The consent hop is gone: the connect page is the only page authorize serves.
+  const hop = await fetch(new URL(`/api/auth/authorize/consent${authorize(claude).search}`, origin), { redirect: 'manual' });
+  assert.equal(hop.status, 404);
+  save('mcp-cimd-anonymous', { ...anonymous, consent_hop_status: hop.status, fetches_before: before.length, fetches_after: fetchEvents().length });
   save('mcp-cimd-fetch-events', fetchEvents());
 } else {
   const metadata = await (await fetch(new URL('/.well-known/oauth-authorization-server', origin))).json();
