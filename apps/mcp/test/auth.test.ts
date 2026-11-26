@@ -356,7 +356,7 @@ describe("gateway authentication", () => {
     expect(products).not.toContain("/api/agents/claim-codes");
   });
 
-  it("tells an unclaimed agent from a browser sign-in that it is a guest until a person claims it, and tells a PAT's agent and a person nothing", async () => {
+  it("tells each agent in whoami, not only in server instructions, what to tell the user and how to finish, and tells a person nothing", async () => {
     const agent = { id: "user-1", username: "claude-code-g3wq", displayName: "Claude Code · g3wq", avatarUrl: null, kind: "agent", claimed: false };
     const gateway = await start(exchangeEnv, {
       user: () => agent,
@@ -368,38 +368,68 @@ describe("gateway authentication", () => {
       expect(whoami.isError).not.toBe(true);
       return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice, whoami: whoami.structuredContent };
     };
+    const guestFacts =
+      "This connection is a guest agent, which Workspace created because the browser had no Workspace session. A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client.";
+    const tell = "Tell the user this in your first reply.";
+    const linkAfterMerge =
+      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.";
+    const finishOwn = `Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge. ${linkAfterMerge}`;
+    const handOver = [
+      "Once the result is verified, mark the pull request ready with pr_ready.",
+      "If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser.",
+      "Otherwise, merge it with pr_merge.",
+      linkAfterMerge,
+    ];
+    const leaveMerging = [
+      "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+      "Give the user the pull request link so they can review it.",
+      "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
+    ];
     const guest = await told("uvw_at_guest");
-    for (const fact of [
-      "This connection is a guest agent, which Workspace created because the browser had no Workspace session.",
-      "A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client.",
-      "Otherwise the user can keep this agent by claiming it with claim.",
-    ]) {
-      expect(guest.instructions).toContain(fact);
-      expect(guest.notice).toContain(fact);
-    }
-    expect(guest.instructions).toContain("Tell the user this in your first reply.");
+    expect(guest.notice, "a client that drops server instructions still hears the guest notice, to pass on, how to finish and which link to give").toBe(
+      `${guestFacts} Otherwise the user can keep this agent by claiming it with claim. ${tell} ${finishOwn}`,
+    );
+    expect(guest.instructions).toContain(`${guestFacts} Otherwise the user can keep this agent by claiming it with claim. ${tell}`);
+    expect(guest.instructions).toContain(linkAfterMerge);
     const readOnly = await told("uvw_at_guest_read");
-    expect(readOnly.instructions, "a connection that cannot call claim does not name it").toContain("Otherwise the user can keep this agent by claiming it.");
-    expect(readOnly.notice).toContain("Otherwise the user can keep this agent by claiming it.");
+    expect(readOnly.notice, "a connection that cannot call claim or open a pull request names neither, nor how to finish one").toBe(
+      `${guestFacts} Otherwise the user can keep this agent by claiming it. ${tell}`,
+    );
+    expect(readOnly.instructions).toContain(`Otherwise the user can keep this agent by claiming it. ${tell}`);
 
     const self = await told("uvw_pat_agent");
     expect(self.instructions).toContain("works in its own Personal Space");
-    expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, undefined]);
+    expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, finishOwn]);
 
     agent.claimed = true;
     const claimed = await told("uvw_at_guest");
     expect(claimed.instructions).toContain("This connection is an agent identity that a person has claimed.");
-    expect([claimed.instructions.includes("guest agent"), claimed.notice]).toEqual([false, undefined]);
     expect(claimed.instructions, "until the cached exchange expires, the session says only that the agent is claimed").toContain("This agent belongs to the person who claimed it");
-    const owned = await told("uvw_at_owned");
-    expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(
-      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.",
+    expect(claimed.notice).toBe(
+      `This agent belongs to the person who claimed it and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves. When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
     );
-    expect(owned.whoami).toMatchObject({ owner: { username: "olivia", name: "Olivia" } });
+    const owned = await told("uvw_at_owned");
+    const ownerFacts =
+      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.";
+    expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(ownerFacts);
+    expect(owned.whoami, "a claimed agent always marks a verified pull request ready; only the merge waits for its owner").toMatchObject({
+      owner: { username: "olivia", name: "Olivia" },
+      notice: `${ownerFacts} When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
+    });
+    for (const sentence of handOver) expect(owned.instructions).toContain(sentence);
 
-    const person = await (await start(exchangeEnv)).connect("uvw_at_oauth");
-    expect(person.getInstructions()).not.toContain("guest agent");
-    expect((await person.callTool({ name: "whoami", arguments: {} })).structuredContent).not.toHaveProperty("notice");
+    const writeOnly = await told("uvw_at_oauth");
+    expect(writeOnly.notice, "write access without worktree:merge keeps the draft and leaves merging to the user").toBe(
+      `${ownerFacts} When the user expects you to see their files, tell them this. ${leaveMerging.join(" ")}`,
+    );
+    for (const sentence of leaveMerging) expect(writeOnly.instructions).toContain(sentence);
+
+    const people = await start(exchangeEnv);
+    for (const bearer of ["uvw_pat_full", "uvw_at_oauth"]) {
+      const person = await people.connect(bearer);
+      expect(person.getInstructions()).not.toContain("guest agent");
+      expect((await person.callTool({ name: "whoami", arguments: {} })).structuredContent, bearer).not.toHaveProperty("notice");
+    }
   });
 
   it("asks Workspace nothing more for a claimed agent's or a person's tool lists", async () => {

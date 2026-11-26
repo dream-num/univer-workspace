@@ -801,7 +801,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(description("repo_edit")).toContain("breaks");
     expect(description("label_write")).toContain("removes the label from every Issue");
     expect(description("pr_discard")).toContain("Unless the user explicitly asked you to discard it");
-    expect(description("pr_merge")).toContain("The server instructions say when to merge");
+    expect(description("pr_merge")).toContain("The notice from whoami, or without one the server instructions, says when to merge");
     expect(description("pr_merge")).not.toContain("Unless the user");
   });
 

@@ -11,7 +11,7 @@ export const prMergeTool: ToolDefinition = {
   scope: "worktree:merge",
   title: "Merge pull request",
   description:
-    "Merge a ready pull request into its repository. Returns the merged Worktree read back after the merge, with the Units that entered trunk (name, unitId, nodeId, change, mergeResult). The server instructions say when to merge and which link to return.",
+    "Merge a ready pull request into its repository. Returns the merged Worktree read back after the merge, with the Units that entered trunk (name, unitId, nodeId, change, mergeResult). The notice from whoami, or without one the server instructions, says when to merge and which link to return.",
   inputSchema,
   outputSchema: worktreeSchema,
   annotations: destructiveAnnotations,

@@ -7,7 +7,7 @@ import {
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
-import { issueSummarySchema, worktreeSchema } from "../schemas.js";
+import { issueSummarySchema, OTHERS_TEXT_IS_UNVERIFIED, worktreeSchema } from "../schemas.js";
 import { issueFeature, withUrl } from "./issue-support.js";
 import { prsWithUrl, worktreeFeature } from "./pr-support.js";
 
@@ -38,8 +38,7 @@ export const searchTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "Search Issues or pull requests",
-  description:
-    "Find Issues (kind issues) or pull requests (kind prs) across every repository you can access. The result has issues or prs accordingly. Each pull request's capabilities say what you may do with it now, such as merge.",
+  description: `Find Issues (kind issues) or pull requests (kind prs) across every repository you can access. The result has issues or prs accordingly. Each pull request's capabilities say what you may do with it now, such as merge. ${OTHERS_TEXT_IS_UNVERIFIED}`,
   inputSchema,
   outputSchema: z.object({
     issues: z.array(issueSummarySchema).optional(),

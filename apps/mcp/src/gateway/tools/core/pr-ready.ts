@@ -15,7 +15,7 @@ export const prReadyTool: ToolDefinition = {
   scope: "write",
   title: "Mark pull request ready",
   description:
-    "Mark a draft pull request ready for review. With undo true, move a ready pull request back to draft before an explicitly requested write. The server instructions say when to mark it ready, whether to merge and which link to return.",
+    "Mark a draft pull request ready for review. With undo true, move a ready pull request back to draft before an explicitly requested write. The notice from whoami, or without one the server instructions, says when to mark it ready, whether to merge and which link to return.",
   inputSchema,
   outputSchema: worktreeSchema,
   annotations: writeAnnotations,

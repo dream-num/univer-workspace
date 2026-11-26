@@ -33,6 +33,8 @@ const state = (patch: Partial<HtmlViewState> = {}): HtmlViewState => ({
 });
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
   sdk.renderHtmlView.mockReturnValue(sdk.view);
   sdk.view.subscribe.mockReturnValue(sdk.unsubscribe);
 });
@@ -112,6 +114,60 @@ it("stops loading at the handshake for a page that binds no Sheet, or when the c
   connectHtmlView(container, { source: '<span data-univer-cell-text="a:s:B2"></span>', loadEngine, onLoadingChanged: closed });
   (sdk.view.subscribe.mock.calls[1]![0] as (state: HtmlViewState) => void)(state({ phase: "closed" }));
   expect(closed.mock.calls).toEqual([[true], [false]]);
+});
+class FakeFrame extends EventTarget {
+  readonly children = [];
+  readonly shadowRoot = null;
+}
+// The SDK puts its frame inside an open shadow root in the container.
+function framedContainer() {
+  vi.stubGlobal("HTMLIFrameElement", FakeFrame);
+  const frame = new FakeFrame();
+  return { frame, container: { children: [{ children: [], shadowRoot: { children: [frame] } }] } as unknown as HTMLElement };
+}
+it("keeps loading after the Sheets load until the frame has loaded its own stylesheets and scripts, and never again", () => {
+  const { frame, container: framed } = framedContainer();
+  const onLoadingChanged = vi.fn();
+  connectHtmlView(framed, { source: '<span data-univer-cell-text="a:s:B2"></span>', loadEngine, onLoadingChanged });
+  const notify = sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void;
+  notify(state({ sources: [{ unitId: "a", phase: "ready" }] }));
+  expect(onLoadingChanged.mock.calls, "a stylesheet the page's head waits for keeps the frame blank").toEqual([[true]]);
+  frame.dispatchEvent(new Event("load"));
+  expect(onLoadingChanged.mock.calls).toEqual([[true], [false]]);
+  frame.dispatchEvent(new Event("load"));
+  notify(state({ sources: [{ unitId: "a", phase: "ready" }, { unitId: "c", phase: "loading" }] }));
+  expect(onLoadingChanged.mock.calls).toEqual([[true], [false]]);
+});
+it("waits for the Sheets when the frame loads first, and ends at once when the connection closes", () => {
+  const first = framedContainer();
+  const sheetsLast = vi.fn();
+  connectHtmlView(first.container, { source: '<span data-univer-cell-text="a:s:B2"></span>', loadEngine, onLoadingChanged: sheetsLast });
+  first.frame.dispatchEvent(new Event("load"));
+  const notify = sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void;
+  notify(state({ sources: [{ unitId: "a", phase: "loading" }] }));
+  expect(sheetsLast.mock.calls).toEqual([[true]]);
+  notify(state({ sources: [{ unitId: "a", phase: "ready" }] }));
+  expect(sheetsLast.mock.calls).toEqual([[true], [false]]);
+  const closed = vi.fn();
+  connectHtmlView(framedContainer().container, { source: "<p>Static</p>", loadEngine, onLoadingChanged: closed });
+  (sdk.view.subscribe.mock.calls[1]![0] as (state: HtmlViewState) => void)(state({ phase: "closed" }));
+  expect(closed.mock.calls).toEqual([[true], [false]]);
+});
+it("stops waiting for a frame that never loads after 10 seconds, and not after the view is gone", () => {
+  vi.useFakeTimers();
+  const hung = vi.fn();
+  connectHtmlView(framedContainer().container, { source: "<p>Static</p>", loadEngine, onLoadingChanged: hung });
+  (sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void)(state());
+  vi.advanceTimersByTime(9_999);
+  expect(hung.mock.calls).toEqual([[true]]);
+  vi.advanceTimersByTime(1);
+  expect(hung.mock.calls).toEqual([[true], [false]]);
+  const left = vi.fn();
+  const connection = connectHtmlView(framedContainer().container, { source: "<p>Static</p>", loadEngine, onLoadingChanged: left });
+  (sdk.view.subscribe.mock.calls[1]![0] as (state: HtmlViewState) => void)(state());
+  connection.dispose();
+  vi.advanceTimersByTime(10_000);
+  expect(left.mock.calls).toEqual([[true]]);
 });
 it("reports local changes for edits until nothing is pending, not for confirmation alone", () => {
   const connection = connectHtmlView(container, { source: "template", loadEngine });

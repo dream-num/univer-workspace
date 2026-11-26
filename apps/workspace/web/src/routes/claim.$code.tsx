@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Bot, ShieldCheck } from "lucide-react";
+import { claimLanding } from "../features/account/claim-landing";
 import { agentClaimQueryOptions, claimAgent } from "../features/account/claimed-agents.queries";
 import { AuthCard, sessionQueryOptions } from "../features/auth";
+import { mySpacesQueryOptions } from "../features/spaces";
 import { api } from "../shared/api/client";
 import { ApiError, apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
@@ -34,12 +36,16 @@ function ClaimAgentPage() {
     const key = claimErrorKey(error);
     return key ? t(key) : error?.message;
   };
-  const openSpace = (spaceId: string) => void navigate({ to: "/spaces/$spaceId", params: { spaceId }, search: {} });
+  const queryClient = useQueryClient();
+  // A claimed agent's repositories join the person's own list; without that list its Personal Space is still a valid landing.
+  const openWork = async (agent: Parameters<typeof claimLanding>[0]) => {
+    const spaces = await queryClient.fetchQuery({ ...mySpacesQueryOptions, staleTime: 0 }).then(({ spaces }) => spaces, () => []);
+    await navigate(claimLanding(agent, spaces));
+  };
   const claim = useMutation({
     mutationFn: () => claimAgent(code),
-    onSuccess: ({ agent }) => openSpace(agent.spaceId),
+    onSuccess: ({ agent }) => openWork(agent),
   });
-  const queryClient = useQueryClient();
   // Staying on this page keeps the claim link; resetting drops everything cached for the agent.
   const signOut = useMutation({
     mutationFn: async () => {
@@ -127,7 +133,7 @@ function ClaimAgentPage() {
             )}
             {claim.error ? <Alert variant="destructive">{errorText(claim.error)}</Alert> : null}
             {claimed ? (
-              <Button className="w-full" size="lg" onClick={() => openSpace(agent.spaceId)}>
+              <Button className="w-full" size="lg" onClick={() => void openWork(agent)}>
                 {t("claimAgentOpenSpace")}
               </Button>
             ) : (

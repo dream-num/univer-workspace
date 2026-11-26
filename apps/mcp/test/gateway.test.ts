@@ -690,7 +690,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       ]);
       expect(await names("?toolsets=all")).toEqual([...agentCore, ...filesNames, ...agentAdmin]);
       const whoami = await (await connect()).callTool({ name: "whoami", arguments: {} });
-      expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject, budget: agentBudget });
+      expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject, budget: agentBudget, notice: expect.any(String) });
     },
   );
 
@@ -726,7 +726,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"712d3cdb3e28fe7fc98ac1e9d31b08cf913270b135a05297c4c5d1eeb4340e4c"`);
+    expect(digest).toMatchInlineSnapshot(`"40a47977beae489f8bd3da659cda5195ec7e60f91fb0791b6766e765603655f5"`);
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {

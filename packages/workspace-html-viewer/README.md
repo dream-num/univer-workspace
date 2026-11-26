@@ -15,10 +15,12 @@ source engines, and exposes the view's save and inspection controls through a re
 
 - `inspect.open()` / `inspect.close()` toggle the built-in inspection UI.
 - `onInspectChanged(boolean)` keeps the host's toolbar toggle in sync.
-- `onLoadingChanged(boolean)` is true until the page has parsed and every Sheet it asked
-  for has loaded or failed. The page's own scripts and stylesheets can keep the frame blank
-  until then. A page that binds no Sheet stops loading at the handshake. Loading ends once, so
-  a Sheet the page asks for later does not report it again.
+- `onLoadingChanged(boolean)` is true until the page has parsed, every Sheet it asked
+  for has loaded or failed, and the frame has fired `load`, which waits for the page's own
+  stylesheets and scripts. A page that binds no Sheet waits only for the handshake and `load`.
+  A frame that has not fired `load` after 10 seconds, for example because a CDN never answers,
+  stops counting, and a closed connection ends loading at once. Loading ends once, so a Sheet
+  the page asks for later does not report it again.
 - `prepareToLeave()` commits drafts, waits for saving and pauses page writes; hosts
   keep the component mounted until it succeeds. Failures leave the page usable.
 - `resume()` resumes the same sandbox after a later host operation cancels departure;

@@ -27,7 +27,8 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   10 minutes.
 - AH6 claims on `/claim/<code>`. Signed out: `Sign in to claim this agent` with an embedded sign-in that returns
   to the same page. Signed in as a person: `Claim <agent name>`, `@<username>`, the file count,
-  `Account that will own it`, and `Claim agent`, which opens the agent's Space. Revisiting shows
+  `Account that will own it`, and `Claim agent`, which opens the one Team repository or Personal Space that holds the
+  agent's work, or `/repositories?q=<username>` when its work is in more than one. Revisiting shows
   `<agent name> is yours`.
 - AH7 handles a browser signed in as an agent: `An agent cannot claim an agent. Sign in with your own account.`
   with `Sign out and continue`, which shows the sign-in on the same page.

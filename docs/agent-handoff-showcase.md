@@ -92,7 +92,7 @@ An MCP client on your computer, such as Claude Code, gets a guest agent with no 
 
 ![The sign-in page an MCP client opens, with the Continue as a guest agent card beside the account sign-in form](images/agent-handoff/guest-agent-card.png)
 
-The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent. Its server instructions tell it to say in its first reply that it is a guest agent because the browser had no Workspace session, that the person can reconnect after signing in to connect under their own account, and that otherwise they can keep it through the claim link that `claim` returns. Its `whoami` result says the same. The agent works in a pull request, merges it, and shares the file:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent. Its server instructions and its `whoami` result tell it to say in its first reply that it is a guest agent because the browser had no Workspace session, that the person can reconnect after signing in to connect under their own account, and that otherwise they can keep it through the claim link that `claim` returns. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, and shares the file:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -141,7 +141,7 @@ flowchart TB
 
 ![The claim page for the guest agent Claude Code · g3wq, showing its username, one file, and the account that will own it](images/agent-handoff/claim-agent.png)
 
-The claim page names the agent and counts its files, and **Claim agent** completes the claim. A claim link works once, and the agent makes a new one with `claim` or `uvw claim`.
+The claim page names the agent and counts the files in its Personal Space, and **Claim agent** completes the claim. It then opens where the agent's work is: the one Team repository or Personal Space that holds it, or, when its work is in more than one of them, the repository list filtered to the agent. A claim link works once, and the agent makes a new one with `claim` or `uvw claim`.
 
 After the claim, `share` returns no expiry date and no claim hint, and the share page drops the **Unverified agent** mark.
 

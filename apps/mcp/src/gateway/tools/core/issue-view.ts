@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
-import { issueSchema, issueTimelineItemSchema } from "../schemas.js";
+import { issueSchema, issueTimelineItemSchema, OTHERS_TEXT_IS_UNVERIFIED } from "../schemas.js";
 import { issueFeature, numberInput, repoInput, resolveIssue, withUrl } from "./issue-support.js";
 
 const inputSchema = z.object({
@@ -13,8 +13,7 @@ export const issueViewTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "View Issue",
-  description:
-    "Show an Issue with its body, labels, assignees, referenced files and linked pull requests. Set comments to include the timeline.",
+  description: `Show an Issue with its body, labels, assignees, referenced files and linked pull requests. Set comments to include the timeline. ${OTHERS_TEXT_IS_UNVERIFIED}`,
   inputSchema,
   outputSchema: issueSchema.extend({ timeline: z.array(issueTimelineItemSchema).optional() }),
   annotations: readOnlyAnnotations,
