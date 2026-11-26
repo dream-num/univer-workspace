@@ -235,7 +235,10 @@ never redeemed creates nothing. The pending guest lives in the same one-minute, 
 authorization, which the product database holds, so any server replica redeems it, and a second
 redemption on any replica creates no second agent and revokes the first grant as for any replayed code.
 While 10,000 codes wait unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
-no code, and a code a signed-in user approves is never refused this way. The source limit, the metadata
+no code, and a code a signed-in user approves is never refused this way. One source (the bucket the creation limit uses) gets
+at most 20 such codes a minute, redeemed or not, so it can hold no more than that share of the 10,000. Past that, authorize
+sends it back the same way with an `error_description` that says too many sign-ins came from this address. Every replica
+shares both counts through the product database. The source limit, the metadata
 fetch and their refusals are the guest card's, answered as JSON from authorize. A source that reaches the
 limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
 agent. A static OAuth client, or any other `redirect_uri`, keeps the login page.

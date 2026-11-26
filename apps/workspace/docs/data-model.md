@@ -1250,9 +1250,10 @@ SQLite V33→V34 重建 `operations`，`kind` CHECK 增加 `revert_worktrees`：
 ### `source_rate_events`
 
 按来源计数的限速事件。每次被接受的事件写一行：`id`（随机 UUID，主键）、`action`、`source` 与 `created_at`（毫秒时间戳）。
-`action` 区分五个限速：`agent_create`（`POST /api/agents` 与 `POST /api/auth/guest` 共用，`AGENT_CREATE_LIMIT_PER_HOUR`，默认 5）、
+`action` 区分六个限速。五个按小时计：`agent_create`（`POST /api/agents` 与 `POST /api/auth/guest` 共用，`AGENT_CREATE_LIMIT_PER_HOUR`，默认 5）、
 `email_code_request`（60）与 `email_code_check`（120，这两项只在设置 `TRUST_PROXY` 时生效）、`client_metadata_fetch`
-（匿名请求开始的 client metadata 抓取，10）和 `node_report`（10），括号里是每小时的上限。`source` 是来源桶：IPv4 地址；
+（匿名请求开始的 client metadata 抓取，10）和 `node_report`（10），括号里是每小时的上限。`guest_authorization` 不按小时计，
+见 `sign_in_codes`：每个 guest 的 `oauth_code` 写一行，只数一个码的有效期（一分钟）之内的行。`source` 是来源桶：IPv4 地址；
 IPv6 取 `/64` 前缀，写作 `2001:db8:1:2::/64`；IPv4 映射的 IPv6 记为 IPv4 地址；其它值，包括没有地址和伪造的转发头，共用 `unknown`。
 表里只有这个桶，不保存完整的 IPv6 地址、请求内容或 User。
 
@@ -1299,9 +1300,11 @@ advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回�
 - 认领不消耗 `claim`：认领是 `agents` 上的条件更新，同一个人可以用同一个码重复打开页面。
 
 写入一个码时在一个事务里依次：删除本种类至多 100 个已过期的行（`claim` 过期后多留 10 分钟，用于回答 410）；`claim` 删除该 agent
-最旧的码，使它的有效码不超过 10 个；guest 的 `oauth_code`、`claim` 与 `cli` 在本种类未过期的 `pending` 行达到 10000 时拒绝；
-最后插入。SQLite 用 `BEGIN IMMEDIATE`；PostgreSQL 用可串行化事务，冲突的一方重放后数到对方的行，删除过期行在事务之外。
-所以每种上限在所有副本间只有一份。没有后台清理：过期的行等同种类的下一次写入删除。`sign_in_codes_expiry (kind, expires_at, state)`
+最旧的码，使它的有效码不超过 10 个；guest 的 `oauth_code` 先删除一分钟之前的 `guest_authorization` 行，同一来源一分钟内已有
+20 行时拒绝；guest 的 `oauth_code`、`claim` 与 `cli` 在本种类未过期的 `pending` 行达到 10000 时拒绝；最后插入，guest 的
+`oauth_code` 同时写一行 `guest_authorization`。SQLite 用 `BEGIN IMMEDIATE`；PostgreSQL 用可串行化事务，冲突的一方重放后数到
+对方的行，删除过期行在事务之外。所以每种上限在所有副本间只有一份。来源的份额数一分钟内拿到的码，兑换不归还名额：码只活一分钟，
+一个地址默认每小时只能创建 5 个 agent，一次连接最多打开两次 authorize，所以正常使用到不了 20；而一个来源至多占 10000 个名额里的 20 个。没有后台清理：过期的行等同种类的下一次写入删除。`sign_in_codes_expiry (kind, expires_at, state)`
 支持容量计数与删除，`sign_in_codes_subject (kind, subject_user_id, expires_at)` 支持每个 agent 的上限。
 
 过期按处理请求的副本自己的时钟判断，与 `source_rate_events` 相同。副本的时钟快多少，码在这个副本上就早多少失效，慢多少就多活多少。

@@ -1,5 +1,5 @@
 import { ClientMetadataDocumentError, ClientMetadataFetchRefusedError, FETCH_TIMEOUT_SECONDS, type CimdClient, type CimdClientId } from "./client-metadata-document.js";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { parse as parseQuery } from "node:querystring";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
@@ -10,7 +10,9 @@ import type { IdentityRepository, SignInCode } from "./identity.repository.js";
 import type { IdentityModule } from "./identity.service.js";
 import type { AgentCreation, User } from "./identity.types.js";
 import { hashSessionSecret } from "./session-token.js";
+import { sourceBucket } from "./source-rate-limiter.js";
 import {
+  CODE_TTL_MS,
   authorizeRedirectTarget,
   defaultOAuthScope,
   issueOAuthAuthorizationCode,
@@ -44,6 +46,8 @@ export const WORKSPACE_SESSION_TOKEN_TYPE = "urn:univer:params:oauth:token-type:
 export const DOWNSTREAM_SESSION_TTL_MS = 10 * 60 * 1000;
 const REGISTRATION_BODY_LIMIT = "16kb";
 const GUEST_AUTHORIZATION_CAPACITY = 10_000;
+// An address creates at most 5 agents an hour by default, and one connection opened authorize twice: 20 is twice that.
+const GUEST_AUTHORIZATIONS_PER_SOURCE = 20;
 const CONSENT_TTL_MS = 5 * 60_000;
 const MCP_STATE_PATTERN = /^[\x20-\x7E]{1,1024}$/u;
 const SCOPE_DESCRIPTIONS: Readonly<Record<McpScope, string>> = {
@@ -820,17 +824,30 @@ async function issueAuthorization(
     now,
     authorizationRequest.kind === "mcp" ? authorizationRequest.resource : undefined,
   );
-  // Only a guest's code is refused at capacity, and every unredeemed code counts toward it.
+  // Only a guest's code is refused at capacity, and every unredeemed code counts toward it. A source's share counts
+  // the guest codes it got within one code lifetime, so no source holds more than that share of the capacity.
   const stored = await options.codes.putSignInCode(
     { kind: "oauth_code", codeHash: hashSessionSecret(code), userCodeHash: null, subjectUserId: subject.kind === "user" ? subject.userId : null, payload: JSON.stringify(authorization), createdAt: now, expiresAt },
-    { expiredBefore: now, ...(subject.kind === "guest" ? { capacity: options.guestAuthorizationCapacity ?? GUEST_AUTHORIZATION_CAPACITY } : {}) },
+    subject.kind === "guest"
+      ? {
+          expiredBefore: now,
+          capacity: options.guestAuthorizationCapacity ?? GUEST_AUTHORIZATION_CAPACITY,
+          perSource: {
+            event: { id: randomUUID(), action: "guest_authorization", source: sourceBucket(subject.agent.originIp), createdAt: now },
+            since: now - CODE_TTL_MS,
+            limit: GUEST_AUTHORIZATIONS_PER_SOURCE,
+          },
+        }
+      : { expiredBefore: now },
   );
   if (stored !== "stored") {
     return authorizationErrorTarget(
       authorizationRequest.redirectUri,
       authorizationRequest.state,
       "temporarily_unavailable",
-      "This Workspace holds too many unredeemed authorization codes. Try again in a minute.",
+      stored === "source-full"
+        ? "Too many sign-ins came from this address. Try again shortly."
+        : "This Workspace holds too many unredeemed authorization codes. Try again in a minute.",
       authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined,
     );
   }

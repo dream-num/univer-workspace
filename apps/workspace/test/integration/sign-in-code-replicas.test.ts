@@ -77,6 +77,7 @@ for (const { name, storage } of backends) {
         port: 0,
         secureCookies: false,
         passwordAuthEnabled: true,
+        trustProxy: "loopback",
         agentCreateLimitPerHour: 20,
         oauthClients: { clients: [
           { clientId: STATIC_ID, clientType: "public", redirectUris: [STATIC_REDIRECT], scopes: ["identity"] },
@@ -180,6 +181,25 @@ for (const { name, storage } of backends) {
       expect(codeOf(await authorize(a, { client_id: client }))).toEqual(expect.any(String));
     });
 
+    it("gives one source at most 20 guest codes a minute across replicas, and leaves other sources theirs", async () => {
+      await using resources = new AsyncDisposableStack();
+      const { a, b } = await replicas(resources);
+      const client = await registerClient(a);
+      const attempts = await Promise.all(Array.from({ length: 24 }, (_, index) => authorize(index % 2 ? a : b, { client_id: client }, "203.0.113.7")));
+      expect(attempts.filter((attempt) => codeOf(attempt) !== null)).toHaveLength(20);
+      for (const origin of [a, b]) {
+        const refused = new URL((await authorize(origin, { client_id: client }, "203.0.113.7")).headers.get("location")!);
+        expect(Object.fromEntries(refused.searchParams)).toEqual({
+          error: "temporarily_unavailable",
+          error_description: "Too many sign-ins came from this address. Try again shortly.",
+          state: STATE,
+          iss: ISSUER,
+        });
+        const other = await authorize(origin, { client_id: client }, "198.51.100.9");
+        expect((await redeem(origin === a ? b : a, client, other)).status, "another source still gets a guest").toBe(200);
+      }
+    });
+
     it("lets a person claim on one replica through the code the agent got from another", async () => {
       await using resources = new AsyncDisposableStack();
       const { a, b } = await replicas(resources);
@@ -267,8 +287,11 @@ function authorizeQuery(fields: Record<string, string>): string {
   }).toString();
 }
 
-function authorize(origin: string, fields: Record<string, string>): Promise<Response> {
-  return fetch(`${origin}/api/auth/authorize?${authorizeQuery(fields)}`, { redirect: "manual" });
+function authorize(origin: string, fields: Record<string, string>, forwardedFor?: string): Promise<Response> {
+  return fetch(`${origin}/api/auth/authorize?${authorizeQuery(fields)}`, {
+    redirect: "manual",
+    ...(forwardedFor === undefined ? {} : { headers: { "x-forwarded-for": forwardedFor } }),
+  });
 }
 
 function codeOf(redirected: Response): string | null {

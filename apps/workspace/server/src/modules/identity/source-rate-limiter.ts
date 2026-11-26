@@ -40,7 +40,7 @@ export function createSourceRateLimiter(
  * One host owns a whole IPv6 /64, so the bucket is that prefix. IPv4-mapped IPv6 is the IPv4 host.
  * Anything that is not an address shares one bucket, so a forwarded header cannot mint buckets.
  */
-function sourceBucket(ip: string | undefined): string {
+export function sourceBucket(ip: string | undefined): string {
   const address = (ip ?? "").replace(/%.*$/u, "");
   if (isIPv4(address)) return address;
   if (!isIPv6(address)) return "unknown";

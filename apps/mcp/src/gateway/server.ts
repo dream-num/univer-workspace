@@ -182,6 +182,7 @@ export function createGateway(
           state.executorRestricted,
           toolPrincipal(state.context.user),
           state.context.scopes,
+          state.context.authKind,
         ),
       },
     );
@@ -476,6 +477,7 @@ export function createGateway(
         usage,
         executor: executorLink(authentication, user, requestId, requestStartedAt + 30_000, usage),
         scopes: authentication.scopes ?? options.scopes ?? allScopes,
+        authKind: authentication.authKind,
       },
       auth: authentication,
       selected,

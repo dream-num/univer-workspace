@@ -189,6 +189,11 @@ carries a short-lived downstream session, the user and the granted scopes. Produ
 that session. The user's `kind` is `human` or `agent`, and an agent also carries `claimed`. The gateway
 keeps both for an agent and treats any other user as `human`. The kind selects the listed tools and the
 server instructions. Workspace answers a banned agent's token with `invalid_grant`.
+An unclaimed agent that reaches the gateway with an OAuth access token was created by a browser sign-in that had no
+Workspace session. Its server instructions and `whoami` result say so, say that a user with a Workspace account who meant
+to connect under it should sign in to Workspace in that browser and reconnect the client, and say that the user can
+otherwise keep the agent by claiming it with `claim`. The instructions tell the agent to pass this on in its first reply.
+An agent that made itself with `POST /api/agents` and connects with its PAT, a claimed agent and a person get none of it.
 A person can claim an unclaimed agent at any moment, so for an unclaimed agent the gateway reads the user from the
 downstream session (`GET /api/session`) on every request instead of keeping the exchanged user. The first request
 after the claim gets the claimed agent's tools, instructions and tool messages. A person's and a claimed agent's
@@ -338,7 +343,7 @@ and the matching owner/slug candidates when available.
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `whoami` | None | `{ origin, subject: { id, name }, budget? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED` |
+| `whoami` | None | `{ origin, subject: { id, name }, budget?, notice? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED`. `notice` is the guest agent notice of [Authentication](#authentication), only for an unclaimed agent over OAuth |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
 | `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Repository fields include `proposals`, `acceptAfterHours` and `capabilities`, what the caller may do there, such as `manageMembers` and `propose`, when the server reports all of them. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
 | `fork_create` | Required `repo` (a Team repository whose `capabilities.propose` is true), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. Its owner and members may fork. Anyone else may fork a public repository whose `proposals` setting admits them, writes only their own proposals and holds at most 3 open ones there. A caller it does not admit gets `FORBIDDEN` with a message naming the setting, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |

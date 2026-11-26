@@ -91,7 +91,7 @@ Doc 或 Slide 用 `inspect`，并把 `target` 设为 `document` 或 `presentatio
 
 ![MCP 客户端打开的登录页，左边是"以访客 Agent 继续"卡片，右边是账号登录表单](images/agent-handoff/guest-agent-card.zh-CN.png)
 
-访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。没有页面时，人只能从 Agent 那里知道它，也就是 `claim` 返回的认领链接。Agent 在 Pull request 里工作，合入后分享文件：
+访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。没有页面时，人只能从 Agent 那里知道它。服务器说明要求 Agent 在第一次回复里说明：它是访客 Agent，因为浏览器没有 Workspace 会话；登录后重新连接，就能以自己的账号连接；否则可以用 `claim` 返回的认领链接把它留下。它的 `whoami` 结果也写明这些。Agent 在 Pull request 里工作，合入后分享文件：
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }

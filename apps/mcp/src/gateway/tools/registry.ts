@@ -22,7 +22,7 @@ import { readTool } from "./core/read.js";
 import { findTool } from "./core/find.js";
 import { inspectTool } from "./core/inspect.js";
 import { screenshotTool } from "./core/screenshot.js";
-import { whoamiTool } from "./core/whoami.js";
+import { unclaimedAgentWhoamiTool, whoamiTool } from "./core/whoami.js";
 import { repoListTool } from "./core/repo-list.js";
 import { repoViewTool } from "./core/repo-view.js";
 import { forkCreateTool } from "./core/fork-create.js";
@@ -76,6 +76,7 @@ import type { ToolDefinition, ToolPrincipal } from "./definition.js";
 
 export const tools: readonly ToolDefinition[] = [
   whoamiTool,
+  unclaimedAgentWhoamiTool,
   repoListTool,
   repoViewTool,
   forkCreateTool,

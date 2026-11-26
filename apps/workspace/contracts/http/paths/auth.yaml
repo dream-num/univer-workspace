@@ -53,7 +53,9 @@
       as POST /api/auth/guest fetches and refuses it, answering here in JSON.
       While 10,000 codes wait unredeemed, such a guest gets
       `temporarily_unavailable` and no code; a code a signed-in user approves
-      is never refused this way.
+      is never refused this way. A source that got 20 such codes in the last
+      minute, redeemed or not, gets the same answer, with an
+      `error_description` that says too many sign-ins came from this address.
       With any other `redirect_uri` the browser goes to the sign-in page,
       which offers that guest path. An unknown client or unregistered
       `redirect_uri` is answered here with 400; once both are verified, other

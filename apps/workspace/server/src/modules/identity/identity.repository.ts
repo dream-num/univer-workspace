@@ -115,7 +115,21 @@ export interface SignInCodeLimits {
   readonly capacity?: number;
   /** Leave room for the new code among this many unexpired codes of its subject, deleting the oldest. */
   readonly perSubject?: number;
+  /**
+   * Refuse while `limit` source events of the event's action and source are newer than `since`, deleting that
+   * action's older events first. A stored code records `event`.
+   */
+  readonly perSource?: { readonly event: SourceEvent; readonly since: number; readonly limit: number };
 }
+
+export interface SourceEvent {
+  readonly id: string;
+  readonly action: string;
+  readonly source: string;
+  readonly createdAt: number;
+}
+
+export type SignInCodePut = "stored" | "full" | "source-full" | "duplicate";
 
 export const SIGN_IN_CODE_PRUNE_BATCH = 100;
 
@@ -219,18 +233,14 @@ export interface IdentityRepository {
    * Deletes every source event at or before `since`, then records `event` unless `limit` events of its
    * action and source are newer than `since`. The count and the insert are one atomic decision across replicas.
    */
-  takeSourceEvent(event: {
-    readonly id: string;
-    readonly action: string;
-    readonly source: string;
-    readonly createdAt: number;
-  }, since: number, limit: number): Promise<boolean>;
+  takeSourceEvent(event: SourceEvent, since: number, limit: number): Promise<boolean>;
   countSourceEvents(action: string, source: string, since: number): Promise<number>;
   /**
-   * Stores a pending sign-in code after applying `limits`, or answers "full" at capacity and "duplicate" when one
-   * of its hashes is taken. The count and the insert are one atomic decision across replicas.
+   * Stores a pending sign-in code after applying `limits`, or answers "full" at capacity, "source-full" at the
+   * per-source limit and "duplicate" when one of its hashes is taken. The counts and the inserts are one atomic
+   * decision across replicas.
    */
-  putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<"stored" | "full" | "duplicate">;
+  putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<SignInCodePut>;
   findSignInCode(kind: SignInCodeKind, hash: string, by?: "user_code_hash"): Promise<SignInCode | null>;
   /** Of concurrent callers, exactly one deletes the code and gets true. */
   deleteSignInCode(kind: SignInCodeKind, codeHash: string): Promise<boolean>;
