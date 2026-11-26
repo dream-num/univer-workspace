@@ -205,7 +205,7 @@ Mode: mcp.
 with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
 and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
 the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. MH3's bot2,
-unclaimed, gets `AGENT_NOT_ALLOWED` on `<bot2>/personal` (`An unclaimed agent cannot make a Space public.`). A uvw password session is interactive and may publish.
+unclaimed, gets `AGENT_NOT_ALLOWED` on `<bot2>/personal` (`An unclaimed agent cannot make a Space public. Keep it private, or give a person a claim link so they can claim you, which lifts this limit. Claiming also lets that person open every Space you own.`). A uvw password session is interactive and may publish.
 
 ### MH5. Copy a shared file
 

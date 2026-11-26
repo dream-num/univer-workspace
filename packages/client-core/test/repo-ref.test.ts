@@ -213,7 +213,53 @@ describe("file links", () => {
     });
   });
 
+  const teamFile = (claimCode: () => Response) => clients((call) =>
+    call.path.endsWith("/link-sharing") ? notFound()
+      : call.path === "/api/spaces/s1" ? Response.json(view())
+        : call.path === "/api/agents/claim-codes" ? claimCode()
+          : Response.json(node(sheet)));
+  const inTeam = 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository me/docs.';
+
+  it("tells an unclaimed agent that a claim lets the user open a file in its Team Space, with a claim link", async () => {
+    const { spaces } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
+    for (const link of [undefined, "viewer"] as const) {
+      await expect(shareNode(spaces, origin, { node: "n1", caller: agent, ...(link === undefined ? {} : { link }) })).rejects.toMatchObject({
+        code: "workspace-argument-invalid",
+        message: `${inTeam} A person can open your repositories once they claim you, so give the user this claim link, which works once within 10 minutes: ${origin}/claim/c0de`,
+        detail: { url: `${origin}/nodes/n1`, claimUrl: `${origin}/claim/c0de` },
+      });
+    }
+  });
+
+  it("names the claim tool to an unclaimed agent when the Workspace cannot make a claim code", async () => {
+    const { spaces } = teamFile(() => Response.json({ error: { code: "AGENT_CLAIM_UNAVAILABLE", message: "Try again shortly." } }, { status: 503 }));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: agent })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `${inTeam} A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.`,
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
+
+  it.each([["a person", person], ["a claimed agent", { ...agent, claimed: true }]] as const)(
+    "tells %s to add a member or make the repository public to let a person open a Team Space file",
+    async (_caller, caller) => {
+      const { spaces, calls } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
+      await expect(shareNode(spaces, origin, { node: "n1", caller, link: "viewer" })).rejects.toMatchObject({
+        code: "workspace-argument-invalid",
+        message: `${inTeam} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).`,
+        detail: { url: `${origin}/nodes/n1` },
+      });
+      expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
+    },
+  );
+
   it("passes other Link Sharing refusals through and rejects a malformed response", async () => {
+    const gone = clients((call) =>
+      call.path.endsWith("/link-sharing") ? notFound()
+        : call.path === "/api/spaces/s1" ? Response.json(view({ type: "personal", slug: "personal", fullName: "me/personal" }))
+          : Response.json(node(sheet)));
+    await expect(shareNode(gone.spaces, origin, { node: "n1", caller: person }))
+      .rejects.toMatchObject({ code: "NOT_FOUND", message: "The resource was not found." });
     const limited = clients((call) =>
       call.path.endsWith("/link-sharing")
         ? Response.json({ error: { code: "RATE_LIMITED", message: "Slow down." } }, { status: 429 })

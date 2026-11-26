@@ -45,7 +45,7 @@ export async function createClaimLink(
 
 /** Reads the Link Sharing of a file, named by its link or Node ID, and sets it first when `link` is given. */
 export async function shareNode(
-  spaces: Pick<WorkspaceSpaceFeature, "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
+  spaces: Pick<WorkspaceSpaceFeature, "get" | "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
   origin: string,
   input: {
     readonly node: string;
@@ -60,7 +60,7 @@ export async function shareNode(
     readonly turnOn?: string;
   },
 ): Promise<WorkspaceShare> {
-  const { nodeId, name, resource } = await resolveNodeReference(spaces, input.node, origin);
+  const { nodeId, name, resource, spaceId } = await resolveNodeReference(spaces, input.node, origin);
   const url = nodeUrl(origin, nodeId);
   let sharing: WorkspaceLinkSharing;
   try {
@@ -86,6 +86,11 @@ export async function shareNode(
         `Only the owner of this file can read or change its Link Sharing. To read the file itself, pass its link as the Unit with trunk: ${url}`,
         { url },
       );
+    }
+    // The server keeps Link Sharing only for Personal Space files, and answers NOT_FOUND for a Team Space file the caller can read.
+    if (error.code === "NOT_FOUND") {
+      const space = await spaces.get(spaceId);
+      if (space.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space.fullName ?? space.name, input.caller);
     }
     throw error;
   }
@@ -135,6 +140,33 @@ export function formatShare(shared: WorkspaceShare): string {
     ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
     ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
   ].join("\n");
+}
+
+async function teamSpaceRefusal(
+  spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
+  origin: string,
+  url: string,
+  name: string,
+  repo: string,
+  caller: WorkspaceSubject,
+): Promise<WorkspaceApplicationError> {
+  const where = `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${repo}.`;
+  if (caller.kind !== "agent" || caller.claimed) {
+    return workspaceError(
+      "workspace-argument-invalid",
+      `${where} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).`,
+      { url },
+    );
+  }
+  const claim = await claimFields(spaces, origin);
+  const next = claim.claimUrl === undefined
+    ? "make a claim link with claim (uvw claim in the CLI) and give it to the user."
+    : `give the user this claim link, which works once within 10 minutes: ${claim.claimUrl}`;
+  return workspaceError(
+    "workspace-argument-invalid",
+    `${where} A person can open your repositories once they claim you, so ${next}`,
+    { url, ...claim },
+  );
 }
 
 async function claimFields(

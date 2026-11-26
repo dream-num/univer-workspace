@@ -11,7 +11,7 @@ export const claimTool: ToolDefinition = {
   scope: "publish",
   title: "Let the user claim this agent",
   description:
-    "For an unclaimed agent only, make a link the user opens to claim you. Claiming keeps your files and their links working for good and lets the user manage them in the browser; you gain no access to the user's files. Give the returned claimUrl to the user. It works once, within 10 minutes, so call claim again when the user needs a new one.",
+    "For an unclaimed agent only, make a link the user opens to claim you. Claiming keeps your files and their links working for good and lets the user open and manage them, private repositories included; you gain no access to the user's files. Give the returned claimUrl to the user. It works once, within 10 minutes, so call claim again when the user needs a new one.",
   inputSchema: z.object({}),
   outputSchema: z.object({ claimUrl: z.url(), expiresAt: z.string() }),
   annotations: writeAnnotations,

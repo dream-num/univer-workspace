@@ -160,7 +160,10 @@ lets anyone with the link read the file; for a person's session, it says to run 
 asks. When the owner is an unclaimed agent, the output also has `expiresAt`. The link stops working
 on that date unless the agent is used or the link is opened before then. It also has `claimUrl` and
 `claimHint`: a link that lets a person keep the agent's files, and a sentence telling the agent to
-give it to the user.
+give it to the user. A file in a Team Space has no Link Sharing, so the command exits 1 with
+`workspace-argument-invalid`, names the repository, and says how to let a person open the file. A
+guest agent gets a claim link to give the user, because claiming lets the user open the agent's
+repositories. Anyone else is pointed to `uvw repo member add` or `uvw repo edit --visibility public`.
 
 ```bash
 uvw claim [--json]
