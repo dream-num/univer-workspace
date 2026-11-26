@@ -55,7 +55,7 @@ beforeEach(() => {
       expect(url.searchParams.get("code")).toBe(CODE);
       return signedIn === "human"
         ? Response.json({ claimed: false, agent: agentSummary })
-        : Response.json({ error: { code: "FORBIDDEN", message: "An agent cannot claim or manage agents. Sign in with your own account." } }, { status: 403 });
+        : Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "This action needs a person signed in to Workspace in a browser." } }, { status: 403 });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/logout") {
       signedIn = null;

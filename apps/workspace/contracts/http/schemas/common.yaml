@@ -89,8 +89,11 @@ Forbidden:
     keep more than 20 files across its Spaces, pending pull-request files included, or store one file
     above 10 MiB, and any agent would have more than 10 open Worktrees or start more than 50 merges in
     24 hours) and
-    `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
-    or updates a Space with `publicRead: true`).
+    `INTERACTIVE_SESSION_REQUIRED` (an action taken for a person, such as creating an access token,
+    approving a CLI login, authorizing an OAuth client, claiming an agent or publishing a draft,
+    comes from a session that is not a person signed in to Workspace in a browser: an agent, a CLI
+    login or a session issued by token exchange; or a human's token-issued session writes Link
+    Sharing, or creates or updates a Space with `publicRead: true`).
   content:
     application/json:
       schema:

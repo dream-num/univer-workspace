@@ -19,7 +19,7 @@ export { createIdentityRouter } from "./identity.router.js";
 export { createGitHubOAuthProvider } from "./github-oauth.js";
 export { createDiscordOAuthProvider } from "./discord-oauth.js";
 export { createGoogleOAuthProvider } from "./google-oauth.js";
-export { createGuestAuthorizationCheck, createMcpClientRegistrationHandler, createOAuthAuthorizationRouter } from "./oauth-authorization-router.js";
+export { createMcpClientRegistrationHandler, createOAuthAuthorizationRouter } from "./oauth-authorization-router.js";
 export type { OAuthClientConfig } from "./oauth-clients.js";
 export type {
   DiscordOAuthProvider,

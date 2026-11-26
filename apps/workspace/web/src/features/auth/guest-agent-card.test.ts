@@ -19,10 +19,17 @@ const http = vi.hoisted(() => {
 });
 
 const returnTo = "/api/auth/authorize?client_id=client&scope=read";
+const callback = "http://127.0.0.1:51063/callback?code=guest-code&state=s&iss=https%3A%2F%2Fspace.example.test";
 const anonymous = {
   authenticated: false, githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false,
   passwordAuthEnabled: true, emailAuthEnabled: false, guestAuthEnabled: true,
 };
+const signedInAs = (user: object) => ({
+  authenticated: true, githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false,
+  passwordAuthEnabled: true, emailAuthEnabled: false, trialDeployment: false,
+  user: { id: "user-1", username: "user", displayName: "User", avatarUrl: null, ...user },
+  authenticationMethods: { password: false, email: null, externalIdentities: [] },
+});
 let root: Root;
 let container: HTMLDivElement;
 let queries: QueryClient;
@@ -38,7 +45,7 @@ beforeEach(() => {
   vi.stubGlobal("location", { ...window.location, assign });
   window.localStorage.setItem("univer-workspace-language", "en-US");
   session = anonymous;
-  guestResponse = () => Response.json({ agent: { id: "agent-1", username: "agent-7f3k" } }, { status: 201 });
+  guestResponse = () => Response.json({ redirectUrl: callback });
   requests.length = 0;
   assign.mockClear();
   http.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -46,7 +53,7 @@ beforeEach(() => {
     requests.push(request);
     const path = new URL(request.url).pathname;
     if (request.method === "GET" && path === "/api/session") return Response.json(session);
-    if (request.method === "POST" && path === "/api/auth/guest") return guestResponse();
+    if (request.method === "POST" && path === "/api/auth/authorize/guest") return guestResponse();
     throw new Error(`Unexpected request ${request.method} ${path}`);
   });
   queries = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -92,13 +99,25 @@ it("renders nothing when the deployment has guest agents off", async () => {
   expect(container.innerHTML).toBe("");
 });
 
+it("renders nothing for a person who is signed in", async () => {
+  session = signedInAs({ kind: "human" });
+  await render(returnTo);
+  expect(container.innerHTML).toBe("");
+});
+
+it("offers the guest agent to a browser that holds only an agent's cookie", async () => {
+  session = signedInAs({ kind: "agent", claimed: false });
+  await render(returnTo);
+  expect(button()?.textContent).toBe("Continue as a guest agent");
+});
+
 it.each([returnTo, "/api/auth/authorize/consent?client_id=client&scope=read"])(
-  "sends the authorization request it continues so the server checks it first, then continues to %s",
+  "sends the authorization request from %s and opens the client's callback the server returns",
   async (target) => {
     await render(target);
     await click();
-    await waitFor(() => expect(assign).toHaveBeenCalledWith(target));
-    expect(guestPosts().map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/guest"]);
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(callback));
+    expect(guestPosts().map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/authorize/guest"]);
     expect(await guestPosts()[0]!.json()).toEqual({ oauthAuthorization: "client_id=client&scope=read" });
     expect(button()?.disabled).toBe(true);
   },
@@ -119,11 +138,12 @@ it("explains the rate limit in the page language and stays on the page", async (
 
 it("shows any other server error as sent", async () => {
   guestResponse = () => Response.json(
-    { error: { code: "CONFLICT", message: "Sign out before continuing as a guest agent." } },
-    { status: 409 },
+    { error: { code: "INVALID_INPUT", message: "This application needs a person signed in to Workspace. Sign in to continue." } },
+    { status: 400 },
   );
   await render(returnTo);
   await click();
   await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
-    .toBe("Sign out before continuing as a guest agent."));
+    .toBe("This application needs a person signed in to Workspace. Sign in to continue."));
+  expect(assign).not.toHaveBeenCalled();
 });

@@ -42,11 +42,18 @@ only to resolve identity is discarded after the callback.
 
 CLI browser login uses a separate device authorization flow. The unauthenticated
 CLI creates a ten-minute request containing a high-entropy device code and a
-human-verifiable code. A signed-in browser explicitly approves the matching
-code; the CLI then exchanges the device code exactly once for its own normal
-login session. Pending requests are bounded, process-local, and non-durable.
-They contain no browser cookie, password, Email verification code, or external
-OAuth access token.
+human-verifiable code. A person signed in to the browser explicitly approves the
+matching code; the CLI then exchanges the device code exactly once for its own
+normal login session. Pending requests are bounded and stored as hashes in the
+product database, so any server replica serves them. They contain no browser
+cookie, password, Email verification code, or external OAuth access token.
+
+Actions taken for a person need a person signed in to Workspace in a browser:
+creating an access token or a Browser Agents token, approving a CLI login,
+authorizing an OAuth client on the consent page, claiming and managing agents,
+linking a login method, changing a password, and publishing or rejecting HTML View
+and Skill drafts. An agent, a CLI login or a session issued by token exchange gets
+`403 INTERACTIVE_SESSION_REQUIRED`.
 
 `GET /api/session` returns `200` for both authenticated and anonymous clients so
 React can use it as its application bootstrap request.
@@ -56,19 +63,28 @@ External Identity. `POST /api/agents` and `POST /api/auth/guest` create one with
 credentials. `POST /api/agents` returns a personal access token with every MCP scope.
 Its `expiresAt` is Unix epoch milliseconds, not an ISO 8601 string.
 `POST /api/auth/guest` sets the login session cookie instead, and returns
-`409 CONFLICT` when the request already carries a valid session. The guest session
-is interactive, so it can approve an OAuth authorization. Given the
-`oauthAuthorization` it continues, it checks that authorization first and creates
-nothing when authorize would refuse it, then names the agent after that dynamically
-registered or metadata-document client, as in `Claude Code · 7f3k`. Both endpoints share one
-per-source-IP limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. `POST /api/auth/guest`
-also lets each source start 10 client metadata fetches per hour and returns the same `429`
-past that budget. When every metadata fetch guests may start is in use, or the source already
-has another in flight, it returns `503 CLIENT_METADATA_BUSY` with `Retry-After` and fetches nothing. The anonymous
-session reports `guestAuthEnabled: false` when the deployment creates no agents.
+`409 CONFLICT` when the request already carries a valid session. It serves
+`uvw auth guest`: the session has the `agent` write source of a CLI login, renews
+while in use, and never acts for a person. Both endpoints share one per-source-IP
+limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. The anonymous session
+reports `guestAuthEnabled: false` when the deployment creates no agents.
 
-`GET /api/auth/authorize` makes a guest agent with no page for a browser with no
-session, when guests are enabled and a DCR or CIMD client's `redirect_uri` is loopback
+The sign-in page offers a guest agent when it was opened from an MCP client's
+authorization. `POST /api/auth/authorize/guest` takes that authorization's query
+string as `oauthAuthorization` and returns the `redirectUrl` the browser opens: the
+client's callback with a code for a new guest agent, named after the dynamically
+registered or metadata-document client, as in `Claude Code · 7f3k`. It reads no
+session and sets no cookie, so the browser stays signed out. It issues the code as
+authorize does for a browser with no session, under the limits below, and lets each
+source start 10 client metadata fetches per hour, returning `429` past that budget.
+When every metadata fetch guests may start is in use, or the source already has
+another in flight, it returns `503 CLIENT_METADATA_BUSY` with `Retry-After` and
+fetches nothing. A configured client such as the Workspace Agent gets `400`, because
+it needs a person signed in.
+
+`GET /api/auth/authorize` treats a session whose User is an agent as signed out and
+sends the browser to the sign-in page. It makes a guest agent with no page for a
+browser with no session, when guests are enabled and a DCR or CIMD client's `redirect_uri` is loopback
 `http`. It redirects to the client with a code and sets no cookie. Redeeming that code
 at `POST /api/auth/token` creates the agent under the same limit, and returns
 `429 temporarily_unavailable` with no agent past it. Authorize applies the limit and
@@ -80,8 +96,7 @@ same way, and the `error_description` says too many sign-ins came from this addr
 A signed-in person who approves an MCP client on the consent page chooses whom it connects
 as. The default is a new agent that the person owns: redeeming the code creates it under the
 same limit, names it after the client, and claims it for that person, so it starts in the state
-of a guest agent the person claimed. The other choice, `self`, connects as the person. A
-signed-in agent connects only as itself. When this browser's address may create no agent, the
+of a guest agent the person claimed. The other choice, `self`, connects as the person. When this browser's address may create no agent, the
 page disables the new agent and says so, and choosing it returns `429 AGENT_CREATE_RATE_LIMITED`
 with a message that names the other choices. The page also lists up to five agents the person owns
 and has not stopped, and preselects the most recently active one created for a client of this name.

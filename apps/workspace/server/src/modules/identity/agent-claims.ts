@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityRepository, StoredAgent } from "./identity.repository.js";
 import type { IdentityModule } from "./identity.service.js";
-import type { AgentClaimCode, AgentView, User } from "./identity.types.js";
+import type { AgentClaimCode, AgentView } from "./identity.types.js";
 import { hashSessionSecret } from "./session-token.js";
 
 const CLAIM_CODE_TTL_MS = 10 * 60 * 1000;
@@ -26,17 +26,6 @@ export function createAgentClaims(options: {
 }): AgentClaims {
   const { identity, repository } = options;
   const now = options.now ?? (() => Date.now());
-
-  async function requireHuman(cookieHeader: string | undefined): Promise<User> {
-    const { user, writeSource } = await identity.requireInteractiveSession(cookieHeader);
-    if (user.kind !== "human") {
-      throw new ApplicationError("FORBIDDEN", 403, "An agent cannot claim or manage agents. Sign in with your own account.");
-    }
-    if (writeSource !== "browser") {
-      throw new ApplicationError("FORBIDDEN", 403, "Claim and manage agents in the browser.");
-    }
-    return user;
-  }
 
   async function claimable(code: unknown, humanId: string): Promise<{ readonly agent: StoredAgent; readonly claimed: boolean }> {
     const claim = typeof code === "string" ? await repository.findSignInCode("claim", hashSessionSecret(code)) : null;
@@ -72,25 +61,25 @@ export function createAgentClaims(options: {
     },
 
     async inspect(cookieHeader, code) {
-      const human = await requireHuman(cookieHeader);
+      const human = (await identity.requireInteractiveSession(cookieHeader)).user;
       const { agent, claimed } = await claimable(code, human.id);
       return { agent: agentView(agent), claimed };
     },
 
     async claim(cookieHeader, code) {
-      const human = await requireHuman(cookieHeader);
+      const human = (await identity.requireInteractiveSession(cookieHeader)).user;
       const { agent, claimed } = await claimable(code, human.id);
       if (!claimed && !(await repository.claimAgent(agent.user.id, human.id, now()))) throw alreadyClaimed();
       return { agent: agentView(agent) };
     },
 
     async list(cookieHeader) {
-      const human = await requireHuman(cookieHeader);
+      const human = (await identity.requireInteractiveSession(cookieHeader)).user;
       return { agents: (await repository.findAgents({ ownerUserId: human.id })).map(agentView) };
     },
 
     async stop(cookieHeader, agentUserId) {
-      const human = await requireHuman(cookieHeader);
+      const human = (await identity.requireInteractiveSession(cookieHeader)).user;
       if (!(await repository.banClaimedAgent(human.id, agentUserId, now()))) {
         throw new ApplicationError("NOT_FOUND", 404, "The resource was not found.");
       }

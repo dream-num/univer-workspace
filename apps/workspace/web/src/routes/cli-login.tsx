@@ -43,7 +43,8 @@ function CliLoginPage() {
     );
   }
 
-  if (!session.data?.authenticated) {
+  // An agent's leftover cookie cannot approve a CLI login, so the page asks a person to sign in.
+  if (!session.data?.authenticated || session.data.user.kind !== "human") {
     const returnTo = `/cli-login${
       initialUserCode ? `?userCode=${encodeURIComponent(initialUserCode)}` : ""
     }`;

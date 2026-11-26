@@ -13,7 +13,7 @@ async function claims() {
   const service = createAgentClaims({
     identity: {
       requireSession: async (agentId) => ({ user: { ...user(agentId!), kind: "agent", claimed: false } }) as never,
-      requireInteractiveSession: async () => ({ user: { ...user("human"), kind: "human" }, writeSource: "browser" }) as never,
+      requireInteractiveSession: async () => ({ user: { ...user("human"), kind: "human" } }) as never,
     },
     repository: {
       findAgents: async (filter) => "userId" in filter

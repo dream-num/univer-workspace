@@ -25,6 +25,7 @@ import type {
 } from "./identity.repository.js";
 import { deriveDisplayName, deriveUserDisplayName, personalSpaceName, validDisplayName } from "./display-name.js";
 import { emailLoginMessage } from "./email-login-mail.js";
+import { personInBrowser } from "./principal-category.js";
 import { createSourceRateLimiter } from "./source-rate-limiter.js";
 import type {
   AgentCreation,
@@ -195,9 +196,8 @@ export interface IdentityModule {
   /** Whether the cookie holds a valid session, without the cleanup and agent activity that reading one causes. */
   hasSession(cookieHeader: string | undefined): Promise<boolean>;
   /**
-   * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
-   * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
-   * that token's revocation.
+   * Like requireSession, but only for a person signed in to the browser: an action that acts for a person
+   * refuses an agent, a CLI or other `agent` write-source session, and a session issued for a token.
    */
   requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal>;
 }
@@ -348,15 +348,11 @@ export function createIdentityModule(options: {
   }
 
   async function requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal> {
-    const stored = await storedSession(cookieHeader);
-    if (stored?.tokenIssued) {
-      throw new ApplicationError(
-        "FORBIDDEN",
-        403,
-        "This action requires an interactive sign-in, not a session issued for an access token."
-      );
+    const signedIn = principal(await storedSession(cookieHeader));
+    if (!personInBrowser(signedIn)) {
+      throw new ApplicationError("INTERACTIVE_SESSION_REQUIRED", 403, "This action needs a person signed in to Workspace in a browser.");
     }
-    return principal(stored);
+    return signedIn;
   }
 
   function principal(stored: StoredSession | null): Principal {

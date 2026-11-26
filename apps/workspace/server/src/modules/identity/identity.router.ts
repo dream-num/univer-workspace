@@ -18,7 +18,6 @@ export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
   readonly agentClaims: AgentClaims;
   readonly accessTokens: AccessTokenService;
-  readonly checkGuestAuthorization: (query: string, sourceIp: string | undefined) => Promise<string | null>;
   readonly mcpOAuth: McpOAuthConfig | null;
   readonly secureCookies: boolean;
   readonly discordBotApiKey?: string;
@@ -154,23 +153,12 @@ export function createIdentityRouter(options: {
         "Sign out before continuing as a guest agent."
       );
     }
-    const label = agentLabel(request.body?.label);
-    const authorization: unknown = request.body?.oauthAuthorization;
-    if (authorization !== undefined && typeof authorization !== "string") {
-      throw new ApplicationError("INVALID_INPUT", 400, "oauthAuthorization must be a string.", "oauthAuthorization");
-    }
-    // Checking a metadata-document client fetches it, so first refuse a source that could not create a guest.
     if (!session.guestAuthEnabled) {
       throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
     }
-    await identity.assertAgentCreationAllowed(request.ip);
-    const { user } = await identity.createAgent({
-      label,
-      // The name comes from the client the server resolved, never from the request.
-      clientName: authorization === undefined ? null : await options.checkGuestAuthorization(authorization, request.ip),
-      originIp: request.ip,
-    });
-    const issued = await identity.issueSession(user, "browser");
+    const { user } = await identity.createAgent({ label: agentLabel(request.body?.label), originIp: request.ip });
+    // Like a CLI login: it renews while in use, and never acts for a person.
+    const issued = await identity.issueSession(user, "agent");
     setSessionCookie(response, identity, issued.cookieValue, options);
     recordLoopEvent("workspace.guest_agent", { entry: "auth_guest" }, { user_id: user.id });
     response.status(201).json({ agent: { id: user.id, username: user.username } });

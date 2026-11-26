@@ -6,25 +6,30 @@ import { useI18n } from "../../shared/i18n";
 import { Alert, Button } from "../../shared/ui";
 import { isOAuthAuthorizeReturnTo, sessionQueryOptions } from "./auth.queries";
 
-/** Renders nothing unless login returns to OAuth authorization and the deployment creates guest agents. */
+/**
+ * Renders nothing unless login returns to OAuth authorization and a guest is possible: no session on a deployment that
+ * creates guest agents, or an agent's leftover cookie, which only exists where guests were on and authorize treats as signed out.
+ */
 export function GuestAgentCard({ returnTo }: { readonly returnTo?: string }) {
   const { t } = useI18n();
   const session = useQuery(sessionQueryOptions);
   const guest = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/api/auth/guest", {
+      const { data, error } = await api.POST("/api/auth/authorize/guest", {
         body: { oauthAuthorization: new URL(returnTo ?? "", window.location.origin).search.slice(1) },
       });
       if (error) throw apiError(error);
+      return data.redirectUrl;
     },
   });
   const error = guest.error as ApiError | null;
+  const view = session.data;
 
   if (
     !returnTo ||
     !isOAuthAuthorizeReturnTo(returnTo) ||
-    session.data?.authenticated !== false ||
-    !session.data.guestAuthEnabled
+    !view ||
+    (view.authenticated ? view.user.kind !== "agent" : !view.guestAuthEnabled)
   ) {
     return null;
   }
@@ -62,7 +67,7 @@ export function GuestAgentCard({ returnTo }: { readonly returnTo?: string }) {
         disabled={guest.isPending || guest.isSuccess}
         onClick={() =>
           guest.mutate(undefined, {
-            onSuccess: () => window.location.assign(returnTo),
+            onSuccess: (redirectUrl) => window.location.assign(redirectUrl),
           })
         }
       >

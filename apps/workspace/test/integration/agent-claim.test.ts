@@ -58,11 +58,11 @@ describe("claiming an agent", () => {
     const agent = await guestAgent(origin);
     const code = await claimCode(origin, agent.cookie);
 
-    await expectError(send(origin, "POST", "/api/agents/claim", { code }, agent.cookie), 403, "FORBIDDEN");
-    await expectError(send(origin, "POST", "/api/agents/claim", { code }, (await guestAgent(origin)).cookie), 403, "FORBIDDEN");
+    await expectError(send(origin, "POST", "/api/agents/claim", { code }, agent.cookie), 403, "INTERACTIVE_SESSION_REQUIRED");
+    await expectError(send(origin, "POST", "/api/agents/claim", { code }, (await guestAgent(origin)).cookie), 403, "INTERACTIVE_SESSION_REQUIRED");
     await register(origin, "carol");
     const cli = await send(origin, "POST", "/api/auth/cli/password/login", { username: "carol", password: PASSWORD });
-    await expectError(send(origin, "POST", "/api/agents/claim", { code }, cookieOf(cli)), 403, "FORBIDDEN");
+    await expectError(send(origin, "POST", "/api/agents/claim", { code }, cookieOf(cli)), 403, "INTERACTIVE_SESSION_REQUIRED");
     await expectError(send(origin, "POST", "/api/agents/claim-codes", undefined, cookieOf(cli)), 403, "FORBIDDEN");
 
     const dave = await register(origin, "dave");

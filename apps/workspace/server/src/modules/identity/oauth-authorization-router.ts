@@ -8,7 +8,7 @@ import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, t
 import { deriveDisplayName } from "./display-name.js";
 import type { IdentityRepository, SignInCode, StoredAgent } from "./identity.repository.js";
 import { agentClientLabel, type IdentityModule } from "./identity.service.js";
-import type { User } from "./identity.types.js";
+import type { AuthenticatedSession, SessionView, User } from "./identity.types.js";
 import { hashSessionSecret } from "./session-token.js";
 import { sourceBucket } from "./source-rate-limiter.js";
 import {
@@ -80,11 +80,17 @@ export function createOAuthAuthorizationRouter(options: {
 
   router.get("/authorize", async (request, response) => {
     const session = await options.identity.getSession(request.headers.cookie);
-    if (!session.authenticated && session.guestAuthEnabled && isLoopbackRedirectUri(request.query.redirect_uri) && await authorizeGuest(request, response)) return;
+    if (!session.authenticated && session.guestAuthEnabled && isLoopbackRedirectUri(request.query.redirect_uri)) {
+      const guest = await authorizeGuest(request.query, request.ip);
+      if (guest !== null) {
+        response.redirect(guest);
+        return;
+      }
+    }
     const authorizationRequest = await resolveAuthorizationRequest(request, response);
     if (authorizationRequest === null) return;
 
-    if (!session.authenticated) {
+    if (!signedInPerson(session)) {
       response.redirect(
         `/login?returnTo=${encodeURIComponent(
           authorizePath(authorizationRequest)
@@ -102,6 +108,24 @@ export function createOAuthAuthorizationRouter(options: {
     response.redirect(
       await issueAuthorization(options, authorizationRequest, { kind: "user", userId: session.user.id })
     );
+  });
+
+  // Reads no session and sets none: the code goes to the client, and redeeming it creates the agent.
+  router.post("/authorize/guest", async (request, response) => {
+    response.set("cache-control", "no-store");
+    const anonymous = await options.identity.getSession(undefined);
+    if (!anonymous.authenticated && !anonymous.guestAuthEnabled) {
+      throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
+    }
+    const authorization: unknown = request.body?.oauthAuthorization;
+    if (typeof authorization !== "string") {
+      throw new ApplicationError("INVALID_INPUT", 400, "oauthAuthorization must be a string.", "oauthAuthorization");
+    }
+    const redirectUrl = await authorizeGuest(parseQuery(authorization), request.ip);
+    if (redirectUrl === null) {
+      throw new ApplicationError("INVALID_INPUT", 400, "This application needs a person signed in to Workspace. Sign in to continue.", "oauthAuthorization");
+    }
+    response.json({ redirectUrl });
   });
 
   router.get("/authorize/consent", async (request, response) => {
@@ -134,7 +158,7 @@ export function createOAuthAuthorizationRouter(options: {
     });
     response.type("html").send(
       authorizationRequest.kind === "mcp"
-        ? renderMcpConsentPage(authorizationRequest, session.user.displayName, consentToken, user.kind === "human" ? { unavailable: await agentUnavailable(request.ip), owned: await ownedAgents(user.id) } : null)
+        ? renderMcpConsentPage(authorizationRequest, session.user.displayName, consentToken, { unavailable: await agentUnavailable(request.ip), owned: await ownedAgents(user.id) })
         : renderConsentPage(authorizationRequest, session.user.displayName, consentToken)
     );
   });
@@ -177,7 +201,6 @@ export function createOAuthAuthorizationRouter(options: {
       authorizationRequest = { ...authorizationRequest, scopes: granted };
       const connectAs: unknown = request.body.connect_as;
       if (connectAs === "new_agent") {
-        if (user.kind !== "human") throw new ApplicationError("FORBIDDEN", 403, "An agent cannot own an agent. Connect as yourself.", "connect_as");
         const unavailable = await agentUnavailable(request.ip);
         if (unavailable !== null) throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, `${unavailable} Go back and choose Yourself, or an agent you already own.`, "connect_as");
         subject = { kind: "owned_agent", ownerUserId: user.id, agent: { label: undefined, clientName: authorizationRequest.clientName, originIp: request.ip } };
@@ -294,20 +317,21 @@ export function createOAuthAuthorizationRouter(options: {
   }
 
   /**
-   * With no session, a loopback MCP client gets a code for a new guest agent and no page: a guest grants nobody's
-   * data, and the code goes to a program on the browser's own machine. Returns false for a client this does not cover.
+   * Where the browser goes with a code for a new guest agent of an MCP client, or with the OAuth error the request earns:
+   * a guest grants nobody's data. Returns null for a static client, which needs a signed-in person.
    */
-  async function authorizeGuest(request: Request, response: Response): Promise<boolean> {
-    const source = mcp === null ? null : await resolveClientSource(request.query.client_id, clients, options.accessTokens, mcp);
-    if (mcp === null || source === null || source.kind === "static") return false;
+  async function authorizeGuest(values: Record<string, unknown>, sourceIp: string | undefined): Promise<string | null> {
+    const clientId = requireQueryString(values.client_id);
+    const source = await resolveClientSource(clientId, clients, options.accessTokens, mcp);
+    if (source?.kind === "static") return null;
+    if (mcp === null || source === null) throw unavailableClient(clientId);
     // Checking a metadata-document client fetches it, so first refuse a source that could not create a guest.
-    await options.identity.assertAgentCreationAllowed(request.ip);
-    const client = await resolveAnonymousClient(options.resolveClientMetadata, source, request.ip);
-    const parsed = parseMcpAuthorizationRequest(mcp, client, request.query);
-    response.redirect("errorRedirect" in parsed
+    await options.identity.assertAgentCreationAllowed(sourceIp);
+    const client = await resolveAnonymousClient(options.resolveClientMetadata, source, sourceIp);
+    const parsed = parseMcpAuthorizationRequest(mcp, client, values);
+    return "errorRedirect" in parsed
       ? parsed.errorRedirect
-      : await issueAuthorization(options, parsed, { kind: "guest", agent: { label: undefined, clientName: client.clientName, originIp: request.ip } }));
-    return true;
+      : await issueAuthorization(options, parsed, { kind: "guest", agent: { label: undefined, clientName: client.clientName, originIp: sourceIp } });
   }
 
   async function resolveAuthorizationRequest(request: Request, response: Response): Promise<AuthorizationRequest | null> {
@@ -319,7 +343,7 @@ export function createOAuthAuthorizationRouter(options: {
     let client: OAuthClientRecord | CimdClient;
     if (source.kind === "cimd") {
       const session = await options.identity.getSession(request.headers.cookie);
-      if (!session.authenticated) {
+      if (!signedInPerson(session)) {
         response.redirect(`/login?returnTo=${encodeURIComponent(request.originalUrl)}`);
         return null;
       }
@@ -557,34 +581,6 @@ export function createOAuthAuthorizationRouter(options: {
   return router;
 }
 
-/**
- * Checks the authorization a guest agent is about to continue, as `/authorize` would once the guest is
- * signed in, so a request that would fail creates no agent. Returns the name the guest takes from its client.
- */
-export function createGuestAuthorizationCheck(options: {
-  readonly accessTokens: AccessTokenService;
-  readonly oauthClients: OAuthClientConfig | null;
-  readonly mcpOAuth: McpOAuthConfig | null;
-  readonly resolveClientMetadata: ResolveClientMetadata;
-}): (query: string, sourceIp: string | undefined) => Promise<string | null> {
-  const clients = new Map((options.oauthClients?.clients ?? []).map((client) => [client.clientId, client]));
-  const mcp = options.mcpOAuth;
-  return async (query, sourceIp) => {
-    const values = parseQuery(query);
-    const clientId = requireQueryString(values.client_id);
-    const source = await resolveClientSource(clientId, clients, options.accessTokens, mcp);
-    if (source?.kind === "static") {
-      parseStaticAuthorizationRequest(source.client, values);
-      return null;
-    }
-    if (mcp === null || source === null) throw unavailableClient(clientId);
-    const client = await resolveAnonymousClient(options.resolveClientMetadata, source, sourceIp);
-    const parsed = parseMcpAuthorizationRequest(mcp, client, values);
-    if ("errorRedirect" in parsed) throw new ApplicationError("INVALID_INPUT", 400, parsed.message, "oauthAuthorization");
-    return client.clientName;
-  };
-}
-
 type ResolveClientMetadata = (clientId: CimdClientId, requester: string, kind?: "anonymous") => Promise<CimdClient>;
 
 /** The client of a request with no session, so a metadata fetch is attributed to its source address. */
@@ -682,6 +678,11 @@ function storedAuthorization(stored: SignInCode, code: string): IssuedAuthorizat
   return { ...(JSON.parse(stored.payload) as Omit<IssuedAuthorization, "code" | "expiresAt">), code, expiresAt: stored.expiresAt };
 }
 
+/** An agent's leftover cookie counts as signed out, so it never authorizes a client as that agent. */
+function signedInPerson(session: SessionView): session is AuthenticatedSession {
+  return session.authenticated && session.user.kind === "human";
+}
+
 /** A request from a static `OAUTH_CLIENTS_JSON` client; its rules are unchanged by MCP OAuth. */
 interface StaticAuthorizationRequest {
   readonly kind: "static";
@@ -741,15 +742,15 @@ function renderConsentPage(
 }
 
 /**
- * `choices` is null when the signed-in User is an agent, which connects only as itself. A person chooses among the agents
- * they own, a new agent unless `unavailable` says why this source cannot create one now, and themselves. The page
- * preselects the most recently active owned agent made for a client of this name, else a new agent, else the person.
+ * The person chooses among the agents they own, a new agent unless `unavailable` says why this source cannot create one
+ * now, and themselves. The page preselects the most recently active owned agent made for a client of this name, else a
+ * new agent, else the person.
  */
 function renderMcpConsentPage(
   request: McpAuthorizationRequest,
   displayName: string,
   consentToken: string,
-  choices: { readonly unavailable: string | null; readonly owned: readonly StoredAgent[] } | null,
+  choices: { readonly unavailable: string | null; readonly owned: readonly StoredAgent[] },
 ): string {
   const client = request.client;
   const clientName = deriveDisplayName(client.clientName);
@@ -761,31 +762,29 @@ function renderMcpConsentPage(
     .map((scope) => `<label class="permission"><input type="checkbox" name="scope" value="${escapeHtml(scope)}" checked><span><strong>${escapeHtml(scope)}</strong> ${escapeHtml(SCOPE_DESCRIPTIONS[scope])}</span></label>`)
     .join("");
   const label = agentClientLabel(client.clientName);
-  const match = label === "" ? undefined : choices?.owned.find((agent) => agent.originLabel === label);
-  const top = choices?.owned.slice(0, OWNED_AGENT_CHOICES) ?? [];
+  const match = label === "" ? undefined : choices.owned.find((agent) => agent.originLabel === label);
+  const top = choices.owned.slice(0, OWNED_AGENT_CHOICES);
   // The agent this client used stays on the list even when five others were active more recently.
   const listed = match === undefined || top.includes(match) ? top : [...top.slice(0, -1), match];
-  const offered = choices !== null && choices.unavailable === null;
+  const offered = choices.unavailable === null;
   const selected = match?.user.id ?? (offered ? "new_agent" : "self");
   const ownSpace = "It works in its own space and sees your files only when you share them.";
   const choice = (value: string, title: string, text: string, disabled = false) =>
     `<label class="choice"><input type="radio" name="connect_as" value="${escapeHtml(value)}"${value === selected ? " checked" : ""}${disabled ? " disabled" : ""}><span><strong>${title}</strong> ${text}</span></label>`;
-  const identity = choices === null
-    ? `<input type="hidden" name="connect_as" value="self">`
-    : `<fieldset class="identity"><legend>Connect it as</legend>`
-      + listed.map((agent) => choice(agent.user.id, escapeHtml(agent.user.displayName), `Your agent @${escapeHtml(agent.user.username)}. ${ownSpace}`)).join("")
-      + choice(
-        "new_agent",
-        `A new agent that you own${selected === "new_agent" ? " <small>Recommended</small>" : ""}`,
-        `${ownSpace} It appears under My agents.${offered ? "" : `<em>${escapeHtml(choices.unavailable!)} Choose ${listed.length > 0 ? "one of your agents or " : ""}Yourself.</em>`}`,
-        !offered,
-      )
-      + choice("self", "Yourself", `It acts as ${user}, with everything you can open.`)
-      + `</fieldset>`;
+  const identity = `<fieldset class="identity"><legend>Connect it as</legend>`
+    + listed.map((agent) => choice(agent.user.id, escapeHtml(agent.user.displayName), `Your agent @${escapeHtml(agent.user.username)}. ${ownSpace}`)).join("")
+    + choice(
+      "new_agent",
+      `A new agent that you own${selected === "new_agent" ? " <small>Recommended</small>" : ""}`,
+      `${ownSpace} It appears under My agents.${offered ? "" : `<em>${escapeHtml(choices.unavailable!)} Choose ${listed.length > 0 ? "one of your agents or " : ""}Yourself.</em>`}`,
+      !offered,
+    )
+    + choice("self", "Yourself", `It acts as ${user}, with everything you can open.`)
+    + `</fieldset>`;
   return consentDocument({
     title: `Connect ${name}`,
     heading: "Connect an AI assistant",
-    requestHtml: `<p><strong>${name}</strong> wants to use Univer Workspace${choices === null ? ` as <strong>${user}</strong>` : ""}.</p><p class="scopes">The name is chosen by the application. Server: ${escapeHtml(request.resource)}. Returns to: ${returnsTo}. Client ID: ${escapeHtml(request.clientId)}.</p>`,
+    requestHtml: `<p><strong>${name}</strong> wants to use Univer Workspace.</p><p class="scopes">The name is chosen by the application. Server: ${escapeHtml(request.resource)}. Returns to: ${returnsTo}. Client ID: ${escapeHtml(request.clientId)}.</p>`,
     fieldsHtml: `<input type="hidden" name="consent_token" value="${escapeHtml(consentToken)}">${identity}<fieldset class="permissions"><legend>Allow it to</legend>${scopes}</fieldset>`,
     css: ".permissions,.identity{margin:0 0 24px;padding:0;border:0}.permissions legend,.identity legend{margin-bottom:8px;color:#30333d;font-size:14px;font-weight:650}.permission{display:flex;gap:10px;align-items:flex-start;padding:8px 0;color:#5c606d;font-size:14px;line-height:1.45}.permission input,.choice input{margin-top:3px}.permission strong,.choice strong{display:block;color:#171717}.choice{display:flex;gap:10px;align-items:flex-start;margin-top:8px;padding:12px 14px;border:1px solid #e2e4ea;border-radius:12px;color:#5c606d;font-size:14px;line-height:1.45;cursor:pointer}.choice:has(input:checked){border-color:#5b50d6;background:#f4f3ff}.choice:has(input:disabled){cursor:default;opacity:.7}.choice small{margin-left:6px;padding:1px 8px;border-radius:999px;background:#5b50d6;color:#fff;font-size:11px;font-weight:650;vertical-align:1px}.choice em{display:block;margin-top:6px;color:#a1361f;font-style:normal}",
   });

@@ -81,7 +81,7 @@ AnonymousSession:
       type: boolean
     guestAuthEnabled:
       type: boolean
-      description: Whether POST /api/auth/guest can create agents. False when AGENT_CREATE_LIMIT_PER_HOUR is 0.
+      description: Whether guest agents are on, for POST /api/auth/guest and POST /api/auth/authorize/guest. False when AGENT_CREATE_LIMIT_PER_HOUR is 0.
 
 AuthenticatedSession:
   type: object
@@ -432,23 +432,26 @@ GuestAgentCreate:
       maxLength: 64
       description: |
         Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
-        address keeps only its local part. Blank, omitted or no visible character means `agent`, or the OAuth
-        client's name.
+        address keeps only its local part. Blank, omitted or no visible character means `agent`.
+
+GuestAuthorizationCreate:
+  type: object
+  additionalProperties: false
+  required: [oauthAuthorization]
+  properties:
     oauthAuthorization:
       type: string
-      description: |
-        The query string of the OAuth authorization the guest continues, as
-        sent to `/api/auth/authorize`. The server checks it as authorize does
-        before it creates anything, so a request that authorize would refuse
-        creates no agent and does not count toward the creation limit. When
-        `label` is blank or omitted and the request names a dynamically
-        registered or Client ID Metadata Document client with a name, the
-        agent is named after that client: the server reads the name from the
-        registration or the metadata document, cleans it as
-        `PasswordRegistration.displayName` describes, keeps only the local
-        part of an email address, cuts it to 40 characters between whole
-        graphemes, and appends ` · ` and the username's four-character
-        suffix to the display name.
+      description: The query string of the `/api/auth/authorize` request the guest continues, without the leading `?`.
+
+GuestAuthorization:
+  type: object
+  additionalProperties: false
+  required: [redirectUrl]
+  properties:
+    redirectUrl:
+      type: string
+      format: uri
+      description: The client's `redirect_uri` with a code, or with an RFC 6749 `error`, `error_description`, `state` and `iss`.
 
 AgentIdentity:
   type: object

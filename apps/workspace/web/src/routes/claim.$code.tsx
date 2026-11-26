@@ -18,7 +18,7 @@ const CLAIM_ERRORS: Readonly<Record<string, MessageKey>> = {
   AGENT_CLAIM_INVALID: "claimAgentInvalid",
   AGENT_CLAIM_EXPIRED: "claimAgentExpired",
   AGENT_ALREADY_CLAIMED: "claimAgentAlreadyClaimed",
-  FORBIDDEN: "claimAgentNotHuman",
+  INTERACTIVE_SESSION_REQUIRED: "claimAgentNotHuman",
 };
 
 function claimErrorKey(error: Error | null): MessageKey | undefined {

@@ -46,7 +46,7 @@ describe("browser agent tokens", () => {
 
     const forbidden = await post(origin, "/api/auth/agent-token", `workspace_session=${session.access_token}`, { scopes });
     expect(forbidden.status).toBe(403);
-    expect(await forbidden.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+    expect(await forbidden.json()).toMatchObject({ error: { code: "INTERACTIVE_SESSION_REQUIRED" } });
 
     const wrongResource = await exchange(origin, body.token, "https://other.example.test/mcp");
     expect(wrongResource.status).toBe(400);
