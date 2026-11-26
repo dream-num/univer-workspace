@@ -138,6 +138,40 @@ for (const { name, storage } of backends) {
       expect({ status: again.status, body: await again.json() }).toMatchObject({ status: 400, body: { error: { code: "INVALID_GRANT" } } });
     });
 
+    it("gives a person's default consent a new agent they own, made only when another replica redeems the code, in a claimed guest's state", async () => {
+      await using resources = new AsyncDisposableStack();
+      const { a, b, rows, count } = await replicas(resources);
+      const client = await registerClient(a);
+      const cookie = await registerPerson(a, "olivia");
+
+      const page = await consentPageFrom(a, client, cookie);
+      expect(page, "the consent page preselects a new agent").toMatch(/name="connect_as" value="new_agent" checked/u);
+      const allowed = await decide(b, consentTokenOf(page), cookie, "new_agent");
+      expect(allowed.status).toBe(303);
+      expect(await count("agents"), "an unredeemed code creates no agent").toBe(0);
+      const unused = await decide(a, await consentTokenFrom(a, client, cookie), cookie, "new_agent");
+      expect(unused.status).toBe(303);
+
+      const tokens = await redeem(a, client, allowed);
+      expect(tokens.status).toBe(200);
+      const principal = await principalOf(b, await accessTokenOf(tokens));
+      expect(principal).toMatchObject({ status: 200, body: { scope: "read", user: { kind: "agent", claimed: true, displayName: expect.stringMatching(/^opencode · [a-z0-9]{4}$/u) } } });
+      const owned = (principal.body as { user: { id: string } }).user.id;
+      expect(await count("agents")).toBe(1);
+
+      const created = await send(b, "POST", "/api/auth/guest", {});
+      const guest = { id: ((await created.json()) as { agent: { id: string } }).agent.id, cookie: cookieOf(created) };
+      const { code } = (await (await send(a, "POST", "/api/agents/claim-codes", undefined, guest.cookie)).json()) as { code: string };
+      expect((await send(b, "POST", "/api/agents/claim", { code }, cookie)).status).toBe(200);
+
+      const state = (id: string) => rows(`SELECT a.owner_user_id, a.claimed_at IS NOT NULL AS claimed, a.expires_at, a.banned_at, s.type AS space_type
+        FROM agents a JOIN spaces s ON s.owner_user_id = a.user_id WHERE a.user_id = '${id}'`);
+      expect(await state(owned)).toEqual(await state(guest.id));
+      expect(await state(owned)).toEqual([expect.objectContaining({ space_type: "personal", expires_at: null, banned_at: null })]);
+      const listed = (await (await send(a, "GET", "/api/agents", undefined, cookie)).json()) as { agents: { id: string; stopped: boolean }[] };
+      expect(listed.agents.map((agent) => agent.id).sort()).toEqual([owned, guest.id].sort());
+    });
+
     it("refuses a replay on another replica and revokes the grant the first redemption issued", async () => {
       await using resources = new AsyncDisposableStack();
       const { a, b, count } = await replicas(resources);
@@ -298,16 +332,23 @@ function codeOf(redirected: Response): string | null {
   return new URL(redirected.headers.get("location")!).searchParams.get("code");
 }
 
-async function consentTokenFrom(origin: string, clientId: string, cookie: string): Promise<string> {
-  const page = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId })}`, { headers: { cookie } });
-  return /name="consent_token" value="([^"]+)"/u.exec(await page.text())![1]!;
+async function consentPageFrom(origin: string, clientId: string, cookie: string): Promise<string> {
+  return (await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId })}`, { headers: { cookie } })).text();
 }
 
-function decide(origin: string, consentToken: string, cookie: string): Promise<Response> {
+function consentTokenOf(page: string): string {
+  return /name="consent_token" value="([^"]+)"/u.exec(page)![1]!;
+}
+
+async function consentTokenFrom(origin: string, clientId: string, cookie: string): Promise<string> {
+  return consentTokenOf(await consentPageFrom(origin, clientId, cookie));
+}
+
+function decide(origin: string, consentToken: string, cookie: string, connectAs: "self" | "new_agent" = "self"): Promise<Response> {
   return fetch(`${origin}/api/auth/authorize/consent`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-    body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read" }),
+    body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read", connect_as: connectAs }),
     redirect: "manual",
   });
 }

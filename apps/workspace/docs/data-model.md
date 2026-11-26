@@ -113,6 +113,9 @@ agent 认证成功时 `last_active_at` 写为当前时间；未认领 agent 同�
 
 人认领 agent 时，一次条件更新在 `owner_user_id` 为空且 `banned_at` 为空时写入 `owner_user_id`、
 `claimed_at` 并把 `expires_at` 置空，所以同一个 agent 只能被认领一次。认领码的哈希存在 [`sign_in_codes`](#sign_in_codes) 里，认领不消耗它。
+登录的人在 MCP 同意页上选择“a new agent that you own”（默认选项）时，兑换授权码先经 `createAgent` 创建 agent，
+再用同一条认领更新把它认领给这个人，所以它和被这个人认领的访客 agent 状态相同。两次写入不在一个事务里：第二次失败时留下一个
+没有 grant 的未认领 agent，30 天后过期。
 主人是该 agent Personal Space 的 Owner，权限从这一列推出，不写 `space_members` 或 `node_grants`。
 
 `banned_at` 由运维命令 `db:ban-agent` 或主人停用该 agent 时写入，已有值不被覆盖，两种来源不加区分。
@@ -1284,8 +1287,8 @@ advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回�
 | --- | --- |
 | `kind`、`code_hash` | 主键。`code_hash` 是码的 SHA-256（base64url），与 Session token 的哈希方式相同。表里没有任何码的原文。 |
 | `user_code_hash` | 仅 `cli`：人在浏览器里输入的验证码的哈希，唯一。`code_hash` 是 CLI 持有的 Device Code 的哈希。 |
-| `subject_user_id` | 码代表的 User。`claim` 是 agent；`consent` 是打开同意页的人；`cli` 在批准前为空，批准后是批准的人；`oauth_code` 是签发时登录的人，zero-click guest 的码在兑换创建 agent 后写入。 |
-| `payload_json` | `oauth_code` 存 code challenge、redirect URI、client id、scope、resource 和 subject，guest 的 subject 含 client 名称与创建限速所用的来源 IP；`consent` 存授权请求，不含 client 记录，因为 static client 带 secret；`claim` 与 `cli` 为 `{}`。 |
+| `subject_user_id` | 码代表的 User。`claim` 是 agent；`consent` 是打开同意页的人；`cli` 在批准前为空，批准后是批准的人；`oauth_code` 是签发时登录的人，兑换时才创建 agent 的码（zero-click guest 的码，和同意页上选了新 agent 的码）在兑换创建 agent 后写入。 |
+| `payload_json` | `oauth_code` 存 code challenge、redirect URI、client id、scope、resource 和 subject。要创建 agent 的 subject 含 client 名称与创建限速所用的来源 IP，同意页上选的新 agent 还含认领它的人。`consent` 存授权请求，不含 client 记录，因为 static client 带 secret；MCP 请求另存 client 名称，供新 agent 命名。`claim` 与 `cli` 为 `{}`。 |
 | `state` | `pending`、`consumed` 或 `replayed`，只有 MCP 的 `oauth_code` 离开 `pending`。 |
 | `grant_id` | 仅 `oauth_code`：兑换签发的 `oauth_grants` 行。 |
 | `created_at`、`expires_at` | 毫秒时间戳。 |

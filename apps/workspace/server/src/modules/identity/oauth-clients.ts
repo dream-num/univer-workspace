@@ -42,12 +42,14 @@ export interface IssuedAuthorization {
 }
 
 /**
- * Who a code acts for: a signed-in User, or a guest agent that redeeming the code creates, so a code
- * nobody redeems leaves no agent behind.
+ * Who a code acts for: a signed-in User, or a new agent that redeeming the code creates, so a code
+ * nobody redeems leaves no agent behind. A guest has no owner; an owned agent is claimed by the person
+ * who chose it on the consent page.
  */
 export type AuthorizationSubject =
   | { readonly kind: "user"; readonly userId: string }
-  | { readonly kind: "guest"; readonly agent: AgentCreation };
+  | { readonly kind: "guest"; readonly agent: AgentCreation }
+  | { readonly kind: "owned_agent"; readonly ownerUserId: string; readonly agent: AgentCreation };
 
 export function requireOAuthState(value: unknown): string {
   if (typeof value !== "string" || !STATE_PATTERN.test(value)) {

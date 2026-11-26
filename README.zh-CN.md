@@ -69,7 +69,7 @@ Workspace 提供远程 [MCP](https://modelcontextprotocol.io) 服务。连上它
 | -------- | ------------------------------------------------------------------------------------------------------------------------ |
 | 服务 URL | `https://space.univer.ai/mcp`。自己部署时为 `https://<你的 Workspace>/mcp`（见 [MCP 服务说明](apps/mcp/README.md)）    |
 | 传输方式 | Streamable HTTP                                                                                                          |
-| 登录     | 在浏览器中完成 OAuth。同意页列出 `read`、`write`、`publish` 和 `worktree:merge`，不想授予的可以取消勾选                    |
+| 登录     | 在浏览器中完成 OAuth。同意页列出 `read`、`write`、`publish` 和 `worktree:merge`，不想授予的可以取消勾选。已登录时，同意页默认让它以一个归你所有的新 agent 连接，选 **Yourself** 则以你的身份连接 |
 | toolset  | 默认 `core`。加 `?toolsets=core,files` 启用 Blob、Asset、Markdown、Typst、SVG、HTML View 工具，`admin` 用于仓库与 Label 管理，`all` 启用全部 |
 
 不支持 OAuth 的客户端可以把个人访问令牌放在 `Authorization: Bearer <token>` 中发送，令牌在 Workspace 账号菜单的

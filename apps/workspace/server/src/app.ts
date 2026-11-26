@@ -487,6 +487,7 @@ export function createWorkspaceApplication(
       secureCookies: config.secureCookies,
       oauthClients,
       codes: identityRepository,
+      agents: identityRepository,
       guestAuthorizationCapacity: dependencies.guestAuthorizationCapacity,
       mcpOAuth: mcpOAuth ?? null,
       resolveClientMetadata,

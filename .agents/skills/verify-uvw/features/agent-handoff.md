@@ -43,6 +43,10 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   The code's token acts for a new guest agent named after the client, which can mint its claim link with `claim`.
   Its server instructions and `whoami` say it is a guest agent because the browser had no Workspace session. One
   address gets at most 20 such codes a minute; past that, authorize sends the client `temporarily_unavailable`.
+- AH12 gives an MCP client that a signed-in person approves a new agent that person owns, by default. The consent
+  page preselects `A new agent that you own` over `Yourself`. Redeeming the code creates the agent, named after the
+  client, already claimed: it is listed under `My agents` and has the claimed agent's tools and instructions, with
+  no `claim`. Choosing `Yourself` connects as the person.
 - MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
@@ -58,7 +62,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 Preconditions:
 
 - Baseline run with `$V user`.
-- Each `uvw auth guest`, `$V mcp-oauth login --guest` or `--guest-card` and `$V principal` creates an agent. `up` raises the limit on
+- Each `uvw auth guest`, `$V mcp-oauth login` without `--connect-as self` and `$V principal` creates an agent. `up` raises the limit on
   agent creations per source IP per hour from the server's default of 5 to 100; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5`
   before `up` to run with the default ([agent principals](../references/stories.md)).
 - `$V uvw` holds the run user's session and `uvw auth guest` refuses while a session is stored
@@ -197,6 +201,41 @@ rm "$H" "$L"
 Pass when between 1 and 20 of the 21 requests get a code, the last one goes back to the callback with
 `error=temporarily_unavailable`, the description `Too many sign-ins came from this address. Try again shortly.` and no
 code, and a minute later the same address gets a code again.
+
+### HO12. A signed-in person's default: a new agent they own (AH12)
+
+Mode: mcp. Run: helper.
+
+`$V mcp-oauth login` signs the run browser in as the run user and approves the consent page with what it preselects.
+The second login chooses `Yourself`.
+
+```bash
+$V mcp-oauth login ho12
+jq -e '.preselected == "new_agent" and .connect_as == "new_agent" and .token.status == 200' "$EVIDENCE/ho12.json"
+$V mcp-oauth exchange ho12-exchange oauth
+jq -e '.body.user.kind == "agent" and .body.user.claimed == true' "$EVIDENCE/ho12-exchange.json"
+$V mcp --auth oauth ho12-whoami whoami
+jq -e '(.subject.name | test("^verify-uvw ho12 · [a-z0-9]{4}$")) and .budget != null' "$EVIDENCE/ho12-whoami.out"
+$V mcp-instructions --auth oauth ho12-instructions
+jq -e '.instructions | contains("This connection is an agent identity that a person has claimed.")' "$EVIDENCE/ho12-instructions.out"
+$V mcp --auth oauth ho12-claim claim '{}'
+test $? -eq 3
+grep -q 'Tool claim not found' "$EVIDENCE/ho12-claim.err"
+agent-browser storage local set univer-workspace-view-onboarding-complete true
+agent-browser open "$ORIGIN/home" && agent-browser wait 2000
+agent-browser find role button click --name Account && agent-browser wait 800
+agent-browser find role menuitem click --name "My agents" && agent-browser wait 1500
+agent-browser get text body | grep -F "@$(jq -r '.body.user.username' "$EVIDENCE/ho12-exchange.json")"
+agent-browser screenshot "$EVIDENCE/ho12-my-agents.png"
+$V mcp-oauth login ho12-self --connect-as self
+jq -e '.preselected == "new_agent" and .connect_as == "self" and .token.status == 200' "$EVIDENCE/ho12-self.json"
+$V mcp-oauth exchange ho12-self-exchange oauth
+jq -e --arg user "verify-$VERIFY_UVW_RUN" '.body.user.kind == "human" and .body.user.username == $user' "$EVIDENCE/ho12-self-exchange.json"
+```
+
+Pass when the consent page preselects the new agent and `ho12-consent.png` shows it above `Yourself`; the token acts
+for an agent named after the client that is already claimed, whose instructions are the claimed agent's and which has
+no `claim` tool; `My agents` in `ho12-my-agents.png` lists it; and the `Yourself` login acts for the run user.
 
 ### MH1. Unclaimed agent
 

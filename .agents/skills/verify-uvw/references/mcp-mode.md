@@ -71,7 +71,7 @@ $V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | -
 $V mcp-tools|mcp-skills|mcp-resources|mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
 $V mcp-token [--scopes read,write,...] [--name name]   # a new default PAT; prints only its id
-$V mcp-oauth login <label> [--guest|--guest-card] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
+$V mcp-oauth login <label> [--guest|--guest-card|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
 $V mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]
 $V mcp-oauth revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
@@ -96,7 +96,9 @@ one more assertion on that event. `executor: none` requires zero worker costs. E
 `mcp-oauth` is a scripted OAuth client for MO2 and MO3. `login` registers a client, or uses the CIMD
 client named by `--client-id` with callback path `/callback`. It clears the run browser's cookies, signs
 in as the run user, approves consent with only `--scopes` checked (default all four), and keeps the token
-pair and client id in `home/mcp-oauth-*`. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
+pair and client id in `home/mcp-oauth-*`. The page preselects a new agent that the run user owns, and `--connect-as`
+picks it (`new_agent`, the default) or the run user (`self`); `<label>.json` records `connect_as` and the
+`preselected` value. A journey that needs the run user passes `--connect-as self`. Each `new_agent` login creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
 --guest` needs no `user`. Its loopback callback gets a guest agent's code with no page, and it fails unless
 the browser still has no session. `--guest-card` registers a callback that is not loopback instead, takes the
 guest agent card, saves `<label>-guest-card.png`, and leaves the run browser signed in as the guest. `refresh` rotates the pair, `reuse` replays the old refresh token, `revoke`

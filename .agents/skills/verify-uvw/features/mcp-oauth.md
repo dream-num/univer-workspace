@@ -14,7 +14,10 @@ are bound to the gateway, refresh and revoke as a client expects, and replays an
 ## How to get to it (user POV)
 
 Add `$MCP_URL` to an MCP client such as opencode, Claude Code, VS Code or Cursor with no credentials. The client
-opens the Workspace consent page in the browser; after `Allow` it calls the gateway with its own tokens.
+opens the Workspace consent page in the browser, where a signed-in person connects it as a new agent they own
+(preselected) or as themselves; after `Allow` it calls the gateway with its own tokens. Every journey here proves
+the person, so each chooses `Yourself` explicitly. The default is covered by
+[HO11 in agent handoff](agent-handoff.md#ho11-a-signed-in-persons-default-a-new-agent-they-own-ah12).
 
 ## Driving it with agent-browser and uvw
 
@@ -49,7 +52,7 @@ it with shell tracing or record raw authorize or callback URLs.
 
 Pass when the unauthenticated POST returns the metadata challenge, both discovery documents
 match this run, opencode prints an authorize URL after client discovery or registration, and the consent page
-shows all four scopes. The consent screenshot must show `worktree:merge` unchecked. The
+shows all four scopes. The script chooses `Yourself`. The consent screenshot must show `worktree:merge` unchecked. The
 callback grants exactly `read write publish`, auth prints `Connected to ws`, and the run exits
 0 with both completed tools. Exactly two matching usage events identify this user and the
 OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
@@ -69,8 +72,8 @@ catches the callback on a loopback port and redeems the code. Tokens stay in `ho
 consent page. `mcp --auth oauth` calls the gateway with the current access token.
 
 ```bash
-$V mcp-oauth login mcp-oauth2-login --scopes read,write,publish
-jq -e '([.offered[]] | all) and .submitted["worktree:merge"] == false and .callback_scope == "read write publish"
+$V mcp-oauth login mcp-oauth2-login --connect-as self --scopes read,write,publish
+jq -e '.preselected == "new_agent" and .connect_as == "self" and ([.offered[]] | all) and .submitted["worktree:merge"] == false and .callback_scope == "read write publish"
   and .token.status == 200 and .token.cache_control == "no-store" and .token.body.token_type == "Bearer" and .token.body.expires_in == 3600
   and .token.body.scope == "read write publish" and (.token.body.access_token | startswith("<uvw_at_")) and (.token.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth2-login.json"
 CLIENT=$(jq -r '.client_id' "$EVIDENCE/mcp-oauth2-login.json")
@@ -126,7 +129,7 @@ the grant, so two clients racing one refresh do not sign the user out. Replayed 
 the whole grant.
 
 ```bash
-$V mcp-oauth login mcp-oauth3-login
+$V mcp-oauth login mcp-oauth3-login --connect-as self
 jq -e '.token.body.scope == "read write publish worktree:merge"' "$EVIDENCE/mcp-oauth3-login.json"
 $V mcp-oauth refresh mcp-oauth3-refresh
 $V mcp-oauth reuse mcp-oauth3-reuse-grace
@@ -149,7 +152,7 @@ leaves it out of the token request, so the server uses the resource bound to the
 `--token-resource <url>` sends a different one. Run the wrong-resource `login` last: it spends the code.
 
 ```bash
-$V mcp-oauth login mcp-oauth4-login --token-resource omit
+$V mcp-oauth login mcp-oauth4-login --connect-as self --token-resource omit
 jq -e '.token.status == 200 and .token.body.scope == "read write publish worktree:merge"' "$EVIDENCE/mcp-oauth4-login.json"
 $V mcp --auth oauth mcp-oauth4-whoami whoami
 $V mcp-oauth refresh mcp-oauth4-refresh-omit --token-resource omit
@@ -160,12 +163,12 @@ test $? -eq 1
 jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth4-refresh-other.json"
 $V mcp-oauth refresh mcp-oauth4-refresh-kept
 jq -e '.status == 200' "$EVIDENCE/mcp-oauth4-refresh-kept.json"
-$V mcp-oauth login mcp-oauth4-login-other --token-resource http://127.0.0.1:1/mcp
+$V mcp-oauth login mcp-oauth4-login-other --connect-as self --token-resource http://127.0.0.1:1/mcp
 test $? -eq 1
 jq -e '.token.status == 400 and .token.body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth4-login-other.json"
 ```
 
-Pass when the consent page offered four checked scopes and the token grants exactly
+Pass when the consent page preselected a new agent, the login chose the run user, the page offered four checked scopes, and the token grants exactly
 `read write publish` with `expires_in: 3600`, a `uvw_rt_` refresh token and `no-store`; the access
 token works through the gateway (`auth_kind: oauth`, this client) but not against Workspace directly
 (`direct`: both Bearer and cookie read as signed out); the exchange keeps the narrowed scopes and a
@@ -202,7 +205,7 @@ MCP use, refresh and revocation. No DCR request is made by `login --client-id`.
 
 ```bash
 CLAUDE_CLIENT=https://claude.ai/oauth/claude-code-client-metadata
-$V mcp-oauth login mcp-cimd-login --client-id "$CLAUDE_CLIENT"
+$V mcp-oauth login mcp-cimd-login --connect-as self --client-id "$CLAUDE_CLIENT"
 jq -e --arg issuer "$ORIGIN" --arg client "$CLAUDE_CLIENT" '.client_id == $client and .client_name == "Claude Code (claude.ai)" and .callback_code_present and .callback_state_matches and .callback_iss == $issuer and .token.status == 200' "$EVIDENCE/mcp-cimd-login.json"
 $V mcp --auth oauth mcp-cimd-whoami whoami
 jq -e --arg client "$CLAUDE_CLIENT" '.client_id == $client and .auth_kind == "oauth" and .outcome == "ok"' "$EVIDENCE/mcp-cimd-whoami.event.json"
@@ -316,7 +319,7 @@ ISS_ENCODED=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$ORIGI
 grep -qx "location: $CURSOR_CB?error=access_denied&iss=$ISS_ENCODED&state=<state>" "$EVIDENCE/mcp-cursor-deny-location.txt"
 
 TOKEN=$(cursor_consent)
-cursor_decide "$TOKEN" allow --data-urlencode scope=read --data-urlencode scope=write --data-urlencode scope=publish --data-urlencode scope=worktree:merge \
+cursor_decide "$TOKEN" allow --data-urlencode connect_as=self --data-urlencode scope=read --data-urlencode scope=write --data-urlencode scope=publish --data-urlencode scope=worktree:merge \
   > "$RUN/home/cursor-approve.headers"
 CODE=$(sed -n 's/^location: .*[?&]code=\([^&]*\).*/\1/p' "$RUN/home/cursor-approve.headers")
 grep -i '^location:' "$RUN/home/cursor-approve.headers" | sed "s/$CODE/<code>/; s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-approve-location.txt"

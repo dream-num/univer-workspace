@@ -188,7 +188,9 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
 that session. The user's `kind` is `human` or `agent`, and an agent also carries `claimed`. The gateway
 keeps both for an agent and treats any other user as `human`. The kind selects the listed tools and the
-server instructions. Workspace answers a banned agent's token with `invalid_grant`.
+server instructions. Workspace answers a banned agent's token with `invalid_grant`. A client that a signed-in
+person approves with the consent page's default acts for a new agent that person owns, so its first exchange
+already carries `claimed: true`.
 An unclaimed agent that reaches the gateway with an OAuth access token was created by a browser sign-in that had no
 Workspace session. Its server instructions and `whoami` result say so, say that a user with a Workspace account who meant
 to connect under it should sign in to Workspace in that browser and reconnect the client, and say that the user can

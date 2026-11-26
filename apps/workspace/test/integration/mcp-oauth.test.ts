@@ -239,6 +239,34 @@ describe("MCP OAuth", () => {
     expect(await (await refresh(origin, clientId, second.refresh_token)).json()).toMatchObject({ error: "invalid_grant" });
   });
 
+  it("asks a signed-in person to choose a new agent or themselves, and names the way out when no agent can be created", async () => {
+    const origin = await start({ guests: false });
+    const clientId = await registeredClientId(origin);
+    const alice = await registerUser(origin, "alice");
+    const redirectUri = OPENCODE_REGISTRATION.redirect_uris[0]!;
+    const page = await (await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri })}`, { headers: { cookie: alice } })).text();
+    expect(page).toContain('name="connect_as" value="new_agent" disabled');
+    expect(page).toContain('name="connect_as" value="self" checked');
+    expect(page).toContain("Or connect as yourself.");
+    const consentToken = consentTokenOf(page);
+
+    const unchosen = await submitConsent(origin, alice, consentToken, ["read"], "allow", null);
+    expect({ status: unchosen.status, body: await unchosen.json() }).toMatchObject({ status: 400, body: { error: { code: "INVALID_INPUT", field: "connect_as" } } });
+    const refused = await submitConsent(origin, alice, consentToken, ["read"], "allow", "new_agent");
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({
+      status: 429,
+      body: { error: { code: "AGENT_CREATE_RATE_LIMITED", message: expect.stringContaining("choose Connect as yourself") } },
+    });
+    const allowed = await submitConsent(origin, alice, consentToken, ["read"], "allow", "self");
+    expect(allowed.status).toBe(303);
+    const tokens = await token(origin, {
+      grant_type: "authorization_code", code: new URL(allowed.headers.get("location")!).searchParams.get("code")!, code_verifier: VERIFIER,
+      redirect_uri: redirectUri, resource: RESOURCE, client_id: clientId,
+    });
+    const exchanged = await exchange(origin, ((await tokens.json()) as { access_token: string }).access_token);
+    expect(await exchanged.json()).toMatchObject({ user: { kind: "human", username: "alice" } });
+  });
+
   it("binds codes to client, redirect, PKCE and resource, and revokes the grant when a code is replayed", async () => {
     const origin = await start();
     const clientId = await registeredClientId(origin);
@@ -689,8 +717,8 @@ function consentTokenOf(page: string): string {
   return /name="consent_token" value="([^"]+)"/u.exec(page)![1]!;
 }
 
-function submitConsent(origin: string, cookie: string, consentToken: string, scopes: readonly string[], decision = "allow"): Promise<Response> {
-  const body = new URLSearchParams({ consent_token: consentToken, decision });
+function submitConsent(origin: string, cookie: string, consentToken: string, scopes: readonly string[], decision = "allow", connectAs: string | null = "self"): Promise<Response> {
+  const body = new URLSearchParams({ consent_token: consentToken, decision, ...(connectAs === null ? {} : { connect_as: connectAs }) });
   for (const scope of scopes) body.append("scope", scope);
   return fetch(`${origin}/api/auth/authorize/consent`, {
     method: "POST",

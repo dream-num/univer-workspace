@@ -21,6 +21,7 @@ Everything below works on `main`. The screenshots come from a local Workspace wi
 ## Before you start
 
 - MCP needs no install. Add `https://space.univer.ai/mcp` to your assistant, or `https://<your-workspace>/mcp` for your own deployment. [Connect an AI assistant](../README.md#connect-an-ai-assistant-mcp) has the steps for each client.
+- When you are signed in, the consent page connects the assistant by default as a new agent that you own. It starts claimed, so it works like the claimed agents on this page. Choose **Yourself** to connect it as you. This page calls that connection your AI assistant.
 - The `uvw` commands need `univer-workspace-cli` 0.7.0 or later. See [Install](../apps/cli/README.md#install).
 
 > [!NOTE]

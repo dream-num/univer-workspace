@@ -77,6 +77,14 @@ it redirects such a guest to the client with `error=temporarily_unavailable` and
 A source that got 20 such codes in the last minute, redeemed or not, is redirected the
 same way, and the `error_description` says too many sign-ins came from this address.
 
+A signed-in person who approves an MCP client on the consent page chooses whom it connects
+as. The default is a new agent that the person owns: redeeming the code creates it under the
+same limit, names it after the client, and claims it for that person, so it starts in the state
+of a guest agent the person claimed. The other choice, `self`, connects as the person. A
+signed-in agent connects only as itself. When this browser's address may create no agent, the
+page disables the new agent and says so, and choosing it returns `429 AGENT_CREATE_RATE_LIMITED`
+with a message that names connecting as yourself.
+
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).
 An agent also carries `claimed`. A banned agent's login session returns
 `401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.
