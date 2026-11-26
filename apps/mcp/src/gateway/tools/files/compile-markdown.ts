@@ -16,7 +16,7 @@ export const compileMarkdownTool = executorTool({
   scope: "write",
   title: "Compile Markdown into a Doc",
   description:
-    "Compile Markdown without applying, or apply it to a pull request. Destination options imply apply: true when apply is omitted; explicit apply: false rejects them. To create, set worktree and space. Generate an idempotency_key before creation and reuse it on retry. To update, set worktree, unit, source_map and explicit blocks; replacement blocks must keep their IDs. Optional assets_upload_id is a ready markdown-assets ZIP with relative image paths. Compile-only returns Facade JavaScript. Save the returned sourceMap for updates and exports.",
+    "Compile Markdown without applying, or apply it to a pull request. New Docs default to Modern; set flavor: traditional in frontmatter for physical pages. Destination options imply apply: true when apply is omitted; explicit apply: false rejects them. To create, set worktree and space. Generate an idempotency_key before creation and reuse it on retry. To update Modern Doc blocks, set worktree, unit, source_map and explicit blocks; replacement blocks must keep their IDs. Optional assets_upload_id is a ready markdown-assets ZIP with relative image paths. Compile-only returns Facade JavaScript. Save the returned sourceMap for Modern Doc updates and exports.",
   annotations: writeAnnotations,
   inputSchema: z.object({
     markdown: markdownCompileInput.shape.markdown,

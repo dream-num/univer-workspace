@@ -1,11 +1,51 @@
-import { json, Router } from "express";
+import { json, Router, type RequestHandler } from "express";
+import { ApplicationError } from "../../middleware/errors.js";
 import { personInBrowser, type IdentityModule } from "../identity/index.js";
 import type { WorktreesModule } from "./worktrees.types.js";
 
-export function createWorktreesRouter(options: {
+interface WorktreeRouteDependencies {
   readonly identity: IdentityModule;
   readonly worktrees: WorktreesModule;
-}): Router {
+}
+
+export function createAddWorktreeUnitHandler(
+  options: WorktreeRouteDependencies
+): RequestHandler<{ worktreeId: string }> {
+  const unitJsonLimitMiB = 8;
+  const parseUnitJson = json({ limit: unitJsonLimitMiB * 1024 * 1024 });
+  return async (request, response) => {
+    const { user } = await options.identity.requireSession(request.headers.cookie);
+    await new Promise<void>((resolve, reject) => {
+      parseUnitJson(request, response, (error: unknown) => {
+        if (!error) {
+          resolve();
+          return;
+        }
+        const tooLarge =
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "entity.too.large";
+        reject(
+          new ApplicationError(
+            tooLarge ? "PAYLOAD_TOO_LARGE" : "INVALID_INPUT",
+            tooLarge ? 413 : 400,
+            tooLarge ? `Worktree Unit requests are limited to ${unitJsonLimitMiB} MiB.` : "Invalid Unit JSON body."
+          )
+        );
+      });
+    });
+    const result = await options.worktrees.addUnit(
+      user.id,
+      request.params.worktreeId,
+      request.headers["idempotency-key"],
+      request.body
+    );
+    response.status(result.status).json(result.body);
+  };
+}
+
+export function createWorktreesRouter(options: WorktreeRouteDependencies): Router {
   const router = Router();
   router.use(json({ limit: "1mb" }));
 
@@ -81,21 +121,6 @@ export function createWorktreesRouter(options: {
           request.body
         )
       );
-    }
-  );
-  router.post(
-    "/worktrees/:worktreeId/units",
-    async (request, response) => {
-      const user = (await options.identity.requireSession(
-        request.headers.cookie
-      )).user;
-      const result = await options.worktrees.addUnit(
-        user.id,
-        request.params.worktreeId,
-        request.headers["idempotency-key"],
-        request.body
-      );
-      response.status(result.status).json(result.body);
     }
   );
   router.post("/worktrees/:worktreeId/units/:unitId/removal", async (request, response) => {

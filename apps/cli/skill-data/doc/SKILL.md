@@ -23,7 +23,14 @@ for every content command; never reuse an imported document's internal id as the
 For original-file preservation without an editable Doc Unit, read the [Blob Skill](../blob/SKILL.md).
 Blob Resources have no `unitId` and cannot use this Skill's commands.
 
-## Modern Docs through Markdown
+## Generate Docs from Markdown
+
+Use Markdown for new paginated Traditional Docs as well as pageless Modern Docs. Choose
+`flavor: traditional` in frontmatter when the request needs physical pages, page margins, or a
+landscape section. Put `::page-break` before the heading or paragraph that starts a new page
+in the same section. Put `::section-break{start="next-page" orientation="landscape"}` before the
+heading or paragraph that starts the landscape section. The renderer paginates within each section.
+Edit existing Traditional Docs with the native editor or Facade.
 
 For new Modern Docs, write Markdown and compile it once into editable native content. Read
 the [Markdown authoring](references/markdown.md) reference of the `doc` Skill
@@ -35,7 +42,7 @@ AI SDK; this Skill owns the Workspace target and review workflow.
 - Preserve SDK default typography, line/paragraph spacing, and callout colors. Use plain
   `:::callout{#notice}`. Modern columns use native ColumnGroup with 2–5 columns; do not use
   Traditional section breaks or replace requested columns with layout tables.
-- Assign explicit top-level block IDs and save the **execution** source map. Compile-only maps do
+- For Modern Doc updates, assign explicit top-level block IDs and save the **execution** source map. Compile-only maps do
   not contain native identities and cannot address later edits.
 - Before each partial update, export the selected current native blocks with `export-markdown`,
   including their resources, refreshed source map, and authoritative revision. Edit that fragment,
@@ -119,8 +126,8 @@ also verify DOCX export when it is part of the request.
 Check `doc.getDocumentFlavor()` or the positive `doc.isTraditional()` guard before page-specific
 work. A new empty Doc created by `createDocument` is Modern by default. Modern Docs are pageless:
 traditional section and page-setup APIs reject them, so do not simulate physical pages with large
-spacers. When the output requires Word-compatible pages, start from a Traditional Doc such as a DOCX
-import or the Traditional output of `compile-typst`.
+spacers. Create a new Word-compatible Traditional Doc from Markdown with `flavor: traditional`.
+Use the native editor or Facade to edit an existing Traditional Doc.
 
 In a Traditional Doc, create a hard page boundary before a top-level paragraph with one atomic
 section command:

@@ -24,7 +24,7 @@ export function registerMarkdownTool(
     defineTool({
       name: "univer_compile_markdown",
       description:
-        "Compile session Markdown and local assets into an editable native Modern Doc using SDK default typography. Creates a draft Doc; provide unitId, sourceMapFile and blockIds together to update explicit stable IDs. Returns a materialized sourceMap to save for later edits. No merge is performed.",
+        "Compile session Markdown and local assets into an editable native Doc using SDK default typography. New Docs default to Modern; set flavor: traditional in frontmatter for physical pages. For Modern Doc block updates, provide unitId, sourceMapFile and blockIds together. Returns a materialized sourceMap for later Modern Doc block updates.",
       parameters: {
         source: {
           type: "string",
@@ -150,7 +150,7 @@ export function registerMarkdownTool(
       },
       presentCall: () => ({
         card: "generic",
-        title: "Compile Markdown into Modern Doc",
+        title: "Compile Markdown into a Doc",
         kind: "execute",
       }),
     }),

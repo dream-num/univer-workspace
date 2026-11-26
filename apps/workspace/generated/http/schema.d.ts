@@ -2545,7 +2545,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add an existing Resource or create a Worktree-local Unit. */
+        /**
+         * Add an existing Resource or create a Worktree-local Unit.
+         * @description The authenticated JSON request body can be up to 8 MiB, including any initial Unit snapshot.
+         */
         post: operations["addWorktreeUnit"];
         delete?: never;
         options?: never;
@@ -9506,6 +9509,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
         };
     };
     setWorktreeUnitRemoved: {

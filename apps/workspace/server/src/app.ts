@@ -121,6 +121,7 @@ import {
   type TrashModule,
 } from "./modules/trash/index.js";
 import {
+  createAddWorktreeUnitHandler,
   createDeclaredChecksReader,
   createWorktreesModule,
   createWorktreesRouter,
@@ -463,6 +464,7 @@ export function createWorkspaceApplication(
   // Draft JSON needs escaping headroom before the other routers apply their 1 MiB parser.
   app.use("/api", createSkillDraftsRouter({ identity, drafts: skillDrafts, sources: skillSources }));
   app.use("/api", createHtmlViewDraftsRouter({ identity, drafts: htmlViewDrafts }));
+  app.post("/api/worktrees/:worktreeId/units", createAddWorktreeUnitHandler({ identity, worktrees }));
   app.use(
     "/api",
     createIdentityRouter({

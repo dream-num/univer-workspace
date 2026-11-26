@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceCompileMarkdownCommand } from "../src/features/markdown/command.js";
+import { createWorkspaceExportMarkdownCommand } from "../src/features/markdown/export-command.js";
 import type { WorkspaceCompileMarkdownResult } from "@univerjs/univer-workspace-client-core";
 
 const map = [
@@ -25,8 +26,11 @@ const compiled: WorkspaceCompileMarkdownResult = {
   sourceMap: [],
 };
 
-async function run(args: string[], execute = vi.fn(async () => compiled)): Promise<string> {
-  const output: string[] = [];
+async function run(
+  args: string[],
+  execute: () => Promise<WorkspaceCompileMarkdownResult> = vi.fn(async () => compiled),
+  output: string[] = [],
+): Promise<string> {
   const config = {
     writeOut: (value: string) => output.push(value),
     writeErr: (value: string) => output.push(value),
@@ -43,6 +47,47 @@ async function run(args: string[], execute = vi.fn(async () => compiled)): Promi
 }
 
 describe("compile-markdown command", () => {
+  it.each(["update", "export"])("reports malformed source map JSON before %s", async (mode) => {
+    const directory = await mkdtemp(join(tmpdir(), "uvw-markdown-"));
+    try {
+      const path = join(directory, "map.json");
+      await writeFile(path, "{");
+      const execute = vi.fn();
+      const command =
+        mode === "update"
+          ? createWorkspaceCompileMarkdownCommand({ execute })
+          : createWorkspaceExportMarkdownCommand({ execute });
+      const errors: string[] = [];
+      command.exitOverride().configureOutput({ writeErr: (text) => errors.push(text) });
+      const args =
+        mode === "update" ? ["report.md", "--apply"] : ["--out", join(directory, "edit.md")];
+      await expect(
+        command.parseAsync(
+          [
+            ...args,
+            "--worktree",
+            "wt",
+            "--unit",
+            "doc",
+            "--blocks",
+            "intro",
+            "--source-map",
+            path,
+            "--json",
+          ],
+          { from: "user" },
+        ),
+      ).rejects.toMatchObject({ exitCode: 1 });
+      expect(JSON.parse(errors.join(""))).toMatchObject({
+        code: "workspace-argument-invalid",
+        message: expect.stringContaining("--source-map"),
+      });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("writes the generated program in compile-only mode", async () => {
     const directory = await mkdtemp(join(tmpdir(), "uvw-markdown-"));
     try {
@@ -53,6 +98,49 @@ describe("compile-markdown command", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("reports a Traditional Doc created in a Worktree", async () => {
+    const execute = vi.fn(async () => ({
+      ...compiled,
+      committed: true,
+      flavor: "traditional" as const,
+    }));
+    const output = await run(
+      ["report.md", "--apply", "--worktree", "wt", "--space", "reports"],
+      execute,
+    );
+    expect(output).toContain("Applied Markdown to Traditional Doc doc");
+    expect(execute).toHaveBeenCalledWith({
+      file: "report.md",
+      apply: { worktreeId: "wt", spaceId: "reports" },
+    });
+  });
+
+  it("prints structured diagnostics when the Markdown compiler throws", async () => {
+    const diagnostics = [
+      {
+        code: "MARKDOWN_SECTION_START",
+        message: "Unsupported section start.",
+        severity: "error",
+        source: { line: 4, column: 1 },
+      },
+    ];
+    const execute = vi.fn(async () => {
+      throw Object.assign(new Error("MARKDOWN_SECTION_START: Unsupported section start."), {
+        name: "DocMarkdownCompileError",
+        diagnostics,
+      });
+    });
+    const output: string[] = [];
+
+    await expect(
+      run(["report.md", "--out", "unused.js", "--json"], execute, output),
+    ).rejects.toMatchObject({ exitCode: 1 });
+    expect(JSON.parse(output.join(""))).toMatchObject({
+      code: "workspace-markdown-invalid",
+      detail: { diagnostics },
+    });
   });
 
   it("updates selected IDs using a materialized source map without a revision argument", async () => {

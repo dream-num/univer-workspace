@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, relative } from "node:path";
 import type { WorkspaceCompileTypstFeature } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { executeCommand, present, type JsonOption } from "../../command.js";
@@ -32,7 +32,7 @@ export function createWorkspaceCompileTypstCommand(
     .option("--preview-dir <directory>")
     .option("--json")
     .action(async (bundle: string, options: CompileTypstOptions) => {
-      const result = await executeCommand(command, async () => {
+      const compile = async () => {
         validateOptions(options);
         return await feature.execute({
           bundlePath: bundle,
@@ -50,14 +50,19 @@ export function createWorkspaceCompileTypstCommand(
                 },
               }),
         });
-      });
+      };
+      const diagnosticsPath = options.diagnosticsOut;
+      const writeDiagnostics =
+        diagnosticsPath === undefined
+          ? undefined
+          : (diagnostics: readonly unknown[]) =>
+              writeOutput(
+                diagnosticsPath,
+                `${JSON.stringify({ schemaVersion: 1, diagnostics }, null, 2)}\n`,
+              );
+      const result = await executeCommand(command, compile, options, writeDiagnostics);
       if (options.out !== undefined) await writeOutput(options.out, result.javascript);
-      if (options.diagnosticsOut !== undefined) {
-        await writeOutput(
-          options.diagnosticsOut,
-          `${JSON.stringify({ schemaVersion: 1, diagnostics: result.diagnostics }, null, 2)}\n`,
-        );
-      }
+      await writeDiagnostics?.(result.diagnostics);
       const value = {
         committed: result.committed,
         compiledTargetUnitId: result.targetUnitId,
@@ -79,6 +84,16 @@ export function createWorkspaceCompileTypstCommand(
 }
 
 function validateOptions(options: CompileTypstOptions): void {
+  if (
+    options.out !== undefined &&
+    options.diagnosticsOut !== undefined &&
+    relative(options.out, options.diagnosticsOut) === ""
+  ) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      "--out and --diagnostics-out require different files.",
+    );
+  }
   if (options.apply === true) {
     if (options.worktree === undefined || options.space === undefined) {
       throw workspaceError(

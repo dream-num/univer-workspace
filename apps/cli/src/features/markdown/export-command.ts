@@ -1,12 +1,11 @@
-import { readFile } from "node:fs/promises";
 import {
-  parseDocMarkdownSourceMap,
   writeWorkspaceMarkdownExport,
   type WorkspaceExportMarkdownFeature,
 } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { executeCommand, present, type JsonOption } from "../../command.js";
 import { workspaceError } from "../../errors.js";
+import { readMarkdownSourceMap } from "./source-map.js";
 
 interface ExportMarkdownOptions extends JsonOption {
   readonly unit: string;
@@ -38,7 +37,7 @@ export function createWorkspaceExportMarkdownCommand(
     )
     .option("--json")
     .action(async (options: ExportMarkdownOptions) => {
-      const result = await executeCommand(command, async () => {
+      const exportMarkdown = async () => {
         const blockIds = options.blocks
           .split(",")
           .map((id) => id.trim())
@@ -54,9 +53,7 @@ export function createWorkspaceExportMarkdownCommand(
             "Export requires a Unit, Worktree and distinct non-empty block IDs.",
           );
         }
-        const sourceMap = parseDocMarkdownSourceMap(
-          JSON.parse(await readFile(options.sourceMap, "utf8")),
-        );
+        const sourceMap = await readMarkdownSourceMap(options.sourceMap);
         const exported = await feature.execute({
           unitId: options.unit,
           worktreeId: options.worktree,
@@ -65,7 +62,8 @@ export function createWorkspaceExportMarkdownCommand(
         });
         await writeWorkspaceMarkdownExport(exported, options.out, options.sourceMapOut);
         return exported;
-      });
+      };
+      const result = await executeCommand(command, exportMarkdown, options);
       present(
         command,
         options,

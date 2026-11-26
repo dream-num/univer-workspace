@@ -199,6 +199,7 @@
     tags: [Worktrees]
     operationId: addWorktreeUnit
     summary: Add an existing Resource or create a Worktree-local Unit.
+    description: The authenticated JSON request body can be up to 8 MiB, including any initial Unit snapshot.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:
@@ -235,6 +236,8 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+      "413":
+        $ref: ../schemas/common.yaml#/PayloadTooLarge
 
 /api/worktrees/{worktreeId}/units/{unitId}/open:
   parameters:

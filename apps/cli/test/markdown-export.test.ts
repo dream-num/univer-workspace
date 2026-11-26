@@ -34,8 +34,11 @@ const result: WorkspaceMarkdownExportResult = {
   ],
 };
 
-async function run(args: string[], execute = vi.fn(async () => result)): Promise<string> {
-  const output: string[] = [];
+async function run(
+  args: string[],
+  execute = vi.fn(async () => result),
+  output: string[] = [],
+): Promise<string> {
   const config = {
     writeOut: (value: string) => output.push(value),
     writeErr: (value: string) => output.push(value),
@@ -125,4 +128,42 @@ describe("export-markdown command", () => {
       expect(execute).not.toHaveBeenCalled();
     },
   );
+
+  it("preserves SDK diagnostics when Markdown and its source map cannot be written", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "uvw-native-command-"));
+    try {
+      const input = join(directory, "input.json");
+      const out = join(directory, "edit.md");
+      await writeFile(input, JSON.stringify({ sourceMap: map }));
+      const output: string[] = [];
+      await expect(
+        run(
+          [
+            "--worktree",
+            "wt",
+            "--unit",
+            "doc",
+            "--source-map",
+            input,
+            "--blocks",
+            "intro",
+            "--out",
+            out,
+            "--source-map-out",
+            out,
+            "--json",
+          ],
+          vi.fn(async () => result),
+          output,
+        ),
+      ).rejects.toMatchObject({ exitCode: 1 });
+      expect(JSON.parse(output.join(""))).toMatchObject({
+        code: "workspace-markdown-invalid",
+        detail: { diagnostics: [{ code: "DOC_MARKDOWN_EXPORT_PATH_INVALID" }] },
+      });
+      await expect(readFile(out)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

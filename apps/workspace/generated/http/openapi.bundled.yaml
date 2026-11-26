@@ -4688,6 +4688,7 @@ paths:
         - Worktrees
       operationId: addWorktreeUnit
       summary: Add an existing Resource or create a Worktree-local Unit.
+      description: The authenticated JSON request body can be up to 8 MiB, including any initial Unit snapshot.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:
@@ -4724,6 +4725,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
   /api/worktrees/{worktreeId}/units/{unitId}/removal:
     parameters:
       - name: worktreeId

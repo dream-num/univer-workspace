@@ -1,13 +1,13 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import {
-  parseDocMarkdownSourceMap,
-  type WorkspaceCompileMarkdownFeature,
-  type WorkspaceCompileMarkdownInput,
+import type {
+  WorkspaceCompileMarkdownFeature,
+  WorkspaceCompileMarkdownInput,
 } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { executeCommand, present, type JsonOption } from "../../command.js";
 import { workspaceError } from "../../errors.js";
+import { readMarkdownSourceMap } from "./source-map.js";
 
 interface MarkdownOptions extends JsonOption {
   readonly apply?: boolean;
@@ -27,10 +27,14 @@ export function createWorkspaceCompileMarkdownCommand(
   feature: Pick<WorkspaceCompileMarkdownFeature, "execute">,
 ): Command {
   const command = new Command("compile-markdown")
-    .description("Compile Markdown into a native Modern Doc, or update explicit blocks in a draft")
+    .description("Create a native Doc from Markdown or update selected Modern Doc blocks")
+    .addHelpText(
+      "after",
+      "\nNew Docs default to Modern. Set flavor: traditional in frontmatter for physical pages.\n",
+    )
     .argument("<file>", "Markdown source file")
     .option("--title <title>")
-    .option("--apply", "create a staged Modern Doc or update the selected blocks")
+    .option("--apply", "create a staged Doc or update selected Modern Doc blocks")
     .option("--worktree <id>")
     .option("--space <id>")
     .option("--parent <node>")
@@ -42,7 +46,7 @@ export function createWorkspaceCompileMarkdownCommand(
     .option("--source-map-out <json>", "write the source map for subsequent block updates")
     .option("--json")
     .action(async (file: string, options: MarkdownOptions) => {
-      const result = await executeCommand(command, async () => {
+      const compile = async () => {
         const input: WorkspaceCompileMarkdownInput = {
           file,
           ...(options.title === undefined ? {} : { title: options.title }),
@@ -78,9 +82,7 @@ export function createWorkspaceCompileMarkdownCommand(
             )
           )
             invalid("Creation options cannot be used with --unit.");
-          const sourceMap = parseDocMarkdownSourceMap(
-            JSON.parse(await readFile(options.sourceMap!, "utf8")),
-          );
+          const sourceMap = await readMarkdownSourceMap(options.sourceMap);
           return await feature.execute({
             ...input,
             update: {
@@ -105,8 +107,11 @@ export function createWorkspaceCompileMarkdownCommand(
               : { idempotencyKey: options.idempotencyKey }),
           },
         });
-      });
+      };
+      const result = await executeCommand(command, compile, options);
       if (options.out !== undefined) await writeOutput(options.out, result.javascript);
+      const flavor =
+        "flavor" in result && result.flavor === "traditional" ? "traditional" : undefined;
       const sourceMap = result.materializedSourceMap ?? result.sourceMap;
       if (options.sourceMapOut !== undefined)
         await writeOutput(options.sourceMapOut, `${JSON.stringify(sourceMap, null, 2)}\n`);
@@ -116,6 +121,7 @@ export function createWorkspaceCompileMarkdownCommand(
         {
           committed: result.committed,
           targetUnitId: result.unit?.unitId ?? result.targetUnitId,
+          ...(flavor === undefined ? {} : { flavor }),
           diagnostics: result.diagnostics,
           sourceMap,
           ...(result.unit === undefined ? {} : { unit: result.unit }),
@@ -123,8 +129,8 @@ export function createWorkspaceCompileMarkdownCommand(
           ...(options.out === undefined ? {} : { out: options.out }),
         },
         result.committed
-          ? `Applied Markdown to Modern Doc ${result.unit?.unitId ?? result.targetUnitId}${
-              options.sourceMapOut === undefined
+          ? `Applied Markdown to ${flavor === "traditional" ? "Traditional" : "Modern"} Doc ${result.unit?.unitId ?? result.targetUnitId}${
+              options.sourceMapOut === undefined && flavor !== "traditional"
                 ? "; pass --source-map-out to keep the block map for later updates and exports"
                 : ""
             }`
