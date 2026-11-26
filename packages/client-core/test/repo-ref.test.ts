@@ -232,7 +232,7 @@ describe("file links", () => {
   it.each([
     ["a person's token session", person, undefined, `ask the user to make the repository public in its settings in the browser: ${origin}/spaces/s1/settings`],
     ["a person's interactive session", person, turnOn, "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
-    ["a claimed agent", { ...agent, claimed: true }, "call share with node n1 and link viewer", "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
+    ["a claimed agent in a repository it does not own", { ...agent, claimed: true }, "call share with node n1 and link viewer", "make the repository public with repo_edit (uvw repo edit --visibility public in the CLI)."],
   ] as const)(
     "tells %s to add a member or have the repository made public in the way it can",
     async (_caller, caller, sessionTurnOn, publish) => {
@@ -245,6 +245,18 @@ describe("file links", () => {
       expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
     },
   );
+
+  it("tells a claimed agent to give the person who claimed it the link to a file in its own Team Space before any other way", async () => {
+    const owned = clients((call) =>
+      call.path.endsWith("/link-sharing") ? notFound()
+        : call.path === "/api/spaces/s1" ? Response.json(view({ owner: { id: "a1", username: "budget-x7k2" }, fullName: "budget-x7k2/docs" }))
+          : Response.json(node(sheet)));
+    await expect(shareNode(owned.spaces, origin, { node: "n1", caller: { ...agent, claimed: true }, link: "viewer", turnOn: "call share with node n1 and link viewer" })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `Link Sharing works only for files in a Personal Space, and "Budget" is in the repository budget-x7k2/docs. The person who claimed you can already open every repository and file you own, private ones included, so to show them this file, give them its link: ${origin}/nodes/n1. They need no membership. To let anyone else open it, add the people the user names as members with repo_member_write (uvw repo member add in the CLI). Make the repository public with repo_edit (uvw repo edit --visibility public in the CLI) only when the user asks for that.`,
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
 
   it("tells a person's token session the way to open a Team Space file when the server first refuses its write", async () => {
     const { spaces } = tokenSessionWrite("team");

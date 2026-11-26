@@ -153,6 +153,14 @@ function teamSpaceRefusal(
   turnOn: string | undefined,
 ): WorkspaceApplicationError {
   const where = `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${space.fullName ?? space.name}.`;
+  // The person who claimed an agent owns the agent's Spaces, but not the Spaces the agent is only a member of.
+  if (caller.kind === "agent" && caller.claimed && space.owner?.id === caller.id) {
+    return workspaceError(
+      "workspace-argument-invalid",
+      `${where} The person who claimed you can already open every repository and file you own, private ones included, so to show them this file, give them its link: ${url}. They need no membership. To let anyone else open it, add the people the user names as members with repo_member_write (uvw repo member add in the CLI). Make the repository public with repo_edit (uvw repo edit --visibility public in the CLI) only when the user asks for that.`,
+      { url },
+    );
+  }
   if (caller.kind !== "agent" || caller.claimed) {
     // Only a person's token session omits turnOn, and the server does not let it make a Space public either.
     const publish = turnOn === undefined
