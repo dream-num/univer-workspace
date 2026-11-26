@@ -183,6 +183,7 @@ export function createGateway(
           toolPrincipal(state.context.user),
           state.context.scopes,
           state.context.authKind,
+          state.context.owner,
         ),
       },
     );
@@ -478,6 +479,7 @@ export function createGateway(
         executor: executorLink(authentication, user, requestId, requestStartedAt + 30_000, usage),
         scopes: authentication.scopes ?? options.scopes ?? allScopes,
         authKind: authentication.authKind,
+        ...(authentication.identity?.owner ? { owner: authentication.identity.owner } : {}),
       },
       auth: authentication,
       selected,

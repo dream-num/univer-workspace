@@ -27,7 +27,10 @@ const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string;
   uvw_pat_readonly: { scope: "read", kind: "pat", id: "pat-2", clientId: null },
   uvw_at_oauth: { scope: "read write", kind: "oauth", id: "grant-1", clientId: "chatgpt" },
   uvw_at_guest: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-2", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
+  uvw_at_guest_read: { scope: "read", kind: "oauth", id: "grant-3", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
+  uvw_at_owned: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-4", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
 };
+const owner = { id: "user-9", username: "olivia", displayName: "Olivia", avatarUrl: null };
 
 function deferred() {
   let resolve!: () => void;
@@ -107,6 +110,7 @@ describe("gateway authentication", () => {
           } else if (!token) {
             response.writeHead(400).end(JSON.stringify({ error: "invalid_grant" }));
           } else {
+            const user = (behavior.user?.() ?? { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null, kind: "human", ...token.user }) as { kind: string; claimed?: boolean };
             response.end(
               JSON.stringify({
                 access_token: `downstream-session-${++issued}`,
@@ -115,7 +119,8 @@ describe("gateway authentication", () => {
                 expires_in: 600,
                 scope: token.scope,
                 subject: { kind: token.kind, id: token.id, client_id: token.clientId },
-                user: behavior.user?.() ?? { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null, kind: "human", ...token.user },
+                user,
+                ...(user.kind === "agent" && user.claimed === true ? { owner } : {}),
                 ...(token.executorAccess === undefined ? {} : { executor_access: token.executorAccess }),
               }),
             );
@@ -361,7 +366,7 @@ describe("gateway authentication", () => {
       const client = await gateway.connect(bearer);
       const whoami = await client.callTool({ name: "whoami", arguments: {} });
       expect(whoami.isError).not.toBe(true);
-      return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice };
+      return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice, whoami: whoami.structuredContent };
     };
     const guest = await told("uvw_at_guest");
     for (const fact of [
@@ -373,6 +378,9 @@ describe("gateway authentication", () => {
       expect(guest.notice).toContain(fact);
     }
     expect(guest.instructions).toContain("Tell the user this in your first reply.");
+    const readOnly = await told("uvw_at_guest_read");
+    expect(readOnly.instructions, "a connection that cannot call claim does not name it").toContain("Otherwise the user can keep this agent by claiming it.");
+    expect(readOnly.notice).toContain("Otherwise the user can keep this agent by claiming it.");
 
     const self = await told("uvw_pat_agent");
     expect(self.instructions).toContain("works in its own Personal Space");
@@ -382,6 +390,12 @@ describe("gateway authentication", () => {
     const claimed = await told("uvw_at_guest");
     expect(claimed.instructions).toContain("This connection is an agent identity that a person has claimed.");
     expect([claimed.instructions.includes("guest agent"), claimed.notice]).toEqual([false, undefined]);
+    expect(claimed.instructions, "until the cached exchange expires, the session says only that the agent is claimed").toContain("This agent belongs to the person who claimed it");
+    const owned = await told("uvw_at_owned");
+    expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(
+      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.",
+    );
+    expect(owned.whoami).toMatchObject({ owner: { username: "olivia", name: "Olivia" } });
 
     const person = await (await start(exchangeEnv)).connect("uvw_at_oauth");
     expect(person.getInstructions()).not.toContain("guest agent");

@@ -50,7 +50,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     const rows = this._database.connection
       .prepare(
         `SELECT users.id, users.username, users.display_name, users.avatar_url,
-           spaces.id AS space_id, agents.owner_user_id, agents.last_active_at,
+           spaces.id AS space_id, agents.owner_user_id, agents.origin_label, agents.last_active_at,
            agents.banned_at IS NOT NULL AS banned,
            (SELECT COUNT(*) FROM nodes JOIN resources ON resources.node_id = nodes.id
             WHERE nodes.space_id = spaces.id AND nodes.trash_batch_id IS NULL) AS files
@@ -942,6 +942,7 @@ function toUser(row: UserRow): User {
 interface AgentRow extends UserRow {
   readonly space_id: string;
   readonly owner_user_id: string | null;
+  readonly origin_label: string;
   readonly last_active_at: number;
   readonly banned: 0 | 1;
   readonly files: number;
@@ -952,6 +953,7 @@ function toStoredAgent(row: AgentRow): StoredAgent {
     user: toUser(row),
     spaceId: row.space_id,
     ownerUserId: row.owner_user_id,
+    originLabel: row.origin_label,
     lastActiveAt: row.last_active_at,
     banned: row.banned === 1,
     files: row.files,

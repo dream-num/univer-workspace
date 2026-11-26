@@ -3,7 +3,7 @@ import type { WorkspaceSubject } from "@univerjs/univer-workspace-client-core/pr
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { GatewayConfig } from "../shared/config.js";
-import type { ToolScope } from "./tools/definition.js";
+import type { AgentOwner, ToolScope } from "./tools/definition.js";
 
 export const allScopes: ReadonlySet<ToolScope> = new Set([
   "read",
@@ -28,6 +28,7 @@ const exchangeResponse = z.object({
     kind: z.enum(["human", "agent"]).optional(),
     claimed: z.boolean().optional(),
   }),
+  owner: z.object({ username: z.string(), displayName: z.string() }).optional(),
   executor_access: z.boolean().optional(),
 });
 const maxCacheMs = 30_000;
@@ -41,7 +42,7 @@ export interface Authentication {
   readonly obtainedAt: number;
   readonly expiresAt: number;
   /** Null means the gateway reads the identity from the Workspace session itself, on every request. */
-  readonly identity: { readonly subject: WorkspaceSubject; readonly executorAccess: boolean } | null;
+  readonly identity: { readonly subject: WorkspaceSubject; readonly executorAccess: boolean; readonly owner?: AgentOwner } | null;
   readonly scopes: ReadonlySet<ToolScope> | null;
   readonly authKind: "pat" | "oauth" | "dev";
   readonly clientId: string;
@@ -98,7 +99,7 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
       );
       throw new Error("Token exchange failed");
     }
-    const { subject, user, scope, access_token, expires_in, executor_access } = parsed.data;
+    const { subject, user, owner, scope, access_token, expires_in, executor_access } = parsed.data;
     const identity = { id: user.id, name: user.displayName };
     const value: Authentication = {
       session: access_token,
@@ -108,6 +109,7 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
       identity: user.kind === "agent" && user.claimed !== true ? null : {
         subject: user.kind === "agent" ? { ...identity, kind: user.kind, claimed: true } : identity,
         executorAccess: executor_access === true,
+        ...(owner ? { owner: { username: owner.username, name: owner.displayName } } : {}),
       },
       scopes: new Set(
         scope.split(/\s+/).filter((name): name is ToolScope => allScopes.has(name as ToolScope)),

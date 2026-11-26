@@ -14,10 +14,11 @@ are bound to the gateway, refresh and revoke as a client expects, and replays an
 ## How to get to it (user POV)
 
 Add `$MCP_URL` to an MCP client such as opencode, Claude Code, VS Code or Cursor with no credentials. The client
-opens the Workspace consent page in the browser, where a signed-in person connects it as a new agent they own
-(preselected) or as themselves; after `Allow` it calls the gateway with its own tokens. Every journey here proves
-the person, so each chooses `Yourself` explicitly. The default is covered by
-[HO11 in agent handoff](agent-handoff.md#ho11-a-signed-in-persons-default-a-new-agent-they-own-ah12).
+opens the Workspace consent page in the browser, where a signed-in person connects it as an agent they own,
+new or continued (preselected), or as themselves; after `Allow` it calls the gateway with its own tokens. Every
+journey here proves the person, so each chooses `Yourself` explicitly. The default is covered by
+[HO12](agent-handoff.md#ho12-a-signed-in-persons-default-a-new-agent-they-own-ah12) and
+[HO13](agent-handoff.md#ho13-reconnecting-a-client-continues-the-agent-you-own-ah13) in agent handoff.
 
 ## Driving it with agent-browser and uvw
 
@@ -231,8 +232,8 @@ node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" vsco
 Pass when `mcp-cimd-vscode.json` records 200 and the consent text includes `vscode.dev`,
 with `mcp-cimd-vscode.png` showing the consent page.
 
-4. Refuse private addresses, malformed identity and mismatched metadata; prove anonymous
-authorize and consent requests never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
+4. Refuse private addresses, malformed identity and mismatched metadata; prove that an anonymous
+authorize request with a callback that is not loopback, and an anonymous consent request, never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
 when it resolves to 127.0.0.1, adds a query to Claude's URL, and upper-cases the host in Claude's URL. The server fetches
 the same real document for `https://CLAUDE.ai/…`, but its `client_id` is the lower-case URL, so the
 error page must name the `client_id` mismatch.
@@ -245,8 +246,10 @@ node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" reje
 ```
 
 Pass when every `mcp-cimd-reject-*.json` records 400 with no Location and the corresponding
-screenshot shows the in-place error. Both anonymous authorize paths return the login
-redirect; `mcp-cimd-anonymous.json` shows equal before/after fetch counts. The public-only
+screenshot shows the in-place error. An anonymous authorize with a callback that is not loopback, and an
+anonymous consent request with a loopback one, both return the login redirect; `mcp-cimd-anonymous.json` shows
+equal before/after fetch counts. An anonymous authorize with a loopback callback is the zero-click guest path of
+[HO10](agent-handoff.md#ho10-a-loopback-mcp-client-from-a-signed-out-browser-ah11), which fetches. The public-only
 `mcp-cimd-fetch-events.json` preserves the fetch attempts and outcomes from the server log.
 
 5. Disable CIMD, then restore the default before MO1, MO2 and MO4. `--reuse` only accepts

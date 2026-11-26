@@ -46,7 +46,10 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH12 gives an MCP client that a signed-in person approves a new agent that person owns, by default. The consent
   page preselects `A new agent that you own` over `Yourself`. Redeeming the code creates the agent, named after the
   client, already claimed: it is listed under `My agents` and has the claimed agent's tools and instructions, with
-  no `claim`. Choosing `Yourself` connects as the person.
+  no `claim`. Those instructions and `whoami` name the person as its owner. Choosing `Yourself` connects as the person.
+- AH13 lets a person continue an agent they own. The consent page lists up to five of their agents, most recently
+  active first, and preselects the one made for a client of the same name. Continuing it creates no agent, so a
+  client that connects again keeps one agent and its files.
 - MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
@@ -62,7 +65,7 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 Preconditions:
 
 - Baseline run with `$V user`.
-- Each `uvw auth guest`, `$V mcp-oauth login` without `--connect-as self` and `$V principal` creates an agent. `up` raises the limit on
+- Each `uvw auth guest`, `$V mcp-oauth login` that submits a new agent and `$V principal` creates an agent. `up` raises the limit on
   agent creations per source IP per hour from the server's default of 5 to 100; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5`
   before `up` to run with the default ([agent principals](../references/stories.md)).
 - `$V uvw` holds the run user's session and `uvw auth guest` refuses while a session is stored
@@ -215,14 +218,15 @@ jq -e '.preselected == "new_agent" and .connect_as == "new_agent" and .token.sta
 $V mcp-oauth exchange ho12-exchange oauth
 jq -e '.body.user.kind == "agent" and .body.user.claimed == true' "$EVIDENCE/ho12-exchange.json"
 $V mcp --auth oauth ho12-whoami whoami
-jq -e '(.subject.name | test("^verify-uvw ho12 · [a-z0-9]{4}$")) and .budget != null' "$EVIDENCE/ho12-whoami.out"
+jq -e --arg user "verify-$VERIFY_UVW_RUN" '(.subject.name | test("^verify-uvw ho12 · [a-z0-9]{4}$")) and .budget != null and .owner.username == $user' "$EVIDENCE/ho12-whoami.out"
 $V mcp-instructions --auth oauth ho12-instructions
 jq -e '.instructions | contains("This connection is an agent identity that a person has claimed.")' "$EVIDENCE/ho12-instructions.out"
 $V mcp --auth oauth ho12-claim claim '{}'
 test $? -eq 3
 grep -q 'Tool claim not found' "$EVIDENCE/ho12-claim.err"
+agent-browser open "$ORIGIN/home" && agent-browser wait 1500
 agent-browser storage local set univer-workspace-view-onboarding-complete true
-agent-browser open "$ORIGIN/home" && agent-browser wait 2000
+agent-browser reload && agent-browser wait 2000
 agent-browser find role button click --name Account && agent-browser wait 800
 agent-browser find role menuitem click --name "My agents" && agent-browser wait 1500
 agent-browser get text body | grep -F "@$(jq -r '.body.user.username' "$EVIDENCE/ho12-exchange.json")"
@@ -235,7 +239,54 @@ jq -e --arg user "verify-$VERIFY_UVW_RUN" '.body.user.kind == "human" and .body.
 
 Pass when the consent page preselects the new agent and `ho12-consent.png` shows it above `Yourself`; the token acts
 for an agent named after the client that is already claimed, whose instructions are the claimed agent's and which has
-no `claim` tool; `My agents` in `ho12-my-agents.png` lists it; and the `Yourself` login acts for the run user.
+no `claim` tool; `whoami` names the run user as its owner; `My agents` in `ho12-my-agents.png` lists it; and the
+`Yourself` login acts for the run user.
+
+### HO13. Reconnecting a client continues the agent you own (AH13)
+
+Mode: mcp. Run: helper.
+
+`--client-name` registers each login's client under one name, as a client that registers again after it lost its
+registration does. The run user signs in to the HTTP API with a cookie kept outside `$EVIDENCE`. The last login
+connects a client of another name as the run user, so it creates no agent.
+
+```bash
+HO13_NAME="verify-uvw ho13"; OC=$RUN/home/o-cookies
+curl --fail-with-body -sS -c "$OC" -o /dev/null -X POST "$ORIGIN/api/auth/password/login" -H 'content-type: application/json' \
+  -d "{\"username\":\"verify-$VERIFY_UVW_RUN\",\"password\":\"$(cat "$RUN/user.pw")\"}"
+$V mcp-oauth login ho13-first --client-name "$HO13_NAME"
+jq -e '.preselected == "new_agent" and .connect_as == "new_agent" and .token.status == 200' "$EVIDENCE/ho13-first.json"
+$V mcp-oauth exchange ho13-first-exchange oauth
+HO13_AGENT=$(jq -r .body.user.id "$EVIDENCE/ho13-first-exchange.json")
+HO13_REPO="$(jq -r .body.user.username "$EVIDENCE/ho13-first-exchange.json")/personal"
+$V mcp --auth oauth ho13-pr pr_create "{\"repo\":\"$HO13_REPO\",\"title\":\"Kept\"}"
+HO13_W=$(jq -r .id "$EVIDENCE/ho13-pr.out"); HO13_N=$(jq -r .number "$EVIDENCE/ho13-pr.out")
+$V mcp --auth oauth ho13-sheet unit_create "{\"worktree\":\"$HO13_W\",\"space\":\"$HO13_REPO\",\"type\":\"sheet\",\"name\":\"Kept sheet\"}"
+$V mcp --auth oauth ho13-ready pr_ready "{\"repo\":\"$HO13_REPO\",\"number\":\"$HO13_N\"}"
+$V mcp --auth oauth ho13-merge pr_merge "{\"repo\":\"$HO13_REPO\",\"number\":\"$HO13_N\"}"
+for attempt in second third; do
+  $V mcp-oauth login "ho13-$attempt" --client-name "$HO13_NAME"
+  jq -e --arg id "$HO13_AGENT" '.preselected == $id and .connect_as == $id and (.choices | index("new_agent")) != null and .token.status == 200' "$EVIDENCE/ho13-$attempt.json"
+  $V mcp-oauth exchange "ho13-$attempt-exchange" oauth
+  jq -e --arg id "$HO13_AGENT" '.body.user.id == $id and .body.user.claimed == true' "$EVIDENCE/ho13-$attempt-exchange.json"
+done
+$V mcp --auth oauth ho13-browse space_browse "{\"repo\":\"$HO13_REPO\"}"
+jq -e '[.nodes[].name] | index("Kept sheet") != null' "$EVIDENCE/ho13-browse.out"
+$V mcp --auth oauth ho13-whoami whoami
+jq -e --arg user "verify-$VERIFY_UVW_RUN" --arg name "Verify $VERIFY_UVW_RUN" '.owner == {username: $user, name: $name}' "$EVIDENCE/ho13-whoami.out"
+$V mcp-instructions --auth oauth ho13-instructions
+jq -e --arg owner "Verify $VERIFY_UVW_RUN (@verify-$VERIFY_UVW_RUN)" '.instructions | contains("This agent belongs to \($owner) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.")' "$EVIDENCE/ho13-instructions.out"
+curl --fail-with-body -sS -b "$OC" "$ORIGIN/api/agents" > "$EVIDENCE/ho13-agents.json"
+jq -e --arg id "$HO13_AGENT" --arg name "$HO13_NAME · " '[.agents[] | select(.displayName | startswith($name)) | .id] == [$id]' "$EVIDENCE/ho13-agents.json"
+$V mcp-oauth login ho13-other --connect-as self
+jq -e --arg id "$HO13_AGENT" '.preselected == "new_agent" and (.choices | index($id)) != null and .connect_as == "self" and .token.status == 200' "$EVIDENCE/ho13-other.json"
+```
+
+Pass when the second and third logins preselect the agent the first made, list `A new agent that you own` too, and
+exchange to that agent; `Kept sheet`, merged by the first connection, is still in its Personal Space; the run user
+owns exactly one agent named after the client; `whoami` and the server instructions name the run user as the owner;
+and a client of another name lists the agent but preselects a new one. `ho13-second-consent.png` shows the agent
+selected above `A new agent that you own` and `Yourself`, each agent option with the hint about its own space.
 
 ### MH1. Unclaimed agent
 

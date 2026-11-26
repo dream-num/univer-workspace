@@ -185,11 +185,13 @@ The screenshot comes from a local Workspace, so the server and the callback are 
 
 The page asks whom the client connects as. **A new agent that you own** is selected. Workspace creates that agent when the client trades the code for tokens, names it after the client, such as "Claude Code · d8ik", and you have already claimed it: it has its own empty Personal Space, opens your files only when you share them with it, and appears under **My agents**. Its files never expire and its share pages carry no **Unverified agent** mark. **Yourself** connects the client as you, with everything you can open. The same limit of 5 agents an hour applies to the new agent. When this address reached it, the page disables the choice, says why, and leaves **Yourself** selected. An agent signed in to the browser, such as a guest agent, sees no choice and connects as itself.
 
+The page also lists up to five agents you already own and have not stopped, most recently active first. When one of them was made for a client of the same name, the page selects it instead, so connecting a client again, after you removed it or its sign-in expired, continues the same agent with its files rather than creating another. Choosing an agent you own creates nothing and does not count toward the limit. Each agent option says that the agent works in its own space and sees your files only when you share them. The agent's server instructions and its `whoami` result name you as its owner, so when it cannot find a file of yours, it can tell you why.
+
 The four permissions are the scopes. You can uncheck any of them, as long as one stays checked:
 
 | Scope | Lets the agent |
 | --- | --- |
-| `read` | View your spaces, files, issues, and worktrees |
+| `read` | View spaces, files, issues, and worktrees |
 | `write` | Edit inside worktrees, and write issues and labels |
 | `publish` | Change files and spaces directly, without a worktree |
 | `worktree:merge` | Merge and discard worktrees |
@@ -298,7 +300,7 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 | After sign-in, the browser shows an `invalid_client` or `temporarily_unavailable` error page | Step 2, Workspace could not fetch the CIMD document, or the document failed its checks | On a private deployment, make sure Workspace Server can reach the internet, or set `MCP_CIMD_ENABLED=0` |
 | On a self-hosted server behind a fake-IP proxy, CIMD always fails | Step 2, public names resolve into `198.18.0.0/15` and are refused as private addresses | Set `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
 | Connected, but some tools are missing | A scope was unchecked in step 3, or the URL's `?toolsets=` leaves the tools out | Sign in again and check the scope, or fix `?toolsets=` |
-| The client connected as a new agent you own, not as you | Step 3, the consent page selects **A new agent that you own** unless you choose **Yourself** | Sign out of the server in the client, connect again, and choose **Yourself** |
+| The client connected as an agent you own, not as you | Step 3, the consent page selects an agent you own, new or continued, unless you choose **Yourself** | Sign out of the server in the client, connect again, and choose **Yourself** |
 | The client connected as a new guest agent, not as you | Step 3, the browser had no Workspace session and the client listens on your computer | Claim the agent with the link it gives you, or sign out of the server in the client, sign in to Workspace in that browser, and connect again |
 | Claude Code no longer opens sign-in after you configured an `Authorization` header | Claude Code skips OAuth when it sees the header | Use one or the other, not both |
 

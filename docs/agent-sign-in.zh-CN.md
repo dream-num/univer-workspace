@@ -185,11 +185,13 @@ https://space.univer.ai/api/auth/authorize
 
 页面先问客户端以谁的身份连接，默认选中 **A new agent that you own**。客户端用授权码换 token 时，Workspace 创建这个 agent，以客户端命名，例如 “Claude Code · d8ik”，并且它已经被你认领：它有自己的空个人空间，只有你分享给它的文件它才能打开，并出现在 **我的 Agent** 里。它的文件不会过期，分享页也没有 **未验证的 Agent** 标记。**Yourself** 让客户端以你的身份连接，能打开你能打开的一切。新 agent 同样受每小时 5 个 agent 的限制。这个地址达到上限时，页面禁用这个选项、说明原因，并选中 **Yourself**。浏览器里登录的是 agent（例如访客 agent）时，页面不提供选择，客户端以这个 agent 自己的身份连接。
 
+页面还列出你已经拥有、没有停用的 agent，最多 5 个，最近活跃的在前。其中有一个是为同名客户端创建的时，页面改为选中它，所以客户端重新连接时（例如你删掉它再加回来，或者它的登录失效了），继续用同一个 agent 和它的文件，而不是再创建一个。选你已有的 agent 不创建任何东西，也不占创建限额。每个 agent 选项都写明，agent 在自己的空间里工作，只有你分享给它的文件它才能看到。agent 的服务器说明和 `whoami` 结果都写明你是它的主人，所以它找不到你的某个文件时，能告诉你原因。
+
 页面上的四项权限就是 scope。你可以取消勾选任何一项，至少留一项：
 
 | scope | 允许 agent |
 | --- | --- |
-| `read` | 查看你的 Space、文件、issue 和 worktree |
+| `read` | 查看 Space、文件、issue 和 worktree |
 | `write` | 在 worktree 里编辑，写 issue 和 label |
 | `publish` | 不经 worktree 直接修改文件和 Space |
 | `worktree:merge` | 合并和丢弃 worktree |
@@ -298,7 +300,7 @@ Workspace 返回一个最长 10 分钟的 session，以及这张 token 代表的
 | 登录后浏览器显示 `invalid_client` 或 `temporarily_unavailable` 错误页 | 第二步，Workspace 取不到 CIMD 文档，或文档没有通过校验 | 私有部署确认 Workspace Server 能访问外网，或设置 `MCP_CIMD_ENABLED=0` |
 | 自部署时出口走 fake-IP 代理，CIMD 总是失败 | 第二步，公网域名被解析到 `198.18.0.0/15`，被当成私有地址拒绝 | 设置 `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
 | 连上了，但缺少某些工具 | 第三步取消了某个 scope，或 URL 的 `?toolsets=` 没有包含它 | 重新授权并勾选，或检查 `?toolsets=` |
-| 客户端连上了，但身份是一个归你所有的新 agent，不是你 | 第三步，同意页默认选中 **A new agent that you own**，除非你选 **Yourself** | 在客户端里登出该服务，重新连接，并选择 **Yourself** |
+| 客户端连上了，但身份是一个归你所有的 agent，不是你 | 第三步，同意页默认选中一个归你所有的 agent（新建的或已有的），除非你选 **Yourself** | 在客户端里登出该服务，重新连接，并选择 **Yourself** |
 | 客户端连上了，但身份是新的访客 agent，不是你 | 第三步，浏览器没有 Workspace 会话，客户端在你的电脑上监听回调 | 用 agent 给你的认领链接认领它；或者在客户端里登出该服务，在这个浏览器里登录 Workspace，再重新连接 |
 | 配了 `Authorization` 头后 Claude Code 不再弹出登录 | Claude Code 看到头就跳过 OAuth | 二选一，不要同时配置 |
 

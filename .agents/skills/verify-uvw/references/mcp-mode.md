@@ -96,9 +96,12 @@ one more assertion on that event. `executor: none` requires zero worker costs. E
 `mcp-oauth` is a scripted OAuth client for MO2 and MO3. `login` registers a client, or uses the CIMD
 client named by `--client-id` with callback path `/callback`. It clears the run browser's cookies, signs
 in as the run user, approves consent with only `--scopes` checked (default all four), and keeps the token
-pair and client id in `home/mcp-oauth-*`. The page preselects a new agent that the run user owns, and `--connect-as`
-picks it (`new_agent`, the default) or the run user (`self`); `<label>.json` records `connect_as` and the
-`preselected` value. A journey that needs the run user passes `--connect-as self`. Each `new_agent` login creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
+pair and client id in `home/mcp-oauth-*`. The page preselects the agent the run user owns that was made for a client
+of the same name, else a new agent. Without `--connect-as` the login keeps that choice; `--connect-as` picks a new
+agent (`new_agent`, which fails when the page disables it at the agent creation limit) or the run user (`self`).
+`--client-name` registers the client under that name instead of `verify-uvw <label>`. `<label>.json` records the
+offered `choices`, the `preselected` value and the submitted `connect_as`. A journey that needs the run user passes
+`--connect-as self`. Each login that submits `new_agent` creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
 --guest` needs no `user`. Its loopback callback gets a guest agent's code with no page, and it fails unless
 the browser still has no session. `--guest-card` registers a callback that is not loopback instead, takes the
 guest agent card, saves `<label>-guest-card.png`, and leaves the run browser signed in as the guest. `refresh` rotates the pair, `reuse` replays the old refresh token, `revoke`

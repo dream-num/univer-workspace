@@ -247,7 +247,7 @@ describe("MCP OAuth", () => {
     const page = await (await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri })}`, { headers: { cookie: alice } })).text();
     expect(page).toContain('name="connect_as" value="new_agent" disabled');
     expect(page).toContain('name="connect_as" value="self" checked');
-    expect(page).toContain("Or connect as yourself.");
+    expect(page).toContain("Choose Yourself.");
     const consentToken = consentTokenOf(page);
 
     const unchosen = await submitConsent(origin, alice, consentToken, ["read"], "allow", null);
@@ -255,7 +255,7 @@ describe("MCP OAuth", () => {
     const refused = await submitConsent(origin, alice, consentToken, ["read"], "allow", "new_agent");
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({
       status: 429,
-      body: { error: { code: "AGENT_CREATE_RATE_LIMITED", message: expect.stringContaining("choose Connect as yourself") } },
+      body: { error: { code: "AGENT_CREATE_RATE_LIMITED", message: expect.stringContaining("Go back and choose Yourself") } },
     });
     const allowed = await submitConsent(origin, alice, consentToken, ["read"], "allow", "self");
     expect(allowed.status).toBe(303);

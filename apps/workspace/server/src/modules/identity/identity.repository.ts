@@ -79,6 +79,8 @@ export interface StoredAgent {
   readonly user: User;
   readonly spaceId: string;
   readonly ownerUserId: string | null;
+  /** The label or client name the agent was created with. */
+  readonly originLabel: string;
   readonly lastActiveAt: number;
   readonly banned: boolean;
   readonly files: number;

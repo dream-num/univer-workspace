@@ -23,6 +23,12 @@ export function toolPrincipal(user: WorkspaceSubject): ToolPrincipal {
   return user.claimed ? "agent_claimed" : "agent_unclaimed";
 }
 
+/** The person who claimed the agent a connection acts for. */
+export interface AgentOwner {
+  readonly username: string;
+  readonly name: string;
+}
+
 export interface ToolContext {
   readonly staging?: StagingStore;
   readonly jobs?: ToolJobs;
@@ -37,6 +43,7 @@ export interface ToolContext {
   readonly resources: () => ResourceLibrary;
   readonly scopes: ReadonlySet<ToolScope>;
   readonly authKind?: "pat" | "oauth" | "dev";
+  readonly owner?: AgentOwner;
 }
 
 export interface ToolDefinition {

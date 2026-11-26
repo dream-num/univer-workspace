@@ -83,10 +83,14 @@ same limit, names it after the client, and claims it for that person, so it star
 of a guest agent the person claimed. The other choice, `self`, connects as the person. A
 signed-in agent connects only as itself. When this browser's address may create no agent, the
 page disables the new agent and says so, and choosing it returns `429 AGENT_CREATE_RATE_LIMITED`
-with a message that names connecting as yourself.
+with a message that names the other choices. The page also lists up to five agents the person owns
+and has not stopped, and preselects the most recently active one created for a client of this name.
+Choosing one connects as that agent and creates nothing. The server checks at the submit and again
+when the code is redeemed that the person still owns it and has not stopped it.
 
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).
-An agent also carries `claimed`. A banned agent's login session returns
+An agent also carries `claimed`. The token exchange of a claimed agent also carries `owner`, the
+person who claimed it. A banned agent's login session returns
 `401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.
 
 A human claims an agent to keep its files. The unclaimed agent calls

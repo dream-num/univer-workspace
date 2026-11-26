@@ -366,11 +366,14 @@ export interface paths {
          *     CIMD metadata is resolved only after interactive sign-in. The form saves the
          *     verified request with a single-use consent token bound to the signed-in user
          *     for five minutes. CIMD clients show their name and metadata URL hostname.
-         *     For a signed-in person, an MCP client's form offers `connect_as`: a new
-         *     agent that the person owns, preselected, or the person (`self`). When the
-         *     per-source agent creation limit refuses this browser's address, the new
-         *     agent is disabled with that reason and `self` is preselected. A signed-in
-         *     agent connects only as itself.
+         *     For a signed-in person, an MCP client's form offers `connect_as`: up to
+         *     five agents the person owns and has not stopped, most recently active
+         *     first, a new agent that the person owns, or the person (`self`). It
+         *     preselects the most recently active of those agents that was created for
+         *     a client of this name, otherwise the new agent. When the per-source agent
+         *     creation limit refuses this browser's address, the new agent is disabled
+         *     with that reason, and `self` is preselected unless an agent is. A
+         *     signed-in agent connects only as itself.
          */
         get: operations["getOAuthConsent"];
         put?: never;
@@ -383,8 +386,13 @@ export interface paths {
          *     agent that the person owns: redeeming the code creates the agent under the
          *     per-source agent creation limit, named after the client, and claims it
          *     for the person, so it is in the state of a guest agent that person claimed.
-         *     A code nobody redeems creates no agent. A 400, 403 or 429 keeps the consent
-         *     token valid, so the person can go back and choose again.
+         *     A code nobody redeems creates no agent. Any other value is the id of an
+         *     agent the person owns and has not stopped, and makes the code act for that
+         *     agent; it creates nothing and counts toward no limit. The token endpoint
+         *     checks again that the person still owns the agent and has not stopped it.
+         *     An id that is not such an agent gets the same 400, whether or not a User
+         *     has it. A 400, 403 or 429 keeps the consent token valid, so the person can
+         *     go back and choose again.
          *     Both successful and denied MCP callbacks include `iss`; static callbacks do not.
          */
         post: operations["submitOAuthConsent"];
@@ -417,7 +425,9 @@ export interface paths {
          *     redeemed code revokes the grant it produced. Redeeming a code for a new
          *     agent, a guest or an agent the consenting person owns, creates that
          *     agent; when its source reached the creation limit after authorization,
-         *     the answer is `temporarily_unavailable` (429) and no agent is created. A refresh token rotates;
+         *     the answer is `temporarily_unavailable` (429) and no agent is created.
+         *     A code for an agent the consenting person already owns answers
+         *     `invalid_grant` when that person no longer owns it or stopped it. A refresh token rotates;
          *     presenting a rotated one within 60 seconds fails without side effects,
          *     later it revokes the grant. Errors use the RFC 6749 section 5.2 body
          *     `{ "error": "<code>", "error_description": "<description>" }` with
@@ -5666,11 +5676,8 @@ export interface operations {
                     /** @enum {string} */
                     decision: "allow" | "deny";
                     scope?: components["schemas"]["McpScope"][];
-                    /**
-                     * @description Required to allow an MCP client. Ignored for static clients and on deny.
-                     * @enum {string}
-                     */
-                    connect_as?: "new_agent" | "self";
+                    /** @description `new_agent`, `self`, or the id of an agent the signed-in person owns. Required to allow an MCP client. Ignored for static clients and on deny. */
+                    connect_as?: string;
                 };
             };
         };
@@ -5694,7 +5701,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description AGENT_CREATE_RATE_LIMITED. `new_agent` was chosen while this browser's address may create no agent. The message names the way out, connecting as yourself or trying again later. */
+            /** @description AGENT_CREATE_RATE_LIMITED. `new_agent` was chosen while this browser's address may create no agent. The message names the way out, choosing Yourself or an agent the person already owns, or trying again later. */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5755,6 +5762,8 @@ export interface operations {
                         scope?: string;
                         subject?: components["schemas"]["TokenExchangeSubject"];
                         user?: components["schemas"]["User"];
+                        /** @description Token exchange only. Present only for a claimed agent, and names the person who claimed it. */
+                        owner?: components["schemas"]["PublicUser"];
                         /**
                          * @description Token exchange only. Present only when an operator
                          *     granted the user the shared MCP executor with

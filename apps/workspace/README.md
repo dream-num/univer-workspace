@@ -251,6 +251,13 @@ at the limit, the page disables `new_agent`, says why and selects `self`, and a 
 `new_agent` answers `429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. A signed-in agent sees no choice
 and approves for itself.
 
+The same page lists up to five agents the person owns and has not stopped, most recently active first. It
+preselects the most recently active one whose `origin_label` is this client's name, so a client that connects
+again continues its agent. Submitting an agent's id approves a code for that agent. It creates nothing and spends
+no creation, and the server checks at the submit and again at redemption that the person owns it and has not
+stopped it, answering an id that is not such an agent the same way whether or not a User has it. With an agent
+preselected, the limit leaves that agent selected instead of `self`.
+
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still
