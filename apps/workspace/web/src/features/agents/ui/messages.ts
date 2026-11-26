@@ -70,7 +70,7 @@ export const agentMessages = {
 
     greeting: (name?: string) => name ? `你好，${name}` : "你好", greetingHint: "有什么可以帮你？",
     agents: "Agents", prompt: "让 Agent 处理一件事", ask: "提问", auto: "执行",
-    askHint: "提问模式只读，不会更改文件。", autoHint: "更改写入 PR，由人审阅并合并；页面保存为草稿，由你在 Workspace 中预览并发布。",
+    askHint: "提问模式只读，不会更改文件。", autoHint: "更改写入 PR，由人审阅并合入；页面保存为草稿，由你在 Workspace 中预览并发布。",
     model: "模型", thinking: "思考强度", off: "关闭", high: "高", max: "最高",
     skillFrom: { github: "来自 GitHub", "skills-sh": "来自 skills.sh", clawhub: "来自 ClawHub", space: "来自 Space" },
     menuSelect: "选择", menuInsert: "插入", skillsAttention: "需要处理",
