@@ -130,6 +130,57 @@ agent 不再有浏览器会话。`POST /api/auth/guest` 只服务 CLI，改发 `
 - **以我本人连接。** 保留，但只作次要链接。它让客户端拥有这个人的全部权限，应当是有意识的选择。
 - **静态客户端。** Workspace Agent 和 Space 插件照旧要人登录，不提供试用。不要求同意的静态客户端（如内部服务）照旧不出页面。
 
+#### 授权一次，之后一直能用
+
+浏览器只在授权那一刻参与。MCP 客户端的凭据是 OAuth grant，由客户端自己保存，和浏览器里有没有会话无关。今天如此，本文不改。access token 1 小时过期，客户端用 refresh token 自己换新的。每次换新，refresh token 的 30 天有效期从那一刻重新算（`oauth_grants.refresh_expires_at`，随轮换顺延）。所以只要客户端 30 天内用过一次，新开对话、隔天再用都不需要人。下图中只有连接页是目标，其余是今天的行为。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant C as MCP 客户端（如 WorkBuddy）
+    participant B as 浏览器
+    participant G as MCP 网关
+    participant W as Workspace Server
+
+    Note over U,W: 配置 MCP 时，只有这一次用到浏览器
+    U->>C: 添加 Workspace 的 MCP 地址
+    C->>B: 打开 /api/auth/authorize
+    B->>W: GET /api/auth/authorize
+    W-->>B: 连接页（目标：按有没有人的会话分两种状态）
+    U->>B: 点一次（用我的 agent 连接，或先不登录试用）
+    B->>W: 提交选择
+    W-->>B: 302 回到客户端，带授权码
+    B-->>C: 授权码
+    C->>W: POST /api/auth/token（授权码和 PKCE）
+    W-->>C: access token（1 小时）和 refresh token（30 天）
+    Note over C: token 存在客户端里，浏览器不留 agent 会话
+
+    Note over U,W: 之后每次对话，都不经过浏览器
+    U->>C: 新开一个对话
+    C->>G: MCP 请求，带 access token
+    G->>W: token exchange（POST /api/auth/token）
+    W-->>G: token 会话（最长 10 分钟，网关缓存）
+    G->>W: 以这个 agent 调用 Workspace API
+    W-->>G: 结果
+    G-->>C: 工具结果
+
+    Note over U,W: access token 过期时，客户端自己续上
+    C->>G: MCP 请求，带过期的 access token
+    G-->>C: 401
+    C->>W: POST /api/auth/token（refresh token）
+    W-->>C: 新的 access token 和 refresh token（30 天从此刻重新算）
+    C->>G: 用新的 access token 重试
+```
+
+只有以下情况要回到图中第一段，重新点一次：
+
+- refresh token 连续 30 天没有用过。
+- 客户端撤销了这个授权（`POST /api/auth/revoke`），或者主人在“我的 agent”里停用了这个 agent。今天网页上没有让人撤销 OAuth 授权的入口。
+- 客户端丢了保存的 token，例如删掉连接器再重新添加。
+
+浏览器不存 agent 登录态，只影响重新授权的那一次。已登录的人回到连接页，默认还是他原来的那个 agent。没登录的人选试用，会得到一个新的临时 agent，原来那个只能用它给过的交接链接取回。今天浏览器里留着的访客 agent 会话会让重新授权接上原来那个 agent，代价是浏览器在人不知情的情况下“变成”了那个 agent，staging 演练里遇到的正是这种情况。
+
 ### 4.5 访问规则
 
 目标。一个主体能碰什么只看三件事：
@@ -231,7 +282,7 @@ fork 跟着账号走：fork 的查询改为“fork 的所有者是行为者自�
 
 - 集成测试：agent 的浏览器会话签发 PAT、批准 CLI 登录、打开授权页都被拒；人的 CLI 会话签发 PAT 也被拒（今天没有这样的调用方）；访客卡片得到授权码而浏览器里没有新 cookie。
 - verify-uvw：HO1、HO8、HO9（改写为“浏览器里只留着 agent cookie 时按没登录处理”）、MA6、MA8。
-- WorkBuddy：在一个只留着旧访客 cookie 的浏览器里连接，看到登录页和访客卡片，而不是直接以旧 agent 连接。
+- 真实客户端（5.7 节）：在一个只留着旧访客 cookie 的浏览器里连接，看到登录页和访客卡片，而不是直接以旧 agent 连接。
 
 **退出条件。** 不再产生 `browser` 来源的 agent 会话，已有的都已过期。
 
@@ -254,7 +305,7 @@ fork 跟着账号走：fork 的查询改为“fork 的所有者是行为者自�
 
 - 集成测试：`guest-authorization.test.ts` 改写为“没有会话时得到连接页，点试用才签发访客码”；新建有主人的 agent 只有一次写入。
 - verify-uvw：HO10、HO11（本机客户端在没登录的浏览器里看到连接页）、HO12、HO13、MO1 到 MO4。
-- WorkBuddy：5.7 节的矩阵。
+- 真实客户端：5.7 节的矩阵。
 
 **退出条件。** `GET /api/auth/authorize` 不再有不出页面就签发授权码的路径（不要求同意的静态客户端除外）。
 
@@ -280,7 +331,7 @@ fork 跟着账号走：fork 的查询改为“fork 的所有者是行为者自�
 - 集成测试：四个入口分别对五种会话（人在浏览器、人的 CLI、人的 token、有主人的 agent、临时 agent）各跑一遍，确认只有“人在浏览器里”能扩大，缩小对所有会话放行，拒绝都带正确的 `url`。
 - 网页单元测试：确认页只显示服务器读出的名字，链接里多出的参数不影响显示。
 - verify-uvw：CE1、LS1 到 LS4、MH2、MH4、MH5、AO1、MP12，`agent-mode-checks.md` 里添加成员的旅程，`html-view.md` 和 `mcp-space-files.md` 里打开 Link Sharing 或公开仓库的步骤；并新增一个“确认链接”旅程：agent 请求加成员，人打开链接确认，成员出现；没有权限的人打开同一个链接得到原来的拒绝。
-- WorkBuddy：对 agent 说“把这个页面也分享给我同事小王”和“把这个仓库公开”，它应当交回确认链接，仓库状态在人点确认之前不变。
+- 真实客户端（5.7 节）：对 agent 说“把这个页面也分享给我同事小王”和“把这个仓库公开”，它应当交回确认链接，仓库状态在人点确认之前不变。
 
 **退出条件。** 服务器里任何非“人在浏览器里”的会话都完成不了 4.6 节表里的扩大动作。
 
@@ -321,7 +372,7 @@ fork 跟着账号走：fork 的查询改为“fork 的所有者是行为者自�
 
 - 集成测试：交接 cookie 只在码有效且 agent 仍是临时账号时生效；接手后预览对别人失效；预览只能读，不能写；主人能列出和删除 agent 的 fork。
 - verify-uvw：HO2 到 HO7、MH1、AO2、FK1，并新增一个旅程：没登录打开交接链接，看到 HTML View 读出的实时数据，登录后收下。
-- WorkBuddy：试用，做一个带公式和 HTML View 的表，拿到交接链接，在无痕窗口里预览，登录后收下，主人在仓库列表里看到它和它的 fork。
+- 真实客户端（5.7 节）：试用，做一个带公式和 HTML View 的表，拿到交接链接，在无痕窗口里预览，登录后收下，主人在仓库列表里看到它和它的 fork。
 
 **退出条件。** 临时 agent 让别人看到内容的路径只剩交接链接。
 
@@ -329,9 +380,11 @@ fork 跟着账号走：fork 的查询改为“fork 的所有者是行为者自�
 
 今天 Link Sharing 只在个人空间里有，Team 仓库靠成员和公开。两套分享方式是第二大的困惑来源，`share` 在 Team 仓库被拒时要在几种说法里挑一种。第 3 步之后 agent 一律拿确认链接，这个差别对 agent 已经不可见，对人仍然存在。是否统一、怎么统一，等第 3 步上线后看实际反馈再定，本文不设计。
 
-### 5.7 WorkBuddy 演练矩阵
+### 5.7 真实客户端演练
 
-第 1、2 步上线后各跑一遍，第 3、5 步加上各自的场景。
+开发期间用本机的 opencode 验收和调试，它比 WorkBuddy 快，也能脚本化。verify-uvw 的 MO1（`.agents/skills/verify-uvw/bin/mcp-oauth-opencode.sh`）已经让 opencode 在一个一次性实例上走浏览器 OAuth：它用独立的 opencode 目录连接 MCP 网关，由 agent-browser 在授权页上点选，再用 `opencode run` 让模型调用工具。第 2 步改了连接页之后，这个脚本要跟着改点选的步骤。每一步合入前，用 opencode 跑下面的矩阵和这一步自己的场景。
+
+WorkBuddy 操作繁琐，等各步稳定后再完整复验一次。它特有的行为只能在它上面确认，例如它不把 MCP server instructions 交给模型（3.6 节第 6 条），以及它会不会自己用 refresh token 续上。
 
 | 浏览器状态                   | 选择         | 期望                                                                     |
 | ---------------------------- | ------------ | ------------------------------------------------------------------------ |
@@ -341,6 +394,9 @@ fork 跟着账号走：fork 的查询改为“fork 的所有者是行为者自�
 | 没登录                       | 试用         | 一次点击；得到临时 agent；重连得到新的临时 agent，页面提醒用交接链接取回 |
 | 只留着旧的 agent cookie      | 任意         | 按没登录处理                                                             |
 | 网页版客户端（回调不在本机） | 以上各行     | 和本机客户端一样                                                         |
+| 已授权，1 小时后新开对话     | 不点         | 不出现授权，客户端自己用 refresh token 续上                              |
+
+opencode 的回调在本机，覆盖不到“回调不在本机”那一行。这一行用 verify-uvw 的 `$V mcp-oauth` 脚本化 OAuth 来跑，像 MO2 和 MO4 那样注册一个非本机的回调。
 
 ## 6. 代价和接受的限制
 
