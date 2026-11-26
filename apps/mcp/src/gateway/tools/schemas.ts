@@ -174,7 +174,7 @@ export const unitSchema = z.object({
     })
     .nullable()
     .describe(
-      "How far trunk moved since this trunk file joined the pull request. Null for a new file and once the pull request is no longer draft or ready. current: trunk has not moved. behind: trunk changed the file since, within the limits. stale: more than 100 revisions behind, or added more than 7 days ago. The server instructions say what to do with each; none of them blocks a merge.",
+      "How far trunk moved since this trunk file joined the pull request. Null for a new file and once the pull request is no longer draft or ready. current: trunk has not moved. behind: trunk changed the file since, within the limits; before you merge, read the file on trunk and check that what your change depends on still holds, and after merging read the result back from trunk. stale: more than 100 revisions behind, or added more than 7 days ago; redo the work in a new pull request, then give the user the stale one's link and say it can be discarded; do not discard it unless they ask. None of them blocks a merge.",
     ),
   mergeResult: z
     .enum(["pending", "merged", "unchanged", "removed", "conflict", "failed"])

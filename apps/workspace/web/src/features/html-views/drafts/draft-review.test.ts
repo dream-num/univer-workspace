@@ -435,7 +435,7 @@ it("shows the waiting message in Chinese", async () => {
   draft.sourceWorktreeId = "pr-3"; draft.publishWhen = "merge";
   window.localStorage.setItem("univer-workspace-language", "zh-CN");
   await render();
-  await waitFor(() => expect(container.textContent).toContain("等待 PR #3 合并，合并后自动发布页面。"));
+  await waitFor(() => expect(container.textContent).toContain("等待 PR #3 合入，合入后自动发布页面。"));
   expect(button("发布").disabled).toBe(true);
 });
 

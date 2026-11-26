@@ -38,7 +38,7 @@ export const draftMessages = {
     sourceSheets: "来源表格", noSourceSheets: "没有表格绑定", sourcesUnavailable: "无法读取来源表格。",
     publicPage: "任何有链接的人", privatePage: "仅成员可访问", unknownVisibility: "无法获取可见范围",
     publishNotice: "发布后立即生效。草稿预览中的修改不会保存。",
-    waitingForPr: (number: number | null) => number === null ? "等待来源 PR 合并，合并后自动发布页面。" : `等待 PR #${number} 合并，合并后自动发布页面。`,
+    waitingForPr: (number: number | null) => number === null ? "等待来源 PR 合入，合入后自动发布页面。" : `等待 PR #${number} 合入，合入后自动发布页面。`,
     pending: "等待审阅", published: "已发布", rejected: "已拒绝", expired: "已过期",
     conflicted: "页面在 Agent 起草后已更改，请让 Agent 修改草稿。",
     sourceDiscarded: "来源 PR 已丢弃，这个页面不会发布。请让 Agent 修改草稿。",

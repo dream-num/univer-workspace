@@ -163,7 +163,7 @@ done
 diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S --argjson core "$CORE" '.[:($core | length)]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.[] | select(.name == "pr_discard") | .description | contains("Unless the user explicitly asked")' "$EVIDENCE/mcp-tools-admin.out"
-jq -e '.[] | select(.name == "pr_merge") | .description | contains("The server instructions say when to merge")' "$EVIDENCE/mcp-tools-core.out"
+jq -e '.[] | select(.name == "pr_merge") | .description | contains("The notice from whoami, or without one the server instructions, says when to merge")' "$EVIDENCE/mcp-tools-core.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
 jq -e 'all(.[]; .description | test("\\buvw\\b") | not)' "$EVIDENCE/mcp-tools-all.out"
 jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 12 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
@@ -173,7 +173,7 @@ Pass when every selection exits 0 with exactly its tools in the fixed order (cor
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard`, `blob_replace`); the core list, schemas
 included, equals the start of `all`; the immediate-effect descriptions, the leave-to-the-user `pr_discard` description and the
-`pr_merge` description that defers to the server instructions are present; no tool description
+`pr_merge` description that defers to the `whoami` `notice`, or without one the server instructions, are present; no tool description
 names `uvw`; the 12 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 

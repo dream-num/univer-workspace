@@ -29,6 +29,7 @@ const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string;
   uvw_at_guest: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-2", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
   uvw_at_guest_read: { scope: "read", kind: "oauth", id: "grant-3", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
   uvw_at_owned: { scope: "read write publish worktree:merge", kind: "oauth", id: "grant-4", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
+  uvw_at_merge: { scope: "read write worktree:merge", kind: "oauth", id: "grant-5", clientId: "https://claude.ai/oauth/claude-code-client-metadata" },
 };
 const owner = { id: "user-9", username: "olivia", displayName: "Olivia", avatarUrl: null };
 
@@ -418,6 +419,14 @@ describe("gateway authentication", () => {
     });
     for (const sentence of handOver) expect(owned.instructions).toContain(sentence);
 
+    const noPublish = await told("uvw_at_merge");
+    const pullLink = "Then give the user the pull request link.";
+    expect(noPublish.notice, "share refuses a connection without publish, so neither names it").toBe(
+      `${ownerFacts} When the user expects you to see their files, tell them this. ${[...handOver.slice(0, -1), pullLink].join(" ")}`,
+    );
+    expect(noPublish.instructions).toContain(`Otherwise, merge it with pr_merge. 10) ${pullLink}`);
+    expect(noPublish.instructions).not.toContain("call share");
+
     const writeOnly = await told("uvw_at_oauth");
     expect(writeOnly.notice, "write access without worktree:merge keeps the draft and leaves merging to the user").toBe(
       `${ownerFacts} When the user expects you to see their files, tell them this. ${leaveMerging.join(" ")}`,
@@ -430,6 +439,23 @@ describe("gateway authentication", () => {
       expect(person.getInstructions()).not.toContain("guest agent");
       expect((await person.callTool({ name: "whoami", arguments: {} })).structuredContent, bearer).not.toHaveProperty("notice");
     }
+  });
+
+  it("tells an agent that cannot read file contents to hand over a copy through claim only with the publish scope claim needs", async () => {
+    const agent = { id: "user-1", username: "claude-code-g3wq", displayName: "Claude Code · g3wq", avatarUrl: null, kind: "agent", claimed: false };
+    const gateway = await start({ ...exchangeEnv, MCP_EXECUTOR_ALLOWED_USER_IDS: "workspace" }, {
+      executor: true,
+      user: () => agent,
+      product: (path) => (path === "/api/session" ? { body: { authenticated: true, user: agent } } : undefined),
+    });
+    const restricted = "Editing document contents is not enabled for this account; ask the user to edit in the browser.";
+    const copy = "make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim";
+    const withPublish = (await gateway.connect("uvw_at_guest")).getInstructions()!;
+    expect(withPublish).toContain(`${restricted} Reading them is not enabled either.`);
+    expect(withPublish).toContain(copy);
+    const withoutPublish = (await gateway.connect("uvw_at_merge")).getInstructions()!;
+    expect(withoutPublish).toContain(`${restricted}\n\n`);
+    expect(withoutPublish).not.toContain("call claim");
   });
 
   it("asks Workspace nothing more for a claimed agent's or a person's tool lists", async () => {

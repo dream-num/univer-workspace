@@ -726,7 +726,18 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"40a47977beae489f8bd3da659cda5195ec7e60f91fb0791b6766e765603655f5"`);
+    expect(digest).toMatchInlineSnapshot(`"480e10b4ac64979de89280e41251430b725a06ce046065eeba9a91b404d89b4d"`);
+  });
+
+  it("says in pr_view's own output schema what to do with each freshness label, for clients that drop server instructions", async () => {
+    const prView = (await (await connect({ pin: "2026-07-28" })).listTools()).tools.find(({ name }) => name === "pr_view");
+    const schema = JSON.stringify(prView?.outputSchema);
+    for (const sentence of [
+      "behind: trunk changed the file since, within the limits; before you merge, read the file on trunk and check that what your change depends on still holds, and after merging read the result back from trunk.",
+      "stale: more than 100 revisions behind, or added more than 7 days ago; redo the work in a new pull request, then give the user the stale one's link and say it can be discarded; do not discard it unless they ask. None of them blocks a merge.",
+    ])
+      expect(schema).toContain(sentence);
+    expect(schema).not.toContain("server instructions");
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {

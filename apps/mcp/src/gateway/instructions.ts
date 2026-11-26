@@ -1,6 +1,6 @@
 import type { OpName } from "../shared/executor-protocol.js";
 import type { AgentOwner, ToolContext, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
-import { guestAgentNotice, ownedAgentNotice } from "./tools/core/whoami.js";
+import { guestAgentNotice, linkAfterMerge, ownedAgentNotice } from "./tools/core/whoami.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION, OTHERS_TEXT_IS_UNVERIFIED } from "./tools/schemas.js";
 
@@ -58,14 +58,10 @@ export function buildServerInstructions(
             : [
                 `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
               ]),
+          linkAfterMerge(principal !== "human" && has("share") && scopes.has("publish")),
           ...(principal === "human"
-            ? ["Then give the user the pull request link."]
+            ? []
             : [
-                ...(has("share")
-                  ? [
-                      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.",
-                    ]
-                  : []),
                 principal === "agent_unclaimed"
                   ? "An unclaimed agent identity cannot make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it."
                   : "A file link from someone else gives an agent identity read access only. Tell the user so; a different link setting does not change it.",
@@ -89,7 +85,7 @@ export function buildServerInstructions(
     ...(executorRestricted
       ? [
           `Editing document contents is not enabled for this account; ask the user to edit in the browser.${
-            finishes && has("claim") && has("unit_create")
+            finishes && has("claim") && scopes.has("publish") && has("unit_create")
               ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim, then give the user the claim link and the copy's link. Tell them to open the claim link first: the copy is theirs to edit once they claim it there. Until then, its link may open read-only or not at all."
               : ""
           }`,

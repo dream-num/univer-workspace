@@ -24,7 +24,7 @@ operator granted with `db:executor-access` receive them (see [Executor access](#
 listed users receive them. `*` admits every user, which is acceptable only where every user of the Workspace is trusted,
 such as an internal staging deployment.
 Other users retain every tool that does not need the executor, and their server instructions
-ask them to edit document contents in the browser. An unclaimed agent is also told to give the user an editable copy
+ask them to edit document contents in the browser. An unclaimed agent with the `publish` scope that `claim` needs is also told to give the user an editable copy
 instead, with its claim link and the copy's link, and to tell the user to open the claim link first: the copy is
 theirs to edit once they claim it, and until then its link opens only if the agent shared it. The executor checks each grant on its own: against its list before
 contacting Workspace, and in `workspace` mode against the access Workspace reports for the grant's session.
@@ -56,7 +56,7 @@ and mark it ready, which makes it visible to the repository. A Team member who c
 pull request gets `FORBIDDEN` with a message naming the author, and the person who claimed an agent author; a caller
 without edit access gets `FORBIDDEN` with a message saying so.
 Each Unit in a pull request carries `freshness` from the server: `current`, `behind` or `stale` for a file from trunk while the
-pull request is draft or ready, otherwise null. When `pr_view` is listed, the instructions say what each label means and tell
+pull request is draft or ready, otherwise null. When `pr_view` is listed, the instructions and the `freshness` description in its output schema say what each label means and tell
 the caller to redo a stale pull request in a new one and then discard the stale one. Freshness never blocks a merge.
 An unclaimed agent also gets `claim`, which its `share` result points to; a person and a claimed agent see neither.
 With `search` listed, the instructions and the core Skill tell the caller that, asked to check its work or given no task, it
@@ -205,8 +205,9 @@ Some MCP clients, WorkBuddy 5.11.3 among them, never give the model the server i
 the descriptions of the tools the model looks up, and tool results. So an agent's `whoami` description asks it to call
 `whoami` before its first reply, and an agent's `notice` also says, in the instructions' words, how it finishes a pull request.
 With `worktree:merge`, an unclaimed agent marks its own ready and merges it. A claimed agent marks it ready and merges it
-unless the person who claimed it asked to review the work or it needs a person's decision. Both give the user the `share`
-url for a merged file in their Personal Space, and the pull request link in a Team repository. With `write` but not
+unless the person who claimed it asked to review the work or it needs a person's decision. With the `publish` scope that
+`share` needs, both give the user the `share` url for a merged file in their Personal Space, and the pull request link in a
+Team repository. Without `publish`, they give the pull request link. With `write` but not
 `worktree:merge`, the agent keeps the draft until the user says the work is finished or asks for review, gives the user the
 pull request link, and leaves merging and discarding to the user. A read-only connection gets no finish rule, and a person's
 `whoami` carries no `notice`. The descriptions of `pr_ready`, `pr_merge` and `execute` point to that `notice`, and to the
