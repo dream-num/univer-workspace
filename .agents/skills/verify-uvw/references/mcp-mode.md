@@ -71,7 +71,7 @@ $V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | -
 $V mcp-tools|mcp-skills|mcp-resources|mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
 $V mcp-token [--scopes read,write,...] [--name name]   # a new default PAT; prints only its id
-$V mcp-oauth login <label> [--guest|--guest-card [--agent-cookie]|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
+$V mcp-oauth login <label> [--guest|--guest-card [--agent-cookie]|--connect-as new_agent|self|<owned-agent-user-id>] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
 $V mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]
 $V mcp-oauth revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
@@ -98,9 +98,11 @@ client named by `--client-id` with callback path `/callback`. It clears the run 
 in as the run user, approves consent with only `--scopes` checked (default all four), and keeps the token
 pair and client id in `home/mcp-oauth-*`. The page preselects the agent the run user owns that was made for a client
 of the same name, else a new agent. Without `--connect-as` the login keeps that choice; `--connect-as` picks a new
-agent (`new_agent`, which fails when the page disables it at the agent creation limit) or the run user (`self`).
+agent (`new_agent`, which fails when the page disables it at the agent creation limit), the run user (`self`), or an
+agent the run user owns, by its user id. The page lists only up to five owned agents that are not stopped, most
+recently active first, and the login fails when it offers no radio with that value.
 `--client-name` registers the client under that name instead of `verify-uvw <label>`. `<label>.json` records the
-offered `choices`, the `preselected` value and the submitted `connect_as`. A journey that needs the run user passes
+offered `choices`, the `preselected` value and the submitted `connect_as`, which is the agent's id when one was chosen. A journey that needs the run user passes
 `--connect-as self`. Each login that submits `new_agent` creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
 --guest` needs no `user`. Its loopback callback gets a guest agent's code with no page, and it fails unless
 the browser still has no session. `--guest-card` registers a callback that is not loopback instead, takes the

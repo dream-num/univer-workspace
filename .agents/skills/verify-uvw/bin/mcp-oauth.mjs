@@ -10,7 +10,7 @@ import { redact as redactSecrets, runSecrets } from './secrets.mjs';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card [--agent-cookie]|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>|--client-name <name>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card [--agent-cookie]|--connect-as new_agent|self|<owned-agent-user-id>] [--scopes read,write,...] [--client-id <https-url>|--client-name <name>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
@@ -55,7 +55,8 @@ if (command === 'login') {
     const value = args.shift();
     if (value === undefined) usage(`Missing value for ${flag}`);
     if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
-    else if (flag === '--connect-as' && ['new_agent', 'self'].includes(value)) connectAs = value;
+    // An owned agent's id goes into a CSS selector, so only the UUID shape Workspace gives a user passes.
+    else if (flag === '--connect-as' && (['new_agent', 'self'].includes(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))) connectAs = value;
     else if (flag === '--client-id' && URL.canParse(value) && new URL(value).protocol === 'https:') clientId = value;
     else if (flag === '--client-name' && value.trim() !== '') clientName = value;
     else usage(`Unknown or invalid option ${flag}`);
@@ -144,7 +145,10 @@ if (command === 'login') {
       if (connectAs === 'new_agent' && JSON.parse(browser('eval', "document.querySelector('input[name=connect_as][value=new_agent]').disabled"))) {
         throw new Error(`the consent page disables the new-agent option at the agent creation limit: ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises it'}`);
       }
-      if (connectAs) browser('click', `input[name=connect_as][value=${connectAs}]`);
+      if (connectAs && !choices.includes(connectAs)) {
+        throw new Error(`the consent page offers no connect_as ${connectAs}; it lists only up to five agents the run user owns and has not stopped, most recently active first`);
+      }
+      if (connectAs) browser('click', `input[name=connect_as][value="${connectAs}"]`);
       submittedAs = connectAs ?? preselected;
       browser('screenshot', `${evidence}-consent.png`);
       browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
