@@ -19,8 +19,7 @@ export interface WorkspaceShare {
   readonly expiresAt?: string;
   /** Who can open `url` now, and while `link` is off, how the caller lets anyone with the link read it. */
   readonly access: string;
-  /** Set when the owner is an unclaimed agent: the page where a person claims it and keeps its files. */
-  readonly claimUrl?: string;
+  /** Set when the owner is an unclaimed agent: how it lets a person claim it and keep its files. */
   readonly claimHint?: string;
 }
 
@@ -29,8 +28,7 @@ export interface WorkspaceClaimLink {
   readonly expiresAt: string;
 }
 
-const CLAIM_HINT =
-  "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.";
+const CLAIM_STEP = "make a claim link with claim (uvw claim in the CLI)";
 
 export async function createClaimLink(
   spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
@@ -45,7 +43,7 @@ export async function createClaimLink(
 
 /** Reads the Link Sharing of a file, named by its link or Node ID, and sets it first when `link` is given. */
 export async function shareNode(
-  spaces: Pick<WorkspaceSpaceFeature, "get" | "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
+  spaces: Pick<WorkspaceSpaceFeature, "get" | "getNode" | "getLinkSharing" | "updateLinkSharing">,
   origin: string,
   input: {
     readonly node: string;
@@ -81,7 +79,7 @@ export async function shareNode(
         if (lookup instanceof WorkspaceApplicationError) return null;
         throw lookup;
       });
-      if (space?.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
+      if (space?.type === "team") throw teamSpaceRefusal(origin, url, name, space, input.caller, input.turnOn);
     }
     if (error.code === "INTERACTIVE_SESSION_REQUIRED") {
       throw workspaceError(
@@ -107,7 +105,7 @@ export async function shareNode(
     owner: sharing.owner,
     ...(sharing.expiresAt === null ? {} : { expiresAt: sharing.expiresAt }),
     access: describeAccess(link, sharing, resource === null, input.caller, input.turnOn),
-    ...(sharing.owner.claimed === false ? await claimFields(spaces, origin) : {}),
+    ...(sharing.owner.claimed === false ? { claimHint: `To let the user keep this file, ${CLAIM_STEP} and give it to them.` } : {}),
   };
 }
 
@@ -142,20 +140,18 @@ export function formatShare(shared: WorkspaceShare): string {
   return [
     `${shared.name}  ${shared.url}`,
     `Link Sharing: ${shared.link}. ${shared.access}`,
-    ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
     ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
   ].join("\n");
 }
 
-async function teamSpaceRefusal(
-  spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
+function teamSpaceRefusal(
   origin: string,
   url: string,
   name: string,
   space: WorkspaceSpace,
   caller: WorkspaceSubject,
   turnOn: string | undefined,
-): Promise<WorkspaceApplicationError> {
+): WorkspaceApplicationError {
   const where = `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${space.fullName ?? space.name}.`;
   if (caller.kind !== "agent" || caller.claimed) {
     // Only a person's token session omits turnOn, and the server does not let it make a Space public either.
@@ -168,26 +164,9 @@ async function teamSpaceRefusal(
       { url },
     );
   }
-  const claim = await claimFields(spaces, origin);
-  const next = claim.claimUrl === undefined
-    ? "make a claim link with claim (uvw claim in the CLI) and give it to the user."
-    : `give the user this claim link, which works once within 10 minutes: ${claim.claimUrl}`;
   return workspaceError(
     "workspace-argument-invalid",
-    `${where} A person can open your repositories once they claim you, so ${next}`,
-    { url, ...claim },
+    `${where} A person can open your repositories once they claim you, so ${CLAIM_STEP} and give it to the user.`,
+    { url },
   );
-}
-
-async function claimFields(
-  spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
-  origin: string,
-): Promise<Pick<WorkspaceShare, "claimUrl" | "claimHint">> {
-  try {
-    return { claimUrl: (await createClaimLink(spaces, origin)).claimUrl, claimHint: CLAIM_HINT };
-  } catch (error) {
-    // A Workspace from before claiming has no claim codes; the share itself already happened.
-    if (error instanceof WorkspaceApplicationError) return {};
-    throw error;
-  }
 }

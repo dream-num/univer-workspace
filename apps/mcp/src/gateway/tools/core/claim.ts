@@ -23,5 +23,5 @@ export const claimTool: ToolDefinition = {
 export const unclaimedAgentShareTool: ToolDefinition = {
   ...shareTool,
   principals: ["agent_unclaimed"],
-  outputSchema: shareOutputSchema.extend({ claimUrl: z.url().optional(), claimHint: z.string().optional() }),
+  outputSchema: shareOutputSchema.extend({ claimHint: z.string().optional() }),
 };

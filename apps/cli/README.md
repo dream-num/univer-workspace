@@ -158,12 +158,14 @@ Share a file after its pull request is merged. Only the owner of the file can us
 folder's link opens everything in it. While Link Sharing is off, `access` also gives the command that
 lets anyone with the link read the file; for a person's session, it says to run it only if the user
 asks. When the owner is an unclaimed agent, the output also has `expiresAt`. The link stops working
-on that date unless the agent is used or the link is opened before then. It also has `claimUrl` and
-`claimHint`: a link that lets a person keep the agent's files, and a sentence telling the agent to
-give it to the user. A file in a Team Space has no Link Sharing, so the command exits 1 with
+on that date unless the agent is used or the link is opened before then. It also has `claimHint`, a
+sentence telling the agent to make a claim link with `uvw claim` and give it to the user so they can
+keep its files. A file in a Team Space has no Link Sharing, so the command exits 1 with
 `workspace-argument-invalid`, names the repository, and says how to let a person open the file. A
-guest agent gets a claim link to give the user, because claiming lets the user open the agent's
-repositories. Anyone else is pointed to `uvw repo member add` or `uvw repo edit --visibility public`.
+guest agent is told to make a claim link with `uvw claim` and give it to the user, because claiming
+lets the user open the agent's repositories. Anyone else is pointed to `uvw repo member add` or
+`uvw repo edit --visibility public`. `uvw share` never makes a claim code, so running it again never
+ends a claim link the agent already gave.
 
 ```bash
 uvw claim [--json]

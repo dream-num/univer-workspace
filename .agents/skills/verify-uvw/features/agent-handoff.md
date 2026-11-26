@@ -22,8 +22,9 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   and sees the card `Give the agent its own space` with `Continue as a guest agent`; the guest is named after the
   OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
   and repository `<username>/personal`.
-- AH5 mints a claim link: MCP `claim` (unclaimed agents only, listed after `share`), `uvw claim`, and the
-  `claimUrl` and `claimHint` that `share` returns for an unclaimed owner. A link works once, within 10 minutes.
+- AH5 mints a claim link: MCP `claim` (unclaimed agents only, listed after `share`) and `uvw claim`. For an
+  unclaimed owner `share` returns `claimHint`, which points to them, and mints nothing. A link works once, within
+  10 minutes.
 - AH6 claims on `/claim/<code>`. Signed out: `Sign in to claim this agent` with an embedded sign-in that returns
   to the same page. Signed in as a person: `Claim <agent name>`, `@<username>`, the file count,
   `Account that will own it`, and `Claim agent`, which opens the agent's Space. Revisiting shows
@@ -72,7 +73,8 @@ Preconditions:
 As the guest: `gu pr create -R $A/personal -t Handoff --json`, then
 `gu unit create --worktree <id> --space $A/personal --type sheet --name "Handoff sheet" --json` (Node ID `AN`),
 `gu pr ready 1 -R $A/personal` and `gu pr merge 1 -R $A/personal`. `gu share $AN --link viewer` prints an expiry
-date and a `Claim link`, with `It works once, within 10 minutes.` Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
+date and `To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.`
+Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
 
 ### HO3. Visitor view (AH1-AH3)
 
@@ -182,8 +184,8 @@ gets in `core` to set up its own repository and declare its checks. A person's d
 
 Mode: mcp.
 
-Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
-gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 55 tools (no `claim`),
+Open the claim URL in the run browser and click `Claim agent`. Right after, with no wait,
+`$V mcp-tools --as bot1 mh-bot1-claimed` lists 55 tools (no `claim`),
 and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
 
 ### MH3. Claimer decisions
@@ -222,14 +224,13 @@ bot1's `pr_ready` and `pr_merge` merge its pull request.
 
 ## Gotchas
 
-- The claim code is a one-time credential. Evidence files from `mcp ... claim`, `share` and `uvw claim` contain it
+- The claim code is a one-time credential. Evidence files from `mcp ... claim` and `uvw claim` contain it
   in plain text. After use, run `$V secret-check`: it fails on each `/claim/<code>` and prints the `perl` command
   that replaces the codes.
-- Claim codes live in server memory: a restart drops them. Each `claim`, and each `share` by an unclaimed owner,
-  mints a new one.
+- Claim codes live in server memory: a restart drops them. Each `claim` mints a new one; `share` never does.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
-- The MCP tool lists change with the claim after the gateway's cache (about 30 s): unclaimed agents have `claim`,
-  claimed agents do not. See [MH1 and MH2](#mh1-unclaimed-agent).
+- The MCP tool lists change on the first request after the claim: unclaimed agents have `claim`, claimed agents
+  do not. See [MH1 and MH2](#mh1-unclaimed-agent).
 - Prompts are English whatever the interface language.
 - The dialog keeps the tab you last chose until the page reloads. Click `MCP (recommended)` before reading the
   MCP tab on a second opening.

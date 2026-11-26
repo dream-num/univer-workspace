@@ -99,11 +99,8 @@ describe("file links", () => {
     });
   });
 
-  it("reads Link Sharing without writing when no link is given, with a claim link for an unclaimed owner", async () => {
-    const { spaces, calls } = clients((call) =>
-      call.path === "/api/agents/claim-codes"
-        ? Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 })
-        : Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
+  it("reads Link Sharing without writing when no link is given, and points an unclaimed owner to claim without making a claim code", async () => {
+    const { spaces, calls } = clients((call) => Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
     await expect(shareNode(spaces, origin, { node: `${origin}/nodes/n1`, caller: agent, turnOn })).resolves.toEqual({
       url: `${origin}/nodes/n1`,
       name: "Budget",
@@ -111,31 +108,16 @@ describe("file links", () => {
       owner: { username: "budget-x7k2", kind: "agent", claimed: false },
       expiresAt: "2026-12-14T00:00:00.000Z",
       access: "Only this agent can open the link until a person claims it. To let anyone with the link read it, run `uvw share n1 --link viewer`.",
-      claimUrl: `${origin}/claim/c0de`,
-      claimHint: "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.",
+      claimHint: "To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.",
     });
     expect(calls.map(({ method, path }) => [method, path])).toEqual([
       ["GET", "/api/nodes/n1"],
       ["GET", "/api/nodes/n1/link-sharing"],
-      ["POST", "/api/agents/claim-codes"],
     ]);
   });
 
-  it("still returns the share when the Workspace cannot make a claim code", async () => {
-    const { spaces } = clients((call) =>
-      call.path === "/api/agents/claim-codes"
-        ? Response.json({ error: { code: "AGENT_CLAIM_UNAVAILABLE", message: "Try again shortly." } }, { status: 503 })
-        : Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
-    const shared = await shareNode(spaces, origin, { node: "n1", caller: agent });
-    expect(shared).toMatchObject({ link: "off", owner: { claimed: false } });
-    expect(shared).not.toHaveProperty("claimUrl");
-  });
-
   it("says until when an unclaimed agent's shared link works", async () => {
-    const { spaces } = clients((call) =>
-      call.path === "/api/agents/claim-codes"
-        ? Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 })
-        : Response.json(call.method === "PUT" ? sharing({ enabled: true }) : node(sheet)));
+    const { spaces } = clients((call) => Response.json(call.method === "PUT" ? sharing({ enabled: true }) : node(sheet)));
     const shared = await shareNode(spaces, origin, { node: "n1", caller: agent, link: "viewer" });
     expect(shared.access).toBe(
       "Anyone with the link can read the file without signing in. The link stops working on 2026-12-14T00:00:00.000Z unless budget-x7k2 stays active.",
@@ -228,31 +210,22 @@ describe("file links", () => {
     });
   });
 
-  const teamFile = (claimCode: () => Response) => clients((call) =>
+  const teamFile = () => clients((call) =>
     call.path.endsWith("/link-sharing") ? notFound()
       : call.path === "/api/spaces/s1" ? Response.json(view())
-        : call.path === "/api/agents/claim-codes" ? claimCode()
-          : Response.json(node(sheet)));
+        : Response.json(node(sheet)));
   const inTeam = 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository me/docs.';
 
-  it("tells an unclaimed agent that a claim lets the user open a file in its Team Space, with a claim link", async () => {
-    const { spaces } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
+  it("tells an unclaimed agent that a claim lets the user open a file in its Team Space, and names claim without making a claim code", async () => {
+    const { spaces, calls } = teamFile();
     for (const link of [undefined, "viewer"] as const) {
       await expect(shareNode(spaces, origin, { node: "n1", caller: agent, ...(link === undefined ? {} : { link }) })).rejects.toMatchObject({
         code: "workspace-argument-invalid",
-        message: `${inTeam} A person can open your repositories once they claim you, so give the user this claim link, which works once within 10 minutes: ${origin}/claim/c0de`,
-        detail: { url: `${origin}/nodes/n1`, claimUrl: `${origin}/claim/c0de` },
+        message: `${inTeam} A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.`,
+        detail: { url: `${origin}/nodes/n1` },
       });
     }
-  });
-
-  it("names the claim tool to an unclaimed agent when the Workspace cannot make a claim code", async () => {
-    const { spaces } = teamFile(() => Response.json({ error: { code: "AGENT_CLAIM_UNAVAILABLE", message: "Try again shortly." } }, { status: 503 }));
-    await expect(shareNode(spaces, origin, { node: "n1", caller: agent })).rejects.toMatchObject({
-      code: "workspace-argument-invalid",
-      message: `${inTeam} A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.`,
-      detail: { url: `${origin}/nodes/n1` },
-    });
+    expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
   });
 
   const addMember = "To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or";
@@ -263,7 +236,7 @@ describe("file links", () => {
   ] as const)(
     "tells %s to add a member or have the repository made public in the way it can",
     async (_caller, caller, sessionTurnOn, publish) => {
-      const { spaces, calls } = teamFile(() => Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 }));
+      const { spaces, calls } = teamFile();
       await expect(shareNode(spaces, origin, { node: "n1", caller, link: "viewer", ...(sessionTurnOn === undefined ? {} : { turnOn: sessionTurnOn }) })).rejects.toMatchObject({
         code: "workspace-argument-invalid",
         message: `${inTeam} ${addMember} ${publish}`,

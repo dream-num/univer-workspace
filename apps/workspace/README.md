@@ -247,9 +247,9 @@ exchange. `pnpm db:ban-agent <username or user id>` bans an agent (`db:ban-agent
 build); it refuses a User that is not an agent, and a second run changes nothing. When the value names two
 Users, as one User's ID and another's username or as two user IDs that differ only in case (both compared ignoring
 case), it names each by what matched and changes nothing; use the other identifier. It runs outside the
-server, so a collaboration socket the agent already holds stays open until its session ends. The MCP gateway caches a token
-exchange for up to 30 seconds, so for that long a banned agent's token still gets an answer from tools
-that do not call Workspace, such as `api_find`.
+server, so a collaboration socket the agent already holds stays open until its session ends. The MCP gateway caches a claimed
+agent's token exchange for up to 30 seconds, so for that long a banned claimed agent's token still gets an answer from tools
+that do not call Workspace, such as `api_find`. It reads an unclaimed agent from its session on every request.
 
 A person claims an agent to keep its files. The unclaimed agent calls `POST /api/agents/claim-codes`,
 which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (`/claim/<code>` on this

@@ -423,6 +423,12 @@ export function createGateway(
       role: "client",
       fetcher,
     });
+    const sessionEnded = async () => {
+      authenticator.evict(bearer, authentication);
+      if (requestStartedAt - authentication.obtainedAt < 5_000) return unauthorized(true);
+      const refreshed = await authenticator.authenticate(bearer, requestId);
+      return unauthorized(refreshed === null);
+    };
     let user: WorkspaceSubject;
     let executorAccess: boolean;
     try {
@@ -432,7 +438,7 @@ export function createGateway(
         error instanceof WorkspaceApplicationError &&
         error.code === "workspace-authentication-required"
       )
-        return unauthorized(true);
+        return await sessionEnded();
       throw error;
     }
     await capabilities.ready;
@@ -490,12 +496,7 @@ export function createGateway(
         if (!call.success) return response;
         // Consume the finite call response before logging or translating an expired downstream session to HTTP 401.
         const text = await response.text();
-        if (state.outcome === "auth_error") {
-          authenticator.evict(bearer, authentication);
-          if (requestStartedAt - authentication.obtainedAt < 5_000) return unauthorized(true);
-          const refreshed = await authenticator.authenticate(bearer, requestId);
-          return unauthorized(refreshed === null);
-        }
+        if (state.outcome === "auth_error") return await sessionEnded();
         return new Response(text, { status: response.status, headers: response.headers });
       } finally {
         if (call.success) {

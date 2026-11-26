@@ -37,7 +37,7 @@ sequenceDiagram
     actor L as 🧑 Leo
     participant A as 🤖 Leo 的 AI 助手
     Note over G: 在 Pull request 里<br/>做 Sheet，自己合入
-    G->>M: share：文件链接和认领链接
+    G->>M: share 和 claim：文件链接和认领链接
     rect rgba(128, 128, 128, 0.25)
     Note over M: 认领 Agent
     end
@@ -91,7 +91,7 @@ Doc 或 Slide 用 `inspect`，并把 `target` 设为 `document` 或 `presentatio
 
 ![MCP 客户端打开的登录页，左边是"以访客 Agent 继续"卡片，右边是账号登录表单](images/agent-handoff/guest-agent-card.zh-CN.png)
 
-访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。没有页面时，人只能从 Agent 那里知道它，也就是 `share` 和 `claim` 返回的认领链接。Agent 在 Pull request 里工作，合入后分享文件：
+访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。没有页面时，人只能从 Agent 那里知道它，也就是 `claim` 返回的认领链接。Agent 在 Pull request 里工作，合入后分享文件：
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -100,6 +100,7 @@ execute     { "worktree": "<worktree id>", "unit": "<unitId>", "code": "<Facade 
 pr_ready    { "repo": "<agent>/personal", "number": 1 }
 pr_merge    { "repo": "<agent>/personal", "number": 1 }
 share       { "node": "<nodeId>", "link": "viewer" }
+claim       {}
 ```
 
 用 CLI 时，`uvw auth guest` 创建 Agent 并打印它的仓库：
@@ -112,18 +113,18 @@ uvw execute --worktree <worktree id> --unit <unitId> --script budget.js
 uvw pr ready 1 -R <agent>/personal
 uvw pr merge 1 -R <agent>/personal
 uvw share <nodeId> --link viewer
+uvw claim
 ```
 
-MCP 的 `share` 返回链接、谁能打开它，以及一个认领链接：
+MCP 的 `share` 返回链接和谁能打开它，并提示 Agent 调用 `claim`：
 
 ```text
 Q3 team budget  https://space.univer.ai/nodes/<nodeId>
 Link Sharing: viewer. Anyone with the link can read the file without signing in. The link stops working on 2026-12-18T15:23:53.488Z unless claude-code-g3wq stays active.
-Claim link: https://space.univer.ai/claim/<code>
-Give the claim link to the user so they can keep this file. It works once, within 10 minutes.
+To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.
 ```
 
-`uvw share` 0.7.0 打印同样的信息，措辞更简短。
+然后 `claim` 返回认领链接，`{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<10 分钟后>" }`，只能用一次，10 分钟内有效。`uvw share` 打印同样的信息，措辞更简短，`uvw claim` 打印认领链接。
 
 在有人认领之前，访客 Agent 最多保留 20 个文件，每个不超过 10 MiB，文件 30 天不用会过期，分享页也会把它标为 **未验证的 Agent**。它读不到任何人的私有文件，也不能加入团队空间。
 
@@ -141,7 +142,7 @@ flowchart TB
 
 认领页显示 Agent 的名字和文件数，点 **认领 Agent** 完成认领。认领链接只能用一次，Agent 可以用 `claim` 或 `uvw claim` 重新生成。
 
-认领之后，`share` 不再返回过期日期和认领链接，分享页也去掉 **未验证的 Agent** 标记。
+认领之后，`share` 不再返回过期日期和认领提示，分享页也去掉 **未验证的 Agent** 标记。
 
 ## 一个文件带来下一个
 

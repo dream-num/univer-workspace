@@ -22,6 +22,7 @@ const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string;
   uvw_pat_granted: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-4", clientId: null, executorAccess: true },
   uvw_pat_denied: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-5", clientId: null, executorAccess: false },
   uvw_pat_agent: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-3", clientId: null, user: { kind: "agent", claimed: false } },
+  uvw_pat_claimed: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-6", clientId: null, user: { kind: "agent", claimed: true } },
   uvw_pat_full: { scope: "read write publish worktree:merge nope", kind: "pat", id: "pat-1", clientId: null },
   uvw_pat_readonly: { scope: "read", kind: "pat", id: "pat-2", clientId: null },
   uvw_at_oauth: { scope: "read write", kind: "oauth", id: "grant-1", clientId: "chatgpt" },
@@ -63,6 +64,8 @@ describe("gateway authentication", () => {
       exchangeBody?: object;
       beforeExchange?: () => Promise<void>;
       expireDownstream?: (cookie: string | undefined) => boolean | Promise<boolean>;
+      user?: () => object;
+      product?: (path: string) => { readonly status?: number; readonly body: object } | undefined;
     } = {},
   ) {
     const exchanges: URLSearchParams[] = [];
@@ -111,7 +114,7 @@ describe("gateway authentication", () => {
                 expires_in: 600,
                 scope: token.scope,
                 subject: { kind: token.kind, id: token.id, client_id: token.clientId },
-                user: { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null, kind: "human", ...token.user },
+                user: behavior.user?.() ?? { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null, kind: "human", ...token.user },
                 ...(token.executorAccess === undefined ? {} : { executor_access: token.executorAccess }),
               }),
             );
@@ -120,8 +123,11 @@ describe("gateway authentication", () => {
         return;
       }
       productCookies.push(request.headers.cookie);
+      const product = behavior.product?.(path);
       if (path !== "/api/session" && await behavior.expireDownstream?.(request.headers.cookie)) {
         response.writeHead(401).end("{}");
+      } else if (product) {
+        response.writeHead(product.status ?? 200).end(JSON.stringify(product.body));
       } else if (request.headers.cookie === "workspace_session=dev-session" && path === "/api/session") {
         response.end(JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "alice" } }));
       } else if (path === "/api/spaces") {
@@ -296,6 +302,63 @@ describe("gateway authentication", () => {
     await client.callTool({ name: "whoami", arguments: {} });
     await client.callTool({ name: "whoami", arguments: {} });
     expect(gateway.exchanges).toHaveLength(1);
+  });
+
+  it("gives an unclaimed agent's first call after a person claims it the claimed agent's tools and advice", async () => {
+    const agent = { id: "user-1", username: "budget-x7k2", displayName: "budget", avatarUrl: null, kind: "agent", claimed: false };
+    const products: string[] = [];
+    const routes: Record<string, { readonly status?: number; readonly body: object }> = {
+      "/api/session": { body: { authenticated: true, user: agent } },
+      "/api/nodes/n1": { body: {
+        node: {
+          id: "n1", spaceId: "s1", parentNodeId: null, name: "Budget", hasChildren: false, accessRole: "owner",
+          updatedAt: "2026-11-14T00:00:00.000Z", resource: null,
+          capabilities: { browseChildren: false, createChildren: false, move: true, rename: true, share: true, trash: true },
+        },
+        space: { id: "s1", name: "Docs" }, breadcrumbs: [{ id: "n1", name: "Budget" }], navigationRootNodeId: null,
+      } },
+      "/api/nodes/n1/link-sharing": { status: 404, body: { error: { code: "NOT_FOUND", message: "The resource was not found." } } },
+      "/api/spaces/s1": { body: {
+        id: "s1", type: "team", name: "Docs", publicRead: false, description: "", slug: "docs", fullName: "budget-x7k2/docs",
+        owner: { id: "user-1", username: "budget-x7k2" }, accessRole: "owner", capabilities: {},
+      } },
+    };
+    const gateway = await start(exchangeEnv, {
+      user: () => agent,
+      product: (path) => {
+        products.push(path);
+        return routes[path];
+      },
+    });
+    const client = await gateway.connect("uvw_pat_agent");
+    const names = async () => (await client.listTools()).tools.map(({ name }) => name);
+    const share = async () => toolError(await client.callTool({ name: "share", arguments: { node: "n1", link: "viewer" } }));
+    const inTeam = 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository budget-x7k2/docs.';
+    expect(await names()).toContain("claim");
+    expect(await share()).toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `${inTeam} A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.`,
+    });
+    agent.claimed = true;
+    expect(await names()).not.toContain("claim");
+    expect(await share()).toMatchObject({
+      code: "workspace-argument-invalid",
+      message: `${inTeam} To let a person open it, add them as a member with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI).`,
+    });
+    expect(gateway.events().map(({ principal_category }) => principal_category)).toEqual(["agent_unclaimed", "agent_claimed"]);
+    expect(gateway.exchanges).toHaveLength(1);
+    expect(products).not.toContain("/api/agents/claim-codes");
+  });
+
+  it("asks Workspace nothing more for a claimed agent's or a person's tool lists", async () => {
+    const gateway = await start(exchangeEnv);
+    for (const bearer of ["uvw_pat_claimed", "uvw_pat_full"]) {
+      const client = await gateway.connect(bearer);
+      await client.listTools();
+      await client.listTools();
+    }
+    expect(gateway.exchanges).toHaveLength(2);
+    expect(gateway.productCookies).toEqual([]);
   });
 
   it("negatively caches invalid_grant and answers HTTP 401 with the invalid-token challenge", async () => {

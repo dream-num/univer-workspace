@@ -65,7 +65,7 @@ $V mcp --as checker-b mpc-claim-b claim '{}'
 ```
 
 Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
-[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Wait 35 s for the gateway's cache. Register a
+[MH1](agent-handoff.md#mh1-unclaimed-agent) says. Register a
 person E with `POST $ORIGIN/api/auth/password/register` and keep the password outside `$EVIDENCE`. Then:
 
 ```bash
@@ -173,7 +173,7 @@ $V mcp --auth oauth mpl-g-claim claim '{}'
 
 The run browser is now signed in as G. In a second session (`AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-o`),
 sign in as O, open the `claimUrl` from `mpl-g-claim.out` and click `Claim agent`. Replace the code in `mpl-g-claim.*`
-as [MH1](agent-handoff.md#mh1-unclaimed-agent) says, and wait 35 s for the gateway's cache.
+as [MH1](agent-handoff.md#mh1-unclaimed-agent) says.
 Sign a second uvw home in as G with the Browser-approved login of
 [MA8](mcp-auth.md#ma8-existing-sign-in-clients), approved in the run browser:
 
@@ -318,8 +318,7 @@ $V mcp --as decl-b mpd-claim-b claim '{}'
 
 Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. After MP17 the run browser is signed
 in as G: run `agent-browser close` first, then sign it in as O with the block under **Browser** in
-[the skill](../SKILL.md#drive). Replace the codes as [MH1](agent-handoff.md#mh1-unclaimed-agent) says, and wait 35 s
-for the gateway's cache. Then A sets up R:
+[the skill](../SKILL.md#drive). Replace the codes as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then A sets up R:
 
 ```bash
 A=$(jq -r .agent.username "$EVIDENCE/principal-decl-a.json"); B=$(jq -r .agent.username "$EVIDENCE/principal-decl-b.json")

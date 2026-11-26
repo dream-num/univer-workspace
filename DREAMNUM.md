@@ -68,7 +68,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It lists `pr_merge` with `core`, and for an agent User also `repo_create`, `repo_edit`, the repository member tools, `space_node` and `blob_upload`. When the connection holds the
   `worktree:merge` scope, it tells the caller to merge its own verified work, and a person or a claimed agent to hand the
   pull request over instead when asked to or when a person must decide; without that scope it leaves merging to the user.
-  An agent shares its merged Personal Space work, and an unclaimed agent also gets `claim` and a claim link in its `share` result. It runs
+  An agent shares its merged Personal Space work, and an unclaimed agent also gets `claim`, which its `share` result points to. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G. Its executor runs resident or, from the same image, on Alibaba Cloud Function Compute
   with HeaderField session affinity; the gateway finds the form through capability discovery.

@@ -587,9 +587,9 @@ through the link, an agent can edit only after a person claims that agent.
 `--link off` stops sharing. Without `--link`, the command only reads the current setting. Only the
 owner of a file can read or change its Link Sharing. Give the user `url` and tell them who can open
 it, from `access`. When the result has `expiresAt`, tell the user that the link stops working on
-that date unless the agent is used or the link is opened before then. When it has `claimUrl`, give
-the user that link too: signing in and opening it within 10 minutes lets them claim the agent and
-keep its files for good. `uvw claim` makes a new claim link when the old one has expired.
+that date unless the agent is used or the link is opened before then. When it has `claimHint`, run
+`uvw claim` and give the user that claim link too: signing in and opening it within 10 minutes lets
+them claim the agent and keep its files for good. Run `uvw claim` again only when the old link has expired.
 
 With a person's session, treat `uvw share --link` like a merge: run it only when the user asks.
 
