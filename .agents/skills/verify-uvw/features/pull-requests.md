@@ -142,7 +142,7 @@ Mode: mcp.
 A second member with read access (register one and add it as `viewer`) opens PR5's ready proposal,
 `$ORIGIN/spaces/$T/pulls/$P5`: the review panel reads
 `Merging this pull request needs edit access to every file it changes.` and has no merge button. In E's
-session the panel has `Confirm merge`; click it, confirm `Merge this task?`, and the page says `Merged`.
+session the panel has `Confirm merge`; click it, confirm `Merge this pull request?`, and the page says `Merged`.
 Screenshot both. The panel sits below the fold, so scroll it into view first.
 
 ### PR9. Private (`pr-merge-rights`)
