@@ -21,7 +21,7 @@ function unknownTools(content: string) {
 }
 
 describe("MCP core Skill tool bindings", () => {
-  it("leaves readiness and merging of verified edits to the server instructions", async () => {
+  it("leaves readiness and merging of verified edits to the finish rule", async () => {
     for (const path of ["../skills/core/SKILL.md", "../dist/skill-data/core/SKILL.md"]) {
       const content = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
       expect(content, path).toContain("Continue draft directly. Only writes need draft");
@@ -31,7 +31,7 @@ describe("MCP core Skill tool bindings", () => {
       expect(content, path).toContain(
         "Before the first write of an explicitly requested rework, return ready to draft once with `pr_ready` and undo true.",
       );
-      expect(content, path).toContain("Then finish the rework as the server instructions say.");
+      expect(content, path).toContain("Then follow the finish rule above.");
       expect(content, path).toContain(
         "Read Sheet values, types, and formulas with `read` and json true.",
       );
@@ -39,7 +39,7 @@ describe("MCP core Skill tool bindings", () => {
         "Read stored content with `inspect` or read-only `execute` for other Unit types",
       );
       expect(content, path).toContain(
-        "Mark the Worktree ready with `pr_ready` and merge it only as the server instructions say.",
+        "Mark the Worktree ready with `pr_ready` and merge it as the finish rule above says.",
       );
       expect(content, path).toContain("Read it with `pr_view` and confirm its state.");
       expect(content, path).not.toMatch(/leave merging to the user|explicitly says the work is finished/u);
@@ -61,18 +61,20 @@ describe("MCP core Skill tool bindings", () => {
     expect(description).not.toContain("Read back with inspect before marking ready.");
   });
 
-  it("binds share and defers readiness and merging to the server instructions", async () => {
+  it("binds share and defers readiness and merging to the finish rule, which every client delivers", async () => {
     const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     expect(tools.find(({ name }) => name === "share")!.description).toContain(
       "To read a drop, pass its url as unit with trunk: true",
     );
-    expect(content).toContain(
-      "The server instructions say when to mark a pull request ready, whether to merge it and which link to return.",
+    expect(content, "a client that never shows server instructions still finds the rule in whoami").toContain(
+      "The notice from whoami, or without one the server instructions, says when to mark a pull request ready, whether to merge it and which link to return. That is the finish rule.",
     );
+    expect(content).not.toContain("as the server instructions say");
+    expect(content).toContain("then merge it as the finish rule above says.");
     expect(content).toContain(
       "`share` works only on files in a Personal Space. For a Team repository, return the pull request link instead.",
     );
-    expect(content).toContain("4. Verify, and finish the pull request as the server instructions say. 5. Submit with `issue_verdict`");
+    expect(content).toContain("4. Verify, then follow the finish rule above. 5. Submit with `issue_verdict`");
     expect(content).toContain("Do not discard unless explicitly requested. Discard is irreversible.");
   });
 
