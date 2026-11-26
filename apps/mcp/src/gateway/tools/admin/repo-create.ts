@@ -8,7 +8,7 @@ const inputSchema = z.object({
   slug: z.string().describe("Repository slug: letters, digits, '.', '_' and '-'."),
   name: z.string().optional().describe("Display name; defaults to the slug."),
   description: z.string().optional().describe("Short plain text, at most 350 characters."),
-  public: z.boolean().optional().describe("Let anyone with the link read it."),
+  public: z.boolean().optional().describe("Let anyone with the link read it. Set it only when the user asks for that."),
   proposals: proposalsSchema.optional().describe(`${proposalsSchema.description} Defaults to members.`),
 });
 export const repoCreateTool: ToolDefinition = {

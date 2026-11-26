@@ -276,7 +276,7 @@ jq -e '[.nodes[].name] | index("Kept sheet") != null' "$EVIDENCE/ho13-browse.out
 $V mcp --auth oauth ho13-whoami whoami
 jq -e --arg user "verify-$VERIFY_UVW_RUN" --arg name "Verify $VERIFY_UVW_RUN" '.owner == {username: $user, name: $name}' "$EVIDENCE/ho13-whoami.out"
 $V mcp-instructions --auth oauth ho13-instructions
-jq -e --arg owner "Verify $VERIFY_UVW_RUN (@verify-$VERIFY_UVW_RUN)" '.instructions | contains("This agent belongs to \($owner) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.")' "$EVIDENCE/ho13-instructions.out"
+jq -e --arg owner "Verify $VERIFY_UVW_RUN (@verify-$VERIFY_UVW_RUN)" '.instructions | contains("This agent belongs to \($owner) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves.")' "$EVIDENCE/ho13-instructions.out"
 curl --fail-with-body -sS -b "$OC" "$ORIGIN/api/agents" > "$EVIDENCE/ho13-agents.json"
 jq -e --arg id "$HO13_AGENT" --arg name "$HO13_NAME · " '[.agents[] | select(.displayName | startswith($name)) | .id] == [$id]' "$EVIDENCE/ho13-agents.json"
 $V mcp-oauth login ho13-other --connect-as self

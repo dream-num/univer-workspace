@@ -32,7 +32,7 @@ export const repoEditTool: ToolDefinition = {
   scope: "publish",
   title: "Edit repository",
   description:
-    "Takes effect immediately, without review. Change a repository's display name, description, visibility, proposals setting, acceptance deadline, landing setting or slug. A new slug breaks every old owner/slug reference and link. Needs at least one change.",
+    "Takes effect immediately, without review. Change a repository's display name, description, visibility, proposals setting, acceptance deadline, landing setting or slug. Make a repository public only when the user asks for that. Anyone with the link can then read everything in it. A new slug breaks every old owner/slug reference and link. Needs at least one change.",
   inputSchema,
   outputSchema: repoSchema,
   annotations: destructiveAnnotations,

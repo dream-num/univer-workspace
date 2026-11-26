@@ -407,11 +407,11 @@ describe("gateway authentication", () => {
     expect(claimed.instructions).toContain("This connection is an agent identity that a person has claimed.");
     expect(claimed.instructions, "until the cached exchange expires, the session says only that the agent is claimed").toContain("This agent belongs to the person who claimed it");
     expect(claimed.notice).toBe(
-      `This agent belongs to the person who claimed it and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves. When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
+      `This agent belongs to the person who claimed it and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves. When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
     );
     const owned = await told("uvw_at_owned");
     const ownerFacts =
-      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.";
+      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves.";
     expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(ownerFacts);
     expect(owned.whoami, "a claimed agent always marks a verified pull request ready; only the merge waits for its owner").toMatchObject({
       owner: { username: "olivia", name: "Olivia" },
