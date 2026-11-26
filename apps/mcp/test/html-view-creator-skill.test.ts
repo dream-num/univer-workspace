@@ -168,6 +168,10 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(save.description).not.toMatch(/wait|pick a style|choose by purpose/iu);
   });
 
+  it("names skills_read where an agent first looks for how to write a page, since a client's own Skill tool cannot load it", () => {
+    expect(tools.find(({ name }) => name === "html_view_save")!.description).toContain("For authoring, call skills_read with name html-view-creator.");
+  });
+
   it("sends a dry run to the save's pull request, where its new Sheets exist", async () => {
     const save = tools.find(({ name }) => name === "html_view_save")!;
     expect(save.description).toContain("It reads the data the save would read, so pass the save's worktree, or repo and pr, too");

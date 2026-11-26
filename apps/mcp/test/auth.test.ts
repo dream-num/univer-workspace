@@ -356,7 +356,7 @@ describe("gateway authentication", () => {
     expect(products).not.toContain("/api/agents/claim-codes");
   });
 
-  it("tells an unclaimed agent from a browser sign-in that it is a guest until a person claims it, and tells a PAT's agent and a person nothing", async () => {
+  it("tells each agent in whoami, not only in server instructions, what to tell the user and how to finish, and tells a person nothing", async () => {
     const agent = { id: "user-1", username: "claude-code-g3wq", displayName: "Claude Code · g3wq", avatarUrl: null, kind: "agent", claimed: false };
     const gateway = await start(exchangeEnv, {
       user: () => agent,
@@ -368,34 +368,43 @@ describe("gateway authentication", () => {
       expect(whoami.isError).not.toBe(true);
       return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice, whoami: whoami.structuredContent };
     };
+    const guestFacts =
+      "This connection is a guest agent, which Workspace created because the browser had no Workspace session. A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client.";
+    const tell = "Tell the user this in your first reply.";
+    const finishOwn =
+      "Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge.";
+    const finishOrHandOver =
+      "Once a result is verified, mark its pull request ready with pr_ready and merge it with pr_merge, unless the person who claimed this agent asked to review the work or it needs their decision; then give them the pull request link and stop there.";
     const guest = await told("uvw_at_guest");
-    for (const fact of [
-      "This connection is a guest agent, which Workspace created because the browser had no Workspace session.",
-      "A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client.",
-      "Otherwise the user can keep this agent by claiming it with claim.",
-    ]) {
-      expect(guest.instructions).toContain(fact);
-      expect(guest.notice).toContain(fact);
-    }
-    expect(guest.instructions).toContain("Tell the user this in your first reply.");
+    expect(guest.notice, "a client that drops server instructions still hears the guest notice, to pass on, and how to finish").toBe(
+      `${guestFacts} Otherwise the user can keep this agent by claiming it with claim. ${tell} ${finishOwn}`,
+    );
+    expect(guest.instructions).toContain(`${guestFacts} Otherwise the user can keep this agent by claiming it with claim. ${tell}`);
     const readOnly = await told("uvw_at_guest_read");
-    expect(readOnly.instructions, "a connection that cannot call claim does not name it").toContain("Otherwise the user can keep this agent by claiming it.");
-    expect(readOnly.notice).toContain("Otherwise the user can keep this agent by claiming it.");
+    expect(readOnly.notice, "a connection that cannot call claim or merge names neither").toBe(
+      `${guestFacts} Otherwise the user can keep this agent by claiming it. ${tell}`,
+    );
+    expect(readOnly.instructions).toContain(`Otherwise the user can keep this agent by claiming it. ${tell}`);
 
     const self = await told("uvw_pat_agent");
     expect(self.instructions).toContain("works in its own Personal Space");
-    expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, undefined]);
+    expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, finishOwn]);
 
     agent.claimed = true;
     const claimed = await told("uvw_at_guest");
     expect(claimed.instructions).toContain("This connection is an agent identity that a person has claimed.");
-    expect([claimed.instructions.includes("guest agent"), claimed.notice]).toEqual([false, undefined]);
     expect(claimed.instructions, "until the cached exchange expires, the session says only that the agent is claimed").toContain("This agent belongs to the person who claimed it");
-    const owned = await told("uvw_at_owned");
-    expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(
-      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.",
+    expect(claimed.notice).toBe(
+      `This agent belongs to the person who claimed it and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves. When the user expects you to see their files, tell them this. ${finishOrHandOver}`,
     );
-    expect(owned.whoami).toMatchObject({ owner: { username: "olivia", name: "Olivia" } });
+    const owned = await told("uvw_at_owned");
+    const ownerFacts =
+      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.";
+    expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(ownerFacts);
+    expect(owned.whoami).toMatchObject({
+      owner: { username: "olivia", name: "Olivia" },
+      notice: `${ownerFacts} When the user expects you to see their files, tell them this. ${finishOrHandOver}`,
+    });
 
     const person = await (await start(exchangeEnv)).connect("uvw_at_oauth");
     expect(person.getInstructions()).not.toContain("guest agent");

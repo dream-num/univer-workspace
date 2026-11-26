@@ -83,7 +83,7 @@ export function buildServerInstructions(
   ];
   const instructions = [
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
-    ...(guest ? [`${guest} Tell the user this in your first reply.`] : []),
+    ...(guest ? [guest] : []),
     ...(finishes ? [intro] : []),
     ...(principal === "agent_claimed" ? [ownedAgentNotice(owner)] : []),
     ...(executorRestricted

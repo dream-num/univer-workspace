@@ -12,13 +12,32 @@ const whoamiOutput = z.object({
 /** An unclaimed agent reached over OAuth came from a browser sign-in with no Workspace session; a PAT's agent made itself. */
 export function guestAgentNotice(principal: ToolPrincipal, authKind: ToolContext["authKind"], claimable: boolean): string | undefined {
   return principal === "agent_unclaimed" && authKind === "oauth"
-    ? `This connection is a guest agent, which Workspace created because the browser had no Workspace session. A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client. Otherwise the user can keep this agent by claiming it${claimable ? " with claim" : ""}.`
+    ? `This connection is a guest agent, which Workspace created because the browser had no Workspace session. A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client. Otherwise the user can keep this agent by claiming it${claimable ? " with claim" : ""}. Tell the user this in your first reply.`
     : undefined;
 }
 
 /** A person who meant to connect as themselves may have taken the consent page's default, a new agent they own. */
 export function ownedAgentNotice(owner: AgentOwner | undefined): string {
   return `This agent belongs to ${owner ? `${owner.name} (@${owner.username})` : "the person who claimed it"} and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. To let this client act as them, they reconnect it and choose to connect as themselves.`;
+}
+
+// Some clients never give the model the server instructions, so an agent's whoami repeats what it must tell the user and how it finishes.
+const finish = {
+  agent_unclaimed:
+    "Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge.",
+  agent_claimed:
+    "Once a result is verified, mark its pull request ready with pr_ready and merge it with pr_merge, unless the person who claimed this agent asked to review the work or it needs their decision; then give them the pull request link and stop there.",
+} as const;
+
+function agentNotice(context: ToolContext): string | undefined {
+  const principal = toolPrincipal(context.user);
+  if (principal === "human") return undefined;
+  const notice = [
+    guestAgentNotice(principal, context.authKind, context.scopes.has("publish")),
+    principal === "agent_claimed" ? `${ownedAgentNotice(context.owner)} When the user expects you to see their files, tell them this.` : undefined,
+    context.scopes.has("worktree:merge") ? finish[principal] : undefined,
+  ].filter((part) => part !== undefined);
+  return notice.length ? notice.join(" ") : undefined;
 }
 
 export const whoamiTool: ToolDefinition = {
@@ -35,20 +54,24 @@ export const whoamiTool: ToolDefinition = {
   async run(context) {
     const { id, name } = context.user;
     const budget = context.user.kind === "agent" ? (await sessionIdentity(context.http)).budget : undefined;
-    const notice = guestAgentNotice(toolPrincipal(context.user), context.authKind, context.scopes.has("publish"));
+    const notice = agentNotice(context);
     return { output: { origin: context.identityOrigin, subject: { id, name }, ...(context.owner ? { owner: context.owner } : {}), ...(budget ? { budget } : {}), ...(notice ? { notice } : {}) }, repo: null };
   },
 };
 
+const agentWhoamiOutput = whoamiOutput.extend({ notice: z.string().optional() });
+const callFirst = "Call it before your first reply; notice says what to tell the user and how to finish your pull requests.";
+
 export const unclaimedAgentWhoamiTool: ToolDefinition = {
   ...whoamiTool,
   principals: ["agent_unclaimed"],
-  outputSchema: whoamiOutput.extend({ notice: z.string().optional() }),
+  description: `${whoamiTool.description} ${callFirst}`,
+  outputSchema: agentWhoamiOutput,
 };
 
 export const claimedAgentWhoamiTool: ToolDefinition = {
   ...whoamiTool,
   principals: ["agent_claimed"],
-  description: `${whoamiTool.description} owner is the person who claimed this agent.`,
-  outputSchema: whoamiOutput.extend({ owner: z.object({ username: z.string(), name: z.string() }).optional() }),
+  description: `${whoamiTool.description} owner is the person who claimed this agent. ${callFirst}`,
+  outputSchema: agentWhoamiOutput.extend({ owner: z.object({ username: z.string(), name: z.string() }).optional() }),
 };

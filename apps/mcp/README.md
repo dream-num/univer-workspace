@@ -193,13 +193,19 @@ person approves with the consent page's default acts for an agent that person ow
 exchange already carries `claimed: true`. The exchange of a claimed agent also names its `owner`. The server
 instructions of a claimed agent name that owner, say that the agent sees the owner's files only when they are shared
 with it, and say that to let the client act as the owner, the owner reconnects it and chooses to connect as
-themselves. Its `whoami` result carries `owner`. Right after a person claims an agent, its cached exchange may still
+themselves. Its `whoami` result carries `owner`, and its `notice` says the same and tells the agent to tell the user
+this when the user expects it to see their files. Right after a person claims an agent, its cached exchange may still
 lack the owner for up to 30 seconds, and the instructions then say only that a person claimed it.
 An unclaimed agent that reaches the gateway with an OAuth access token was created by a browser sign-in that had no
-Workspace session. Its server instructions and `whoami` result say so, say that a user with a Workspace account who meant
+Workspace session. Its server instructions and `whoami` `notice` say so, say that a user with a Workspace account who meant
 to connect under it should sign in to Workspace in that browser and reconnect the client, and say that the user can
-otherwise keep the agent by claiming it, naming `claim` only when the connection can call it. The instructions tell the agent to pass this on in its first reply.
+otherwise keep the agent by claiming it, naming `claim` only when the connection can call it. Both tell the agent to pass this on in its first reply.
 An agent that made itself with `POST /api/agents` and connects with its PAT, a claimed agent and a person get none of it.
+Some MCP clients, WorkBuddy 5.11.3 among them, never give the model the server instructions. They pass on tool names,
+the descriptions of the tools the model looks up, and tool results. So an agent's `whoami` description asks it to call
+`whoami` before its first reply, and with `worktree:merge` an agent's `notice` also says how it finishes a pull request:
+an unclaimed agent merges its own, and a claimed agent merges unless the person who claimed it asked to review the work or
+it needs their decision. A person's `whoami` carries no `notice`.
 A person can claim an unclaimed agent at any moment, so for an unclaimed agent the gateway reads the user from the
 downstream session (`GET /api/session`) on every request instead of keeping the exchanged user. The first request
 after the claim gets the claimed agent's tools, instructions and tool messages. A person's and a claimed agent's
@@ -349,7 +355,7 @@ and the matching owner/slug candidates when available.
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `whoami` | None | `{ origin, subject: { id, name }, budget?, notice? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED`. `notice` is the guest agent notice of [Authentication](#authentication), only for an unclaimed agent over OAuth |
+| `whoami` | None | `{ origin, subject: { id, name }, owner?, budget?, notice? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED`. `owner` is the person who claimed the agent. `notice` is the agent notice of [Authentication](#authentication): the guest or owner facts to tell the user and, with `worktree:merge`, how the agent finishes a pull request. A person gets neither |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
 | `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Repository fields include `proposals`, `acceptAfterHours` and `capabilities`, what the caller may do there, such as `manageMembers` and `propose`, when the server reports all of them. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
 | `fork_create` | Required `repo` (a Team repository whose `capabilities.propose` is true), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. Its owner and members may fork. Anyone else may fork a public repository whose `proposals` setting admits them, writes only their own proposals and holds at most 3 open ones there. A caller it does not admit gets `FORBIDDEN` with a message naming the setting, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |
