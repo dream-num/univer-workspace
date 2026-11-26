@@ -61,8 +61,9 @@ if (command === 'vscode') {
     save(`mcp-cimd-reject-${label}`, { client_id: clientId, status: response.status, location: null, body, ...(label === 'dns-loopback' ? { hostname, addresses, public_domain: 'localtest.me', public_domain_addresses: publicAddresses } : {}) });
   }
   const before = fetchEvents();
-  for (const path of ['/api/auth/authorize', '/api/auth/authorize/consent']) {
-    const url = authorize(`${claude}/anonymous-probe`);
+  // An anonymous authorize with a loopback callback takes the zero-click guest path (HO10), which fetches metadata.
+  for (const [path, redirect] of [['/api/auth/authorize', 'https://verify-uvw.invalid/callback'], ['/api/auth/authorize/consent', undefined]]) {
+    const url = authorize(`${claude}/anonymous-probe`, redirect);
     url.pathname = path;
     const response = await fetch(url, { redirect: 'manual' });
     assert.equal(response.status, 302);

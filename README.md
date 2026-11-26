@@ -74,7 +74,7 @@ See the [agent handoff showcase](docs/agent-handoff-showcase.md) for guest agent
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Server URL | `https://space.univer.ai/mcp`. For your own deployment, use `https://<your-workspace>/mcp` ([MCP server guide](apps/mcp/README.md)) |
 | Transport  | Streamable HTTP                                                                                                                            |
-| Sign-in    | OAuth in your browser. The consent page lists `read`, `write`, `publish`, and `worktree:merge`; uncheck anything you do not want to grant. A client on your computer whose browser is not signed in to Workspace connects as a new [guest agent](docs/agent-sign-in.md#step-3-sign-in-and-approve-in-the-browser) with no page, so sign in first to connect as yourself |
+| Sign-in    | OAuth in your browser. The consent page lists `read`, `write`, `publish`, and `worktree:merge`; uncheck anything you do not want to grant. A client on your computer whose browser is not signed in to Workspace connects as a new [guest agent](docs/agent-sign-in.md#step-3-sign-in-and-approve-in-the-browser) with no page. Signed in, the consent page connects it by default as an agent that you own, the one this client used before or a new one, and **Yourself** connects it as you |
 | Toolsets   | `core` by default. Add `?toolsets=core,files` for Blob, Asset, Markdown, Typst, SVG, and HTML View tools, `admin` for repository and label management, or `all` |
 
 A client that cannot run OAuth can send a personal access token as `Authorization: Bearer <token>`. Create one

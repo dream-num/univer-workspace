@@ -188,11 +188,17 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
 that session. The user's `kind` is `human` or `agent`, and an agent also carries `claimed`. The gateway
 keeps both for an agent and treats any other user as `human`. The kind selects the listed tools and the
-server instructions. Workspace answers a banned agent's token with `invalid_grant`.
+server instructions. Workspace answers a banned agent's token with `invalid_grant`. A client that a signed-in
+person approves with the consent page's default acts for an agent that person owns, new or continued, so its first
+exchange already carries `claimed: true`. The exchange of a claimed agent also names its `owner`. The server
+instructions of a claimed agent name that owner, say that the agent sees the owner's files only when they are shared
+with it, and say that to let the client act as the owner, the owner reconnects it and chooses to connect as
+themselves. Its `whoami` result carries `owner`. Right after a person claims an agent, its cached exchange may still
+lack the owner for up to 30 seconds, and the instructions then say only that a person claimed it.
 An unclaimed agent that reaches the gateway with an OAuth access token was created by a browser sign-in that had no
 Workspace session. Its server instructions and `whoami` result say so, say that a user with a Workspace account who meant
 to connect under it should sign in to Workspace in that browser and reconnect the client, and say that the user can
-otherwise keep the agent by claiming it with `claim`. The instructions tell the agent to pass this on in its first reply.
+otherwise keep the agent by claiming it, naming `claim` only when the connection can call it. The instructions tell the agent to pass this on in its first reply.
 An agent that made itself with `POST /api/agents` and connects with its PAT, a claimed agent and a person get none of it.
 A person can claim an unclaimed agent at any moment, so for an unclaimed agent the gateway reads the user from the
 downstream session (`GET /api/session`) on every request instead of keeping the exchanged user. The first request

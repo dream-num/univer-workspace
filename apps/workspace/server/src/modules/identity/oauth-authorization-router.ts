@@ -6,9 +6,9 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord } from "./access-tokens.js";
 import { deriveDisplayName } from "./display-name.js";
-import type { IdentityRepository, SignInCode } from "./identity.repository.js";
-import type { IdentityModule } from "./identity.service.js";
-import type { AgentCreation, User } from "./identity.types.js";
+import type { IdentityRepository, SignInCode, StoredAgent } from "./identity.repository.js";
+import { agentClientLabel, type IdentityModule } from "./identity.service.js";
+import type { User } from "./identity.types.js";
 import { hashSessionSecret } from "./session-token.js";
 import { sourceBucket } from "./source-rate-limiter.js";
 import {
@@ -49,9 +49,10 @@ const GUEST_AUTHORIZATION_CAPACITY = 10_000;
 // An address creates at most 5 agents an hour by default, and one connection opened authorize twice: 20 is twice that.
 const GUEST_AUTHORIZATIONS_PER_SOURCE = 20;
 const CONSENT_TTL_MS = 5 * 60_000;
+const OWNED_AGENT_CHOICES = 5;
 const MCP_STATE_PATTERN = /^[\x20-\x7E]{1,1024}$/u;
 const SCOPE_DESCRIPTIONS: Readonly<Record<McpScope, string>> = {
-  read: "View your spaces, files, issues and worktrees",
+  read: "View spaces, files, issues and worktrees",
   write: "Edit inside worktrees, and write issues and labels",
   publish: "Change files and spaces directly, without a worktree",
   "worktree:merge": "Merge and discard worktrees",
@@ -63,6 +64,7 @@ export function createOAuthAuthorizationRouter(options: {
   readonly secureCookies: boolean;
   readonly oauthClients: OAuthClientConfig | null;
   readonly codes: SignInCodeStore;
+  readonly agents: Pick<IdentityRepository, "claimAgent" | "findAgents">;
   readonly guestAuthorizationCapacity?: number | undefined;
   readonly mcpOAuth?: McpOAuthConfig | null;
   readonly resolveClientMetadata: ResolveClientMetadata;
@@ -110,12 +112,15 @@ export function createOAuthAuthorizationRouter(options: {
       response.redirect(`/login?returnTo=${encodeURIComponent(`/api/auth/authorize/consent?${new URLSearchParams(request.query as Record<string, string>).toString()}`)}`);
       return;
     }
-    await options.identity.requireInteractiveSession(request.headers.cookie);
+    const { user } = await options.identity.requireInteractiveSession(request.headers.cookie);
     const now = Date.now();
     const consentToken = randomBytes(32).toString("base64url");
-    // A static client carries its secret, so the stored request leaves the client out.
+    // A static client carries its secret, so the stored request leaves the client out and keeps only the name an owned agent takes.
+    const stored = authorizationRequest.kind === "mcp"
+      ? { ...authorizationRequest, client: undefined, clientName: authorizationRequest.client.clientName }
+      : { ...authorizationRequest, client: undefined };
     await options.codes.putSignInCode(
-      { kind: "consent", codeHash: hashSessionSecret(consentToken), userCodeHash: null, subjectUserId: session.user.id, payload: JSON.stringify({ ...authorizationRequest, client: undefined }), createdAt: now, expiresAt: now + CONSENT_TTL_MS },
+      { kind: "consent", codeHash: hashSessionSecret(consentToken), userCodeHash: null, subjectUserId: session.user.id, payload: JSON.stringify(stored), createdAt: now, expiresAt: now + CONSENT_TTL_MS },
       { expiredBefore: now },
     );
     const callback = new URL(authorizationRequest.redirectUri);
@@ -129,7 +134,7 @@ export function createOAuthAuthorizationRouter(options: {
     });
     response.type("html").send(
       authorizationRequest.kind === "mcp"
-        ? renderMcpConsentPage(authorizationRequest, session.user.displayName, consentToken)
+        ? renderMcpConsentPage(authorizationRequest, session.user.displayName, consentToken, user.kind === "human" ? { unavailable: await agentUnavailable(request.ip), owned: await ownedAgents(user.id) } : null)
         : renderConsentPage(authorizationRequest, session.user.displayName, consentToken)
     );
   });
@@ -137,7 +142,7 @@ export function createOAuthAuthorizationRouter(options: {
   router.post("/authorize/consent", async (request, response) => {
     const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) throw new ApplicationError("UNAUTHENTICATED", 401, "Sign in is required.");
-    await options.identity.requireInteractiveSession(request.headers.cookie);
+    const { user } = await options.identity.requireInteractiveSession(request.headers.cookie);
     const token = request.body.consent_token;
     if (typeof token !== "string" || token === "") {
       throw new ApplicationError(
@@ -161,14 +166,28 @@ export function createOAuthAuthorizationRouter(options: {
     }
     let authorizationRequest = JSON.parse(pending.payload) as ConsentedRequest;
     const allowed = request.body.decision === "allow";
+    let subject: AuthorizationSubject = { kind: "user", userId: session.user.id };
+    // Every refusal below keeps the consent token valid, so the user can go back and choose again.
     if (allowed && authorizationRequest.kind === "mcp") {
       const checked: unknown[] = [request.body.scope].flat();
       const granted = authorizationRequest.scopes.filter((scope) => checked.includes(scope));
       if (granted.length === 0) {
-        // The consent token stays valid so the user can go back and choose.
         throw new ApplicationError("INVALID_INPUT", 400, "Select at least one permission to allow.", "scope");
       }
       authorizationRequest = { ...authorizationRequest, scopes: granted };
+      const connectAs: unknown = request.body.connect_as;
+      if (connectAs === "new_agent") {
+        if (user.kind !== "human") throw new ApplicationError("FORBIDDEN", 403, "An agent cannot own an agent. Connect as yourself.", "connect_as");
+        const unavailable = await agentUnavailable(request.ip);
+        if (unavailable !== null) throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, `${unavailable} Go back and choose Yourself, or an agent you already own.`, "connect_as");
+        subject = { kind: "owned_agent", ownerUserId: user.id, agent: { label: undefined, clientName: authorizationRequest.clientName, originIp: request.ip } };
+      } else if (connectAs !== "self") {
+        // Any id that is not an agent of this person gets the same answer, so the form reveals no other User.
+        if (typeof connectAs !== "string" || !(await ownsAgent(user.id, connectAs))) {
+          throw new ApplicationError("INVALID_INPUT", 400, "Choose a new agent that you own, an agent you already own, or yourself.", "connect_as");
+        }
+        subject = { kind: "user", userId: connectAs, ownerUserId: user.id };
+      }
     }
     // The delete decides which of concurrent submissions, on any replica, uses the token.
     if (!(await options.codes.deleteSignInCode("consent", tokenHash))) throw invalidConsent();
@@ -176,7 +195,7 @@ export function createOAuthAuthorizationRouter(options: {
       response.redirect(303, authorizationErrorTarget(authorizationRequest.redirectUri, authorizationRequest.state, "access_denied", undefined, authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined));
       return;
     }
-    response.redirect(303, await issueAuthorization(options, authorizationRequest, { kind: "user", userId: session.user.id }));
+    response.redirect(303, await issueAuthorization(options, authorizationRequest, subject));
   });
 
   router.post("/token", async (request, response) => {
@@ -411,9 +430,13 @@ export function createOAuthAuthorizationRouter(options: {
       await failRedemption(400, "invalid_grant", "resource does not match the authorization request.");
       return;
     }
+    if (subject.kind === "user" && subject.ownerUserId !== undefined && !(await ownsAgent(subject.ownerUserId, subject.userId))) {
+      await failRedemption(400, "invalid_grant", "The authorization code is invalid or expired.");
+      return;
+    }
     let issued: IssuedGrant;
     try {
-      const userId = subject.kind === "user" ? subject.userId : (await createGuestAgent(subject.agent)).id;
+      const userId = subject.kind === "user" ? subject.userId : (await createAgent(subject)).id;
       issued = await options.accessTokens.issueGrant({ clientId, scopes: authorization.scope.split(" "), resource: authorization.resource, userId });
     } catch (error) {
       if (!(error instanceof ApplicationError && error.code === "AGENT_CREATE_RATE_LIMITED")) {
@@ -430,10 +453,45 @@ export function createOAuthAuthorizationRouter(options: {
     sendGrant(response, issued);
   }
 
-  async function createGuestAgent(agent: AgentCreation): Promise<User> {
-    const { user } = await options.identity.createAgent(agent);
-    recordLoopEvent("workspace.guest_agent", { entry: "auth_token" }, { user_id: user.id });
+  async function createAgent(subject: Exclude<AuthorizationSubject, { readonly kind: "user" }>): Promise<User> {
+    const { user } = await options.identity.createAgent(subject.agent);
+    if (subject.kind === "guest") {
+      recordLoopEvent("workspace.guest_agent", { entry: "auth_token" }, { user_id: user.id });
+    } else if (!(await options.agents.claimAgent(user.id, subject.ownerUserId, Date.now()))) {
+      // Only a ban or a claim between the two writes gets here; the agent is left as an unclaimed guest with no grant.
+      throw new Error("A new agent could not be claimed for the person who chose it.");
+    }
     return user;
+  }
+
+  async function ownedAgents(ownerUserId: string): Promise<readonly StoredAgent[]> {
+    // A claimed agent never expires, so a stopped one is the only kind to leave out. Ties keep the latest claim first.
+    return (await options.agents.findAgents({ ownerUserId }))
+      .filter((agent) => !agent.banned)
+      .reverse()
+      .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  }
+
+  async function ownsAgent(ownerUserId: string, agentUserId: string): Promise<boolean> {
+    const [agent] = await options.agents.findAgents({ userId: agentUserId });
+    return agent !== undefined && agent.ownerUserId === ownerUserId && !agent.banned;
+  }
+
+  async function agentOwner(agentUserId: string): Promise<User | undefined> {
+    const [agent] = await options.agents.findAgents({ userId: agentUserId });
+    if (!agent?.ownerUserId) return undefined;
+    const [owner] = await options.identity.findUsers([agent.ownerUserId]);
+    return owner;
+  }
+
+  async function agentUnavailable(sourceIp: string | undefined): Promise<string | null> {
+    try {
+      await options.identity.assertAgentCreationAllowed(sourceIp);
+      return null;
+    } catch (error) {
+      if (error instanceof ApplicationError && error.code === "AGENT_CREATE_RATE_LIMITED") return error.message;
+      throw error;
+    }
   }
 
   async function exchangeToken(request: Request, response: Response): Promise<void> {
@@ -478,6 +536,7 @@ export function createOAuthAuthorizationRouter(options: {
     }
     const { subject, ttlMs, user, cookieValue } = exchanged;
     const executorAccess = await options.identity.hasExecutorAccess(user.id);
+    const owner = user.kind === "agent" && user.claimed ? await agentOwner(user.id) : undefined;
     response.json({
       access_token: cookieValue,
       issued_token_type: WORKSPACE_SESSION_TOKEN_TYPE,
@@ -490,6 +549,7 @@ export function createOAuthAuthorizationRouter(options: {
         client_id: subject.kind === "oauth" ? subject.clientId : null,
       },
       user,
+      ...(owner ? { owner } : {}),
       ...(executorAccess ? { executor_access: true } : {}),
     });
   }
@@ -613,7 +673,7 @@ async function registerClient(accessTokens: AccessTokenService, config: McpOAuth
 type AuthorizationRequest = StaticAuthorizationRequest | McpAuthorizationRequest;
 
 /** A request as its consent token stores it. */
-type ConsentedRequest = Omit<StaticAuthorizationRequest, "client"> | Omit<McpAuthorizationRequest, "client">;
+type ConsentedRequest = Omit<StaticAuthorizationRequest, "client"> | (Omit<McpAuthorizationRequest, "client"> & { readonly clientName: string | null });
 
 type SignInCodeStore = Pick<IdentityRepository, "putSignInCode" | "findSignInCode" | "deleteSignInCode" | "redeemSignInCode" | "recordSignInGrant">;
 
@@ -680,25 +740,54 @@ function renderConsentPage(
   });
 }
 
+/**
+ * `choices` is null when the signed-in User is an agent, which connects only as itself. A person chooses among the agents
+ * they own, a new agent unless `unavailable` says why this source cannot create one now, and themselves. The page
+ * preselects the most recently active owned agent made for a client of this name, else a new agent, else the person.
+ */
 function renderMcpConsentPage(
   request: McpAuthorizationRequest,
   displayName: string,
   consentToken: string,
+  choices: { readonly unavailable: string | null; readonly owned: readonly StoredAgent[] } | null,
 ): string {
   const client = request.client;
   const clientName = deriveDisplayName(client.clientName);
   const name = escapeHtml("host" in client ? (clientName === "" ? client.host : `${clientName} (${client.host})`) : clientName || "An unnamed application");
+  const user = escapeHtml(displayName);
   const callback = new URL(request.redirectUri);
   const returnsTo = escapeHtml(callback.origin === "null" ? callback.protocol : callback.origin);
   const scopes = request.scopes
     .map((scope) => `<label class="permission"><input type="checkbox" name="scope" value="${escapeHtml(scope)}" checked><span><strong>${escapeHtml(scope)}</strong> ${escapeHtml(SCOPE_DESCRIPTIONS[scope])}</span></label>`)
     .join("");
+  const label = agentClientLabel(client.clientName);
+  const match = label === "" ? undefined : choices?.owned.find((agent) => agent.originLabel === label);
+  const top = choices?.owned.slice(0, OWNED_AGENT_CHOICES) ?? [];
+  // The agent this client used stays on the list even when five others were active more recently.
+  const listed = match === undefined || top.includes(match) ? top : [...top.slice(0, -1), match];
+  const offered = choices !== null && choices.unavailable === null;
+  const selected = match?.user.id ?? (offered ? "new_agent" : "self");
+  const ownSpace = "It works in its own space and sees your files only when you share them.";
+  const choice = (value: string, title: string, text: string, disabled = false) =>
+    `<label class="choice"><input type="radio" name="connect_as" value="${escapeHtml(value)}"${value === selected ? " checked" : ""}${disabled ? " disabled" : ""}><span><strong>${title}</strong> ${text}</span></label>`;
+  const identity = choices === null
+    ? `<input type="hidden" name="connect_as" value="self">`
+    : `<fieldset class="identity"><legend>Connect it as</legend>`
+      + listed.map((agent) => choice(agent.user.id, escapeHtml(agent.user.displayName), `Your agent @${escapeHtml(agent.user.username)}. ${ownSpace}`)).join("")
+      + choice(
+        "new_agent",
+        `A new agent that you own${selected === "new_agent" ? " <small>Recommended</small>" : ""}`,
+        `${ownSpace} It appears under My agents.${offered ? "" : `<em>${escapeHtml(choices.unavailable!)} Choose ${listed.length > 0 ? "one of your agents or " : ""}Yourself.</em>`}`,
+        !offered,
+      )
+      + choice("self", "Yourself", `It acts as ${user}, with everything you can open.`)
+      + `</fieldset>`;
   return consentDocument({
     title: `Connect ${name}`,
     heading: "Connect an AI assistant",
-    requestHtml: `<p><strong>${name}</strong> wants to use Univer Workspace as <strong>${escapeHtml(displayName)}</strong>.</p><p class="scopes">The name is chosen by the application. Server: ${escapeHtml(request.resource)}. Returns to: ${returnsTo}. Client ID: ${escapeHtml(request.clientId)}.</p>`,
-    fieldsHtml: `<input type="hidden" name="consent_token" value="${escapeHtml(consentToken)}"><fieldset class="permissions"><legend>Allow it to</legend>${scopes}</fieldset>`,
-    css: ".permissions{margin:0 0 24px;padding:0;border:0}.permissions legend{margin-bottom:8px;color:#30333d;font-size:14px;font-weight:650}.permission{display:flex;gap:10px;align-items:flex-start;padding:8px 0;color:#5c606d;font-size:14px;line-height:1.45}.permission input{margin-top:3px}.permission strong{display:block;color:#171717}",
+    requestHtml: `<p><strong>${name}</strong> wants to use Univer Workspace${choices === null ? ` as <strong>${user}</strong>` : ""}.</p><p class="scopes">The name is chosen by the application. Server: ${escapeHtml(request.resource)}. Returns to: ${returnsTo}. Client ID: ${escapeHtml(request.clientId)}.</p>`,
+    fieldsHtml: `<input type="hidden" name="consent_token" value="${escapeHtml(consentToken)}">${identity}<fieldset class="permissions"><legend>Allow it to</legend>${scopes}</fieldset>`,
+    css: ".permissions,.identity{margin:0 0 24px;padding:0;border:0}.permissions legend,.identity legend{margin-bottom:8px;color:#30333d;font-size:14px;font-weight:650}.permission{display:flex;gap:10px;align-items:flex-start;padding:8px 0;color:#5c606d;font-size:14px;line-height:1.45}.permission input,.choice input{margin-top:3px}.permission strong,.choice strong{display:block;color:#171717}.choice{display:flex;gap:10px;align-items:flex-start;margin-top:8px;padding:12px 14px;border:1px solid #e2e4ea;border-radius:12px;color:#5c606d;font-size:14px;line-height:1.45;cursor:pointer}.choice:has(input:checked){border-color:#5b50d6;background:#f4f3ff}.choice:has(input:disabled){cursor:default;opacity:.7}.choice small{margin-left:6px;padding:1px 8px;border-radius:999px;background:#5b50d6;color:#fff;font-size:11px;font-weight:650;vertical-align:1px}.choice em{display:block;margin-top:6px;color:#a1361f;font-style:normal}",
   });
 }
 
@@ -810,7 +899,7 @@ async function issueAuthorization(
     readonly codes: SignInCodeStore;
     readonly guestAuthorizationCapacity?: number | undefined;
   },
-  authorizationRequest: ConsentedRequest,
+  authorizationRequest: AuthorizationRequest | ConsentedRequest,
   subject: AuthorizationSubject
 ): Promise<string> {
   const now = Date.now();

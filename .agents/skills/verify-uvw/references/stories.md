@@ -10,12 +10,13 @@ $V principal <name> [label]                # POST /api/agents; prints id and use
 $V mcp --as <name> <label> <tool> [json]   # also mcp-tools, mcp-skills, mcp-resources, mcp-resource, mcp-instructions
 $V mcp-oauth login <label> --guest         # scripted loopback OAuth client that gets a guest agent with no page
 $V mcp-oauth login <label> --guest-card    # the same through the guest agent card, for a browser signed in as the guest
+$V mcp-oauth login <label>                 # the run user's consent page with its default, an agent the run user owns
 $V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'
 ```
 
 `principal` keeps the token in `home/principals/<name>.token` (mode 0600) and never prints it;
 `principal-<name>.json` in `$EVIDENCE` records id, username and expiry. Names match
-`^[a-z0-9][a-z0-9_-]{0,31}$`; `human` means the run user. Every `principal`, `mcp-oauth login --guest` or `--guest-card`,
+`^[a-z0-9][a-z0-9_-]{0,31}$`; `human` means the run user. Every `principal`, `mcp-oauth login` that submits a new agent,
 first `story --oauth` of an identity, and `uvw auth guest` a model runs creates an agent, and Workspace answers 429
 past `AGENT_CREATE_LIMIT_PER_HOUR` creations per source IP per hour, which defaults to 5. `up` raises it to 100 and
 records it as `AGENT_CREATE_LIMIT` in `run.env`; set `VERIFY_UVW_AGENT_CREATE_LIMIT=5` before `up` to run with the

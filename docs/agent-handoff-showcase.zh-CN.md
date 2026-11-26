@@ -21,6 +21,7 @@ flowchart TB
 ## 开始之前
 
 - MCP 无需安装。把 `https://space.univer.ai/mcp` 添加到你的 AI 助手，自己部署时用 `https://<你的 Workspace>/mcp`。各客户端的步骤见[连接 AI 助手](../README.zh-CN.md#连接-ai-助手mcp)。
+- 你已登录时，同意页默认让助手以一个归你所有的 Agent 连接：它之前用过的那个，或者一个新的。它一开始就是已认领的，和本文里已认领的 Agent 一样工作。选 **Yourself** 则让它以你的身份连接，本文把这种连接叫作你的 AI 助手。
 - 文中的 `uvw` 命令需要 `univer-workspace-cli` 0.7.0 或更高版本，安装方法见 [Install](../apps/cli/README.md#install)（英文）。
 
 > [!NOTE]

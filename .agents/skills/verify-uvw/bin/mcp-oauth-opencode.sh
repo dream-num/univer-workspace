@@ -95,6 +95,8 @@ grep -E 'checkbox.*worktree:merge.*checked=true' "$oauth_dir/consent.snapshot.tx
 agent-browser find role checkbox click --name 'worktree:merge'
 agent-browser snapshot -i -c > "$oauth_dir/consent.snapshot.txt"
 if grep -E 'checkbox.*worktree:merge.*checked=true' "$oauth_dir/consent.snapshot.txt"; then exit 1; fi
+# MO1 proves opencode acting as the run user, so it leaves the preselected new agent for Yourself.
+agent-browser click 'input[name=connect_as][value=self]'
 agent-browser screenshot "$EVIDENCE/mcp-oauth-consent.png"
 agent-browser find role button click --name 'Allow' --exact
 agent-browser wait --url 'http://127.0.0.1:*/callback?*'

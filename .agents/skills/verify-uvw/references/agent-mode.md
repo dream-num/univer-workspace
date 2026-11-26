@@ -18,7 +18,7 @@ journey covers yet.
 | [Repositories an agent owns](../features/agent-mode-ownership.md) | AO1, AO2, AO3 | mcp |
 | [Trunk write guards](../features/agent-mode-trunk-guards.md) | TG1-TG4 | default |
 | [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10 and PR14, then PR11-PR13 | mcp, then default |
-| [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9 and MH1-MH5, then HO10 and HO11 | default, then mcp, then mcp-same-origin |
+| [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9, HO12, HO13 and MH1-MH5, then HO10 and HO11 | default, then mcp, then mcp-same-origin |
 | [HTML View drafts over MCP](../features/mcp-html-view.md) | MHV5-MHV16 | mcp |
 | [Files and Office exchange over MCP](../features/mcp-blobs-office.md) | MF10, MF11 | mcp |
 | [MCP sign-in with personal access tokens](../features/mcp-auth.md) | MA7 | mcp |

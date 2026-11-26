@@ -223,9 +223,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Product V36 (PostgreSQL product schema version 16) adds the `sign_in_codes` table through a backed-up V35 → V36
   startup migration that backfills nothing. OAuth authorization codes, consent tokens, agent claim codes and CLI
   browser authorizations live there, so any replica redeems a code another issued. A row stores the SHA-256 hash of
-  the code and never the code, the User it acts for, its expiry, and for an OAuth code the authorization request; a
-  zero-click guest's request includes the source IP its creation limit counts. An expired row stays until a later
-  code of the same kind deletes it.
+  the code and never the code, the User it acts for, its expiry, and for an OAuth code the authorization request,
+  which names the consenting person when the code acts for an agent that person owns; a request that creates an agent, for a zero-click guest or for a new agent the consenting person owns, includes the
+  source IP its creation limit counts. An expired row stays until a later code of the same kind deletes it.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, per-source rate limit events, sign-in code hashes, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

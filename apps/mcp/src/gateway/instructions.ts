@@ -1,6 +1,6 @@
 import type { OpName } from "../shared/executor-protocol.js";
-import type { ToolContext, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
-import { guestAgentNotice } from "./tools/core/whoami.js";
+import type { AgentOwner, ToolContext, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
+import { guestAgentNotice, ownedAgentNotice } from "./tools/core/whoami.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "./tools/schemas.js";
 
@@ -12,10 +12,11 @@ export function buildServerInstructions(
   principal: ToolPrincipal,
   scopes: ReadonlySet<ToolScope>,
   authKind?: ToolContext["authKind"],
+  owner?: AgentOwner,
 ): string {
-  const guest = guestAgentNotice(principal, authKind);
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
+  const guest = guestAgentNotice(principal, authKind, has("claim") && scopes.has("publish"));
   const finishes = scopes.has("worktree:merge") && has("pr_merge");
   // An unclaimed agent has nobody to hand a pull request to, so it always finishes its own.
   const { reviewer, intro } = {
@@ -84,6 +85,7 @@ export function buildServerInstructions(
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
     ...(guest ? [`${guest} Tell the user this in your first reply.`] : []),
     ...(finishes ? [intro] : []),
+    ...(principal === "agent_claimed" ? [ownedAgentNotice(owner)] : []),
     ...(executorRestricted
       ? [
           `Editing document contents is not enabled for this account; ask the user to edit in the browser.${

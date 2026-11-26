@@ -243,6 +243,21 @@ fetch and their refusals are the guest card's, answered as JSON from authorize. 
 limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
 agent. A static OAuth client, or any other `redirect_uri`, keeps the login page.
 
+A signed-in person on the consent page of a DCR or CIMD client chooses `connect_as`. `new_agent`, preselected,
+approves a code that stands for a new agent this person owns. Redeeming it creates the agent named after the
+client, under the same source limit, then claims it for the person with the claim's own conditional update, so
+it starts in the state of a guest that person claimed. `self` approves a code for the person. When the source is
+at the limit, the page disables `new_agent`, says why and selects `self`, and a submit that still sends
+`new_agent` answers `429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. A signed-in agent sees no choice
+and approves for itself.
+
+The same page lists up to five agents the person owns and has not stopped, most recently active first. It
+preselects the most recently active one whose `origin_label` is this client's name, so a client that connects
+again continues its agent. Submitting an agent's id approves a code for that agent. It creates nothing and spends
+no creation, and the server checks at the submit and again at redemption that the person owns it and has not
+stopped it, answering an id that is not such an agent the same way whether or not a User has it. With an agent
+preselected, the limit leaves that agent selected instead of `self`.
+
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still

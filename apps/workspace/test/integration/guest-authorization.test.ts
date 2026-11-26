@@ -199,13 +199,21 @@ describe("continuing an OAuth authorization as a guest agent", () => {
       expect(created.status).toBe(201);
       const cookie = created.headers.get("set-cookie")!.split(";", 1)[0]!;
       const { user } = (await (await fetch(`${origin}/api/session`, { headers: { cookie } })).json()) as { user: { username: string; displayName: string } };
-      return { ...user, consent: await (await fetch(`${origin}/api/auth/authorize/consent?${query}`, { headers: { cookie } })).text() };
+      return { ...user, cookie, consent: await (await fetch(`${origin}/api/auth/authorize/consent?${query}`, { headers: { cookie } })).text() };
     };
 
     const claude = await continueAs(`${CIMD}/claude`);
     expect(claude.username).toMatch(/^claude-code-[a-z0-9]{4}$/u);
     expect(claude.displayName).toBe(`Claude Code · ${claude.username.slice(-4)}`);
     expect(claude.consent).toContain(`wants to use Univer Workspace as <strong>Claude Code · ${claude.username.slice(-4)}</strong>`);
+    expect(claude.consent, "an agent connects only as itself").toContain('<input type="hidden" name="connect_as" value="self">');
+    const owning = await fetch(`${origin}/api/auth/authorize/consent`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: claude.cookie },
+      body: new URLSearchParams({ consent_token: /name="consent_token" value="([^"]+)"/u.exec(claude.consent)![1]!, decision: "allow", scope: "read", connect_as: "new_agent" }),
+      redirect: "manual",
+    });
+    expect(owning.status).toBe(403);
 
     const hostile = await continueAs(`${CIMD}/hostile`);
     const suffix = ` · ${hostile.username.slice(-4)}`;
@@ -360,7 +368,7 @@ describe("authorizing a loopback client from a browser with no session", () => {
     const allowed = await fetch(`${origin}/api/auth/authorize/consent`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-      body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read" }),
+      body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read", connect_as: "self" }),
       redirect: "manual",
     });
     expect(codeOf(allowed)).toMatch(/^[\w-]{32}$/u);

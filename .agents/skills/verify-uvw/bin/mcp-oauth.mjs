@@ -10,7 +10,7 @@ import { redact as redactSecrets, runSecrets } from './secrets.mjs';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>|--client-name <name>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
@@ -46,7 +46,7 @@ const keepGrant = body => {
 
 if (command === 'login') {
   let scopes = ['read', 'write', 'publish', 'worktree:merge'];
-  let clientId, guest = false, card = false;
+  let clientId, clientName, guest = false, card = false, connectAs;
   while (args.length) {
     const flag = args.shift();
     if (flag === '--guest') { guest = true; continue; }
@@ -54,11 +54,17 @@ if (command === 'login') {
     const value = args.shift();
     if (value === undefined) usage(`Missing value for ${flag}`);
     if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
+    else if (flag === '--connect-as' && ['new_agent', 'self'].includes(value)) connectAs = value;
     else if (flag === '--client-id' && URL.canParse(value) && new URL(value).protocol === 'https:') clientId = value;
+    else if (flag === '--client-name' && value.trim() !== '') clientName = value;
     else usage(`Unknown or invalid option ${flag}`);
   }
   if (!guest && !username) usage('No user to sign in as; run verify-uvw user, or pass --guest');
   if (card && clientId) usage('--guest-card registers its own client, so it takes no --client-id');
+  if (clientId && clientName) usage('--client-name names a client this login registers, so it takes no --client-id');
+  // A guest connects only as itself. Without --connect-as the run user keeps what the page preselects: the agent it
+  // owns that was made for a client of this name, else a new agent.
+  if (guest && connectAs) usage('--connect-as is for the run user; a guest connects as itself');
   const noPage = guest && !card;
   const callback = createServer();
   await new Promise(resolve => callback.listen(0, '127.0.0.1', resolve));
@@ -79,7 +85,7 @@ if (command === 'login') {
   try {
     if (clientId === undefined) {
       const registration = await fetch(`${origin}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ client_name: `verify-uvw ${label}`, redirect_uris: [redirectUri], grant_types: ['authorization_code', 'refresh_token'], token_endpoint_auth_method: 'none' }) });
+        body: JSON.stringify({ client_name: clientName ?? `verify-uvw ${label}`, redirect_uris: [redirectUri], grant_types: ['authorization_code', 'refresh_token'], token_endpoint_auth_method: 'none' }) });
       const client = await registration.json();
       if (registration.status !== 201 || typeof client.client_id !== 'string') throw new Error(`Registration returned ${registration.status}`);
       clientId = client.client_id;
@@ -113,14 +119,23 @@ if (command === 'login') {
       browser('wait', '--url', '**/home');
       browser('open', authorize.href);
     }
-    let clientName = null, offered = null, submitted = null;
+    let shownName = null, offered = null, submitted = null, choices = null, preselected = null, submittedAs = null;
     if (!noPage) {
       browser('wait', '--text', 'Connect an AI assistant');
       const readChecks = () => JSON.parse(JSON.parse(browser('eval', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input[name=scope]')].map(i => [i.value, i.checked])))")));
-      clientName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
+      shownName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
       offered = readChecks();
       for (const scope of Object.keys(offered)) if (!scopes.includes(scope)) browser('click', `input[name=scope][value="${scope}"]`);
       submitted = readChecks();
+      if (!guest) {
+        choices = JSON.parse(JSON.parse(browser('eval', "JSON.stringify([...document.querySelectorAll('input[name=connect_as]')].map(i => i.value))")));
+        preselected = JSON.parse(browser('eval', "document.querySelector('input[name=connect_as]:checked')?.value ?? null"));
+        if (connectAs === 'new_agent' && JSON.parse(browser('eval', "document.querySelector('input[name=connect_as][value=new_agent]').disabled"))) {
+          throw new Error(`the consent page disables the new-agent option at the agent creation limit: ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises it'}`);
+        }
+        if (connectAs) browser('click', `input[name=connect_as][value=${connectAs}]`);
+        submittedAs = connectAs ?? preselected;
+      }
       browser('screenshot', `${evidence}-consent.png`);
       browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
     }
@@ -140,7 +155,7 @@ if (command === 'login') {
       keepGrant(token.body);
       keep('mcp-oauth-client-id', clientId);
     }
-    save({ guest, ...(guest ? { page: noPage ? 'none' : 'guest card and consent' } : {}), ...(noPage ? { browser_signed_in_after: browserSignedIn } : {}), client_id: clientId, client_name: clientName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
+    save({ guest, ...(guest ? { page: noPage ? 'none' : 'guest card and consent' } : { choices, preselected, connect_as: submittedAs }), ...(noPage ? { browser_signed_in_after: browserSignedIn } : {}), client_id: clientId, client_name: shownName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
   } finally {
     callback.close();
   }

@@ -17,7 +17,7 @@ async function claims() {
     },
     repository: {
       findAgents: async (filter) => "userId" in filter
-        ? [{ user: user(filter.userId), spaceId: "space", ownerUserId: null, lastActiveAt: 0, banned: false, files: 0 }]
+        ? [{ user: user(filter.userId), spaceId: "space", ownerUserId: null, originLabel: "agent", lastActiveAt: 0, banned: false, files: 0 }]
         : [],
       claimAgent: async () => true,
       banClaimedAgent: async () => true,

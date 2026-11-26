@@ -71,6 +71,11 @@ const EMAIL_CODE_MAX_ATTEMPTS = 5;
 const DEFAULT_AGENT_LABEL = "agent";
 const MAX_AGENT_CLIENT_NAME_LENGTH = 40;
 
+/** The name an agent created for an OAuth client takes, and its `origin_label`; empty when the client has no usable name. */
+export function agentClientLabel(clientName: string | null | undefined): string {
+  return deriveDisplayName(clientName, MAX_AGENT_CLIENT_NAME_LENGTH);
+}
+
 export interface IdentityModule {
   initialize(): Promise<void>;
   readonly cookieName: string;
@@ -624,7 +629,7 @@ export function createIdentityModule(options: {
     async createAgent(input) {
       if (!(await agentCreateLimiter.take(input.originIp))) throw agentCreateRateLimited();
       const explicitLabel = deriveDisplayName(input.label);
-      const clientName = explicitLabel ? undefined : deriveDisplayName(input.clientName, MAX_AGENT_CLIENT_NAME_LENGTH) || undefined;
+      const clientName = explicitLabel ? undefined : agentClientLabel(input.clientName) || undefined;
       const label = explicitLabel || clientName || DEFAULT_AGENT_LABEL;
       const createdAt = now();
       const expiresAt = createdAt + AGENT_TTL_MS;
