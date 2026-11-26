@@ -232,7 +232,9 @@ cookie. The code carries every requested scope and stands for a guest agent name
 above. Redeeming it at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is
 never redeemed creates nothing. The pending guest lives in the same process-local, one-minute,
 single-use code as any authorization, so a second redemption creates no second agent, revokes the first
-grant as for any replayed code, and a restart drops an unredeemed code. The source limit, the metadata
+grant as for any replayed code, and a restart drops an unredeemed code. While 10,000 codes wait
+unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
+no code, and a code a signed-in user approves is never refused this way. The source limit, the metadata
 fetch and their refusals are the guest card's, answered as JSON from authorize. A source that reaches the
 limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
 agent. A static OAuth client, or any other `redirect_uri`, keeps the login page.

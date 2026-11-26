@@ -72,7 +72,8 @@ session, when guests are enabled and a DCR or CIMD client's `redirect_uri` is lo
 `http`. It redirects to the client with a code and sets no cookie. Redeeming that code
 at `POST /api/auth/token` creates the agent under the same limit, and returns
 `429 temporarily_unavailable` with no agent past it. Authorize applies the limit and
-the metadata fetch budget above before redirecting.
+the metadata fetch budget above before redirecting. While 10,000 codes wait unredeemed,
+it redirects such a guest to the client with `error=temporarily_unavailable` and no code.
 
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).
 An agent also carries `claimed`. A banned agent's login session returns

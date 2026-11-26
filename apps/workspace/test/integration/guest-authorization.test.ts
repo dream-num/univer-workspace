@@ -18,6 +18,7 @@ const applications: ProductTestApplication[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
@@ -321,9 +322,54 @@ describe("authorizing a loopback client from a browser with no session", () => {
     expect((await redeem(origin, registered, await authorize(origin, { client_id: registered }))).status).toBe(200);
     expect((await authorize(origin, { client_id: registered })).status).toBe(429);
   });
+
+  it("tells the client to try again, and issues nothing, while too many codes wait unredeemed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode(), guestAuthorizationCapacity: 2 });
+    const registered = await register(origin, "opencode");
+    const codeOf = (authorized: Response) => new URL(authorized.headers.get("location")!).searchParams.get("code");
+    const first = await authorize(origin, { client_id: registered });
+    const second = await authorize(origin, { client_id: registered });
+    expect([codeOf(first), codeOf(second)]).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
+
+    const refused = await authorize(origin, { client_id: registered });
+    expect(refused.status).toBe(302);
+    expect(refused.headers.get("set-cookie")).toBeNull();
+    const location = new URL(refused.headers.get("location")!);
+    expect(`${location.origin}${location.pathname}`).toBe(CALLBACK);
+    expect(Object.fromEntries(location.searchParams)).toEqual({
+      error: "temporarily_unavailable",
+      error_description: expect.stringMatching(/try again/iu),
+      state: STATE,
+      iss: ISSUER,
+    });
+
+    expect((await redeem(origin, registered, first)).status).toBe(200);
+    const third = await authorize(origin, { client_id: registered });
+    expect(codeOf(third)).toMatch(/^[\w-]{32}$/u);
+    expect(codeOf(await authorize(origin, { client_id: registered }))).toBeNull();
+
+    vi.setSystemTime(Date.now() + 61_000);
+    const fresh = [await authorize(origin, { client_id: registered }), await authorize(origin, { client_id: registered })];
+    expect(fresh.map(codeOf)).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
+    expect((await redeem(origin, registered, third)).status).toBe(400);
+
+    const cookie = await signIn(origin);
+    const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: registered })}`, { headers: { cookie } });
+    const consentToken = /name="consent_token" value="([^"]+)"/u.exec(await consent.text())![1]!;
+    const allowed = await fetch(`${origin}/api/auth/authorize/consent`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+      body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read" }),
+      redirect: "manual",
+    });
+    expect(codeOf(allowed)).toMatch(/^[\w-]{32}$/u);
+
+    for (const authorized of fresh) expect((await redeem(origin, registered, authorized)).status).toBe(200);
+  });
 });
 
-async function start(options: { agentCreateLimitPerHour: number; fetchDocument: FetchClientMetadataDocument; trustProxy?: boolean }): Promise<string> {
+async function start(options: { agentCreateLimitPerHour: number; fetchDocument: FetchClientMetadataDocument; trustProxy?: boolean; guestAuthorizationCapacity?: number }): Promise<string> {
   const application = await createProductTestApplication({
     host: "127.0.0.1",
     port: 0,
@@ -342,6 +388,7 @@ async function start(options: { agentCreateLimitPerHour: number; fetchDocument: 
   }, {
     unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
     fetchClientMetadataDocument: options.fetchDocument,
+    ...(options.guestAuthorizationCapacity === undefined ? {} : { guestAuthorizationCapacity: options.guestAuthorizationCapacity }),
   });
   applications.push(application);
   const server = createServer(application.app);

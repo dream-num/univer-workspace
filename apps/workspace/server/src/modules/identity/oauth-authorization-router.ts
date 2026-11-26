@@ -41,6 +41,7 @@ export const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
 export const WORKSPACE_SESSION_TOKEN_TYPE = "urn:univer:params:oauth:token-type:workspace-session";
 export const DOWNSTREAM_SESSION_TTL_MS = 10 * 60 * 1000;
 const REGISTRATION_BODY_LIMIT = "16kb";
+const GUEST_AUTHORIZATION_CAPACITY = 10_000;
 const MCP_STATE_PATTERN = /^[\x20-\x7E]{1,1024}$/u;
 const SCOPE_DESCRIPTIONS: Readonly<Record<McpScope, string>> = {
   read: "View your spaces, files, issues and worktrees",
@@ -55,6 +56,7 @@ export function createOAuthAuthorizationRouter(options: {
   readonly secureCookies: boolean;
   readonly oauthClients: OAuthClientConfig | null;
   readonly authorizationStore: Map<string, IssuedAuthorization>;
+  readonly guestAuthorizationCapacity?: number | undefined;
   readonly mcpOAuth?: McpOAuthConfig | null;
   readonly resolveClientMetadata: ResolveClientMetadata;
 }): Router {
@@ -408,6 +410,8 @@ export function createOAuthAuthorizationRouter(options: {
     try {
       issued = await issuing;
     } catch (error) {
+      // No grant exists for a replay to revoke, and keeping the record would let anonymous redemptions grow it.
+      redeemedCodes.delete(code);
       if (!(error instanceof ApplicationError && error.code === "AGENT_CREATE_RATE_LIMITED")) throw error;
       fail(429, "temporarily_unavailable", error.message);
       return;
@@ -783,13 +787,25 @@ function authorizePath(request: AuthorizationRequest): string {
 function issueAuthorization(
   options: {
     readonly authorizationStore: Map<string, IssuedAuthorization>;
+    readonly guestAuthorizationCapacity?: number | undefined;
   },
   authorizationRequest: AuthorizationRequest,
   subject: AuthorizationSubject
 ): string {
   const now = Date.now();
+  // Every code has the same lifetime and a Map iterates in insertion order, so the expired codes come first.
   for (const [code, pending] of options.authorizationStore) {
-    if (pending.expiresAt <= now) options.authorizationStore.delete(code);
+    if (pending.expiresAt > now) break;
+    options.authorizationStore.delete(code);
+  }
+  if (subject.kind === "guest" && options.authorizationStore.size >= (options.guestAuthorizationCapacity ?? GUEST_AUTHORIZATION_CAPACITY)) {
+    return authorizationErrorTarget(
+      authorizationRequest.redirectUri,
+      authorizationRequest.state,
+      "temporarily_unavailable",
+      "This Workspace holds too many unredeemed authorization codes. Try again in a minute.",
+      authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined,
+    );
   }
   const scope = authorizationRequest.kind === "static" ? authorizationRequest.scope : authorizationRequest.scopes.join(" ");
   const authorization = issueOAuthAuthorizationCode(

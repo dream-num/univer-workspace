@@ -329,12 +329,16 @@ export interface paths {
          *     code nobody redeems creates nothing. A source at that limit gets 429
          *     before anything is fetched, and a CIMD document is fetched and refused
          *     as POST /api/auth/guest fetches and refuses it, answering here in JSON.
+         *     While 10,000 codes wait unredeemed, such a guest gets
+         *     `temporarily_unavailable` and no code; a code a signed-in user approves
+         *     is never refused this way.
          *     With any other `redirect_uri` the browser goes to the sign-in page,
          *     which offers that guest path. An unknown client or unregistered
          *     `redirect_uri` is answered here with 400; once both are verified, other
          *     errors redirect to the client with RFC 6749 `error` (`invalid_request`,
-         *     `invalid_scope`, `invalid_target`, `unsupported_response_type` or
-         *     `access_denied`), `error_description` and `state`. Every MCP success, error
+         *     `invalid_scope`, `invalid_target`, `unsupported_response_type`,
+         *     `temporarily_unavailable` or `access_denied`), `error_description` and
+         *     `state`. Every MCP success, error
          *     and deny callback includes `iss` (RFC 9207); static callbacks are unchanged.
          */
         get: operations["oauthAuthorize"];
