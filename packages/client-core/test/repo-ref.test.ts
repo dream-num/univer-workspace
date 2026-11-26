@@ -204,6 +204,18 @@ describe("file links", () => {
     });
   });
 
+  it("keeps the browser step when a token session writes a file in a Personal Space it cannot look up", async () => {
+    const { spaces } = clients((call) =>
+      call.method === "PUT"
+        ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+        : call.path === "/api/spaces/s1" ? notFound()
+          : Response.json(node(sheet)));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: person, link: "off" })).rejects.toMatchObject({
+      code: "INTERACTIVE_SESSION_REQUIRED",
+      message: expect.stringContaining(`share the file in the browser: ${origin}/nodes/n1`),
+    });
+  });
+
   it("tells someone who is not the owner to read the file through its link", async () => {
     const { spaces } = clients((call) =>
       call.path.endsWith("/link-sharing")

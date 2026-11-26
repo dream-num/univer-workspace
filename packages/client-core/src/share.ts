@@ -76,8 +76,12 @@ export async function shareNode(
     // Only Personal Space files have Link Sharing, in the Browser too. For a Team Space file the server answers NOT_FOUND,
     // or INTERACTIVE_SESSION_REQUIRED first when a person's token session writes.
     if (error.code === "NOT_FOUND" || error.code === "INTERACTIVE_SESSION_REQUIRED") {
-      const space = await spaces.get(spaceId);
-      if (space.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
+      // Someone else's Personal Space can hide from the caller, so a failed lookup keeps the server's own refusal.
+      const space = await spaces.get(spaceId).catch((lookup: unknown) => {
+        if (lookup instanceof WorkspaceApplicationError) return null;
+        throw lookup;
+      });
+      if (space?.type === "team") throw await teamSpaceRefusal(spaces, origin, url, name, space, input.caller, input.turnOn);
     }
     if (error.code === "INTERACTIVE_SESSION_REQUIRED") {
       throw workspaceError(
