@@ -745,7 +745,7 @@ cmd_user() {
 cmd_mcp_oauth() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
-  # login --guest needs no user: it continues through the guest agent card.
+  # login --guest and --guest-card need no user: the guest agent stands in for one.
   local USERNAME=""
   # shellcheck disable=SC1091
   [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"

@@ -84,7 +84,7 @@
     {
       "id": 4,
       "title": "新建的访客 agent（按入口）",
-      "description": "api_agents 是 POST /api/agents，auth_guest 是登录页的访客卡片。",
+      "description": "api_agents 是 POST /api/agents，auth_guest 是登录页的访客卡片，auth_token 是本机 MCP 客户端不经页面得到的访客授权码在换 token 时创建的。",
       "type": "stat",
       "gridPos": { "h": 6, "w": 8, "x": 0, "y": 6 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },

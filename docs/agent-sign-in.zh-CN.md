@@ -51,7 +51,7 @@ sequenceDiagram
     C->>W: GET /.well-known/oauth-authorization-server
     W-->>C: 各端点地址，支持 CIMD 和 PKCE
     C->>U: 在浏览器打开 /api/auth/authorize
-    U->>W: 登录，或以访客 agent 继续
+    U->>W: 登录（未登录时客户端改为得到访客 agent，见第三步）
     W->>D: GET client_id 这个 URL
     D-->>W: client_name、redirect_uris
     W-->>U: 同意页，勾选权限
@@ -173,9 +173,9 @@ https://space.univer.ai/api/auth/authorize
 - `state` 由客户端生成，回调时原样带回，防止别人把一次不是你发起的授权塞给你的客户端。
 - `code_challenge` 是 PKCE 的一半，下一节解释。
 
-你没有登录时，Workspace 先跳到登录页。登录方式取决于部署，可以是密码，也可以是 GitHub、Discord 或 Google。如果你选了 GitHub，那是另一次独立的 OAuth，Workspace 在其中是客户端。它在你回到 Workspace 时就结束了，和 agent 拿到的 token 无关。
+你没有登录、而客户端像 Claude Code 一样在你的电脑上监听回调时，你看不到任何页面，下一段解释。其他情况下 Workspace 先跳到登录页。登录方式取决于部署，可以是密码，也可以是 GitHub、Discord 或 Google。如果你选了 GitHub，那是另一次独立的 OAuth，Workspace 在其中是客户端。它在你回到 Workspace 时就结束了，和 agent 拿到的 token 无关。
 
-从 MCP 授权进入的登录页还多一个 **Continue as a guest agent**。选它时，Workspace 不登录任何人，而是新建一个 agent 账号，名字取自客户端的名字（CIMD 文档的 `client_name`，或 DCR 注册时报的名字），例如 “Claude Code · g3wq”。之后的同意页和换 token 与登录用户完全相同，只是 token 代表这个 agent。访客 agent 能做什么、怎样被人认领，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
+浏览器没有 Workspace 会话时，客户端可以得到一个访客 agent，而不是某个人。访客 agent 是新建的 agent 账号，名字取自客户端的名字（CIMD 文档的 `client_name`，或 DCR 注册时报的名字），例如 “Claude Code · g3wq”，读不到任何人的私有文件。`redirect_uri` 是 loopback 的 `http` 地址（`127.0.0.1`、`[::1]` 或 `localhost`）时，Workspace 不显示任何页面，直接把浏览器送回回调，带上一个新访客 agent 的授权码，权限是客户端请求的全部 scope，浏览器保持未登录。这里不授出任何人的数据，授权码也只会交给这台电脑上的程序，所以没有什么需要批准。Workspace 在客户端用授权码换 token 时才创建 agent，客户端没用上的授权码不留下任何东西。默认每个地址每小时最多创建 5 个 agent（`AGENT_CREATE_LIMIT_PER_HOUR`），超过后浏览器显示 `AGENT_CREATE_RATE_LIMITED`。已有 10,000 个这样的授权码等着换 token 时，客户端收到 `temporarily_unavailable` 而不是授权码，过一分钟再试即可。想以自己的身份连接，先在这个浏览器里登录 Workspace 再连接。其他 `redirect_uri`，例如 `https` 地址，登录页提供 **Continue as a guest agent**，访客 agent 之后像登录用户一样确认同意页。关闭访客 agent 的部署总是显示登录页。访客 agent 能做什么、怎样被人认领，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
 
 登录后是同意页：
 
@@ -296,6 +296,7 @@ Workspace 返回一个最长 10 分钟的 session，以及这张 token 代表的
 | 登录后浏览器显示 `invalid_client` 或 `temporarily_unavailable` 错误页 | 第二步，Workspace 取不到 CIMD 文档，或文档没有通过校验 | 私有部署确认 Workspace Server 能访问外网，或设置 `MCP_CIMD_ENABLED=0` |
 | 自部署时出口走 fake-IP 代理，CIMD 总是失败 | 第二步，公网域名被解析到 `198.18.0.0/15`，被当成私有地址拒绝 | 设置 `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
 | 连上了，但缺少某些工具 | 第三步取消了某个 scope，或 URL 的 `?toolsets=` 没有包含它 | 重新授权并勾选，或检查 `?toolsets=` |
+| 客户端连上了，但身份是新的访客 agent，不是你 | 第三步，浏览器没有 Workspace 会话，客户端在你的电脑上监听回调 | 用 agent 给你的认领链接认领它；或者在客户端里登出该服务，在这个浏览器里登录 Workspace，再重新连接 |
 | 配了 `Authorization` 头后 Claude Code 不再弹出登录 | Claude Code 看到头就跳过 OAuth | 二选一，不要同时配置 |
 
 ## 术语和出处

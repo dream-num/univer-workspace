@@ -165,7 +165,7 @@ Then:
 ```bash
 $V cli mpl-repo-view repo view "$R" --json landing
 jq -e '.landing == "checks"' "$EVIDENCE/mpl-repo-view.out"
-$V mcp-oauth login mpl-guest --guest
+$V mcp-oauth login mpl-guest --guest-card
 $V mcp --auth oauth mpl-g-repos repo_list '{}'
 G=$(jq -r '.repos[0].fullName | split("/")[0]' "$EVIDENCE/mpl-g-repos.out")
 $V mcp --auth oauth mpl-g-claim claim '{}'

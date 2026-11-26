@@ -127,7 +127,8 @@ describe("MCP OAuth", () => {
   it("runs the opencode flow: discovery, registration, scoped consent, code, exchange, refresh rotation and replay", async () => {
     // The token service reads the clock it was created with, so the fake clock is installed first.
     vi.useFakeTimers({ toFake: ["Date"] });
-    const origin = await start();
+    // With guests on, a signed-out browser would get a guest agent's code instead of the sign-in page.
+    const origin = await start({ guests: false });
     const metadata = await fetch(`${origin}/.well-known/oauth-authorization-server`);
     expect(metadata.status).toBe(200);
     expect(await metadata.json()).toEqual({
@@ -526,7 +527,8 @@ describe("MCP OAuth", () => {
       client_id: clientId, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"],
       grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
     }) });
-    const origin = await start({ fetchDocument, maxRegisteredClients: 1 });
+    // With guests on, a signed-out browser would get a guest agent's code, fetching the document as a guest does.
+    const origin = await start({ fetchDocument, maxRegisteredClients: 1, guests: false });
     await registeredClientId(origin);
     const redirectUri = "http://127.0.0.1:61234/callback";
     const query = authorizeQuery({ client_id: clientId, redirect_uri: redirectUri });
@@ -748,7 +750,7 @@ async function registerUser(origin: string, username: string): Promise<string> {
   return response.headers.get("set-cookie")!.split(";", 1)[0]!;
 }
 
-async function start(options: { maxRegisteredClients?: number; disabled?: boolean; staticConsent?: boolean; cimdEnabled?: boolean; fetchDocument?: FetchClientMetadataDocument } = {}): Promise<string> {
+async function start(options: { maxRegisteredClients?: number; disabled?: boolean; staticConsent?: boolean; cimdEnabled?: boolean; guests?: false; fetchDocument?: FetchClientMetadataDocument } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-mcp-oauth-"));
   application = await createSqliteTestApplication({
     host: "127.0.0.1",
@@ -758,6 +760,7 @@ async function start(options: { maxRegisteredClients?: number; disabled?: boolea
     sessionTtlMs: 24 * 60 * 60_000,
     passwordAuthEnabled: true,
     emailAuth: null,
+    ...(options.guests === false ? { agentCreateLimitPerHour: 0 } : {}),
     oauthClients: options.staticConsent ? { clients: OAUTH_CLIENTS!.clients.map((client) => ({ ...client, requiresConsent: true })) } : OAUTH_CLIENTS,
     mcpOAuth: options.disabled
       ? null

@@ -2,7 +2,7 @@
 // verify-uvw mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options]
 // Tokens live in home/ (mode 0600). Evidence keeps only redacted shapes, never a token, code, verifier or state.
 import { createHash, randomBytes } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ import { redact as redactSecrets, runSecrets } from './secrets.mjs';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest|--guest-card] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
@@ -46,10 +46,11 @@ const keepGrant = body => {
 
 if (command === 'login') {
   let scopes = ['read', 'write', 'publish', 'worktree:merge'];
-  let clientId, guest = false;
+  let clientId, guest = false, card = false;
   while (args.length) {
     const flag = args.shift();
     if (flag === '--guest') { guest = true; continue; }
+    if (flag === '--guest-card') { guest = card = true; continue; }
     const value = args.shift();
     if (value === undefined) usage(`Missing value for ${flag}`);
     if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
@@ -57,9 +58,12 @@ if (command === 'login') {
     else usage(`Unknown or invalid option ${flag}`);
   }
   if (!guest && !username) usage('No user to sign in as; run verify-uvw user, or pass --guest');
+  if (card && clientId) usage('--guest-card registers its own client, so it takes no --client-id');
+  const noPage = guest && !card;
   const callback = createServer();
   await new Promise(resolve => callback.listen(0, '127.0.0.1', resolve));
-  const redirectUri = `http://127.0.0.1:${callback.address().port}/callback`;
+  // A loopback callback gets a signed-out browser a guest code with no page, so the card needs a callback that is not loopback.
+  const redirectUri = card ? 'https://verify-uvw.invalid/callback' : `http://127.0.0.1:${callback.address().port}/callback`;
   const received = new Promise(resolve => callback.on('request', (request, response) => {
     response.end('verify-uvw received the authorization response');
     resolve(new URL(request.url, redirectUri));
@@ -69,6 +73,9 @@ if (command === 'login') {
     try { return execFileSync('agent-browser', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 }); }
     catch { throw new Error(`agent-browser ${a[0]} failed`); }
   };
+  // An `open` that lands on the callback must not block the event loop that answers it.
+  const browserAsync = (...a) => new Promise((resolve, reject) => execFile('agent-browser', a, { encoding: 'utf8', timeout: 60000 },
+    (error, stdout) => (error ? reject(new Error(`agent-browser ${a[0]} failed`)) : resolve(stdout))));
   try {
     if (clientId === undefined) {
       const registration = await fetch(`${origin}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -86,14 +93,19 @@ if (command === 'login') {
     browser('storage', 'local', 'set', 'univer-workspace-language', 'en-US');
     browser('reload');
     browser('wait', '--text', 'Username');
-    if (guest) {
+    const limited = `this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`;
+    if (noPage) {
+      await browserAsync('open', authorize.href);
+      if (browser('get', 'text', 'body').includes('AGENT_CREATE_RATE_LIMITED')) throw new Error(`authorize says ${limited}`);
+    } else if (card) {
       // The login page offers the guest agent card only when it was reached from an authorize request.
+      browser('network', 'route', 'https://verify-uvw.invalid/**', '--body', '{}');
       browser('open', authorize.href);
       browser('wait', '--text', 'Continue as a guest agent');
       browser('screenshot', `${evidence}-guest-card.png`);
       browser('find', 'role', 'button', 'click', '--name', 'Continue as a guest agent');
       browser('wait', '1500');
-      if (browser('get', 'text', 'body').includes('hourly limit for guest agent requests')) throw new Error(`the guest card says this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`);
+      if (browser('get', 'text', 'body').includes('hourly limit for guest agent requests')) throw new Error(`the guest card says ${limited}`);
     } else {
       browser('find', 'label', 'Username', 'fill', username);
       browser('find', 'label', 'Password', 'fill', readFileSync(join(run, 'user.pw'), 'utf8'));
@@ -101,26 +113,34 @@ if (command === 'login') {
       browser('wait', '--url', '**/home');
       browser('open', authorize.href);
     }
-    browser('wait', '--text', 'Connect an AI assistant');
-    const readChecks = () => JSON.parse(JSON.parse(browser('eval', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input[name=scope]')].map(i => [i.value, i.checked])))")));
-    const clientName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
-    const offered = readChecks();
-    for (const scope of Object.keys(offered)) if (!scopes.includes(scope)) browser('click', `input[name=scope][value="${scope}"]`);
-    const submitted = readChecks();
-    browser('screenshot', `${evidence}-consent.png`);
-    browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
+    let clientName = null, offered = null, submitted = null;
+    if (!noPage) {
+      browser('wait', '--text', 'Connect an AI assistant');
+      const readChecks = () => JSON.parse(JSON.parse(browser('eval', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input[name=scope]')].map(i => [i.value, i.checked])))")));
+      clientName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
+      offered = readChecks();
+      for (const scope of Object.keys(offered)) if (!scopes.includes(scope)) browser('click', `input[name=scope][value="${scope}"]`);
+      submitted = readChecks();
+      browser('screenshot', `${evidence}-consent.png`);
+      browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
+    }
     let timer;
-    const answer = await Promise.race([received, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No callback within 30 s')), 30000); })]).finally(() => clearTimeout(timer));
+    const answer = card
+      ? (browser('wait', '--url', 'https://verify-uvw.invalid/callback?*'), new URL(browser('get', 'url').trim()))
+      : await Promise.race([received, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No callback within 30 s')), 30000); })]).finally(() => clearTimeout(timer));
+    if (card) browser('network', 'unroute');
+    // The browser that got a guest code with no page must still have no session.
+    const browserSignedIn = noPage ? (browser('open', `${origin}/api/session`), JSON.parse(browser('get', 'text', 'body')).authenticated) : undefined;
     if (answer.searchParams.get('state') !== state || !answer.searchParams.get('code')) throw new Error(`Callback carried ${answer.searchParams.get('error') ?? 'no code'} or a wrong state`);
     if (answer.searchParams.get('iss') !== origin) throw new Error('Callback issuer does not match Workspace');
     const token = await form('/api/auth/token', { grant_type: 'authorization_code', client_id: clientId, code: answer.searchParams.get('code'),
       code_verifier: verifier, redirect_uri: redirectUri, ...tokenResource });
-    const ok = token.status === 200 && typeof token.body.access_token === 'string';
+    const ok = token.status === 200 && typeof token.body.access_token === 'string' && (!noPage || browserSignedIn === false);
     if (ok) {
       keepGrant(token.body);
       keep('mcp-oauth-client-id', clientId);
     }
-    save({ guest, client_id: clientId, client_name: clientName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
+    save({ guest, ...(guest ? { page: noPage ? 'none' : 'guest card and consent' } : {}), ...(noPage ? { browser_signed_in_after: browserSignedIn } : {}), client_id: clientId, client_name: clientName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
   } finally {
     callback.close();
   }

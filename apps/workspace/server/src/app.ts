@@ -186,6 +186,7 @@ export function createWorkspaceApplication(
     readonly emailSender?: EmailSender;
     readonly oauthStateSecret?: string;
     readonly fetchClientMetadataDocument?: FetchClientMetadataDocument;
+    readonly guestAuthorizationCapacity?: number;
   } = {},
 ): WorkspaceApplication {
   const oauthStateSecret =
@@ -488,6 +489,7 @@ export function createWorkspaceApplication(
       secureCookies: config.secureCookies,
       oauthClients,
       authorizationStore,
+      guestAuthorizationCapacity: dependencies.guestAuthorizationCapacity,
       mcpOAuth: mcpOAuth ?? null,
       resolveClientMetadata,
     })

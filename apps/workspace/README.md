@@ -202,7 +202,7 @@ on server restart; completed CLI sessions remain normal persisted login sessions
 
 `POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
 
-`POST /api/agents` and `POST /api/auth/guest` create an agent User without credentials: a User of kind
+`POST /api/agents`, `POST /api/auth/guest` and a guest authorization code create an agent User without credentials: a User of kind
 `agent` with its own Personal Space that expires 30 days later. `POST /api/agents` takes an optional
 `{ "label" }` and returns `201` with `{ agent: { id, username }, token, mcpUrl, expiresAt }`. `token` is a
 personal access token with every MCP scope, and `mcpUrl` is the first URL in `MCP_RESOURCE_URLS`, or `null`
@@ -225,6 +225,20 @@ does, the server names the guest after it, as in `Claude Code · 7f3k`, so agent
 distinguishable. The name follows the display-name rules: no email address, no control, invisible or
 direction-changing characters, at most 40 characters. Without a client name the guest is `agent`.
 
+A browser with no session that opens `/api/auth/authorize` for a DCR or CIMD client whose `redirect_uri` is
+loopback `http` (`127.0.0.1`, `[::1]` or `localhost`) skips the login page and the card while guest agents
+are enabled. Authorize answers `302` to the client's callback with `code`, `state` and `iss` and sets no
+cookie. The code carries every requested scope and stands for a guest agent named after the client, as
+above. Redeeming it at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is
+never redeemed creates nothing. The pending guest lives in the same process-local, one-minute,
+single-use code as any authorization, so a second redemption creates no second agent, revokes the first
+grant as for any replayed code, and a restart drops an unredeemed code. While 10,000 codes wait
+unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
+no code, and a code a signed-in user approves is never refused this way. The source limit, the metadata
+fetch and their refusals are the guest card's, answered as JSON from authorize. A source that reaches the
+limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
+agent. A static OAuth client, or any other `redirect_uri`, keeps the login page.
+
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still
@@ -243,7 +257,7 @@ origin) to the person. The code is held in server memory for ten minutes, so a r
 claims the agent once. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
 claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
 CLI login and a token session get `403`. On that `403` the page offers Sign out and continue, because a browser
-that took the guest agent card is still signed in as the agent. It signs out and shows sign-in on the same page,
+that took the guest agent card is still signed in as the agent. A guest that got its code with no page leaves the browser signed out. It signs out and shows sign-in on the same page,
 which comes back to the claim link. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
 the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
 code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
@@ -414,7 +428,7 @@ loop count.
 | `workspace_link_sharing_changes_total` | Link Sharing turned on or off. A role change while sharing stays on does not count | `state` (`on`, `off`), `role` (`viewer`, `editor`), `owner_category` |
 | `workspace_share_page_views_total` | A `GET` page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open, including a `304` revalidation, which is a real open. `HEAD` and in-app navigation do not count | `session` (`signed_in`, `signed_out`), `owner_category` |
 | `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
-| `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
+| `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`, `auth_token` for a guest authorization code redeemed at `POST /api/auth/token`) |
 | `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an unclaimed agent making a Space public. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `INTERACTIVE_SESSION_REQUIRED`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.

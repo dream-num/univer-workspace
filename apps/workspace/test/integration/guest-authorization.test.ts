@@ -10,11 +10,15 @@ const CIMD = "https://client.example.test/metadata";
 const STATIC_ID = "workspace-agent";
 const STATIC_REDIRECT = "https://agent.example.test/cb";
 const CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+const VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const STATE = "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx5";
+const GATEWAY_ID = "univer-workspace-mcp-gateway";
+const GATEWAY_SECRET = "test-gateway-secret-at-least-32-characters";
 const applications: ProductTestApplication[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
@@ -216,7 +220,156 @@ describe("continuing an OAuth authorization as a guest agent", () => {
   });
 });
 
-async function start(options: { agentCreateLimitPerHour: number; fetchDocument: FetchClientMetadataDocument; trustProxy?: boolean }): Promise<string> {
+describe("authorizing a loopback client from a browser with no session", () => {
+  const claudeCode = () => vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => ({
+    body: JSON.stringify({ client_id: id, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"] }),
+  }));
+
+  it("sends the client a code for a new guest agent, with no page and no session", async () => {
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode() });
+    const registered = await register(origin, "opencode");
+    const clients: Array<[Record<string, string | undefined>, string, string, RegExp]> = [
+      [{ client_id: registered, scope: undefined }, CALLBACK, "read write publish worktree:merge", /^opencode · [a-z0-9]{4}$/u],
+      [{ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }, "http://127.0.0.1:51063/callback", "read write", /^Claude Code · [a-z0-9]{4}$/u],
+    ];
+    for (const [fields, callback, scope, name] of clients) {
+      const authorized = await authorize(origin, fields);
+      expect(authorized.status).toBe(302);
+      expect(authorized.headers.get("set-cookie")).toBeNull();
+      const location = new URL(authorized.headers.get("location")!);
+      expect(`${location.origin}${location.pathname}`).toBe(callback);
+      expect(location.searchParams.get("code")).toMatch(/^[\w-]{32}$/u);
+      expect(location.searchParams.get("state")).toBe(STATE);
+      expect(location.searchParams.get("iss")).toBe(ISSUER);
+      expect(location.searchParams.get("scope")).toBe(scope);
+
+      const issued = await redeem(origin, fields.client_id!, authorized);
+      expect(issued.status).toBe(200);
+      const tokens = (await issued.json()) as { access_token: string; refresh_token: string; scope: string };
+      expect(tokens).toMatchObject({ access_token: expect.stringMatching(/^uvw_at_/u), refresh_token: expect.stringMatching(/^uvw_rt_/u), scope });
+      const principal = await principalOf(origin, tokens.access_token);
+      expect(principal.status).toBe(200);
+      expect(await principal.json()).toMatchObject({ scope, user: { kind: "agent", displayName: expect.stringMatching(name) } });
+    }
+  });
+
+  it("leaves a client that is not loopback to the sign-in page, and a signed-in browser to the consent page", async () => {
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode() });
+    const registered = await register(origin, "opencode", [CALLBACK, "https://client.example.test/cb"]);
+    const remote = await authorize(origin, { client_id: registered, redirect_uri: "https://client.example.test/cb" });
+    expect(remote.status).toBe(302);
+    expect(remote.headers.get("location")).toMatch(/^\/login\?returnTo=%2Fapi%2Fauth%2Fauthorize%3F/u);
+    expect(remote.headers.get("set-cookie")).toBeNull();
+    const signedIn = await authorize(origin, { client_id: registered }, await signIn(origin));
+    expect(signedIn.status).toBe(302);
+    expect(signedIn.headers.get("location")).toMatch(/^\/api\/auth\/authorize\/consent\?/u);
+
+    const guestsOff = await start({ agentCreateLimitPerHour: 0, fetchDocument: claudeCode() });
+    const off = await authorize(guestsOff, { client_id: await register(guestsOff, "opencode") });
+    expect(off.headers.get("location")).toMatch(/^\/login\?/u);
+  });
+
+  it("creates the guest when the code is redeemed, once, within the creation limit", async () => {
+    const fetchDocument = claudeCode();
+    const origin = await start({ agentCreateLimitPerHour: 2, fetchDocument });
+    const registered = await register(origin, "opencode");
+    const unredeemed = await authorize(origin, { client_id: registered });
+    const first = await authorize(origin, { client_id: registered });
+    const issued = await redeem(origin, registered, first);
+    expect(issued.status).toBe(200);
+    const { access_token: accessToken } = (await issued.json()) as { access_token: string };
+    const replayed = await redeem(origin, registered, first);
+    expect(replayed.status).toBe(400);
+    expect(await replayed.json()).toMatchObject({ error: "invalid_grant" });
+    expect((await principalOf(origin, accessToken)).status).toBe(400);
+
+    const second = await authorize(origin, { client_id: registered });
+    expect((await redeem(origin, registered, second)).status).toBe(200);
+    const limited = await authorize(origin, { client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("location")).toBeNull();
+    expect(limited.headers.get("set-cookie")).toBeNull();
+    expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
+    expect(fetchDocument).not.toHaveBeenCalled();
+
+    const late = await redeem(origin, registered, unredeemed);
+    expect(late.status).toBe(429);
+    expect(await late.json()).toEqual({ error: "temporarily_unavailable", error_description: "Too many agents were created from this address. Try again later." });
+  });
+
+  it("creates nothing for a request that would fail", async () => {
+    const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument: claudeCode() });
+    const registered = await register(origin, "opencode");
+    const redirected: Array<[Record<string, string | undefined>, string]> = [
+      [{ client_id: registered, resource: "https://wrong.example.test/mcp" }, "invalid_target"],
+      [{ client_id: registered, code_challenge_method: "plain" }, "invalid_request"],
+      [{ client_id: registered, scope: "read admin" }, "invalid_scope"],
+    ];
+    for (const [fields, error] of redirected) {
+      const refused = await authorize(origin, fields);
+      const location = new URL(refused.headers.get("location")!);
+      expect(location.searchParams.get("error")).toBe(error);
+      expect(location.searchParams.has("code")).toBe(false);
+    }
+    for (const fields of [{ client_id: registered, redirect_uri: "http://127.0.0.1:10/elsewhere" }, { client_id: "00000000-0000-4000-8000-000000000000" }]) {
+      const refused = await authorize(origin, fields);
+      expect(refused.status).toBe(400);
+      expect(refused.headers.get("location")).toBeNull();
+    }
+    const wrongVerifier = await redeem(origin, registered, await authorize(origin, { client_id: registered }), "x".repeat(43));
+    expect(wrongVerifier.status).toBe(400);
+
+    expect((await redeem(origin, registered, await authorize(origin, { client_id: registered }))).status).toBe(200);
+    expect((await authorize(origin, { client_id: registered })).status).toBe(429);
+  });
+
+  it("tells the client to try again, and issues nothing, while too many codes wait unredeemed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument: claudeCode(), guestAuthorizationCapacity: 2 });
+    const registered = await register(origin, "opencode");
+    const codeOf = (authorized: Response) => new URL(authorized.headers.get("location")!).searchParams.get("code");
+    const first = await authorize(origin, { client_id: registered });
+    const second = await authorize(origin, { client_id: registered });
+    expect([codeOf(first), codeOf(second)]).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
+
+    const refused = await authorize(origin, { client_id: registered });
+    expect(refused.status).toBe(302);
+    expect(refused.headers.get("set-cookie")).toBeNull();
+    const location = new URL(refused.headers.get("location")!);
+    expect(`${location.origin}${location.pathname}`).toBe(CALLBACK);
+    expect(Object.fromEntries(location.searchParams)).toEqual({
+      error: "temporarily_unavailable",
+      error_description: expect.stringMatching(/try again/iu),
+      state: STATE,
+      iss: ISSUER,
+    });
+
+    expect((await redeem(origin, registered, first)).status).toBe(200);
+    const third = await authorize(origin, { client_id: registered });
+    expect(codeOf(third)).toMatch(/^[\w-]{32}$/u);
+    expect(codeOf(await authorize(origin, { client_id: registered }))).toBeNull();
+
+    vi.setSystemTime(Date.now() + 61_000);
+    const fresh = [await authorize(origin, { client_id: registered }), await authorize(origin, { client_id: registered })];
+    expect(fresh.map(codeOf)).toEqual([expect.stringMatching(/^[\w-]{32}$/u), expect.stringMatching(/^[\w-]{32}$/u)]);
+    expect((await redeem(origin, registered, third)).status).toBe(400);
+
+    const cookie = await signIn(origin);
+    const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: registered })}`, { headers: { cookie } });
+    const consentToken = /name="consent_token" value="([^"]+)"/u.exec(await consent.text())![1]!;
+    const allowed = await fetch(`${origin}/api/auth/authorize/consent`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+      body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read" }),
+      redirect: "manual",
+    });
+    expect(codeOf(allowed)).toMatch(/^[\w-]{32}$/u);
+
+    for (const authorized of fresh) expect((await redeem(origin, registered, authorized)).status).toBe(200);
+  });
+});
+
+async function start(options: { agentCreateLimitPerHour: number; fetchDocument: FetchClientMetadataDocument; trustProxy?: boolean; guestAuthorizationCapacity?: number }): Promise<string> {
   const application = await createProductTestApplication({
     host: "127.0.0.1",
     port: 0,
@@ -227,11 +380,15 @@ async function start(options: { agentCreateLimitPerHour: number; fetchDocument: 
     passwordAuthEnabled: true,
     ...(options.trustProxy ? { trustProxy: true } : {}),
     agentCreateLimitPerHour: options.agentCreateLimitPerHour,
-    oauthClients: { clients: [{ clientId: STATIC_ID, clientType: "public", redirectUris: [STATIC_REDIRECT], scopes: ["identity"] }] },
+    oauthClients: { clients: [
+      { clientId: STATIC_ID, clientType: "public", redirectUris: [STATIC_REDIRECT], scopes: ["identity"] },
+      { clientId: GATEWAY_ID, clientType: "confidential", clientSecret: GATEWAY_SECRET, tokenExchange: true, redirectUris: ["https://gw.example.test/cb"], scopes: ["identity"] },
+    ] },
     mcpOAuth: { issuer: ISSUER, resources: [RESOURCE], maxRegisteredClients: 100, cimdEnabled: true },
   }, {
     unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
     fetchClientMetadataDocument: options.fetchDocument,
+    ...(options.guestAuthorizationCapacity === undefined ? {} : { guestAuthorizationCapacity: options.guestAuthorizationCapacity }),
   });
   applications.push(application);
   const server = createServer(application.app);
@@ -260,14 +417,42 @@ async function signIn(origin: string): Promise<string> {
   return response.headers.get("set-cookie")!.split(";", 1)[0]!;
 }
 
-async function register(origin: string, clientName: string): Promise<string> {
+async function register(origin: string, clientName: string, redirectUris = [CALLBACK]): Promise<string> {
   const response = await fetch(`${origin}/api/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ client_name: clientName, redirect_uris: [CALLBACK] }),
+    body: JSON.stringify({ client_name: clientName, redirect_uris: redirectUris }),
   });
   expect(response.status).toBe(201);
   return ((await response.json()) as { client_id: string }).client_id;
+}
+
+function authorize(origin: string, fields: Record<string, string | undefined>, cookie?: string): Promise<Response> {
+  return fetch(`${origin}/api/auth/authorize?${authorizeQuery(fields)}`, { redirect: "manual", ...(cookie === undefined ? {} : { headers: { cookie } }) });
+}
+
+function redeem(origin: string, clientId: string, authorized: Response, codeVerifier = VERIFIER): Promise<Response> {
+  const callback = new URL(authorized.headers.get("location")!);
+  return fetch(`${origin}/api/auth/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code", client_id: clientId, code: callback.searchParams.get("code")!, code_verifier: codeVerifier,
+      redirect_uri: `${callback.origin}${callback.pathname}`, resource: RESOURCE,
+    }),
+  });
+}
+
+/** Whom an MCP access token acts for, as the gateway learns it. */
+function principalOf(origin: string, accessToken: string): Promise<Response> {
+  return fetch(`${origin}/api/auth/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange", client_id: GATEWAY_ID, client_secret: GATEWAY_SECRET,
+      subject_token: accessToken, subject_token_type: "urn:ietf:params:oauth:token-type:access_token", resource: RESOURCE,
+    }),
+  });
 }
 
 function authorizeQuery(fields: Record<string, string | undefined>): string {

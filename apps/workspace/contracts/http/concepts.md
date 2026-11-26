@@ -67,6 +67,14 @@ past that budget. When every metadata fetch guests may start is in use, or the s
 has another in flight, it returns `503 CLIENT_METADATA_BUSY` with `Retry-After` and fetches nothing. The anonymous
 session reports `guestAuthEnabled: false` when the deployment creates no agents.
 
+`GET /api/auth/authorize` makes a guest agent with no page for a browser with no
+session, when guests are enabled and a DCR or CIMD client's `redirect_uri` is loopback
+`http`. It redirects to the client with a code and sets no cookie. Redeeming that code
+at `POST /api/auth/token` creates the agent under the same limit, and returns
+`429 temporarily_unavailable` with no agent past it. Authorize applies the limit and
+the metadata fetch budget above before redirecting. While 10,000 codes wait unredeemed,
+it redirects such a guest to the client with `error=temporarily_unavailable` and no code.
+
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).
 An agent also carries `claimed`. A banned agent's login session returns
 `401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.

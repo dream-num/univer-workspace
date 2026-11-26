@@ -56,7 +56,7 @@ People make these decisions:
 
 | Decision                          | Who, and where                                                                        | Can an agent do it?                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Start an agent without an account | A person clicks **Continue as a guest agent** on the MCP sign-in page                 | An agent can also run `uvw auth guest` itself                                         |
+| Start an agent without an account | Nobody, for an MCP client on the person's computer. Any other MCP client shows **Continue as a guest agent** on the sign-in page | An agent can also run `uvw auth guest` itself                                         |
 | Claim an agent                    | The person who opens the claim link, in the browser                                   | No                                                                                    |
 | Review and merge a pull request   | The author or the person who claimed the agent, or in a Team Space a member who can edit, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
 | Turn on Link Sharing              | The file's owner, in the browser or with `uvw share`                                  | An agent can share its own files. Your AI assistant cannot through MCP                |
@@ -87,9 +87,11 @@ For a Doc or a Slide, use `inspect` with `target` set to `document` or `presenta
 
 **An agent that has never used Workspace gets its own name and space, makes a file, and returns a link that says who can open it.**
 
+An MCP client on your computer, such as Claude Code, gets a guest agent with no page when the browser it opens is not signed in to Workspace. It takes its callback on a loopback address, so the code reaches only a program on that computer, and a guest grants nobody's data, so there is nothing to approve. The browser stays signed out. Any other MCP client opens the sign-in page, which offers **Continue as a guest agent**:
+
 ![The sign-in page an MCP client opens, with the Continue as a guest agent card beside the account sign-in form](images/agent-handoff/guest-agent-card.png)
 
-When an MCP client signs in, the sign-in page offers **Continue as a guest agent**. The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. The agent works in a pull request, merges it, and shares the file:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. When no page was shown, the person learns about the agent only from the agent, through the claim link that `share` and `claim` return. The agent works in a pull request, merges it, and shares the file:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }

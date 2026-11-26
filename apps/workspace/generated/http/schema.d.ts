@@ -305,8 +305,9 @@ export interface paths {
          *     When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
          *     (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
          *     clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
-         *     disables it. CIMD metadata is fetched only after interactive sign-in, or
-         *     when a browser continues as a guest agent (POST /api/auth/guest); invalid
+         *     disables it. CIMD metadata is fetched only after interactive sign-in,
+         *     when a browser continues as a guest agent (POST /api/auth/guest), or for
+         *     a guest agent with no page as described below; invalid
          *     documents return 400 and temporary fetch failures return 503 here, never a
          *     client redirect. CIMD names are displayed with their URL hostname. They must send
          *     `response_type=code`, `code_challenge_method=S256` and a `resource`
@@ -315,13 +316,29 @@ export interface paths {
          *     `write`, `publish` and `worktree:merge` (default all four) and `state`
          *     is optional, 1 to 1024 printable ASCII characters. A loopback
          *     `redirect_uri` matches a registered one with any port (RFC 8252); every
-         *     other URI matches exactly. The user always sees a consent page that
+         *     other URI matches exactly. A signed-in user always sees a consent page that
          *     lists the requested scopes, each of which can be unchecked; the code
-         *     carries only the checked scopes. An unknown client or unregistered
+         *     carries only the checked scopes.
+         *
+         *     A browser with no session gets no page when guest agents are enabled and
+         *     the MCP client's `redirect_uri` is loopback `http` (`127.0.0.1`, `[::1]`
+         *     or `localhost`, any port). The response redirects to the client with a
+         *     code for a new guest agent, named after the client, that carries every
+         *     requested scope, and sets no cookie. The agent is created when the code
+         *     is redeemed, under the per-source limit POST /api/auth/guest uses, so a
+         *     code nobody redeems creates nothing. A source at that limit gets 429
+         *     before anything is fetched, and a CIMD document is fetched and refused
+         *     as POST /api/auth/guest fetches and refuses it, answering here in JSON.
+         *     While 10,000 codes wait unredeemed, such a guest gets
+         *     `temporarily_unavailable` and no code; a code a signed-in user approves
+         *     is never refused this way.
+         *     With any other `redirect_uri` the browser goes to the sign-in page,
+         *     which offers that guest path. An unknown client or unregistered
          *     `redirect_uri` is answered here with 400; once both are verified, other
          *     errors redirect to the client with RFC 6749 `error` (`invalid_request`,
-         *     `invalid_scope`, `invalid_target`, `unsupported_response_type` or
-         *     `access_denied`), `error_description` and `state`. Every MCP success, error
+         *     `invalid_scope`, `invalid_target`, `unsupported_response_type`,
+         *     `temporarily_unavailable` or `access_denied`), `error_description` and
+         *     `state`. Every MCP success, error
          *     and deny callback includes `iss` (RFC 9207); static callbacks are unchanged.
          */
         get: operations["oauthAuthorize"];
@@ -382,7 +399,10 @@ export interface paths {
          *     or stored grant. If present, it must match that resource. They return
          *     `McpTokenResponse` with `Cache-Control:
          *     no-store`. A code is good for one attempt; presenting an already
-         *     redeemed code revokes the grant it produced. A refresh token rotates;
+         *     redeemed code revokes the grant it produced. Redeeming a guest agent's
+         *     code creates that agent; when its source reached the creation limit
+         *     after authorization, the answer is `temporarily_unavailable` (429) and
+         *     no agent is created. A refresh token rotates;
          *     presenting a rotated one within 60 seconds fails without side effects,
          *     later it revokes the grant. Errors use the RFC 6749 section 5.2 body
          *     `{ "error": "<code>", "error_description": "<description>" }` with
@@ -3422,7 +3442,7 @@ export interface components {
         };
         OAuthTokenError: {
             /** @enum {string} */
-            error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client" | "unsupported_grant_type";
+            error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client" | "unsupported_grant_type" | "temporarily_unavailable";
             /** @description Present for MCP token errors, including unknown or missing clients. */
             error_description?: string;
         };
@@ -4838,13 +4858,14 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. */
+        /** @description CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. For a guest agent with no page, JSON OAUTH_CLIENT_UNAVAILABLE, or CLIENT_METADATA_BUSY with Retry-After. */
         503: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
                 "text/html": string;
+                "application/json": components["schemas"]["ErrorResponse"];
             };
         };
         /** @description Invalid request. */
@@ -5557,13 +5578,23 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. */
+            /** @description AGENT_CREATE_RATE_LIMITED, for a guest agent with no page. This source created too many agents or started too many metadata fetches in the last hour. No client redirect. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. For a guest agent with no page, JSON OAUTH_CLIENT_UNAVAILABLE, or CLIENT_METADATA_BUSY with Retry-After. */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/html": string;
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -5713,6 +5744,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
+                };
+            };
+            /** @description `temporarily_unavailable`. The code was for a guest agent, and its source created too many agents since authorization. No agent was created. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthTokenError"];
                 };
             };
         };
