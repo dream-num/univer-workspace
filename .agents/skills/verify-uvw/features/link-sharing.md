@@ -9,7 +9,8 @@ page, unless the Space is public. Both surfaces show the same state. A reader wh
 ## Sub-features
 
 - LS1 shows a file's link and its Link Sharing state with `uvw share <node>`.
-- LS2 sets the link to `viewer` with `uvw share --link viewer`, and an anonymous visitor opens the file read-only.
+- LS2 asks for a `viewer` link with `uvw share --link viewer`, which the server refuses with a confirm link. The owner
+  confirms it in the browser, and an anonymous visitor opens the file read-only.
 - LS3 sets the link to `off`, and the anonymous visitor gets a 404 page.
 - LS4 shows the CLI-set state in the browser `Share` dialog, turns sharing on there, and reads it back through
   uvw and an anonymous visit.
@@ -22,14 +23,18 @@ page, unless the Space is public. Both surfaces show the same state. A reader wh
 
 - Browser: open a file, then click `Share` in its header. The dialog `Share “<name>”` has a `Link sharing`
   section with a switch, a `Link access` combobox and `Copy link`.
-- CLI: `uvw share <file link or Node ID>` prints the link and its state; `--link off|viewer|editor` sets it.
+- CLI: `uvw share <file link or Node ID>` prints the link and its state; `--link off` turns it off. `--link viewer`
+  and `--link editor` change nothing and print a confirm link, `$ORIGIN/confirm/link-sharing?node=<id>&role=<role>`.
+- Confirm page: the link opens `Turn on Link Sharing for <name>?` with the consequence, `Now` and `After you confirm`,
+  and the buttons `Confirm` and `Give up`.
 - A signed-out reader sees `Read only`, `Sign up` and `Sign in` in the page header. Below it the visitor bar shows
   the logo (a GitHub link named `Made with Univer Workspace`), `By <name>` for a Personal Space file, the copy count
   (`1 copy`) and a `More actions` menu with `Remix` (files only), `Hand to my agent`
   ([agent handoff](./agent-handoff.md)), `Copy link` and `Report`. In immersive view (`?view=immersive`) the header
   is hidden and the bar adds the links `Sign up free` and `Sign in` and `Collapse sign-up bar`.
 - A signed-in reader of someone else's Personal Space file sees the same bar without the sign-up links or collapse.
-- Space visibility: `uvw repo edit <owner>/<slug> --visibility public|private`, or the repository settings.
+- Space visibility: the repository settings, or `uvw repo edit <owner>/<slug> --visibility private`. `--visibility
+  public` prints a confirm link the same way. `$V person` runs uvw with the run user's browser session, for setup.
 
 ## Driving it with agent-browser and uvw
 
@@ -44,12 +49,19 @@ Preconditions:
 Run `$V cli share-show share "$N" --json`. Output has `url: "$ORIGIN/nodes/$N"`,
 `name: "Verify Budget"`, `link: "off"`, `owner.username: "verify-<run-id>"` and an `access` sentence:
 `Only people with access to the repository can open the link. Only if the user asks, run …--link viewer…`.
-Without `--json`, the second line is `Link Sharing: off.` followed by that sentence. With `--link editor` it
-says signed-in people can edit and an agent can edit only after a person claims it.
+Without `--json`, the second line is `Link Sharing: off.` followed by that sentence.
 
 ### LS2. Viewer link
 
-Run `$V cli share-viewer share "$N" --link viewer --json` (`link: "viewer"`), then
+Run `$V cli share-viewer share "$N" --link viewer --json`. It exits 1, and `share-viewer.err` starts
+`INTERACTIVE_SESSION_REQUIRED:`, ends its first line with
+`Give the user this link so they can confirm it in the browser: $ORIGIN/confirm/link-sharing?node=$N&role=viewer`
+and carries the same link as `url` in the detail. `$V cli share-refused share "$N" --json` still reads `link: "off"`.
+Open that link in the run browser: the page reads `Turn on Link Sharing for Verify Budget?` and
+`Anyone with the link will be able to read Verify Budget without signing in.`, with `Now` `Off` and
+`After you confirm` `Can view`. Screenshot `$EVIDENCE/share-confirm.png`, then
+`agent-browser find role button click --name Confirm --exact`. The page says `Done.` Read back with
+`$V cli share-confirmed share "$N" --json` (`link: "viewer"`), then
 `$V open-anon share-anon-viewer "$ORIGIN/nodes/$N"`. `share-anon-viewer.node-status` reports `200`, and
 `share-anon-viewer.png` shows the grid with `Rent`/`1200`, `Read only` and `Sign up`/`Sign in` in the header,
 and the bar with `By Verify <run-id>` and `More actions`.
@@ -101,7 +113,7 @@ The server serves link previews from `apps/workspace/dist/public` only when it e
 ### LS7. Public Space
 
 With the file link `off`, run
-`$V cli ls-public repo edit "verify-$VERIFY_UVW_RUN/personal" --visibility public --json` (`publicRead: true`).
+`$V person ls-public repo edit "verify-$VERIFY_UVW_RUN/personal" --visibility public --json` (`publicRead: true`).
 `$V open-anon ls-public "$ORIGIN/nodes/$N"` reports `200`. Set it back with `--visibility private`; the same
 visit reports `404`.
 
@@ -124,7 +136,10 @@ visit reports `404`.
   Vite on the web port never injects them.
 - `Save my version` on a page in trial mode copies the page and the Sheets it binds; see HV6-HV7 in
   [HTML View](./html-view.md).
-- Making a Space public needs an interactive session. A uvw password login or the browser may; an MCP PAT or
-  OAuth session gets `INTERACTIVE_SESSION_REQUIRED` and an unclaimed agent `AGENT_NOT_ALLOWED` ([MH4 in agent handoff](./agent-handoff.md#mh4-public-spaces)).
+- Only a person signed in to the browser turns a link on, raises it to `editor` or makes a Space public. A uvw
+  login, an MCP PAT or OAuth session and a claimed agent get `INTERACTIVE_SESSION_REQUIRED` with a confirm link,
+  and an unclaimed agent `AGENT_NOT_ALLOWED`, except for its own `viewer` link
+  ([MH4 in agent handoff](./agent-handoff.md#mh4-public-spaces), [CE4 in an agent's limits](./agent-mode-limits.md#ce4-a-person-confirms-what-an-agent-asks-for)).
+  Turning a link off and making a Space private need no confirmation.
 - A malformed JSON body to the share API answers `400` with `INVALID_INPUT`
   (`The request body is not valid JSON.`).

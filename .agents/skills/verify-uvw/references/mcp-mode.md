@@ -53,7 +53,7 @@ and replaces logs, so save what you need from the logs first. Run `user` again a
 
 ## Credentials
 
-`$V user` also signs the run user in twice and creates a fresh opencode directory and a personal access token (PAT).
+`$V user` also signs the run user in for the gateway and creates a fresh opencode directory and a personal access token (PAT).
 `home/mcp-session` is a CLI login, which `--auth dev` sends through the gateway. `home/browser-session` is a
 browser sign-in, which minting a PAT and the connect page need; it never goes to the gateway. The
 gateway exchanges the PAT with Workspace (confidential client `univer-workspace-mcp-gateway`, whose

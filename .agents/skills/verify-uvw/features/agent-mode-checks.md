@@ -71,9 +71,9 @@ person E with `POST $ORIGIN/api/auth/password/register` and keep the password ou
 
 ```bash
 A=$(jq -r .agent.username "$EVIDENCE/principal-checker-a.json"); B=$(jq -r .agent.username "$EVIDENCE/principal-checker-b.json")
-$V cli mpc-member-a repo member add "$A" --role viewer -R "$R" --json
-$V cli mpc-member-b repo member add "$B" --role editor -R "$R" --json
-$V cli mpc-member-e repo member add <E> --role viewer -R "$R" --json
+$V person mpc-member-a repo member add "$A" --role viewer -R "$R" --json
+$V person mpc-member-b repo member add "$B" --role editor -R "$R" --json
+$V person mpc-member-e repo member add <E> --role viewer -R "$R" --json
 $V mcp --as checker-a mpc-a-pr pr_create "{\"repo\":\"$R\",\"title\":\"Raise North\"}"
 W=$(jq -r .id "$EVIDENCE/mpc-a-pr.out"); N=$(jq -r .number "$EVIDENCE/mpc-a-pr.out")
 $V mcp --as checker-a mpc-a-add unit_add "{\"worktree\":\"$W\",\"resource\":\"$RES\"}"
@@ -189,7 +189,7 @@ O connects an MCP client as G, its own agent, so every `$V mcp --auth oauth` cal
 $V mcp-oauth login mpl-g --connect-as "$G_ID"
 $V mcp --auth oauth mpl-g-whoami whoami '{}'
 jq -e --arg id "$G_ID" --arg o "$O" '.subject.id == $id and .owner.username == $o' "$EVIDENCE/mpl-g-whoami.out"
-$V cli mpl-member-g repo member add "$G" --role editor -R "$R" --json
+$V person mpl-member-g repo member add "$G" --role editor -R "$R" --json
 ```
 
 No sign-in gives an agent a browser session, so the run browser borrows G's uvw session cookie to show G's view.
@@ -317,7 +317,8 @@ results, leaving Trunk with every row.
 ### MP18. An agent declares checks in its own repository on the default connection
 
 A claimed agent A creates a repository R, declares two checks in `.agents/checks.md` and turns on `landing` `checks`,
-all on the default connection. A adds a claimed agent B as an Editor. B's merge without results is refused with
+all on the default connection. A asks to add a claimed agent B as an Editor, which returns a confirm link, and O, who
+claimed A, adds B in the browser session. B's merge without results is refused with
 `CHECKS_REQUIRED` naming both checks, and succeeds once B reports both. B's `space_node` and `blob_upload` on R's
 Trunk are refused with `AGENT_NOT_ALLOWED`. No call below passes `--toolsets`.
 
@@ -349,6 +350,9 @@ jq -e '.upload.name == "checks.md" and .upload.availability == "ready"' "$EVIDEN
 $V mcp --as decl-a mpd-landing repo_edit "{\"repo\":\"$R\",\"landing\":\"checks\"}"
 jq -e '.landing == "checks"' "$EVIDENCE/mpd-landing.out"
 $V mcp --as decl-a mpd-member repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$B\",\"role\":\"editor\"}"
+test $? -eq 1
+jq -e '.code == "INTERACTIVE_SESSION_REQUIRED" and (.detail.url | endswith("&role=editor"))' "$EVIDENCE/mpd-member.out"
+$V person mpd-member-confirmed repo member add "$B" --role editor -R "$R" --json role
 ```
 
 B proposes a Sheet and tries to merge it with no results, then reports both checks and merges:
@@ -388,7 +392,8 @@ jq -s -e 'map(.code) == ["AGENT_NOT_ALLOWED", "AGENT_NOT_ALLOWED"]' "$EVIDENCE/m
 ```
 
 Pass when A's default tool list has `space_node`, `blob_upload` and `file_upload_create` and its instructions say how to
-declare checks; A creates `.agents` and a ready `checks.md` and sets `landing` to `checks` with no `toolsets`; B's first
+declare checks; A creates `.agents` and a ready `checks.md` and sets `landing` to `checks` with no `toolsets`; A's
+`repo_member_write` exits 1 with a confirm link and O's browser session adds B; B's first
 `pr_merge` exits 1 with `CHECKS_REQUIRED` naming both checks as missing; after B reports both, `pr_view` lists them
 declared and `passed`, the merge succeeds and Trunk reads Region, Total, North, 40; and B's `space_node` and
 `blob_upload` on R exit 1 with `AGENT_NOT_ALLOWED`.

@@ -404,7 +404,8 @@ already did, then define `uh`, `ue` and MHV8's `page` function. H creates the Sp
 `principal`s:
 
 ```bash
-uh repo create fork-pages --name "Fork pages" --public --proposals accountable --json id > "$EVIDENCE/mfp-team.out"; T=$(jq -r .id "$EVIDENCE/mfp-team.out")
+uh repo create fork-pages --name "Fork pages" --proposals accountable --json id > "$EVIDENCE/mfp-team.out"; T=$(jq -r .id "$EVIDENCE/mfp-team.out")
+curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PATCH -H 'content-type: application/json' -d '{"publicRead":true}' "$ORIGIN/api/spaces/$T"
 $V principal pagefork mfp-a
 AID=$(jq -r .agent.id "$EVIDENCE/principal-pagefork.json")
 $V mcp --as pagefork mfp-claim claim '{}'

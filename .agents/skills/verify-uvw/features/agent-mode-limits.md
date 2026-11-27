@@ -7,6 +7,9 @@ all its Spaces (`AGENT_QUOTA_EXCEEDED`). It cannot make a Space public, join a T
 user search neither finds it nor answers it (`AGENT_NOT_ALLOWED`). A claimed agent joins a person's Team Space as a
 Viewer or an Editor, never as an admin. Someone who is not a member holds at most 3 open proposals in one Team Space
 (`FORBIDDEN`). Each limit has a way out: a claim, a deleted fork, a file moved to Trash or a discarded proposal.
+Only a person signed in to the browser lets more people see data. When an agent or a uvw session asks to add a
+member, raise a role or make a Space public, the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`
+with a confirm link, and the person who opens it confirms or gives up.
 
 ## Sub-features
 
@@ -14,19 +17,22 @@ Viewer or an Editor, never as an admin. Someone who is not a member holds at mos
   replay of a creation that Collaboration failed, and frees a place with a merge that `whoami` counts. The run user has
   no budget.
 - CE1 adds a claimed agent to a person's Team Space as a Viewer and refuses it as an admin, refuses an unclaimed agent
-  as a member and as one that adds members, hides it from user search, lets it join and add once claimed, and hides a
-  stopped agent from search.
+  as a member and as one that adds members, hides it from user search, lets it join once claimed, answers its own
+  added member with a confirm link that its claimer confirms, and hides a stopped agent from search.
 - CE2 drives an unclaimed agent to 3 Team Spaces, 3 forks and 20 files across three Spaces, some still in a pull
-  request, refuses each next one and a public Team Space, and frees a fork with `fork_delete`, a file with a move to
-  Trash and the Team Spaces with a claim.
+  request, refuses each next one and making a Team Space public, and frees a fork with `fork_delete`, a file with a
+  move to Trash and the Team Spaces with a claim.
 - CE3 has an agent that is not a member open 3 proposals in a public Team Space, refuses the fourth with `FORBIDDEN`,
   and opens it after `pr_discard`.
+- CE4 has a claimed agent ask to add a member. The call changes nothing and returns a confirm link. The server
+  refuses the confirmation of a person without the capability, and the agent's claimer opens the link, confirms, and
+  the member appears.
 
 ## How to get to it (user POV)
 
 An agent reads its budget with `whoami`. MP14 also calls `pr_create`, `pr_ready` and `pr_merge` as an agent. CE1-CE3
 call `claim`, `repo_create`, `repo_member_write`, `fork_create`, `fork_delete`, `unit_create`, `space_node` and
-`pr_discard` as agents. The run user adds members with `uvw repo member add`, and claims and stops agents through the
+`pr_discard` as agents. The run user adds members with its browser session (`$V person … repo member add`), and claims and stops agents through the
 HTTP API that the claim page and `My agents` call.
 
 ## Driving it with agent-browser and uvw
@@ -112,10 +118,12 @@ leaves 9 open and 1 merge in `whoami`, the next creation succeeds, and the run u
 
 Run: helper.
 
-O holds a Team Space S. O adds a claimed agent A as a Viewer, and the change to admin is refused. An unclaimed agent
+O holds a Team Space S. O's uvw session is refused when it adds a claimed agent A, with a confirm link, and O adds A
+as a Viewer in the browser session. The change to admin is refused. An unclaimed agent
 U is refused as a member: uvw does not find it, and the HTTP API that adds members answers `AGENT_NOT_ALLOWED`. User
-search finds A and not U. U creates a repository of its own and cannot add O to it. Once O claims U, O adds U to S and
-U adds O to its repository. O then stops A, and search no longer finds it.
+search finds A and not U. U creates a repository of its own and cannot add O to it. Once O claims U, O adds U to S.
+U's call to add O to its repository now returns a confirm link, and O confirms it. O then stops A, and search no
+longer finds it.
 
 ```bash
 $V cli ce1-repo repo create ce-joins --name "Joins" --json id,fullName
@@ -124,11 +132,15 @@ $V principal ce-claimed ce1-a
 $V principal ce-unclaimed ce1-u
 A=$(jq -r .agent.username "$EVIDENCE/principal-ce-claimed.json"); U=$(jq -r .agent.username "$EVIDENCE/principal-ce-unclaimed.json")
 claim_agent ce-claimed ce1-a-claim
-$V cli ce1-add-a repo member add "$A" --role viewer -R "$R" --json role
+$V cli ce1-add-a-cli repo member add "$A" --role viewer -R "$R" --json role
+test $? -eq 1
+grep -q '^INTERACTIVE_SESSION_REQUIRED: ' "$EVIDENCE/ce1-add-a-cli.err"
+grep -qF "Give the user this link so they can confirm it in the browser: $ORIGIN/confirm/member?space=$S&user=$(jq -r .agent.id "$EVIDENCE/principal-ce-claimed.json")&role=viewer" "$EVIDENCE/ce1-add-a-cli.err"
+$V person ce1-add-a repo member add "$A" --role viewer -R "$R" --json role
 jq -e '.role == "viewer"' "$EVIDENCE/ce1-add-a.out"
 $V cli ce1-admin-a repo member add "$A" --role admin -R "$R" --json role
 test $? -eq 1
-grep -q '^AGENT_NOT_ALLOWED: An unclaimed agent cannot add or be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.' "$EVIDENCE/ce1-admin-a.err"
+grep -q '^AGENT_NOT_ALLOWED: An unclaimed agent cannot be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.' "$EVIDENCE/ce1-admin-a.err"
 $V cli ce1-add-u repo member add "$U" --role viewer -R "$R" --json role
 test $? -eq 1
 grep -q 'Unclaimed and stopped agents cannot be members.' "$EVIDENCE/ce1-add-u.err"
@@ -145,25 +157,31 @@ $V mcp --as ce-unclaimed ce1-u-add-o repo_member_write "{\"repo\":\"$U/own\",\"a
 test $? -eq 1
 jq -e '.code == "AGENT_NOT_ALLOWED" and .message == "An unclaimed agent cannot add Team Space members. A person must claim it first."' "$EVIDENCE/ce1-u-add-o.out"
 claim_agent ce-unclaimed ce1-u-claim
-$V cli ce1-add-u-claimed repo member add "$U" --role viewer -R "$R" --json role
+$V person ce1-add-u-claimed repo member add "$U" --role viewer -R "$R" --json role
 jq -e '.role == "viewer"' "$EVIDENCE/ce1-add-u-claimed.out"
 $V mcp --as ce-unclaimed ce1-u-add-o-claimed repo_member_write "{\"repo\":\"$U/own\",\"action\":\"add\",\"user\":\"$O\",\"role\":\"viewer\"}"
-jq -e '.role == "viewer"' "$EVIDENCE/ce1-u-add-o-claimed.out"
+test $? -eq 1
+US=$(jq -r .id "$EVIDENCE/ce1-u-repo.out"); OID=$(jq -r .user.id "$RUN/logs/register.json")
+jq -e --arg url "$ORIGIN/confirm/member?space=$US&user=$OID&role=viewer" '.code == "INTERACTIVE_SESSION_REQUIRED" and .detail.url == $url' "$EVIDENCE/ce1-u-add-o-claimed.out"
+curl --fail-with-body -sS -b "$OC" -o "$EVIDENCE/ce1-o-confirms.json" -X PUT -H 'content-type: application/json' -d '{"role":"viewer"}' "$ORIGIN/api/team-spaces/$US/members/$OID"
+jq -e '.role == "viewer"' "$EVIDENCE/ce1-o-confirms.json"
 curl --fail-with-body -sS -b "$OC" -o /dev/null -X POST "$ORIGIN/api/agents/$(jq -r .agent.id "$EVIDENCE/principal-ce-claimed.json")/stop"
 curl --fail-with-body -sS -b "$OC" "$ORIGIN/api/users/search?query=$A" > "$EVIDENCE/ce1-search-stopped.json"
 jq -e '.users == []' "$EVIDENCE/ce1-search-stopped.json"
 ```
 
-Pass when A joins as a Viewer and the change to admin exits 1 with `AGENT_NOT_ALLOWED`; uvw cannot find U and the
+Pass when O's uvw add exits 1 with `INTERACTIVE_SESSION_REQUIRED` and the confirm link for A as a Viewer, A joins as
+a Viewer through the browser session and the change to admin exits 1 with `AGENT_NOT_ALLOWED`; uvw cannot find U and the
 HTTP API answers 403 `AGENT_NOT_ALLOWED`; search finds A and not U; U creates its repository, and its
 `repo_member_write` exits 1 with `AGENT_NOT_ALLOWED` and says a person must claim it; once claimed, U joins S as a
-Viewer and adds O; and search no longer finds the stopped A.
+Viewer, its own `repo_member_write` exits 1 with the confirm link for O, and O's browser session adds O with the
+values that link names; and search no longer finds the stopped A.
 
 ### CE2. An unclaimed agent's Team Spaces, forks and files
 
 Run: helper.
 
-An unclaimed agent Q creates Team Spaces q1 to q3 and is refused a fourth and a public one. It forks q1 three times
+An unclaimed agent Q creates Team Spaces q1 to q3, is refused a fourth, and is refused when it makes q1 public. It forks q1 three times
 and is refused a fourth fork until it deletes one. It merges 10 Sheets into its Personal Space and puts 10 more in a
 pull request in q1, so a Sheet in q2 is refused until it moves one to Trash. Once O claims Q, its fourth Team Space is
 created. `sheets <repo> <label> <count>` has Q open a pull request in a repository and create Sheets in it.
@@ -171,13 +189,13 @@ created. `sheets <repo> <label> <count>` has Q open a pull request in a reposito
 ```bash
 $V principal ce-quota ce2-q
 Q=$(jq -r .agent.username "$EVIDENCE/principal-ce-quota.json")
-$V mcp --as ce-quota ce2-public repo_create '{"slug":"q0","public":true}'
-test $? -eq 1
-jq -e '.code == "AGENT_NOT_ALLOWED" and .message == "An unclaimed agent cannot make a Space public. Keep it private, or give a person a claim link so they can claim you, which lifts this limit. Claiming also lets that person open every Space you own."' "$EVIDENCE/ce2-public.out"
 for n in 1 2 3; do
   $V mcp --as ce-quota "ce2-repo-$n" repo_create "{\"slug\":\"q$n\"}" || break
 done
 jq -s -e 'map(.fullName) == ["'"$Q/q1"'", "'"$Q/q2"'", "'"$Q/q3"'"]' "$EVIDENCE"/ce2-repo-[123].out
+$V mcp --as ce-quota ce2-public repo_edit "{\"repo\":\"$Q/q1\",\"visibility\":\"public\"}"
+test $? -eq 1
+jq -e '.code == "AGENT_NOT_ALLOWED" and (.detail.url == null) and .message == "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again."' "$EVIDENCE/ce2-public.out"
 $V mcp --as ce-quota ce2-repo-4 repo_create '{"slug":"q4"}'
 test $? -eq 1
 jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-repo-4.out"
@@ -218,7 +236,7 @@ $V mcp --as ce-quota ce2-repo-4-claimed repo_create '{"slug":"q4"}'
 jq -e '.fullName == "'"$Q/q4"'"' "$EVIDENCE/ce2-repo-4-claimed.out"
 ```
 
-Pass when the public Team Space exits 1 with `AGENT_NOT_ALLOWED` and names a claim as the way out; q1 to q3 are created and q4 exits 1 with
+Pass when q1 to q3 are created, making q1 public exits 1 with `AGENT_NOT_ALLOWED`, no confirm link and a claim link as the way out, and q4 exits 1 with
 `AGENT_QUOTA_EXCEEDED` naming 3 Team Spaces; f1 to f3 are created, and f4 exits 1 naming 3 forks and is created after
 `fork_delete`; the Personal Space pull request merges 10 Sheets and q1's pull request holds 10 more; the Sheet in q2
 exits 1 naming 20 files and is created after one Sheet moves to Trash; and after the claim q4 is created.
@@ -231,7 +249,8 @@ O makes a public Team Space whose proposals setting is `anyone`. An unclaimed ag
 proposals there, and the fourth is refused with `FORBIDDEN`. N discards one with `pr_discard` and opens the fourth.
 
 ```bash
-$V cli ce3-repo repo create ce-open --name "Open" --public --proposals anyone --json fullName,publicRead,proposals
+$V cli ce3-repo-private repo create ce-open --name "Open" --proposals anyone --json fullName,publicRead,proposals
+$V person ce3-repo repo edit "$O/ce-open" --visibility public --json fullName,publicRead,proposals
 jq -e '.publicRead and .proposals == "anyone"' "$EVIDENCE/ce3-repo.out"
 $V principal ce-outsider ce3-n
 for n in 1 2 3; do
@@ -250,9 +269,64 @@ jq -e '.state == "draft"' "$EVIDENCE/ce3-pr-4-freed.out"
 Pass when the repository reads back public with `anyone`, three proposals open as drafts, the fourth exits 1 with
 `FORBIDDEN` and the message above, the discard succeeds, and the fourth then opens.
 
+### CE4. A person confirms what an agent asks for
+
+O claims two agents, C and D. C creates a repository of its own, which O owns too, and asks to add D as an Editor.
+The call changes nothing and returns a confirm link. A person V, a Viewer of the repository, opens the link, and the
+server refuses V's confirmation. O opens it, confirms, and D is a member.
+
+```bash
+$V principal ce-asker ce4-c
+$V principal ce-joiner ce4-d
+C=$(jq -r .agent.username "$EVIDENCE/principal-ce-asker.json"); D=$(jq -r .agent.username "$EVIDENCE/principal-ce-joiner.json")
+claim_agent ce-asker ce4-c-claim
+claim_agent ce-joiner ce4-d-claim
+$V mcp --as ce-asker ce4-repo repo_create '{"slug":"ce-asks","name":"Asks"}'
+T=$(jq -r .id "$EVIDENCE/ce4-repo.out"); R="$C/ce-asks"
+$V mcp --as ce-asker ce4-add repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$D\",\"role\":\"editor\"}"
+test $? -eq 1
+L="$ORIGIN/confirm/member?space=$T&user=$(jq -r .agent.id "$EVIDENCE/principal-ce-joiner.json")&role=editor"
+jq -e --arg url "$L" '.code == "INTERACTIVE_SESSION_REQUIRED" and .detail.url == $url and (.message | endswith("Give the user this link so they can confirm it in the browser: " + $url))' "$EVIDENCE/ce4-add.out"
+$V mcp --as ce-asker ce4-members-before repo_member_list "{\"repo\":\"$R\"}"
+jq -e '.members == []' "$EVIDENCE/ce4-members-before.out"
+$V metrics > "$EVIDENCE/ce4-metrics.prom"
+grep -E '^workspace_exposure_refusals_total\{change="member",code="INTERACTIVE_SESSION_REQUIRED",principal_category="agent_claimed"\} [1-9]' "$EVIDENCE/ce4-metrics.prom"
+```
+
+Create V in a second browser session: with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-v`, pin the language and
+view as [the skill](../SKILL.md#drive) does, open `/login`, click the `Create account` mode button, fill `Username` with
+`ce4-v-$VERIFY_UVW_RUN`, `Display name` and `Password`, and submit. O makes V a Viewer:
+`$V person ce4-viewer repo member add "ce4-v-$VERIFY_UVW_RUN" --role viewer -R "$R" --json role`. In V's session, open
+`$L` and click `Confirm`. The page shows `The current user cannot perform this action.`, does not say `Done.`, and
+`Now` still reads `Not a member`. Screenshot it as `ce4-viewer.png`.
+
+In the run browser, signed in as O, open `$L`. The page reads `Give <D's display name> (@<D>) access to <C>/ce-asks?`
+and `<D's display name> (@<D>) will be able to read and edit every file in <C>/ce-asks.`, with `Now` `Not a member`
+and `After you confirm` `Can edit`, and the buttons `Confirm` and `Give up`. Open `$L&title=Harmless` too: the page is
+the same and never shows `Harmless`. Screenshot it as `ce4-confirm.png`, then
+`agent-browser find role button click --name Confirm --exact`. The page says `Done.` and `Now` reads `Can edit`. Then:
+
+```bash
+$V mcp --as ce-asker ce4-members-after repo_member_list "{\"repo\":\"$R\"}"
+jq -e --arg d "$D" '[.members[] | select(.user.username == $d) | .role] == ["editor"]' "$EVIDENCE/ce4-members-after.out"
+$V mcp --as ce-asker ce4-again repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$D\",\"role\":\"editor\"}"
+jq -e '.role == "editor"' "$EVIDENCE/ce4-again.out"
+$V mcp --as ce-asker ce4-lower repo_member_write "{\"repo\":\"$R\",\"action\":\"edit\",\"user\":\"$D\",\"role\":\"viewer\"}"
+jq -e '.role == "viewer"' "$EVIDENCE/ce4-lower.out"
+AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-v agent-browser close
+```
+
+Pass when C's add exits 1 with `INTERACTIVE_SESSION_REQUIRED` and the confirm link in its message and `detail.url`,
+the member list stays empty and the refusal is counted; V's `Confirm` is refused and changes nothing; O's page names
+D and the repository as the server reads them, shows nothing from the link's extra parameter, and its `Confirm` makes
+D an Editor; and C's repeat of the stored role and its change down to Viewer succeed with no link.
+
 ## Gotchas
 
 - The MCP-mode gotchas in [MCP gateway](mcp.md#gotchas) apply.
+- `$V person <label> <uvw args>` runs uvw with the run user's browser session and saves evidence as `$V cli` does. It
+  stands in for the person doing the same in the browser, so use it for setup. CE4, LS2 and MH4 drive the confirm
+  page itself.
 - uvw and MCP name a member through user search, which never returns an unclaimed or stopped agent, so they answer
   `No user named or identified by "<name>" can join.` before the server can refuse. CE1 reads the server's
   `AGENT_NOT_ALLOWED` from `PUT /api/team-spaces/<id>/members/<user-id>` with the agent's ID.

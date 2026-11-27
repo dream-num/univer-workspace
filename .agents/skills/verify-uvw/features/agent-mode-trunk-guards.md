@@ -62,7 +62,7 @@ jq -e '. == {event: "changeset_ack", baseRev: 1}' "$EVIDENCE/tg-owner-edit.json"
 $V cli tg-old space node create "$R" --name Old --json
 $V cli tg-old-trash space node trash "$(jq -r .node.nodeId "$EVIDENCE/tg-old.out")" --json
 B=$(jq -r .trashBatch.trashBatchId "$EVIDENCE/tg-old-trash.out")
-$V cli tg-viewer repo member add "$A" --role viewer -R "$R" --json role
+$V person tg-viewer repo member add "$A" --role viewer -R "$R" --json role
 trunk() { $V uvw inspect range A1:B2 --trunk --unit "$U" --worksheet index:1 --json | jq -c '[.. | objects | select(has("v")) | .v]'; }
 trash() { curl -sS -b "$TG/$1.cookies" -o "$EVIDENCE/$2.json" -w '%{http_code}\n' -X "$3" "$ORIGIN/api/trash-batches/$B$4"; }
 ```
@@ -124,7 +124,7 @@ Trash and rename refusals and its Browser opening Trunk read-only. Here A posts 
 route and restores and deletes B. Back in `review`, the same edit commits.
 
 ```bash
-$V cli tg3-editor repo member edit "$A" --role editor -R "$R" --json role
+$V person tg3-editor repo member edit "$A" --role editor -R "$R" --json role
 $V cli tg3-checks repo edit "$R" --landing checks --json landing
 jq -e '.landing == "checks"' "$EVIDENCE/tg3-checks.out"
 trunk > "$EVIDENCE/tg3-before.json"
@@ -156,7 +156,7 @@ protects B2 so that only O edits it, as the Browser's range protection does. A's
 protection is refused, because it would replace B2. O's same restore commits, and B2 stays protected.
 
 ```bash
-$V cli tg4-editor repo member edit "$A" --role editor -R "$R" --json role
+$V person tg4-editor repo member edit "$A" --role editor -R "$R" --json role
 $V cli tg4-review repo edit "$R" --landing review --json landing
 node "$TC" "$TG/agent.cookies" "$U" univer.mutation.revert-version '{"revision":1}' > "$EVIDENCE/tg4-restore-open.json"
 jq -e '.event == "changeset_ack"' "$EVIDENCE/tg4-restore-open.json"

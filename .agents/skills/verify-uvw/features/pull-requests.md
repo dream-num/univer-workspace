@@ -195,7 +195,7 @@ $V cli prh-seed pr create -R "$R" -t Seed --json id,number
 $V cli prh-old unit create --worktree "$(jq -r .id "$EVIDENCE/prh-seed.out")" --space "$R" --type sheet --name Old --json
 $V cli prh-seed-ready pr ready "$(jq -r .number "$EVIDENCE/prh-seed.out")" -R "$R" --json state
 $V cli prh-seed-merge pr merge "$(jq -r .number "$EVIDENCE/prh-seed.out")" -R "$R" --json state
-$V cli prh-member repo member add "$X" --role admin -R "$R" --json
+$V person prh-member repo member add "$X" --role admin -R "$R" --json
 ux pr create -R "$R" -t "Replace Old" --json id,number > "$EVIDENCE/prh-pr.out"
 W=$(jq -r .id "$EVIDENCE/prh-pr.out"); N=$(jq -r .number "$EVIDENCE/prh-pr.out")
 ux unit add --worktree "$W" --resource "$(jq -r .unit.resourceId "$EVIDENCE/prh-old.out")" --json > "$EVIDENCE/prh-add-old.out"
@@ -231,7 +231,7 @@ jq -e '[.worktree.units[] | [.name, .fileState]] == [["Old", "live"], ["Added", 
 test "$(cut -d' ' -f2 "$EVIDENCE/prh-owner-1-compare.txt")" = 409
 $V cli prh-trash-old space node trash "$(jq -r .unit.nodeId "$EVIDENCE/prh-old.out")" --json
 curl --fail-with-body -sS -b "$OH/cookies" -o /dev/null -X DELETE "$ORIGIN/api/trash-batches/$(batch Added)"
-$V cli prh-public repo edit "$R" --visibility public --json publicRead
+$V person prh-public repo edit "$R" --visibility public --json publicRead
 observe "$XH" former-2
 observe "$OH" owner-2
 for f in units.json items.json compare.txt; do cmp "$EVIDENCE/prh-former-1-$f" "$EVIDENCE/prh-former-2-$f"; done
@@ -276,8 +276,8 @@ curl --fail-with-body -sS -b "$OH/cookies" -o /dev/null -X POST "$ORIGIN/api/age
   -d "{\"code\":\"$(jq -r '.claimUrl | split("/") | last' "$GH/claim.json")\"}"
 $V cli prm-repo repo create merged-alone --name "Merged alone" --json id
 T=$(jq -r .id "$EVIDENCE/prm-repo.out")
-$V cli prm-agent repo member add "$A" --role editor -R "$R" --json role
-$V cli prm-member repo member add "$M" --role viewer -R "$R" --json role
+$V person prm-agent repo member add "$A" --role editor -R "$R" --json role
+$V person prm-member repo member add "$M" --role viewer -R "$R" --json role
 ga pr create -R "$R" -t "Sales by an agent" --json id,number > "$EVIDENCE/prm-pr.out"
 W=$(jq -r .id "$EVIDENCE/prm-pr.out"); N=$(jq -r .number "$EVIDENCE/prm-pr.out")
 ga unit create --worktree "$W" --space "$R" --type sheet --name Sales --json > "$EVIDENCE/prm-sales.out"
@@ -326,7 +326,7 @@ jq -e '.error.code == "ACTIVE_WORKTREE_RESOURCE_REFERENCE"' "$EVIDENCE/prd-delet
 um pr discard "$N2" -R "$R" --json state > "$EVIDENCE/prd-viewer-discard.out" 2> "$EVIDENCE/prd-viewer-discard.err"
 test $? -eq 1
 grep -q '^NOT_FOUND: Worktree not found.' "$EVIDENCE/prd-viewer-discard.err"
-$V cli prd-admin repo member edit "$M" --role admin -R "$R" --json role
+$V person prd-admin repo member edit "$M" --role admin -R "$R" --json role
 um pr discard "$N2" -R "$R" --json state > "$EVIDENCE/prd-discard.out"
 jq -e '.state == "discarded"' "$EVIDENCE/prd-discard.out"
 ga pr view "$N2" -R "$R" --json state > "$EVIDENCE/prd-agent-view.out"

@@ -311,7 +311,8 @@ unless this run already did, and define `uh`, `ue`, `H`, `HH` and `EH` as it doe
 `principal`:
 
 ```bash
-uh repo create fork-files --name "Fork files" --public --proposals accountable --json id > "$EVIDENCE/mff-team.out"; T=$(jq -r .id "$EVIDENCE/mff-team.out")
+uh repo create fork-files --name "Fork files" --proposals accountable --json id > "$EVIDENCE/mff-team.out"; T=$(jq -r .id "$EVIDENCE/mff-team.out")
+curl --fail-with-body -sS -b "$HH/cookies" -o /dev/null -X PATCH -H 'content-type: application/json' -d '{"publicRead":true}' "$ORIGIN/api/spaces/$T"
 $V principal filefork mff-a
 AID=$(jq -r .agent.id "$EVIDENCE/principal-filefork.json")
 $V mcp --as filefork mff-claim claim '{}'

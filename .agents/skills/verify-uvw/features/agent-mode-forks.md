@@ -36,7 +36,8 @@ a fork changes nothing upstream, and its pull requests stay there.
 An MCP client calls `fork_create`, `fork_list`, `fork_view` and `fork_delete`, and passes the fork address as `repo`
 to `space_browse` and as `worktree` to `read`, `execute` and `unit_list`. It readies and reopens the fork's pull
 request with `pr_ready`, using `worktree.number` from `fork_view`. A person runs `uvw fork create|list|view|delete`,
-manages members with `uvw repo member add|remove`, and changes visibility with `uvw repo edit`.
+manages members with `uvw repo member add|remove`, and changes visibility with `uvw repo edit`. Adding a member and
+making a repository public need the person's browser session, so the setup runs them as `$V person`.
 
 ## Driving it with agent-browser and uvw
 
@@ -98,7 +99,7 @@ $V mcp --as forker fk-claim claim '{}' > /dev/null
 jq -nc --arg c "$(jq -r .claimUrl "$EVIDENCE/fk-claim.out" | sed 's#.*/claim/##')" '{code:$c}' \
   | curl --fail-with-body -sS -b "$RUN/home/fk-o.cookies" -o "$EVIDENCE/fk-claimed.json" -H 'content-type: application/json' -H "Origin: $ORIGIN" -d @- "$ORIGIN/api/agents/claim"
 perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "$EVIDENCE"/fk-claim.*
-$V cli fk-member repo member add "$A" --role viewer -R "$S" --json
+$V person fk-member repo member add "$A" --role viewer -R "$S" --json
 $V mcp --as forker fk-role repo_view "{\"repo\":\"$S\"}"
 jq -e '.accessRole == "viewer" and .capabilities.propose and .publicRead == false' "$EVIDENCE/fk-role.out"
 ```
@@ -347,7 +348,7 @@ O then makes S public with `proposals` `members`, which lets anyone read it and 
 through the fork again and writes:
 
 ```bash
-$V cli fk-public repo edit "$S" --visibility public --proposals members --json
+$V person fk-public repo edit "$S" --visibility public --proposals members --json
 $V mcp --as forker fk-public-view fork_view "{\"fork\":\"$F2\"}"
 jq -e --arg s "$S" '.upstream.fullName == $s and .upstream.affiliation == "none" and .upstream.capabilities.propose == false and .worktree.capabilities.addUnit == false' "$EVIDENCE/fk-public-view.out"
 $V mcp --as forker fk-public-browse space_browse "{\"repo\":\"$F2\",\"recursive\":true}"

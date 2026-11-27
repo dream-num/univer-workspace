@@ -257,7 +257,7 @@ assert(session, 'Login must return a session cookie');
 writeFileSync(sessionFile, session, { mode: 0o600 });
 const membership = await fetch(`${origin}/api/team-spaces/${team}/members/${user.id}`, {
   method: 'PUT', headers: { 'content-type': 'application/json',
-    cookie: 'workspace_session=' + readFileSync(home + '/mcp-session', 'utf8').trim() },
+    cookie: 'workspace_session=' + readFileSync(home + '/browser-session', 'utf8').trim() },
   body: JSON.stringify({ role: 'viewer' }),
 });
 assert(membership.ok, `Membership returned ${membership.status}`);

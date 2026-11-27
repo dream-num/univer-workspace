@@ -356,6 +356,8 @@ Mode: mcp.
 Open the claim URL in the run browser and click `Claim agent`. Right after, with no wait,
 `$V mcp-tools --as bot1 mh-bot1-claimed` lists 55 tools (no `claim`),
 and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
+The paragraph after it says who can open everything the agent owns and ends `the server answers such a call with a
+confirm link, which you give to the user.`
 
 ### MH3. Claimer decisions
 
@@ -373,10 +375,14 @@ bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) 
 Mode: mcp.
 
 `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
-with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
-and `detail.url` ending in `/spaces/<id>/settings`. bot1, claimed in MH2, may publish:
-the same call with `--as bot1` on `<bot1>/personal` succeeds, and `"visibility":"private"` sets it back. MH3's bot2,
-unclaimed, gets `AGENT_NOT_ALLOWED` on `<bot2>/personal` (`An unclaimed agent cannot make a Space public. Keep it private, or give a person a claim link so they can claim you, which lifts this limit. Claiming also lets that person open every Space you own.`). A uvw password session is interactive and may publish.
+with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message that ends with the confirm link, and `detail.url`
+`$ORIGIN/confirm/public?space=<id>`. bot1, claimed in MH2, gets the same refusal with `--as bot1` on
+`<bot1>/personal`, and its `repo_view` still has `publicRead: false`. Open bot1's link in the run browser, signed in
+as the run user who claimed it: the page reads `Make <bot1>/personal public?` with `Now` `Private` and
+`After you confirm` `Public`. Click `Confirm`, and bot1's `repo_view` has `publicRead: true`. `"visibility":"private"`
+with `--as bot1` sets it back with no link. MH3's bot2, unclaimed, gets `AGENT_NOT_ALLOWED` on `<bot2>/personal` with
+no `detail.url` (`An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again.`).
+A uvw password session gets a confirm link too ([LS7](./link-sharing.md#ls7-public-space) uses the browser session).
 
 ### MH5. Copy a shared file
 
@@ -384,7 +390,7 @@ Mode: mcp.
 
 The run user makes a viewer-linked Sheet `N`: `$V cli` `pr create -R verify-<run-id>/personal`, `unit create --type
 sheet` (its `unit.nodeId` is `N`), `pr ready` and `pr merge` as [PR1](pull-requests.md#pr1-open-fill-ready-and-merge-a-pull-request)
-does, then `$V cli mh-share share <N> --link viewer --json`. bot1 runs `pr_create` in `<bot1>/personal`, then
+does, then `$V person mh-share share <N> --link viewer --json`. bot1 runs `pr_create` in `<bot1>/personal`, then
 `unit_create` with that pull request's `worktree`, `"space":"<bot1>/personal"`, `"type":"sheet"`,
 `"name":"Shared copy"` and `"from":"$ORIGIN/nodes/<N>"`. It returns `unit.change: "added"` and
 `unit.name: "Shared copy"`. The same call with `"type":"doc"` fails with

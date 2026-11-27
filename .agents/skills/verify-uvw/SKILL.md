@@ -15,6 +15,7 @@ $V user      # register a throwaway password user and sign uvw in as it
 $V doctor    # is this instance ours and worth driving?
 $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
+$V person <label> <uvw args...>   # the same with the run user's browser session, for setup that lets more people see data
 $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
 $V secret-check [directory]    # fail when evidence holds a token, a session cookie or a claim code
@@ -138,6 +139,12 @@ commands.
 ```bash
 $V cli pr-create pr create -R verify-<run-id>/personal -t "Title" --json
 ```
+
+Only a person signed in to the browser lets more people see data. `$V cli` is a uvw login, so adding a member,
+raising a role, making a repository public or turning Link Sharing on exits 1 with a confirm link. `$V user` also
+signs the run user in as the browser does, and `$V person <label> <uvw args...>` runs uvw with that session and saves
+evidence as `cli` does. Use it for a recipe's setup, with commands that only call the HTTP API. To prove the confirm
+link and its page, follow CE4 in [an agent's limits](features/agent-mode-limits.md).
 
 ## Evidence
 

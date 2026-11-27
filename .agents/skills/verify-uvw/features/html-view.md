@@ -78,10 +78,10 @@ With the page open: `pr create`, `unit add --worktree <W2> --resource $R`,
 
 ### HV5. Visitor
 
-`$V cli hv-share-page share $PN --link viewer --json`. In a cookie-less session
+`$V person hv-share-page share $PN --link viewer --json`. In a cookie-less session
 (`AGENT_BROWSER_SESSION=<run>-anon`, `cookies clear`) open `$ORIGIN/nodes/$PN`: `Read only`, a disabled
 spinbutton and `The resource was not found.` Share the Sheet too (`space find "HV data" --space $O/personal`,
-`nodes[0].nodeId`, `share <id> --link viewer`) and reload: the page shows `3`/`6`.
+`nodes[0].nodeId`, `$V person hv-share-data share <id> --link viewer --json`) and reload: the page shows `3`/`6`.
 
 ### HV6. Trial mode
 
