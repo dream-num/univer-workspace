@@ -109,7 +109,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let prUnits = [unit()];
   let created: Record<string, unknown> = team;
   let linkSharing = { enabled: false, role: "viewer" };
-  let humanTokenSession = false;
+  let needsConfirm = false;
   let sessionUser: Record<string, unknown> = user;
   let ownedByClaimedAgent = false;
   let checksRequired: string | null = null;
@@ -132,9 +132,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
     }
     if (target.pathname === "/api/spaces/lookup") return Response.json(team);
     if (at("GET", "/api/spaces/team-1")) return Response.json(team);
-    if (humanTokenSession && fields["publicRead"] === true) {
+    if (needsConfirm && fields["publicRead"] === true) {
       return Response.json(
-        { error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Make the Space public in the browser." } },
+        { error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "A person confirms it.", url: "/confirm/public?space=team-1" } },
         { status: 403 },
       );
     }
@@ -182,9 +182,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
     if (target.pathname === "/api/nodes/sheet/link-sharing" && teamFile) {
       return Response.json({ error: { code: "NOT_FOUND", message: "The resource was not found." } }, { status: 404 });
     }
-    if (target.pathname === "/api/nodes/sheet/link-sharing" && request.method !== "GET" && humanTokenSession) {
+    if (target.pathname === "/api/nodes/sheet/link-sharing" && request.method !== "GET" && needsConfirm) {
       return Response.json(
-        { error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Change Link Sharing in the browser." } },
+        { error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "A person confirms it.", url: "/confirm/link-sharing?node=sheet&role=viewer" } },
         { status: 403 },
       );
     }
@@ -299,7 +299,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     prState = "draft";
     prUnits = [unit()];
     linkSharing = { enabled: false, role: "viewer" };
-    humanTokenSession = false;
+    needsConfirm = false;
     sessionUser = user;
     ownedByClaimedAgent = false;
     teamFile = false;
@@ -436,17 +436,17 @@ describe("space, unit, repository admin, label and merge tools", () => {
     const client = await connect();
     const created = await client.callTool({
       name: "repo_create",
-      arguments: { slug: "docs", description: "Handbook", public: true },
+      arguments: { slug: "docs", description: "Handbook" },
     });
     expect(created.structuredContent).toMatchObject({
       id: "team-2",
       name: "docs",
       slug: "docs",
-      publicRead: true,
+      publicRead: false,
       url: `${origin}/spaces/team-2`,
     });
     expect(writesOf()).toEqual([
-      { method: "POST", path: "/api/team-spaces", body: { name: "docs", slug: "docs", publicRead: true } },
+      { method: "POST", path: "/api/team-spaces", body: { name: "docs", slug: "docs" } },
       { method: "PATCH", path: "/api/spaces/team-2", body: { description: "Handbook" } },
     ]);
     requests.length = 0;
@@ -481,13 +481,13 @@ describe("space, unit, repository admin, label and merge tools", () => {
     const client = await connect();
     const created = await client.callTool({
       name: "repo_create",
-      arguments: { slug: "docs", public: true, proposals: "accountable" },
+      arguments: { slug: "docs", proposals: "accountable" },
     });
-    expect(created.structuredContent).toMatchObject({ publicRead: true, proposals: "accountable" });
+    expect(created.structuredContent).toMatchObject({ proposals: "accountable" });
     const edited = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", proposals: "anyone" } });
     expect(edited.structuredContent).toMatchObject({ proposals: "anyone" });
     expect(writesOf()).toEqual([
-      { method: "POST", path: "/api/team-spaces", body: { name: "docs", slug: "docs", publicRead: true, proposals: "accountable" } },
+      { method: "POST", path: "/api/team-spaces", body: { name: "docs", slug: "docs", proposals: "accountable" } },
       { method: "PATCH", path: "/api/spaces/team-1", body: { proposals: "anyone" } },
     ]);
     requests.length = 0;
@@ -522,16 +522,18 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(writesOf()).toEqual([{ method: "PATCH", path: "/api/spaces/team-1", body: { landing: "checks" } }]);
   });
 
-  it("sends a person's token session to the browser to make a repository public", async () => {
+  it("returns the confirm link for the user when the server refuses to make a repository public, and creates only private ones", async () => {
     const client = await connect();
-    humanTokenSession = true;
-    const settings = `${origin}/spaces/team-1/settings`;
+    needsConfirm = true;
+    const confirm = `${origin}/confirm/public?space=team-1`;
     const edited = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "public" } });
-    expect(toolError(edited)).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: settings } });
-    expect(edited.content).toMatchObject([{ type: "text", text: expect.stringContaining(`make it public in its settings in the browser: ${settings}`) }]);
-    const created = await client.callTool({ name: "repo_create", arguments: { slug: "docs", public: true } });
-    expect(toolError(created)).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED" });
-    expect(created.content).toMatchObject([{ type: "text", text: expect.stringContaining("Create it private, then ask the user to make it public in its settings in the browser.") }]);
+    expect(toolError(edited)).toMatchObject({
+      code: "INTERACTIVE_SESSION_REQUIRED",
+      message: `A person confirms it. Give the user this link so they can confirm it in the browser: ${confirm}`,
+      detail: { url: confirm },
+    });
+    const create = (await client.listTools()).tools.find((tool) => tool.name === "repo_create")!;
+    expect(Object.keys(create.inputSchema.properties!)).toEqual(["slug", "name", "description", "proposals"]);
     expect(
       (await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "private" } })).structuredContent,
     ).toMatchObject({ publicRead: false });
@@ -719,16 +721,20 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(description).toContain("unit with trunk: true to read, find, inspect, outline or screenshot");
   });
 
-  it("refuses a file link of another Workspace and sends a person's token session to the settings of a Team Space", async () => {
+  it("refuses a file link of another Workspace, and returns the confirm link for the user when the server refuses to turn a link on", async () => {
     const client = await connect();
     expect(
       toolError(await client.callTool({ name: "share", arguments: { node: "https://elsewhere.example/nodes/sheet", link: "viewer" } })),
     ).toMatchObject({ code: "workspace-origin-mismatch" });
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
-    humanTokenSession = true;
+    needsConfirm = true;
     const refused = await client.callTool({ name: "share", arguments: { node: "sheet", link: "viewer" } });
-    expect(toolError(refused)).toMatchObject({ code: "workspace-argument-invalid", detail: { url: `${origin}/nodes/sheet` } });
-    expect(refused.content).toMatchObject([{ type: "text", text: expect.stringContaining(`ask the user to make the repository public in its settings in the browser: ${origin}/spaces/team-1/settings`) }]);
+    const confirm = `${origin}/confirm/link-sharing?node=sheet&role=viewer`;
+    expect(toolError(refused)).toMatchObject({
+      code: "INTERACTIVE_SESSION_REQUIRED",
+      message: `A person confirms it. Give the user this link so they can confirm it in the browser: ${confirm}`,
+      detail: { url: confirm },
+    });
     expect((await client.callTool({ name: "share", arguments: { node: "sheet" } })).structuredContent).toMatchObject({
       link: "off",
     });
@@ -737,13 +743,12 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it.each([
     ["a claimed agent", { ...user, kind: "agent", claimed: true }, false,
       "Only people with access to the repository can open the link. To let anyone with the link read it, call share with node sheet and link viewer."],
-    ["a person's token session", user, false,
-      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."],
+    ["a person", user, false,
+      "Only people with access to the repository can open the link. Only if the user asks, call share with node sheet and link viewer to let anyone with the link read it."],
     ["a person reading the file of an agent they claimed", user, true,
-      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."],
+      "Only people with access to the repository can open the link. Only if the user asks, call share with node sheet and link viewer to let anyone with the link read it."],
   ] as const)("gives %s a next step it can take for a link that is off", async (_caller, principal, agentFile, access) => {
     sessionUser = principal;
-    humanTokenSession = principal === user;
     ownedByClaimedAgent = agentFile;
     const client = await connect();
     const read = await client.callTool({ name: "share", arguments: { node: `${origin}/nodes/sheet` } });
@@ -771,7 +776,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     for (let attempt = 0; attempt < 11; attempt += 1) {
       expect(toolError(await client.callTool({ name: "share", arguments: { node: "sheet", link: "viewer" } }))).toMatchObject({
         code: "workspace-argument-invalid",
-        message: 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository bob/team. A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.',
+        message: `Link Sharing works only for files in a Personal Space, and "Budget" is in the repository bob/team. To let more people open it, add them as members with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI). Either one needs the user, and the server's answer says what to give them.`,
         detail: { url: `${origin}/nodes/sheet` },
       });
     }

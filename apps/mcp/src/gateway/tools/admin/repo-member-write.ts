@@ -18,7 +18,7 @@ export const repoMemberWriteTool: ToolDefinition = {
   scope: "publish",
   title: "Add, change or remove a repository member",
   description:
-    "Takes effect immediately, without review. Add a user to a Team repository with a role (viewer reads, editor also writes, admin also manages members), change a member's role, or remove a member. Needs capabilities.manageMembers from repo_view. An agent can be admin only of a repository an agent owns, and an unclaimed agent can neither add members nor be one: those calls return AGENT_NOT_ALLOWED.",
+    "Takes effect immediately, without review. Add a user to a Team repository with a role (viewer reads, editor also writes, admin also manages members), change a member's role, or remove a member. Needs capabilities.manageMembers from repo_view. Adding a member or raising a role needs the user to confirm it in the browser: the refusal says what to give them. An agent can be admin only of a repository an agent owns, and an unclaimed agent cannot be a member: those calls return AGENT_NOT_ALLOWED.",
   inputSchema,
   outputSchema: z.object({ ...teamMemberSchema.partial().shape, removed: z.string().optional() }),
   annotations: destructiveAnnotations,

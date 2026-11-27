@@ -16,12 +16,11 @@ export function guestAgentNotice(principal: ToolPrincipal, authKind: ToolContext
     : undefined;
 }
 
-/** A person who meant to connect as themselves may have taken the consent page's default, a new agent they own. */
 export function ownedAgentNotice(owner: AgentOwner | undefined): string {
-  return `This agent belongs to ${owner ? `${owner.name} (@${owner.username})` : "the person who claimed it"} and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves.`;
+  return `${owner ? `${owner.name} (@${owner.username}) owns this agent and` : "The person who claimed this agent"} can open everything it owns, so to show them a repository or file, give them its link. You cannot let anyone else see one yourself: the server answers such a call with a confirm link, which you give to the user.`;
 }
 
-/** share is listed whatever the scopes, but refuses a connection without publish. */
+/** Only an unclaimed agent turns a link on itself, and share refuses a connection without publish. */
 export function linkAfterMerge(canShare: boolean): string {
   return canShare
     ? "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link."
@@ -41,9 +40,9 @@ function agentNotice(context: ToolContext): string | undefined {
   if (principal === "human") return undefined;
   const notice = [
     guestAgentNotice(principal, context.authKind, context.scopes.has("publish")),
-    principal === "agent_claimed" ? `${ownedAgentNotice(context.owner)} When the user expects you to see their files, tell them this.` : undefined,
+    principal === "agent_claimed" ? ownedAgentNotice(context.owner) : undefined,
     context.scopes.has("worktree:merge")
-      ? `${finish[principal]} ${linkAfterMerge(context.scopes.has("publish"))}`
+      ? `${finish[principal]} ${linkAfterMerge(principal === "agent_unclaimed" && context.scopes.has("publish"))}`
       : context.scopes.has("write") ? leaveMerging : undefined,
   ].filter((part) => part !== undefined);
   return notice.length ? notice.join(" ") : undefined;

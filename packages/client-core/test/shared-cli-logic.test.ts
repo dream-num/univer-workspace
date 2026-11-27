@@ -129,10 +129,10 @@ describe("createRepo", () => {
       },
     } as unknown as WorkspaceSpaceFeature;
     await createRepo(spaces, { slug: "docs" });
-    await createRepo(spaces, { slug: "docs", name: "Docs", public: true, proposals: "accountable", description: "x".repeat(350) });
+    await createRepo(spaces, { slug: "docs", name: "Docs", proposals: "accountable", description: "x".repeat(350) });
     expect(calls).toEqual([
       ["create", { name: "docs", slug: "docs" }],
-      ["create", { name: "Docs", slug: "docs", publicRead: true, proposals: "accountable" }],
+      ["create", { name: "Docs", slug: "docs", proposals: "accountable" }],
       ["update", "s1", { description: "x".repeat(350) }],
     ]);
   });

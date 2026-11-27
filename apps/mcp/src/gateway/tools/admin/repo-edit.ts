@@ -1,4 +1,4 @@
-import { editRepo, repoEditPatch, repoUrl } from "@univerjs/univer-workspace-client-core/product";
+import { repoEditPatch, repoUrl } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { destructiveAnnotations, type ToolDefinition } from "../definition.js";
 import { landingSchema, proposalsSchema, repoSchema } from "../schemas.js";
@@ -32,7 +32,7 @@ export const repoEditTool: ToolDefinition = {
   scope: "publish",
   title: "Edit repository",
   description:
-    "Takes effect immediately, without review. Change a repository's display name, description, visibility, proposals setting, acceptance deadline, landing setting or slug. Make a repository public only when the user asks for that. Anyone with the link can then read everything in it. A new slug breaks every old owner/slug reference and link. Needs at least one change.",
+    "Takes effect immediately, without review. Change a repository's display name, description, visibility, proposals setting, acceptance deadline, landing setting or slug. Making it public needs the user to confirm it in the browser: the refusal says what to give them. A new slug breaks every old owner/slug reference and link. Needs at least one change.",
   inputSchema,
   outputSchema: repoSchema,
   annotations: destructiveAnnotations,
@@ -48,7 +48,7 @@ export const repoEditTool: ToolDefinition = {
       ...(slug === undefined ? {} : { slug }),
     });
     const spaceId = await resolveRepo(context, repo);
-    const space = await editRepo(spaceFeature(context), context.identityOrigin, spaceId, patch);
+    const space = await spaceFeature(context).update(spaceId, patch);
     return { output: { ...space, url: repoUrl(context.identityOrigin, space.id) }, repo: spaceId };
   },
 };

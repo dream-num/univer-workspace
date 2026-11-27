@@ -311,7 +311,7 @@ describe("gateway authentication", () => {
     expect(gateway.exchanges).toHaveLength(1);
   });
 
-  it("gives an unclaimed agent's first call after a person claims it the claimed agent's tools and advice", async () => {
+  it("gives an unclaimed agent's first call after a person claims it the claimed agent's tools", async () => {
     const agent = { id: "user-1", username: "budget-x7k2", displayName: "budget", avatarUrl: null, kind: "agent", claimed: false };
     const products: string[] = [];
     const routes: Record<string, { readonly status?: number; readonly body: object }> = {
@@ -340,18 +340,12 @@ describe("gateway authentication", () => {
     const client = await gateway.connect("uvw_pat_agent");
     const names = async () => (await client.listTools()).tools.map(({ name }) => name);
     const share = async () => toolError(await client.callTool({ name: "share", arguments: { node: "n1", link: "viewer" } }));
-    const inTeam = 'Link Sharing works only for files in a Personal Space, and "Budget" is in the repository budget-x7k2/docs.';
+    const inTeam = `Link Sharing works only for files in a Personal Space, and "Budget" is in the repository budget-x7k2/docs. To let more people open it, add them as members with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI). Either one needs the user, and the server's answer says what to give them.`;
     expect(await names()).toContain("claim");
-    expect(await share()).toMatchObject({
-      code: "workspace-argument-invalid",
-      message: `${inTeam} A person can open your repositories once they claim you, so make a claim link with claim (uvw claim in the CLI) and give it to the user.`,
-    });
+    expect(await share()).toMatchObject({ code: "workspace-argument-invalid", message: inTeam });
     agent.claimed = true;
     expect(await names()).not.toContain("claim");
-    expect(await share()).toMatchObject({
-      code: "workspace-argument-invalid",
-      message: `${inTeam} The person who claimed you can already open every repository and file you own, private ones included, so to show them this file, give them its link: ${identityOrigin}/nodes/n1. They need no membership. To let anyone else open it, add the people the user names as members with repo_member_write (uvw repo member add in the CLI). Make the repository public with repo_edit (uvw repo edit --visibility public in the CLI) only when the user asks for that.`,
-    });
+    expect(await share()).toMatchObject({ code: "workspace-argument-invalid", message: inTeam });
     expect(gateway.events().map(({ principal_category }) => principal_category)).toEqual(["agent_unclaimed", "agent_claimed"]);
     expect(gateway.exchanges).toHaveLength(1);
     expect(products).not.toContain("/api/agents/claim-codes");
@@ -374,12 +368,16 @@ describe("gateway authentication", () => {
     const tell = "Tell the user this in your first reply.";
     const linkAfterMerge =
       "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.";
-    const finishOwn = `Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge. ${linkAfterMerge}`;
+    const mergeOwn = "Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge.";
+    const finishOwn = `${mergeOwn} ${linkAfterMerge}`;
+    const pullLink = "Then give the user the pull request link.";
+    const owns = (who: string) =>
+      `${who} can open everything it owns, so to show them a repository or file, give them its link. You cannot let anyone else see one yourself: the server answers such a call with a confirm link, which you give to the user.`;
     const handOver = [
       "Once the result is verified, mark the pull request ready with pr_ready.",
       "If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser.",
       "Otherwise, merge it with pr_merge.",
-      linkAfterMerge,
+      pullLink,
     ];
     const leaveMerging = [
       "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
@@ -398,6 +396,13 @@ describe("gateway authentication", () => {
     );
     expect(readOnly.instructions).toContain(`Otherwise the user can keep this agent by claiming it. ${tell}`);
 
+    const noPublish = await told("uvw_at_merge");
+    expect(noPublish.notice, "share refuses a connection without publish, so neither names it").toBe(
+      `${guestFacts} Otherwise the user can keep this agent by claiming it. ${tell} ${mergeOwn} ${pullLink}`,
+    );
+    expect(noPublish.instructions).toContain(`merge it with pr_merge. 8) ${pullLink}`);
+    expect(noPublish.instructions).not.toContain("call share");
+
     const self = await told("uvw_pat_agent");
     expect(self.instructions).toContain("works in its own Personal Space");
     expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, finishOwn]);
@@ -405,31 +410,22 @@ describe("gateway authentication", () => {
     agent.claimed = true;
     const claimed = await told("uvw_at_guest");
     expect(claimed.instructions).toContain("This connection is an agent identity that a person has claimed.");
-    expect(claimed.instructions, "until the cached exchange expires, the session says only that the agent is claimed").toContain("This agent belongs to the person who claimed it");
-    expect(claimed.notice).toBe(
-      `This agent belongs to the person who claimed it and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves. When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
-    );
+    const unnamed = owns("The person who claimed this agent");
+    expect(claimed.instructions, "until the cached exchange expires, the session says only that the agent is claimed").toContain(unnamed);
+    expect(claimed.notice).toBe(`${unnamed} ${handOver.join(" ")}`);
     const owned = await told("uvw_at_owned");
-    const ownerFacts =
-      "This agent belongs to Olivia (@olivia) and works in its own Personal Space. It sees their files only when they are shared with it; when one of their files is not found, tell the user why. They can open every repository and file this agent owns, private ones included, so to show them one, give them its link. To let this client act as them, they reconnect it and choose to connect as themselves.";
-    expect(owned.instructions, "a claimed agent names its owner, what it can see and how to connect as them").toContain(ownerFacts);
+    const ownerFacts = owns("Olivia (@olivia) owns this agent and");
+    expect(owned.instructions, "a claimed agent names its owner and how each of them gets to see its work").toContain(ownerFacts);
     expect(owned.whoami, "a claimed agent always marks a verified pull request ready; only the merge waits for its owner").toMatchObject({
       owner: { username: "olivia", name: "Olivia" },
-      notice: `${ownerFacts} When the user expects you to see their files, tell them this. ${handOver.join(" ")}`,
+      notice: `${ownerFacts} ${handOver.join(" ")}`,
     });
     for (const sentence of handOver) expect(owned.instructions).toContain(sentence);
-
-    const noPublish = await told("uvw_at_merge");
-    const pullLink = "Then give the user the pull request link.";
-    expect(noPublish.notice, "share refuses a connection without publish, so neither names it").toBe(
-      `${ownerFacts} When the user expects you to see their files, tell them this. ${[...handOver.slice(0, -1), pullLink].join(" ")}`,
-    );
-    expect(noPublish.instructions).toContain(`Otherwise, merge it with pr_merge. 10) ${pullLink}`);
-    expect(noPublish.instructions).not.toContain("call share");
+    expect(owned.instructions, "its owner opens its work by link, and a link for anyone needs the owner to confirm").not.toContain("call share");
 
     const writeOnly = await told("uvw_at_oauth");
     expect(writeOnly.notice, "write access without worktree:merge keeps the draft and leaves merging to the user").toBe(
-      `${ownerFacts} When the user expects you to see their files, tell them this. ${leaveMerging.join(" ")}`,
+      `${ownerFacts} ${leaveMerging.join(" ")}`,
     );
     for (const sentence of leaveMerging) expect(writeOnly.instructions).toContain(sentence);
 

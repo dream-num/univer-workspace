@@ -730,7 +730,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"5a9e4b6ff1e3b772bc8356bfe85ed0a14eca71797bcf21c2e1cb253c907f7bb4"`);
+    expect(digest).toMatchInlineSnapshot(`"55cccff7ffc76d2b8124f3ee4b31e0ede19939ed4dc558a3c75210ba8ff2aeb5"`);
   });
 
   it("says in pr_view's own output schema what to do with each freshness label, for clients that drop server instructions", async () => {
@@ -744,13 +744,14 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(schema).not.toContain("server instructions");
   });
 
-  it("says in repo_edit and repo_create to make a repository public only when the user asks", async () => {
-    const tools = (await (await connect({ pin: "2026-07-28" }, "?toolsets=admin")).listTools()).tools;
-    const tool = (name: string) => tools.find((candidate) => candidate.name === name);
-    expect(tool("repo_edit")?.description).toContain(
-      "Make a repository public only when the user asks for that. Anyone with the link can then read everything in it.",
-    );
-    expect(JSON.stringify(tool("repo_create")?.inputSchema)).toContain("Let anyone with the link read it. Set it only when the user asks for that.");
+  it("says in each tool that can let more people see data that the user confirms it, and creates repositories private", async () => {
+    const tools = (await (await connect({ pin: "2026-07-28" }, "?toolsets=all")).listTools()).tools;
+    const description = (name: string) => tools.find((candidate) => candidate.name === name)?.description;
+    expect(description("repo_edit")).toContain("Making it public needs the user to confirm it in the browser: the refusal says what to give them.");
+    expect(description("repo_member_write")).toContain("Adding a member or raising a role needs the user to confirm it in the browser: the refusal says what to give them.");
+    expect(description("share")).toContain("Turning the link on or raising it to editor needs the user to confirm it in the browser: the refusal says what to give them.");
+    expect(description("repo_create")).toContain("Create a private Team Space repository; repo_edit makes it public.");
+    expect(JSON.stringify(tools)).not.toContain("only when the user asks for that");
   });
 
   it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
@@ -798,10 +799,10 @@ describe("gateway over real HTTP and the MCP client", () => {
       "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person",
     );
     expect(claimed).toContain(
-      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) If the merged file is in your Personal Space, call share",
+      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Then give the user the pull request link.",
     );
-    expect(claimed).toContain(share);
-    expect(claimed).toContain("A file link from someone else gives an agent identity read access only.");
+    expect(claimed, "its owner opens its work by link, and a link for anyone needs the owner to confirm").not.toContain("call share");
+    expect(claimed).not.toContain("read access only");
     const checks = "In a repository that requires checks, report every declared check with pr_check, then merge. If pr_merge refuses one for changing .agents/, give the user its link to merge.";
     expect([human, agent, claimed].every((text) => text.includes(checks))).toBe(true);
     expect(filesOnly).not.toContain(checks);

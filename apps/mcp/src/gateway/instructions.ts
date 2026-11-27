@@ -58,14 +58,10 @@ export function buildServerInstructions(
             : [
                 `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
               ]),
-          linkAfterMerge(principal !== "human" && has("share") && scopes.has("publish")),
-          ...(principal === "human"
-            ? []
-            : [
-                principal === "agent_unclaimed"
-                  ? "An unclaimed agent identity cannot make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it."
-                  : "A file link from someone else gives an agent identity read access only. Tell the user so; a different link setting does not change it.",
-              ]),
+          linkAfterMerge(principal === "agent_unclaimed" && has("share") && scopes.has("publish")),
+          ...(principal === "agent_unclaimed"
+            ? ["An unclaimed agent identity cannot make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it."]
+            : []),
         ]
       : [
           ...(has("pr_ready")

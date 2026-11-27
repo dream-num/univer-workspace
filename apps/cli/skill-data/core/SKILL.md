@@ -571,10 +571,10 @@ and the pull request stays `merging` or `merged`, run the same `pr merge` again 
 Until a person claims it, nobody else can open a guest agent's pull request, so a guest agent
 finishes the task itself. A claimed one (`uvw auth status --json` shows `"claimed": true`) hands
 off as above instead when the person who claimed it asked to review the work or the change needs
-a person's decision; that person merges it. Otherwise, after step 4, merge the pull request. For a
-file in the agent's Personal Space, turn on Link Sharing for the file and return the link instead of
-the review URL. Link Sharing applies only to Personal Space files, so in a Team repository return the
-review URL:
+a person's decision; that person merges it. Otherwise, after step 4, merge the pull request. A claimed
+agent returns the review URL, which the person who claimed it can open. An unclaimed agent with a file
+in its Personal Space turns on Link Sharing for the file and returns that link instead. Link Sharing
+applies only to Personal Space files, so in a Team repository it returns the review URL:
 
 ```bash
 uvw pr merge <n> -R <username>/personal --json
@@ -592,6 +592,12 @@ that date unless the agent is used or the link is opened before then. When it ha
 them claim the agent and keep its files for good. Run `uvw claim` again only when the old link has expired.
 
 With a person's session, treat `uvw share --link` like a merge: run it only when the user asks.
+
+Only a person in a browser lets more people see data. `uvw share --link viewer` or `--link editor`,
+`uvw repo edit --visibility public`, `uvw repo member add` and a higher `uvw repo member edit --role`
+change nothing and exit 1 with `INTERACTIVE_SESSION_REQUIRED` and a confirm link. Give the link to
+the user, who opens it and confirms. An unclaimed agent's `--link viewer` still turns on at once.
+Its other such commands exit 1 with `AGENT_NOT_ALLOWED`, which says to give the user a claim link.
 
 ## Command map
 

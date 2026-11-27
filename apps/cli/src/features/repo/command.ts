@@ -105,17 +105,16 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     });
 
   const create = new Command("create")
-    .description("Create a Team Space repository")
+    .description("Create a private Team Space repository")
     .argument("<slug>", "repository slug: letters, digits, '.', '_' and '-'")
     .option("--name <name>", "display name (default: the slug)")
     .option("--description <text>", "short plain-text description")
-    .option("--public", "let anyone with the link read it")
     .option("--proposals <who>", PROPOSALS_HELP)
     .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
         slug: string,
-        options: JsonFieldsOption & { description?: string; name?: string; proposals?: string; public?: boolean },
+        options: JsonFieldsOption & { description?: string; name?: string; proposals?: string },
       ) => {
         const space = await executeCommand(create, async () => {
           return await createRepo(
@@ -124,7 +123,6 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
               slug,
               ...(options.description === undefined ? {} : { description: options.description }),
               ...(options.name === undefined ? {} : { name: options.name }),
-              ...(options.public === true ? { public: true } : {}),
               ...(options.proposals === undefined ? {} : { proposals: proposalsOf(options.proposals) }),
             },
             flag,

@@ -325,6 +325,9 @@ folder (`space_node`, then `file_upload_create` with purpose blob and
 On `FILES_IN_TRASH`, `pr_edit` leave_out_trashed, then merge.
 `share` works only on files in a Personal Space. For a Team repository, return the
 pull request link instead.
+Letting more people see data needs a person. Turning a link on or raising it to editor,
+making a repository public, adding a member or raising a role changes nothing and returns
+a confirm link: give it to the user. An unclaimed agent's viewer link still turns on at once.
 An agent's `share` url also says, in `access`, who can open it. While unclaimed, it also gives the user a claim link
 from `claim`.
 There is no separate close or reopen tool for a pull request.

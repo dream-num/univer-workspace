@@ -129,7 +129,9 @@ The command creates a new guest agent with its own Personal Space, stores its se
 session file as a login, and prints the agent's username and its repository `<username>/personal`.
 The agent creates files there with the usual commands, merges its pull request, and shares the result
 with `uvw share <file> --link viewer`. Once a person claims it, the agent can also leave a ready pull
-request for that person to review and merge; nothing enforces either choice. Before it is claimed, a guest
+request for that person to review and merge; nothing enforces either choice. A claimed agent no longer
+turns a link on itself (see [Confirm links](#confirm-links)); the person who claimed it can open
+everything it owns. Before it is claimed, a guest
 agent cannot join a Team Space, add members to one or make a repository public. It can create up to 3 Team
 Spaces of its own, and keeps at most 20 files across its repositories, of at most 10 MiB each.
 
@@ -162,11 +164,24 @@ asks. When the owner is an unclaimed agent, the output also has `expiresAt`. The
 on that date unless the agent is used or the link is opened before then. It also has `claimHint`, a
 sentence telling the agent to make a claim link with `uvw claim` and give it to the user so they can
 keep its files. A file in a Team Space has no Link Sharing, so the command exits 1 with
-`workspace-argument-invalid`, names the repository, and says how to let a person open the file. A
-guest agent is told to make a claim link with `uvw claim` and give it to the user, because claiming
-lets the user open the agent's repositories. Anyone else is pointed to `uvw repo member add` or
+`workspace-argument-invalid`, names the repository, and points to `uvw repo member add` and
 `uvw repo edit --visibility public`. `uvw share` never makes a claim code, so running it again never
 ends a claim link the agent already gave.
+
+### Confirm links
+
+Only a person signed in to Workspace in a browser lets more people see data. `uvw share --link viewer`
+or `--link editor`, `uvw repo edit --visibility public`, `uvw repo member add` and a higher
+`uvw repo member edit --role` ask for that. From the CLI, a person's session included, the server
+changes nothing and the command exits 1 with `INTERACTIVE_SESSION_REQUIRED`. The message ends with the
+confirm link to give the user, and the printed detail carries it as `url`. The person opens the link,
+sees the change and its consequence, and confirms or gives up. A command that keeps or lowers the
+stored access, such as `--link off`, `--visibility private` or `repo member remove`, runs as before.
+`uvw repo create` makes a private repository and has no `--public` option.
+
+A guest agent has no person to confirm for it. Its `--link viewer` still turns on at once. Its other
+such commands exit 1 with `AGENT_NOT_ALLOWED` and a message telling it to give the user a claim link
+from `uvw claim`.
 
 ```bash
 uvw claim [--json]
@@ -278,8 +293,9 @@ These commands manage a Team repository's members, and take effect immediately. 
 stopped one; adding someone who is already a member changes their role. `edit` and `remove` take a current member,
 so a stopped agent can still be removed, and a member can remove themselves. `list` prints the owner first; its
 `--json` is `{ owner, members }`. `uvw repo view --json capabilities` shows `manageMembers`, which says whether you may
-change members. An agent can be an admin only of a repository an agent owns, and a guest agent can neither add members
-nor be one until a person claims it. Both refusals exit 1 with `AGENT_NOT_ALLOWED` and a sentence saying so.
+change members. Adding a member or raising a role exits 1 with a confirm link for the user (see
+[Confirm links](#confirm-links)). An agent can be an admin only of a repository an agent owns, and a guest agent
+cannot be a member until a person claims it. Both refusals exit 1 with `AGENT_NOT_ALLOWED` and a sentence saying so.
 
 ### Forks
 

@@ -30,7 +30,6 @@ import {
 } from "./space-model.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
 import type { WorkspaceUnit, WorkspaceWorktree } from "./worktree-model.js";
-import { repoUrl } from "./urls.js";
 import { usernameKey } from "./username.js";
 import { findUser } from "./users.js";
 
@@ -93,7 +92,6 @@ export async function createRepo(
     readonly description?: string;
     readonly name?: string;
     readonly proposals?: WorkspaceSpaceProposals;
-    readonly public?: boolean;
     readonly slug: string;
   },
   name: ParameterName = plainName,
@@ -104,21 +102,11 @@ export async function createRepo(
       `${name("description")} must contain at most ${String(REPO_DESCRIPTION_MAX)} characters.`,
     );
   }
-  let created: WorkspaceSpace;
-  try {
-    created = await spaces.create({
-      name: input.name ?? input.slug,
-      slug: input.slug,
-      ...(input.public === true ? { publicRead: true } : {}),
-      ...(input.proposals === undefined ? {} : { proposals: input.proposals }),
-    });
-  } catch (error) {
-    if (!isInteractiveSessionRequired(error)) throw error;
-    throw workspaceError(
-      error.code,
-      "This connection cannot create a public repository. Create it private, then ask the user to make it public in its settings in the browser.",
-    );
-  }
+  const created = await spaces.create({
+    name: input.name ?? input.slug,
+    slug: input.slug,
+    ...(input.proposals === undefined ? {} : { proposals: input.proposals }),
+  });
   return input.description === undefined
     ? created
     : await spaces.update(created.id, { description: input.description });
@@ -163,26 +151,6 @@ export function repoEditPatch(
   };
 }
 
-/** Applies a repository edit; a person's token session cannot make it public, so the error gives the settings URL. */
-export async function editRepo(
-  spaces: Pick<WorkspaceSpaceFeature, "update">,
-  origin: string,
-  spaceId: string,
-  patch: ReturnType<typeof repoEditPatch>,
-): Promise<WorkspaceSpace> {
-  try {
-    return await spaces.update(spaceId, patch);
-  } catch (error) {
-    if (!isInteractiveSessionRequired(error)) throw error;
-    const url = `${repoUrl(origin, spaceId)}/settings`;
-    throw workspaceError(
-      error.code,
-      `This connection cannot make a repository public. Ask the user to make it public in its settings in the browser: ${url}`,
-      { url },
-    );
-  }
-}
-
 const membersPath = (spaceId: string): string => `/api/team-spaces/${encodeURIComponent(spaceId)}/members`;
 
 async function putMember(
@@ -195,9 +163,6 @@ async function putMember(
     await http.json(`${membersPath(spaceId)}/${encodeURIComponent(userId)}`, { body: { role }, method: "PUT" }),
   );
 }
-
-const isInteractiveSessionRequired = (error: unknown): error is WorkspaceApplicationError =>
-  error instanceof WorkspaceApplicationError && error.code === "INTERACTIVE_SESSION_REQUIRED";
 
 export function selectRepos(
   spaces: readonly WorkspaceSpace[],
@@ -285,7 +250,7 @@ export class WorkspaceSpaceFeature {
     try {
       found = await findUser(http, user);
     } catch (error) {
-      // User search refuses only an unclaimed agent, which the member ceiling refuses as well.
+      // User search refuses only an unclaimed agent, which the server does not let add a member either.
       if (!(error instanceof WorkspaceApplicationError) || error.code !== "AGENT_NOT_ALLOWED") throw error;
       throw workspaceError(error.code, "An unclaimed agent cannot add Team Space members. A person must claim it first.");
     }

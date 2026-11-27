@@ -114,11 +114,10 @@ people with access can open the page with all its data. A public page can open
 without its private source data. Signed-out visitors and signed-in non-members are
 read-only; page writes are rejected for them.
 
-If the user wants anyone with the link to open a private repository's page, ask
-before making the repository public: this immediately publishes everything in the
-repository. After approval, use CLI `repo edit <repo> --visibility public`. A person's MCP
-connection cannot make a repository public: the user does it in the browser from its `url`.
-An unclaimed agent cannot either: give the user a claim link from `claim` to open it.
+If the user wants anyone with the link to open a private repository's page, the
+repository must be public, which makes everything in it readable. Use CLI
+`repo edit <repo> --visibility public` or MCP `repo_edit`, and give the user the confirm
+link it returns. An unclaimed agent gets none: give the user a claim link from `claim`.
 Keep source Sheets in the same public repository as the page, or list the
 `privateSourceUnitIds` to the user. These fields describe declared sources at
 creation time; script-created references and later permission changes still need

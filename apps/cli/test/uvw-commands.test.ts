@@ -210,8 +210,10 @@ describe("uvw repository and Issue commands", () => {
     expect(JSON.parse(await run(command, ["list", "--type", "team", "--json", "fullName"]))).toEqual([
       { fullName: "alice/docs" },
     ]);
-    await run(command, ["create", "docs", "--name", "Docs", "--description", "d", "--public"]);
-    expect(create).toHaveBeenCalledWith({ name: "Docs", publicRead: true, slug: "docs" });
+    await run(command, ["create", "docs", "--name", "Docs", "--description", "d"]);
+    expect(create).toHaveBeenCalledWith({ name: "Docs", slug: "docs" });
+    await expect(run(command, ["create", "docs", "--public"]), "a repository is made public with repo edit").rejects.toMatchObject({ exitCode: 1 });
+    expect(create).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith("space-1", { description: "d" });
     await run(command, ["rename", "new", "-R", "alice/docs"]);
     expect(lookup).toHaveBeenCalledWith("alice", "docs");
@@ -234,8 +236,8 @@ describe("uvw repository and Issue commands", () => {
     } as unknown as WorkspaceSpaceFeature;
     const command = createRepoCommand(spaces, repoContext);
 
-    await run(command, ["create", "docs", "--public", "--proposals", "accountable"]);
-    expect(create).toHaveBeenCalledWith({ name: "docs", publicRead: true, proposals: "accountable", slug: "docs" });
+    await run(command, ["create", "docs", "--proposals", "accountable"]);
+    expect(create).toHaveBeenCalledWith({ name: "docs", proposals: "accountable", slug: "docs" });
     expect(JSON.parse(await run(command, ["edit", "alice/docs", "--proposals", "anyone", "--json", "proposals"])))
       .toEqual({ proposals: "accountable" });
     expect(update).toHaveBeenCalledWith("space-1", { proposals: "anyone" });
@@ -1359,15 +1361,20 @@ describe("uvw share", () => {
     expect(JSON.parse(await run(command, ["--json", "claimUrl"]))).toEqual({ claimUrl });
   });
 
-  it("tells a person's delegated session to share in the browser", async () => {
+  it("prints the confirm link for the user when the server refuses to turn the link on", async () => {
+    const confirm = `${ORIGIN}/confirm/link-sharing?node=node-1&role=viewer`;
     const { command } = share(async () => {
-      throw workspaceError("INTERACTIVE_SESSION_REQUIRED", "An interactive sign-in is required.", { status: 403 });
+      throw workspaceError(
+        "INTERACTIVE_SESSION_REQUIRED",
+        `A person confirms it. Give the user this link so they can confirm it in the browser: ${confirm}`,
+        { status: 403, url: confirm },
+      );
     });
     const error = await run(command, [url, "--link", "viewer"]).catch((caught: unknown) => caught);
-    expect(error).toMatchObject({
-      exitCode: 1,
-      message: expect.stringMatching(new RegExp(`INTERACTIVE_SESSION_REQUIRED: .*browser: ${url}`, "u")),
-    });
+    expect(error).toMatchObject({ exitCode: 1 });
+    const { message } = error as Error;
+    expect(message).toContain(`INTERACTIVE_SESSION_REQUIRED: A person confirms it. Give the user this link so they can confirm it in the browser: ${confirm}`);
+    expect(message).toContain(`"url": "${confirm}"`);
   });
 });
 

@@ -33,7 +33,7 @@ export const shareTool: ToolDefinition = {
   scope: "publish",
   title: "Share a file by link",
   description:
-    "Read or set Link Sharing for a file in a Personal Space. A shared file is a drop: anyone who has the returned url can open it without signing in. Share a file after its pull request is merged, and only its owner can share it. To read a drop, pass its url as unit with trunk: true to read, find, inspect, outline or screenshot. Through an editor link, anonymous visitors and unclaimed agents still only read. expiresAt is set when the drop stops working on that date unless its owner, an unclaimed agent, stays active.",
+    "Read or set Link Sharing for a file in a Personal Space. A shared file is a drop: anyone who has the returned url can open it without signing in. Share a file after its pull request is merged, and only its owner can share it. Turning the link on or raising it to editor needs the user to confirm it in the browser: the refusal says what to give them. To read a drop, pass its url as unit with trunk: true to read, find, inspect, outline or screenshot. Through an editor link, anonymous visitors and unclaimed agents still only read. expiresAt is set when the drop stops working on that date unless its owner, an unclaimed agent, stays active.",
   inputSchema,
   outputSchema: shareOutputSchema,
   annotations: writeAnnotations,
@@ -44,8 +44,7 @@ export const shareTool: ToolDefinition = {
       node: nodeId,
       ...(link === undefined ? {} : { link }),
       caller: context.user,
-      // A person reaches the gateway with a token session, which cannot change Link Sharing.
-      ...(context.user.kind === "agent" ? { turnOn: `call share with node ${nodeId} and link viewer` } : {}),
+      turnOn: `call share with node ${nodeId} and link viewer`,
     });
     return {
       output: shared,
