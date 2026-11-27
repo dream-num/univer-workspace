@@ -289,7 +289,7 @@ Workspace 返回一个最长 10 分钟的 session，以及这张 token 代表的
 
 | 入口 | 怎么拿到凭证 | 适合 |
 | --- | --- | --- |
-| 个人访问令牌（PAT） | 在 Workspace 账户菜单的 **Access tokens** 里创建，配置为 `Authorization: Bearer uvw_pat_…` | 不支持 OAuth 的 MCP 客户端 |
+| 个人访问令牌（PAT） | 在 Workspace 账户菜单的 **Access tokens** 里创建，选择 **Read and write**（默认，四个 scope 全部授予）或 **Read only**（只授予 `read`），然后配置为 `Authorization: Bearer uvw_pat_…` | 不支持 OAuth 的 MCP 客户端 |
 | `uvw auth login` | CLI 打印一个网址和验证码，你在浏览器里核对验证码并批准，然后运行 `uvw auth login --complete` | 在终端里运行命令的 agent |
 | `uvw auth guest` | CLI 直接新建一个访客 agent，不需要任何账号 | 先做出文件、再交给人认领 |
 | Workspace Agent | 预先登记的客户端 `univer-workspace-harness`，走授权码流程 | 自己部署的 Workspace Agent 服务 |

@@ -289,7 +289,7 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 
 | Entry point | How it gets a credential | Fits |
 | --- | --- | --- |
-| Personal access token (PAT) | Create one under **Access tokens** in the Workspace account menu, then configure `Authorization: Bearer uvw_pat_…` | MCP clients that cannot run OAuth |
+| Personal access token (PAT) | Create one under **Access tokens** in the Workspace account menu and choose **Read and write** (the default, all four scopes) or **Read only** (`read`), then configure `Authorization: Bearer uvw_pat_…` | MCP clients that cannot run OAuth |
 | `uvw auth login` | The CLI prints a URL and a code. You match the code in the browser and approve, then run `uvw auth login --complete` | Agents that run terminal commands |
 | `uvw auth guest` | The CLI creates a guest agent with no account | Making a file first and handing it to a person to claim |
 | Workspace Agent | The pre-registered client `univer-workspace-harness`, through the authorization code flow | A self-hosted Workspace Agent service |

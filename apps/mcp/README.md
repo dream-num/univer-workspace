@@ -618,6 +618,8 @@ Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `for
 `pr_merge`, `pr_discard` and `pr_revert`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard` and `pr_revert`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
+People choose between two tiers, on the connect page and in the personal access token dialog: read only grants `read`, and read and write grants all four scopes.
+The four scopes stay internal, used by the exchange, the tool checks and Web Agents' per-call approvals. Personal access tokens created with a narrower list keep it.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
 `workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
