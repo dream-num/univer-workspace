@@ -3,7 +3,6 @@ import type { components } from "../../../../generated/http/schema.js";
 export type AccessTier = components["schemas"]["AccessTier"];
 type McpScope = components["schemas"]["McpScope"];
 
-/** The same table as the server's `ACCESS_TIER_SCOPES`; the token API still takes explicit scopes. */
 export const accessTierScopes = {
   read: ["read"],
   read_write: ["read", "write", "publish", "worktree:merge"],
