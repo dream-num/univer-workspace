@@ -175,8 +175,8 @@ them, and lists what no journey covers yet.
   and public Spaces.
 - [HTML View](./html-view.md): HV1-HV7 cover publishing with uvw, the `Pages` tab, owner writes to the source
   Sheet, live Sheet updates, read-only visitors, trial mode and `Save my version`.
-- [Agent handoff and claim](./agent-handoff.md): AH1-AH14 cover `Hand to my agent`, guest agents over
-  uvw and MCP, including the connect page's `Try without signing in`, handoff links, the handoff page and its signed-out preview, `My agents`, the claimer's pull request decisions, and the connect page's own agents, new or continued. MH1-MH5
+- [Agent handoff and claim](./agent-handoff.md): AH1-AH15 cover `Hand to my agent`, guest agents over
+  uvw and MCP, including the connect page's `Try without signing in`, handoff links, the handoff page and its signed-out preview, a guest agent's file links before and after a person takes it, `My agents`, the claimer's pull request decisions, and the connect page's own agents, new or continued. MH1-MH5
   cover agent principals over MCP: tool lists before and after a claim, public-Space refusals and copies.
 
 ## Helper scripts
