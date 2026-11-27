@@ -41,6 +41,7 @@ import type {
 import type { UniverLocaleKey } from "./locales.ts";
 import css from "./FileSidebar.module.scss";
 import { localizedSpaceName } from "./space-name.ts";
+import { workspaceErrorMessage } from "./workspace-error.ts";
 
 const PRODUCT_API = "/univer-workspace/api";
 const COLLAB_API = "/univer-workspace/collab";
@@ -280,6 +281,7 @@ export function FileSidebar({
               headers: jsonHeaders(),
               body: JSON.stringify({ role }),
             },
+            workspaceOrigin,
           );
         },
         async removeGrant({ nodeId, userId }) {
@@ -294,7 +296,7 @@ export function FileSidebar({
             credentials: "same-origin",
             headers: jsonHeaders(),
             body: JSON.stringify({ enabled, role }),
-          });
+          }, workspaceOrigin);
         },
       },
     }),
@@ -494,22 +496,16 @@ interface RemoteSpaceView {
   readonly capabilities: WorkspaceFileSpace["capabilities"];
 }
 
-async function readJson<T>(response: Response): Promise<T> {
+async function readJson<T>(response: Response, workspaceOrigin = ""): Promise<T> {
   const text = await response.text();
   const value = text.trim() === "" ? undefined : (JSON.parse(text) as unknown);
   if (response.status === 401) throw new Error("workspace_connection_required");
-  if (!response.ok) {
-    const message =
-      value !== null && typeof value === "object" && "error" in value
-        ? String((value as { error: unknown }).error)
-        : `Workspace request failed (${response.status})`;
-    throw new Error(message);
-  }
+  if (!response.ok) throw new Error(workspaceErrorMessage(value, response.status, workspaceOrigin));
   return value as T;
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  return await readJson<T>(await fetch(path, { credentials: "same-origin", ...init }));
+async function fetchJson<T>(path: string, init?: RequestInit, workspaceOrigin = ""): Promise<T> {
+  return await readJson<T>(await fetch(path, { credentials: "same-origin", ...init }), workspaceOrigin);
 }
 
 function jsonHeaders(): HeadersInit {
