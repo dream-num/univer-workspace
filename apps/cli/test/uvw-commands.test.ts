@@ -1361,7 +1361,7 @@ describe("uvw share", () => {
   });
 
   it("exits 1 with the server's refusal when an unclaimed agent turns the link on", async () => {
-    const refusal = "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user.";
+    const refusal = "An unclaimed agent's files can already be viewed by anyone who has a file's link, so give the user that link. Making a repository public, adding people and letting link visitors edit wait until a person takes you, because no person can confirm them for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. Once they sign in and take you, try again.";
     const { command } = share(async () => {
       throw workspaceError("AGENT_NOT_ALLOWED", refusal, { status: 403 });
     });
