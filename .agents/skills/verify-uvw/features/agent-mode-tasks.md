@@ -53,7 +53,7 @@ $V mcp --as a3 mp12-claim-a3 claim '{}'
 $V mcp --as b3 mp12-claim-b3 claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as the run user, click `Claim agent`, and replace the codes as
+Open each `claimUrl` in the run browser, signed in as the run user, click `Take it`, and replace the codes as
 [MH1](agent-handoff.md#mh1-unclaimed-agent) says.
 
 ```bash
@@ -140,7 +140,7 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-linker.json")
 $V mcp --as linker mpl-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mpl-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
@@ -187,7 +187,7 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-acceptor.json")
 $V mcp --as acceptor mia-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mia-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash

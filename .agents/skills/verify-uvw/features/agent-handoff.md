@@ -1,10 +1,10 @@
 # Agent handoff and claim
 
 A person who opens someone else's shared file can hand it to their own AI agent. The agent connects without an
-account as a guest agent, works in pull requests in its own Personal Space, and gives the person a claim link.
-The person signs in, claims the agent, and from then on owns its Space, sees it under **My agents**, and decides
-its pull requests. Until claimed, the agent's files carry an `Unverified agent` label and its links expire after
-30 days without use.
+account as a guest agent, works in pull requests in its own Personal Space, and gives the person one handoff link.
+Whoever opens it sees everything the agent owns, read-only and live, without signing in. The person signs in there,
+takes the agent, and from then on owns its Space, sees it under **My agents**, and decides its pull requests. Until
+claimed, the agent's files carry an `Unverified agent` label, and the agent expires after 30 days without use.
 
 ## Sub-features
 
@@ -23,29 +23,31 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   The trial goes straight back to the client with a code and leaves the browser's session as it was; the guest is
   named after the OAuth client plus a suffix (`verify-uvw g1 · n5er`). `uvw auth guest` creates a guest named `agent` with username `agent-xxxx`
   and repository `<username>/personal`.
-- AH5 mints a claim link: MCP `claim` (unclaimed agents only, listed after `share`) and `uvw claim`. For an
-  unclaimed owner `share` returns `claimHint`, which points to them, and mints nothing. A link works once, within
-  10 minutes.
-- AH6 claims on `/claim/<code>`. Signed out: `Sign in to claim this agent` with an embedded sign-in that returns
-  to the same page. Signed in as a person: `Claim <agent name>`, `@<username>`, the file count,
-  `Account that will own it`, and `Claim agent`, which opens the one Team repository or Personal Space that holds the
+- AH5 mints a handoff link: MCP `claim` (unclaimed agents only, listed in place of `share`) and `uvw claim`. The link
+  works for 7 days, or until a person takes the agent. An unclaimed agent cannot turn on Link Sharing: `uvw share
+  --link viewer` exits 1 with `AGENT_NOT_ALLOWED`, and `uvw share` with the link off points to the handoff link.
+- AH6 takes the agent on `/claim/<code>`. Signed out: `Work from <agent name>`, `@<username>`, `Link works until`,
+  each Space the agent owns with its file count and its files, and `Sign in and take it`, which goes to the sign-in
+  page and returns to the same page. Signed in as a person: the same summary without the file links,
+  `Account that will own it`, and `Take it`, which opens the one Team repository or Personal Space that holds the
   agent's work, or `/repositories?q=<username>` when its work is in more than one. Revisiting shows
   `<agent name> is yours`.
-- AH7 handles a browser signed in as an agent: `An agent cannot claim an agent. Sign in with your own account.`
-  with `Sign out and continue`, which shows the sign-in on the same page.
-- AH8 shows claim errors: `This agent has already been claimed.` and
-  `This claim link is not valid. Ask the agent for a new one.` (an expired link says it has expired).
+- AH7 handles a browser signed in as an agent: `An agent cannot take an agent. Sign in with your own account.`
+  with `Sign out and continue`, which leaves the signed-out page with `Sign in and take it`.
+- AH8 shows handoff errors under `Unable to open this handoff link`: `This agent already has an owner.`, which adds
+  `If you took it, sign in to open its files.` and `Sign in` for a signed-out visitor, and
+  `This handoff link is not valid. Ask the agent for a new one.` (an expired link says it has expired).
 - AH9 lists claimed agents in Account menu > `My agents` with `Open space` and `Stop <display name>`. `Stop` asks
   `Stop this agent?`, marks the row `Stopped`, signs the agent out, and its links answer 404 to everyone else.
 - AH10 lets the claimer decide the agent's pull requests: `uvw pr list -R <agent>/personal` and MCP `pr_list`
   work, merge works, and `pr create` in the agent's Space is refused. After the claim, `share` no longer prints
-  an expiry or a claim link.
+  an expiry or the handoff link.
 - AH11 gives an MCP client a guest agent only after one click. A browser with no session that opens authorize gets
   the signed-out connect page with no code and no cookie. `Try without signing in` posts a form that answers `303` to
   the callback with a code. The code carries all four scopes when the client asked for `write`, and `read` otherwise.
-  Its token acts for a new guest agent named after the client, which can mint its claim link with `claim`. Its
-  server instructions and `whoami` say it is a guest agent because the browser had no Workspace session. One address
-  gets at most 20 such codes a minute; past that, the trial sends the client `temporarily_unavailable`.
+  Its token acts for a new guest agent named after the client, which can mint its handoff link with `claim`. Its
+  server instructions and `whoami` say it is a temporary agent that gives the user a handoff link when it is done.
+  One address gets at most 20 such codes a minute; past that, the trial sends the client `temporarily_unavailable`.
 - AH12 gives an MCP client that a signed-in person connects a new agent that person owns, by default. The connect
   page's main button is `Connect as a new agent`, above `Connect as myself`, and its `Let it change content` switch
   is on. Redeeming the code creates the agent, named after the client, already claimed: it is listed under
@@ -54,6 +56,10 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 - AH13 lets a person continue an agent they own. The connect page puts the agent made for a client of the same name
   on its main button and offers no new agent then, and lists up to five of their agents, most recently active
   first. Continuing it creates no agent, so a client that connects again keeps one agent and its files.
+- AH14 previews the agent's work before anyone takes it. A browser that opened the handoff link holds its code in
+  the httpOnly `workspace_handoff` cookie and, signed out, reads everything the agent owns as a viewer: its Spaces,
+  its files, and an HTML View with its Sheet data, live. Nothing else reads the agent's private files, and a session
+  in the browser wins over the cookie. The preview ends for every browser once a person takes the agent.
 - MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
 
 ## How to get to it (user POV)
@@ -62,7 +68,8 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
   and click `Hand to my agent`.
 - An agent runs `uvw auth guest`, or connects an MCP client from a browser that is not signed in through
   `Try without signing in`, then calls `claim` or `uvw claim` and gives you the link.
-- Open the claim link in your browser, sign in, and click `Claim agent`. Manage agents from Account > `My agents`.
+- Open the handoff link in your browser and look at the agent's files. Click `Sign in and take it`, sign in, and
+  click `Take it`. Manage agents from Account > `My agents`.
 
 ## Driving it with agent-browser and uvw
 
@@ -85,23 +92,30 @@ Preconditions:
 
 As the guest: `gu pr create -R $A/personal -t Handoff --json`, then
 `gu unit create --worktree <id> --space $A/personal --type sheet --name "Handoff sheet" --json` (Node ID `AN`),
-`gu pr ready 1 -R $A/personal` and `gu pr merge 1 -R $A/personal`. `gu share $AN --link viewer` prints an expiry
-date and `To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.`
-Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
+`gu pr ready 1 -R $A/personal` and `gu pr merge 1 -R $A/personal`. `gu share $AN --link viewer` exits 1 with
+`AGENT_NOT_ALLOWED: An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again.`
+`gu share $AN` prints `Link Sharing: off. Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).`
+`$V open-anon ah-private "$ORIGIN/nodes/$AN"` reports 404. `gu claim --json` returns `claimUrl` and an `expiresAt`
+7 days ahead; save `claimUrl` outside `$EVIDENCE` as `CLAIM`. `gu claim` prints `Handoff link: <url>` and says the
+link works for 7 days.
 
 ### HO3. Visitor view (AH1-AH3)
 
-In a separate agent-browser session (`AGENT_BROWSER_SESSION=<run>-anon`), open
-`$ORIGIN/nodes/$AN`, pin the locale, reload, and wait for `canvas`. The bar shows `By agent` and
-`Unverified agent`. Click `More actions`, then the menu item `Hand to my agent`
+In a separate agent-browser session (`AGENT_BROWSER_SESSION=<run>-anon`), pin the locale, open `$CLAIM` so the
+session holds the preview, then open `$ORIGIN/nodes/$AN` and wait for `canvas`. The bar shows `Read only`,
+`By agent` and `Unverified agent`. Click `More actions`, then the menu item `Hand to my agent`
 (`find role menuitem click --name "Hand to my agent" --exact`; the dialog has the same title). Read the MCP tab,
 click `Command line (uvw)`, then `Copy prompt`. Screenshot both tabs and close with `Close`.
 
-### HO4. Claim (AH6)
+### HO4. Preview and take (AH6, AH14)
 
-In that session open the claim URL: `Sign in to claim this agent`. Sign in as the run user
-through the embedded form. The page shows `Claim agent` (the guest's name is `agent`), `@<A>` and `1 file`.
-Click `Claim agent`; the URL becomes `/spaces/<id>`. Reopen the claim URL: `agent is yours`.
+In that session open `$CLAIM`: `Work from agent` (the guest's name is `agent`), `@<A>`, `Link works until` with a
+date 7 days ahead, the Personal Space row with `1 file`, the link `Handoff sheet`, and `Sign in and take it`.
+Click it: the URL becomes `/login?returnTo=%2Fclaim%2F…`. Sign in as the run user; the browser returns to the
+handoff page, which now shows `Account that will own it`, `The agent will belong to “<run user's name>”.` and
+`Take it`, and lists the Space without the file link. Click `Take it`; the URL becomes `/spaces/<id>`. Reopen
+`$CLAIM`: `agent is yours` and `Open its files`. The URL in `get url` and in screenshots of the address carries the
+code, so keep both out of `$EVIDENCE` or redact them.
 
 ### HO5. My agents (AH9)
 
@@ -115,12 +129,17 @@ The guest opens and readies a second PR. As the run user,
 `$V cli ah-pr-list pr list -R $A/personal -s all --json` lists both, `pr merge` merges the second, and
 `pr create -R $A/personal` fails with
 `Personal Space pull requests must target the signed-in user's own Space.`
+`$V person ah-share share $AN --link viewer --json` turns the link of the agent's file on for its new owner, with
+`link` `viewer` and no `expiresAt`, and `$V open-anon ah-shared "$ORIGIN/nodes/$AN"` then shows the Sheet.
 
 ### HO7. Errors (AH8)
 
 Register another user in a new session (`AGENT_BROWSER_SESSION=<run>-other`): pin the locale, open `/login`, click
-the `Create account` mode button, fill `Username`, `Display name` and `Password`, and submit. That user opening the
-used claim URL sees `This agent has already been claimed.`; `$ORIGIN/claim/not-a-real-code` shows the not-valid text.
+the `Create account` mode button, fill `Username`, `Display name` and `Password`, and submit. That user opening
+`$CLAIM` sees `Unable to open this handoff link` and `This agent already has an owner.` with `Back to home` only;
+`$ORIGIN/claim/not-a-real-code` shows `This handoff link is not valid. Ask the agent for a new one.` A session with
+nobody signed in (`<run>-anon2`) that opens `$CLAIM` also reads `If you took it, sign in to open its files.` and
+`Sign in`.
 
 ### HO8. Stop (AH9)
 
@@ -145,13 +164,14 @@ $V mcp --auth oauth g1-claim claim '{}' > /dev/null   # stdout would put the cla
 ```
 
 Open the `claimUrl` from `g1-claim.out` in the run browser, which still holds the other agent's cookie: it shows
-`An agent cannot claim an agent. Sign in with your own account.` and `Sign out and continue`. Click it, sign in as the
-run user, and claim. Replace the code in `g1-claim.*` as [MH1](#mh1-unclaimed-agent) says.
+`An agent cannot take an agent. Sign in with your own account.` and `Sign out and continue`. Click it, then
+`Sign in and take it`, sign in as the run user, and click `Take it`. Replace the code in `g1-claim.*` as
+[MH1](#mh1-unclaimed-agent) says.
 
 Pass when `g1.json` records the signed-out page, the same agent before and after and a token, `g1-connect.png` shows
 `Sign in to connect` and `Try without signing in` rather than the cookie's agent, `whoami` names the guest after the
-client and not after the cookie's agent, and the claim page asks the cookie's agent to sign out before the run user
-claims the guest.
+client and not after the cookie's agent, and the handoff page asks the cookie's agent to sign out before the run user
+takes the guest.
 
 ### HO10. An MCP client from a signed-out browser takes the trial (AH11)
 
@@ -186,10 +206,10 @@ $V mcp-oauth login ho10 --guest
 jq -e '.page == "signed_out" and .trial == "offered" and .browser_signed_in_after == false and .callback_scope == "read write publish worktree:merge" and .token.status == 200' "$EVIDENCE/ho10.json"
 $V mcp --auth oauth ho10-whoami whoami
 jq -e '(.subject.name | test("^verify-uvw ho10 · [a-z0-9]{4}$")) and .budget != null' "$EVIDENCE/ho10-whoami.out"
-NOTICE='This connection is a guest agent, which Workspace created because the browser had no Workspace session.'
-jq -e --arg n "$NOTICE" '.notice | startswith($n) and contains("sign in to Workspace in that browser and reconnect the client") and contains("claiming it with claim")' "$EVIDENCE/ho10-whoami.out"
+NOTICE='You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.'
+jq -e --arg n "$NOTICE" '.notice | startswith($n) and (contains("guest agent") | not)' "$EVIDENCE/ho10-whoami.out"
 $V mcp-instructions --auth oauth ho10-instructions
-jq -e --arg n "$NOTICE" '.instructions | contains($n) and contains("Tell the user this in your first reply.")' "$EVIDENCE/ho10-instructions.out"
+jq -e --arg n "$NOTICE" '.instructions | contains($n) and (contains("guest agent") | not)' "$EVIDENCE/ho10-instructions.out"
 $V mcp-oauth exchange ho10-exchange oauth
 jq -e '.body.user.kind == "agent"' "$EVIDENCE/ho10-exchange.json"
 $V mcp --auth oauth ho10-claim claim '{}' > /dev/null   # stdout would put the claim code in the run log
@@ -197,15 +217,18 @@ jq -e '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}$")' "$EVIDENCE/ho10-claim.out"
 perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "$EVIDENCE"/ho10-claim.*
 $V mcp-oauth login ho10-read --guest --scope read
 jq -e '.trial == "offered" and .callback_scope == "read" and .token.body.scope == "read"' "$EVIDENCE/ho10-read.json"
+$V mcp --auth oauth ho10-read-whoami whoami
+jq -e '.notice == null' "$EVIDENCE/ho10-read-whoami.out"
 ```
 
 Pass when authorize answers the signed-out browser `200` with the connect page, a CSP whose `form-action` names the
 callback, no code, no consent token, no `Location` and no `Set-Cookie`; the trial form answers `303` to the callback
 with a code for all four scopes and no `Set-Cookie`, and a JSON body gets a `400` HTML page; the scripted client gets
 its token through `Try without signing in` and leaves the browser with no session; `whoami` names the guest after the
-client with an agent's budget; `whoami` and the server instructions both say it is a guest agent because the browser
-had no Workspace session; the token exchange names a User of kind `agent`; `claim` returns a claim link; and a
-request without `write` gets a guest with `read` only, whose `ho10-read-connect.png` promises no claim link.
+client with an agent's budget; `whoami` and the server instructions both carry the temporary agent sentence and
+neither says `guest agent`; the token exchange names a User of kind `agent`; `claim` returns a handoff link; and a
+request without `write` gets a guest with `read` only, whose `whoami` has no notice and whose
+`ho10-read-connect.png` promises no handoff link.
 
 ### HO11. One address that keeps taking the trial (AH11)
 
@@ -326,11 +349,85 @@ and a client of another name lists the agent but puts a new one on the main butt
 `You're signed in as @<run user>. It will work as your agent <name>.`, the main button `Connect as <name>`, and
 `Connect as myself`, with no new agent.
 
+### HO14. A signed-out visitor sees a guest agent's live page, takes the agent, and the preview stops (AH14)
+
+A second guest, driven from its own home, merges a Sheet and publishes an HTML View bound to it in its private
+Personal Space, then makes its handoff link. The link and the cookie jar stay in `$RUN/home`.
+
+```bash
+G2=$VERIFY_UVW_ROOT/$VERIFY_UVW_RUN/home-guest-ho14; g2(){ env UNIVER_HOME=$G2 node apps/cli/dist/main.js "$@"; }
+g2 config set workspace.origin $ORIGIN
+g2 auth guest --json > "$EVIDENCE/ho14-guest.json"; B=$(jq -r .agent.username "$EVIDENCE/ho14-guest.json")
+g2 pr create -R $B/personal -t Preview --json > "$EVIDENCE/ho14-pr.json"; W=$(jq -r .id "$EVIDENCE/ho14-pr.json")
+g2 unit create --worktree $W --space $B/personal --type sheet --name "Preview data" --json > "$EVIDENCE/ho14-unit.json"
+U=$(jq -r .unit.unitId "$EVIDENCE/ho14-unit.json"); R=$(jq -r .unit.resourceId "$EVIDENCE/ho14-unit.json")
+g2 execute --worktree $W --unit $U --json -e 'const ws=workbook.getActiveSheet(); ws.getRange("A1:C2").setValues([["Item","Qty","Double"],["Rent",5,"=B2*2"]]); return {sheet:ws.getSheetId()};' > "$EVIDENCE/ho14-seed.json"
+S=$(jq -r .value.sheet "$EVIDENCE/ho14-seed.json")
+g2 pr ready 1 -R $B/personal --json > /dev/null; g2 pr merge 1 -R $B/personal --json > /dev/null
+SPACE=$(g2 repo list --owner @me --type personal --json | jq -r '.[0].id')
+printf '<!DOCTYPE html><html><head><title>Qty page</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>Qty page</h1><label>Qty <input type="number" data-univer-cell-model="%s:%s:B2"></label><p>Double: <output data-univer-cell-text="%s:%s:C2">loading</output></p></body></html>\n' $U $S $U $S > "$EVIDENCE/ho14.univer.html"
+g2 html-view create --file "$EVIDENCE/ho14.univer.html" --space $SPACE --name 'Qty page' --idempotency-key "ho14-$VERIFY_UVW_RUN-0001-abcdef" --json > "$EVIDENCE/ho14-page.json"
+PN=$(jq -r .nodeId "$EVIDENCE/ho14-page.json"); jq -e '.repositoryVisibility == "private"' "$EVIDENCE/ho14-page.json"
+g2 claim --json > "$RUN/home/ho14-claim.json"; CLAIM2=$(jq -r .claimUrl "$RUN/home/ho14-claim.json"); CODE=${CLAIM2##*/claim/}
+$V open-anon ho14-private "$ORIGIN/nodes/$PN"       # 404 without the link
+```
+
+The cookie the handoff page sets reads the agent's files and writes nothing:
+
+```bash
+J=$RUN/home/ho14-jar; status(){ curl -sS -w '%{http_code}\n' "$@"; }
+status -c "$J" -o "$EVIDENCE/ho14-handoff.json" "$ORIGIN/api/agents/claim?code=$CODE" | grep -qx 200
+jq -e --arg b "$B" '.agent.username == $b and .claimed == false and ([.spaces[] | {type, files}] == [{type: "personal", files: 2}])' "$EVIDENCE/ho14-handoff.json"
+grep -q 'HttpOnly.*workspace_handoff' "$J"
+status -b "$J" -o "$EVIDENCE/ho14-node.json" "$ORIGIN/api/nodes/$PN" | grep -qx 200
+status -b "$J" -o "$EVIDENCE/ho14-write.json" -X PUT -H 'content-type: application/json' -H "Origin: $ORIGIN" -d '{"enabled":true,"role":"viewer"}' "$ORIGIN/api/nodes/$PN/link-sharing" | grep -qx 401
+```
+
+Open `$CLAIM2` in two sessions with nobody signed in, `<run>-ho14-a` and `<run>-ho14-b`, after pinning the locale in
+each. Do not print `get url` there: the address carries the code. Both show `Work from agent`, `@<B>`, the Personal
+Space row with `2 files`, the links `Preview data` and `Qty page.univer.html`, and `Sign in and take it`. In each,
+click `Qty page.univer.html` and wait about 6 s: the address ends `/nodes/$PN?view=immersive`, the bar reads
+`Read only`, `By agent` and `Unverified agent`, `snapshot -i -c` shows the page's `spinbutton "Qty"` with `5`, and the
+screenshot shows `Double: 10`. In session a, also open `$ORIGIN/nodes/<Preview data's node>`: the Sheet opens
+`Read only` with `5` and `10` in row 2.
+
+With both pages open, the guest changes the Sheet through a second pull request:
+
+```bash
+g2 pr create -R $B/personal -t "Qty 3" --json > "$EVIDENCE/ho14-pr2.json"; W2=$(jq -r .id "$EVIDENCE/ho14-pr2.json")
+g2 unit add --worktree $W2 --resource $R --json > /dev/null
+g2 execute --worktree $W2 --unit $U --json -e "workbook.getSheetBySheetId('$S').getRange('B2').setValue(3); return 1;" > /dev/null
+g2 pr ready 2 -R $B/personal --json > /dev/null; g2 pr merge 2 -R $B/personal --json > /dev/null
+```
+
+Within a few seconds and with no reload, session b's page shows `3` and `Double: 6`.
+
+In session a, open `$CLAIM2`, click `Sign in and take it`, sign in as the run user and click `Take it`; the address
+becomes `/spaces/<id>`. Then the preview is over for session b and for the cookie jar:
+
+```bash
+status -b "$J" -o "$EVIDENCE/ho14-node-after.json" "$ORIGIN/api/nodes/$PN" | grep -qx 404
+status -b "$J" -c "$J" -o "$EVIDENCE/ho14-handoff-after.json" "$ORIGIN/api/agents/claim?code=$CODE" | grep -qx 409
+jq -e '.error.code == "AGENT_ALREADY_CLAIMED"' "$EVIDENCE/ho14-handoff-after.json"
+if grep -q workspace_handoff "$J"; then false; fi
+```
+
+Reload session b's page: `Unable to open this resource`. Open `$CLAIM2` there: `Unable to open this handoff link`,
+`This agent already has an owner.`, `If you took it, sign in to open its files.` and `Sign in`. Remove `$G2`
+yourself after `$V down`.
+
+Pass when the page answers 404 without the link; the handoff answer names the agent, unclaimed, with two files, and
+sets an httpOnly cookie that reads the page and gets `401` on a write; both signed-out sessions list the two files
+and show the page with `5` and `Double: 10` under `Unverified agent`, and the Sheet opens read-only; session b's
+page turns to `3` and `Double: 6` with no reload after the guest's merge; the run user takes the agent from session
+a; and after that the cookie jar gets `404` for the page and `409` for the link, which clears the cookie, session
+b's reload cannot open the page, and its handoff page says the agent has an owner.
+
 ### MH1. Unclaimed agent
 
 Mode: mcp.
 
-Run after `user`. Claiming needs the run browser signed in as the run user; the journeys above cover the browser side.
+Run after `user`. Taking an agent needs the run browser signed in as the run user; the journeys above cover the browser side.
 Idempotency keys need 16 to 200 URL-safe characters, so pad them for short run IDs.
 
 ```bash
@@ -340,12 +437,13 @@ $V mcp-instructions --as bot1 mh-bot1-instructions
 $V mcp --as bot1 mh-bot1-claim claim '{}'
 ```
 
-`mh-bot1.out` lists 56 tools: the 49 `core` tools with `claim` right after `share`,
+`mh-bot1.out` lists 55 tools: the 49 `core` tools with `claim` where a person has `share`,
 then `blob_upload`, `repo_create`, `repo_edit`, `repo_member_list`, `repo_member_write` and `space_node`, which an agent
-gets in `core` to set up its own repository and declare its checks. A person's default list has 49 and no `claim`. The instructions say the agent
+gets in `core` to set up its own repository and declare its checks. A person's default list has 49, with `share` and no `claim`. The instructions say the agent
 `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`, and they
-do not contain `guest agent`: bot1 made itself with `POST /api/agents`, so no browser sign-in created it.
-`claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
+carry `You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.`
+and no `call share`. The `claim` description says the link works for 7 days and has no `works once`.
+`claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 7 days ahead; the usage event carries
 `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text, and
 `$V secret-check` fails on it and prints the command that replaces it.
 
@@ -353,8 +451,8 @@ do not contain `guest agent`: bot1 made itself with `POST /api/agents`, so no br
 
 Mode: mcp.
 
-Open the claim URL in the run browser and click `Claim agent`. Right after, with no wait,
-`$V mcp-tools --as bot1 mh-bot1-claimed` lists 55 tools (no `claim`),
+Open the handoff link in the run browser and click `Take it`. Right after, with no wait,
+`$V mcp-tools --as bot1 mh-bot1-claimed` lists 55 tools (`share` and no `claim`),
 and the second paragraph of the instructions starts `This connection is an agent identity that a person has claimed.`
 The paragraph after it says who can open everything the agent owns and ends `the server answers such a call with a
 confirm link, which you give to the user.`
@@ -381,7 +479,7 @@ with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message that ends with
 as the run user who claimed it: the page reads `Make <bot1>/personal public?` with `Now` `Private` and
 `After you confirm` `Public`. Click `Confirm`, and bot1's `repo_view` has `publicRead: true`. `"visibility":"private"`
 with `--as bot1` sets it back with no link. MH3's bot2, unclaimed, gets `AGENT_NOT_ALLOWED` on `<bot2>/personal` with
-no `detail.url` (`An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again.`).
+no `detail.url` (`An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again.`).
 A uvw password session gets a confirm link too ([LS7](./link-sharing.md#ls7-public-space) uses the browser session).
 
 ### MH5. Copy a shared file
@@ -399,11 +497,16 @@ bot1's `pr_ready` and `pr_merge` merge its pull request.
 
 ## Gotchas
 
-- The claim code is a one-time credential. Evidence files from `mcp ... claim` and `uvw claim` contain it
-  in plain text. After use, run `$V secret-check`: it fails on each `/claim/<code>` and prints the `perl` command
-  that replaces the codes.
-- The product database holds claim codes as hashes, so a restart keeps them and any server replica accepts them. Each
-  `claim` mints a new one; `share` never does.
+- The handoff link's code is a credential: until a person takes the agent it reads everything the agent owns, for 7
+  days. Evidence files from `mcp ... claim` and `uvw claim` contain it in plain text, and so does the address of
+  the handoff page and of the sign-in page it leads to. After use, run `$V secret-check`: it fails on each
+  `/claim/<code>` and on a `workspace_handoff` cookie value, and prints the `perl` command that replaces the codes.
+- The product database holds the codes as hashes, so a restart keeps them and any server replica accepts them. Each
+  `claim` mints a new one, and an agent keeps its 10 newest.
+- A browser session holds one preview. Opening another agent's handoff link replaces it, and any session signed in
+  to that browser wins over it, so use a session with nobody signed in for HO3, HO4 and HO14.
+- In a preview, the bar's `Sign up free` and `Sign in` return to the file, which the signed-in person cannot open
+  until they take the agent. Take the agent from the handoff page.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
 - The MCP tool lists change on the first request after the claim: unclaimed agents have `claim`, claimed agents
   do not. See [MH1 and MH2](#mh1-unclaimed-agent).

@@ -126,7 +126,7 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-trashed.json")
 $V mcp --as trashed mpt-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mpt-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mpt-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mpt-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash

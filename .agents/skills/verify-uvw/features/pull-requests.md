@@ -251,7 +251,7 @@ Run: helper.
 The run user O holds a Team Space with a claimed guest agent A as an Editor and a person M as a Viewer. A opens a pull
 request that adds a Sheet `Sales`, marks it ready and merges it, all with its own uvw. A can merge it, so ready leaves
 it `private`, and M cannot read it. Once merged, M reads it as `space` with its file, lists it, and finds its merge by A
-in the Space's activity. O claims A with the call the claim page makes. The homes, passwords, cookies and the claim
+in the Space's activity. O claims A with the call the handoff page makes. The homes, passwords, cookies and the claim
 link stay in `$UNIVER_HOME/prm-*`, which `$V down` deletes:
 
 ```bash

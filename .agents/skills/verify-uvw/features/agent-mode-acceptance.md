@@ -70,7 +70,7 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-panel.json")
 $V mcp --as panel mip-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mip-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mip-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mip-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Create member E in a second browser session: with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-e`, pin the
 language and view as [the skill](../SKILL.md#drive) does, open `/login`, click the `Create account` mode button, fill
 `Username` with `mip-e-$VERIFY_UVW_RUN`, `Display name` and `Password`, and submit. Then:
@@ -195,7 +195,7 @@ $V mcp --as checks-a mic-claim-a claim '{}'
 $V mcp --as checks-v mic-claim-v claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
+Open each `claimUrl` in the run browser, signed in as O, and click `Take it`. Replace the codes as
 [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
@@ -265,7 +265,7 @@ $V mcp --as sharer mis-claim claim '{}'
 ```
 
 Create C in a second browser session as MI13 creates E, with `AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-c` and
-username `mis-c-$VERIFY_UVW_RUN`. In C's session, open the `claimUrl` from `mis-claim.out` and click `Claim agent`.
+username `mis-c-$VERIFY_UVW_RUN`. In C's session, open the `claimUrl` from `mis-claim.out` and click `Take it`.
 Replace the code in `mis-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
@@ -340,7 +340,7 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-reverter.json")
 $V mcp --as reverter mrv-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mrv-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mrv-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mrv-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Create E in a second browser session as MI13 does, with username `mrv-e-$VERIFY_UVW_RUN` and display name
 `Erin`. Then:
 

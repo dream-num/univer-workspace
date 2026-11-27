@@ -13,14 +13,14 @@ nothing, and the claimer still sees them.
   as an admin and P as an Editor. B's capabilities equal P's once P is an admin too. B renames R and creates an Issue
   label, and cannot turn on required checks. A edits B's label, and reopens and discards a pull request of B's.
 - AO2 has the run user O, A's claimer, see R and a repository A created before the claim as their owner, change P's
-  role, make R public and private again, and discard a pull request of B's.
+  role, make R public and private again, and discard a pull request of B's. O also lists and deletes a fork of A's.
 - AO3 has O stop A. B and P then read nothing of R, and O still sees it.
 
 ## How to get to it (user POV)
 
 An agent calls `repo_create`, `repo_member_write`, `repo_view`, `repo_edit`, `label_write`, `label_list`, `pr_create`,
 `pr_ready`, `pr_view`, `pr_discard`, `space_browse` and `outline`. The claimer uses `uvw repo list`, `repo view`,
-`repo member`, `repo edit` and `pr discard`, and claims and stops agents through the HTTP API that the claim page and
+`repo member`, `repo edit`, `pr discard`, `fork list` and `fork delete`, and claims and stops agents through the HTTP API that the handoff page and
 `My agents` call.
 
 ## Driving it with agent-browser and uvw
@@ -32,8 +32,8 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
 The run user O signs in to the HTTP API with a cookie kept outside `$EVIDENCE`. `claim_agent <principal> <label>
-[cookie-jar]` has the agent mint a claim link with `claim`, has O, or the person whose cookie jar is given, claim it
-with `POST /api/agents/claim` as the claim page does, and replaces the used code in the evidence:
+[cookie-jar]` has the agent mint a handoff link with `claim`, has O, or the person whose cookie jar is given, take it
+with `POST /api/agents/claim` as the handoff page does, and replaces the used code in the evidence:
 
 ```bash
 O=verify-$VERIFY_UVW_RUN; OC=$RUN/home/o-cookies
@@ -131,7 +131,8 @@ Run: helper.
 This journey uses AO1's agents, P and repositories, so AO1 runs first. O, who claimed A, finds R and the repository A
 created before the claim among its own, as their owner with the same capabilities. O makes P a Viewer. O's uvw
 session is refused when it makes R public, with a confirm link, and O makes it public in the browser session and
-private again with uvw. O discards a pull request of B's, whose claimer is P.
+private again with uvw. O discards a pull request of B's, whose claimer is P. A forks R, and O lists that fork among
+its own and deletes it.
 
 ```bash
 $V cli ao2-list repo list -L 100 --json fullName,accessRole
@@ -150,11 +151,19 @@ jq -s -e 'map(.publicRead) == [true, false]' "$EVIDENCE/ao2-public.out" "$EVIDEN
 $V mcp --as ao-b ao2-b-pr pr_create "{\"repo\":\"$R\",\"title\":\"B's second proposal\",\"visibility\":\"space\"}"
 $V cli ao2-discard pr discard "$(jq -r .number "$EVIDENCE/ao2-b-pr.out")" -R "$R" --json state
 jq -e '.state == "discarded"' "$EVIDENCE/ao2-discard.out"
+$V mcp --as ao-a ao2-fork fork_create "{\"repo\":\"$R\",\"name\":\"mine\"}"
+$V cli ao2-forks fork list --json fullName,state
+jq -e '[.[] | select(.fullName == "'"$A/mine"'") | .state] == ["clean"]' "$EVIDENCE/ao2-forks.out"
+$V cli ao2-fork-delete fork delete "$A/mine" --json
+jq -e '.fork == "'"$A/mine"'"' "$EVIDENCE/ao2-fork-delete.out"
+$V mcp --as ao-a ao2-forks-after fork_list '{}'
+jq -e '.forks == []' "$EVIDENCE/ao2-forks-after.out"
 ```
 
 Pass when O's repository list holds both repositories as `owner`, both read back the same role and capabilities, P
 becomes a Viewer, O's uvw session gets the confirm link for R, R reads back public through the browser session and
-then private, and O discards B's pull request.
+then private, O discards B's pull request, O's fork list holds A's fork `<A>/mine`, and after O deletes it A has no
+fork.
 
 ### AO3. A stopped agent's repositories are suspended
 
@@ -200,6 +209,6 @@ owner.
 - `Stop` cannot be undone, so AO3 runs last.
 - `label_write` and `pr_discard` are in the `admin` toolset, so an agent calls them with `--toolsets core,admin`.
 - The claims and the stop go through the HTTP API with a person's cookie. [Agent handoff and claim](agent-handoff.md)
-  drives the claim page and `My agents` in the browser.
+  drives the handoff page and `My agents` in the browser.
 - An unclaimed agent expires after 30 days without use, which a run cannot reach, so no journey shows that an expired
   agent's repositories are suspended.

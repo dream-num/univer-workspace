@@ -6,7 +6,7 @@ budget. Until a person claims it, an agent owns at most 3 Team Spaces and 3 fork
 all its Spaces (`AGENT_QUOTA_EXCEEDED`). It cannot make a Space public, join a Team Space or add anyone to one, and
 user search neither finds it nor answers it (`AGENT_NOT_ALLOWED`). A claimed agent joins a person's Team Space as a
 Viewer or an Editor, never as an admin. Someone who is not a member holds at most 3 open proposals in one Team Space
-(`FORBIDDEN`). Each limit has a way out: a claim, a deleted fork, a file moved to Trash or a discarded proposal.
+(`FORBIDDEN`). Each limit has a way out: a person who takes the agent, a deleted fork, a file moved to Trash or a discarded proposal.
 Only a person signed in to the browser lets more people see data. When an agent or a uvw session asks to add a
 member, raise a role or make a Space public, the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`
 with a confirm link, and the person who opens it confirms or gives up.
@@ -33,7 +33,7 @@ with a confirm link, and the person who opens it confirms or gives up.
 An agent reads its budget with `whoami`. MP14 also calls `pr_create`, `pr_ready` and `pr_merge` as an agent. CE1-CE3
 call `claim`, `repo_create`, `repo_member_write`, `fork_create`, `fork_delete`, `unit_create`, `space_node` and
 `pr_discard` as agents. The run user adds members with its browser session (`$V person … repo member add`), and claims and stops agents through the
-HTTP API that the claim page and `My agents` call.
+HTTP API that the handoff page and `My agents` call.
 
 ## Driving it with agent-browser and uvw
 
@@ -44,7 +44,7 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
 The run user O signs in to the HTTP API with a cookie kept outside `$EVIDENCE`. `claim_agent <principal> <label>`
-has the agent mint a claim link with `claim`, has O claim it with `POST /api/agents/claim` as the claim page does, and
+has the agent mint a handoff link with `claim`, has O take it with `POST /api/agents/claim` as the handoff page does, and
 replaces the used code in the evidence:
 
 ```bash
@@ -155,7 +155,7 @@ jq -e '.users == []' "$EVIDENCE/ce1-search-u.json"
 $V mcp --as ce-unclaimed ce1-u-repo repo_create '{"slug":"own","name":"Own"}'
 $V mcp --as ce-unclaimed ce1-u-add-o repo_member_write "{\"repo\":\"$U/own\",\"action\":\"add\",\"user\":\"$O\",\"role\":\"viewer\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_NOT_ALLOWED" and .message == "An unclaimed agent cannot add Team Space members. A person must claim it first."' "$EVIDENCE/ce1-u-add-o.out"
+jq -e '.code == "AGENT_NOT_ALLOWED" and .message == "An unclaimed agent cannot add Team Space members. Give the user your handoff link from claim (uvw claim in the CLI). Once they take you, try again."' "$EVIDENCE/ce1-u-add-o.out"
 claim_agent ce-unclaimed ce1-u-claim
 $V person ce1-add-u-claimed repo member add "$U" --role viewer -R "$R" --json role
 jq -e '.role == "viewer"' "$EVIDENCE/ce1-add-u-claimed.out"
@@ -173,7 +173,7 @@ jq -e '.users == []' "$EVIDENCE/ce1-search-stopped.json"
 Pass when O's uvw add exits 1 with `INTERACTIVE_SESSION_REQUIRED` and the confirm link for A as a Viewer, A joins as
 a Viewer through the browser session and the change to admin exits 1 with `AGENT_NOT_ALLOWED`; uvw cannot find U and the
 HTTP API answers 403 `AGENT_NOT_ALLOWED`; search finds A and not U; U creates its repository, and its
-`repo_member_write` exits 1 with `AGENT_NOT_ALLOWED` and says a person must claim it; once claimed, U joins S as a
+`repo_member_write` exits 1 with `AGENT_NOT_ALLOWED` and points to its handoff link; once claimed, U joins S as a
 Viewer, its own `repo_member_write` exits 1 with the confirm link for O, and O's browser session adds O with the
 values that link names; and search no longer finds the stopped A.
 
@@ -184,7 +184,7 @@ Run: helper.
 An unclaimed agent Q creates Team Spaces q1 to q3, is refused a fourth, and is refused when it makes q1 public. It forks q1 three times
 and is refused a fourth fork until it deletes one. It merges 10 Sheets into its Personal Space and puts 10 more in a
 pull request in q1, so a Sheet in q2 is refused until it moves one to Trash. Once O claims Q, its fourth Team Space is
-created. `sheets <repo> <label> <count>` has Q open a pull request in a repository and create Sheets in it.
+created and O lists Q's forks as its own. `sheets <repo> <label> <count>` has Q open a pull request in a repository and create Sheets in it.
 
 ```bash
 $V principal ce-quota ce2-q
@@ -195,17 +195,17 @@ done
 jq -s -e 'map(.fullName) == ["'"$Q/q1"'", "'"$Q/q2"'", "'"$Q/q3"'"]' "$EVIDENCE"/ce2-repo-[123].out
 $V mcp --as ce-quota ce2-public repo_edit "{\"repo\":\"$Q/q1\",\"visibility\":\"public\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_NOT_ALLOWED" and (.detail.url == null) and .message == "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again."' "$EVIDENCE/ce2-public.out"
+jq -e '.code == "AGENT_NOT_ALLOWED" and (.detail.url == null) and .message == "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again."' "$EVIDENCE/ce2-public.out"
 $V mcp --as ce-quota ce2-repo-4 repo_create '{"slug":"q4"}'
 test $? -eq 1
-jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-repo-4.out"
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a handoff link so they can take you, which lifts this limit."' "$EVIDENCE/ce2-repo-4.out"
 for n in 1 2 3; do
   $V mcp --as ce-quota "ce2-fork-$n" fork_create "{\"repo\":\"$Q/q1\",\"name\":\"f$n\"}" || break
 done
 jq -s -e 'map(.fullName) == ["'"$Q/f1"'", "'"$Q/f2"'", "'"$Q/f3"'"]' "$EVIDENCE"/ce2-fork-[123].out
 $V mcp --as ce-quota ce2-fork-4 fork_create "{\"repo\":\"$Q/q1\",\"name\":\"f4\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 forks. Delete a fork you no longer need, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-fork-4.out"
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 forks. Delete a fork you no longer need, or give a person a handoff link so they can take you, which lifts this limit."' "$EVIDENCE/ce2-fork-4.out"
 $V mcp --as ce-quota ce2-fork-delete fork_delete "{\"fork\":\"$Q/f1\"}"
 $V mcp --as ce-quota ce2-fork-4-freed fork_create "{\"repo\":\"$Q/q1\",\"name\":\"f4\"}"
 jq -e '.fullName == "'"$Q/f4"'"' "$EVIDENCE/ce2-fork-4-freed.out"
@@ -227,19 +227,22 @@ $V mcp --as ce-quota ce2-over-pr pr_create "{\"repo\":\"$Q/q2\",\"title\":\"ce2-
 W=$(jq -r .id "$EVIDENCE/ce2-over-pr.out")
 $V mcp --as ce-quota ce2-over-1 unit_create "{\"worktree\":\"$W\",\"space\":\"$Q/q2\",\"type\":\"sheet\",\"name\":\"ce2-over-1\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can keep at most 20 files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, or give a person a claim link so they can claim you, which lifts this limit."' "$EVIDENCE/ce2-over-1.out"
+jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can keep at most 20 files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, or give a person a handoff link so they can take you, which lifts this limit."' "$EVIDENCE/ce2-over-1.out"
 $V mcp --as ce-quota ce2-trash space_node "{\"action\":\"trash\",\"node\":\"$(jq -r .unit.nodeId "$EVIDENCE/ce2-personal-1.out")\"}"
 $V mcp --as ce-quota ce2-over-freed unit_create "{\"worktree\":\"$W\",\"space\":\"$Q/q2\",\"type\":\"sheet\",\"name\":\"ce2-over-1\"}"
 jq -e '.unit.change == "added"' "$EVIDENCE/ce2-over-freed.out"
 claim_agent ce-quota ce2-claim
 $V mcp --as ce-quota ce2-repo-4-claimed repo_create '{"slug":"q4"}'
 jq -e '.fullName == "'"$Q/q4"'"' "$EVIDENCE/ce2-repo-4-claimed.out"
+curl --fail-with-body -sS -b "$OC" "$ORIGIN/api/forks" > "$EVIDENCE/ce2-o-forks.json"
+jq -e '[.forks[] | select(.owner.username == "'"$Q"'") | .name] | sort == ["f2", "f3", "f4"]' "$EVIDENCE/ce2-o-forks.json"
 ```
 
-Pass when q1 to q3 are created, making q1 public exits 1 with `AGENT_NOT_ALLOWED`, no confirm link and a claim link as the way out, and q4 exits 1 with
+Pass when q1 to q3 are created, making q1 public exits 1 with `AGENT_NOT_ALLOWED`, no confirm link and the handoff link as the way out, and q4 exits 1 with
 `AGENT_QUOTA_EXCEEDED` naming 3 Team Spaces; f1 to f3 are created, and f4 exits 1 naming 3 forks and is created after
 `fork_delete`; the Personal Space pull request merges 10 Sheets and q1's pull request holds 10 more; the Sheet in q2
-exits 1 naming 20 files and is created after one Sheet moves to Trash; and after the claim q4 is created.
+exits 1 naming 20 files and is created after one Sheet moves to Trash; and after the claim q4 is created and O's
+own fork list holds Q's f2, f3 and f4.
 
 ### CE3. A non-member's open proposals
 
@@ -331,4 +334,4 @@ D an Editor; and C's repeat of the stored role and its change down to Viewer suc
   `No user named or identified by "<name>" can join.` before the server can refuse. CE1 reads the server's
   `AGENT_NOT_ALLOWED` from `PUT /api/team-spaces/<id>/members/<user-id>` with the agent's ID.
 - CE1-CE3 claim and stop agents through the HTTP API with O's cookie. [Agent handoff and claim](agent-handoff.md)
-  drives the claim page and `My agents` in the browser.
+  drives the handoff page and `My agents` in the browser.

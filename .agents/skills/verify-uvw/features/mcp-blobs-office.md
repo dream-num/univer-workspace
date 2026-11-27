@@ -318,7 +318,7 @@ AID=$(jq -r .agent.id "$EVIDENCE/principal-filefork.json")
 $V mcp --as filefork mff-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mff-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
+Open the `claimUrl` from `mff-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the
 code in `mff-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. H adds A as a
 Viewer and E as an Editor, uploads the files and a page, and puts a Sheet with B2 `42` on Trunk:
 

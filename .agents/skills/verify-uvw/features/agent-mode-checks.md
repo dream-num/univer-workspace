@@ -65,7 +65,7 @@ $V mcp --as checker-a mpc-claim-a claim '{}'
 $V mcp --as checker-b mpc-claim-b claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
+Open each `claimUrl` in the run browser, signed in as O, and click `Take it`. Replace the codes as
 [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Register a
 person E with `POST $ORIGIN/api/auth/password/register` and keep the password outside `$EVIDENCE`. Then:
 
@@ -174,12 +174,12 @@ G=$(jq -r .agent.username "$EVIDENCE/mpl-g-guest.out"); G_ID=$(jq -r .agent.id "
 (umask 077 && gu claim --json > "$RUN/home/g-claim.private")
 ```
 
-The claim link stays in `$RUN/home`, out of the evidence and the run log. In the run browser, still signed in as O,
+The handoff link stays in `$RUN/home`, out of the evidence and the run log. In the run browser, still signed in as O,
 O claims G:
 
 ```bash
 agent-browser open "$(jq -r .claimUrl "$RUN/home/g-claim.private")" > /dev/null
-agent-browser find role button click --name 'Claim agent'
+agent-browser find role button click --name 'Take it'
 agent-browser wait --url '**/spaces/*'
 ```
 
@@ -329,7 +329,7 @@ $V mcp --as decl-a mpd-claim-a claim '{}'
 $V mcp --as decl-b mpd-claim-b claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. After MP17 the run browser holds
+Open each `claimUrl` in the run browser, signed in as O, and click `Take it`. After MP17 the run browser holds
 G's session: run `agent-browser close` first, then sign it in as O with the block under **Browser** in
 [the skill](../SKILL.md#drive). Replace the codes as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then A sets up R:
 

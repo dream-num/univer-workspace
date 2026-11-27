@@ -369,7 +369,7 @@ BOT=$(jq -r .agent.id "$EVIDENCE/principal-pagebot.json")
 $V mcp --as pagebot mpa-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mpa-claim.out` in the run browser and click `Claim agent`, then replace the code in
+Open the `claimUrl` from `mpa-claim.out` in the run browser and click `Take it`, then replace the code in
 `mpa-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. The agent then works alone:
 
 ```bash
@@ -411,7 +411,7 @@ AID=$(jq -r .agent.id "$EVIDENCE/principal-pagefork.json")
 $V mcp --as pagefork mfp-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mfp-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the
+Open the `claimUrl` from `mfp-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the
 code in `mfp-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then H adds A
 as a Viewer and E as an Editor, and puts a Sheet with North `42` in B2 on Trunk and a page bound to it, with the
 commands of MHV8 on `$H/fork-pages`, from `uh pr create` to `PN` and `PR`, with `mfp-h` in place of `mpm-h` in the
