@@ -127,12 +127,12 @@ uvw auth guest [--label <name>]
 
 The command creates a new guest agent with its own Personal Space, stores its session in the same
 session file as a login, and prints the agent's username and its repository `<username>/personal`.
-The agent creates files there with the usual commands, merges its pull request, and shares the result
-with `uvw share <file> --link viewer`. Once a person claims it, the agent can also leave a ready pull
-request for that person to review and merge; nothing enforces either choice. A claimed agent no longer
-turns a link on itself (see [Confirm links](#confirm-links)); the person who claimed it can open
+The agent creates files there with the usual commands, merges its pull request, and gives the user the
+handoff link from [`uvw claim`](#hand-a-guest-agents-work-over). Once a person takes it, the agent can also leave a ready pull
+request for that person to review and merge; nothing enforces either choice. No agent turns a link on
+itself (see [Confirm links](#confirm-links)); the person who took it can open
 everything it owns. Before it is claimed, a guest
-agent cannot join a Team Space, add members to one or make a repository public. It can create up to 3 Team
+agent cannot join a Team Space, add members to one, make a repository public or turn on Link Sharing. It can create up to 3 Team
 Spaces of its own, and keeps at most 20 files across its repositories, of at most 10 MiB each.
 
 `uvw auth guest` refuses while a session is stored for the Workspace origin. Run `uvw auth logout`
@@ -143,8 +143,8 @@ A guest session renews like a login session: it lasts 7 days by default, and a g
 use stays signed in. Left unused, it ends after 3.5 to 7 days by default. After the session ends, or
 after `uvw auth logout`, the CLI cannot sign in to the same agent again.
 `uvw auth guest` then creates a new agent, and nobody but a person who claimed it can change the old
-agent's files. Links that the old agent shared keep working until the old agent expires, 30 days
-after it was last used or one of its links was last opened. A claimed agent never expires.
+agent's files. A handoff link that the old agent gave keeps working until it expires, and the old agent
+expires 30 days after it was last used or its handoff link was last opened. A claimed agent never expires.
 
 ## Share a file by link
 
@@ -160,13 +160,12 @@ Share a file after its pull request is merged. Only the owner of the file can us
 `--json` prints `url`, `name`, `link`, `owner`, and `access`, which says who can open the link. A
 folder's link opens everything in it. While Link Sharing is off, `access` also gives the command that
 lets anyone with the link read the file; for a person's session, it says to run it only if the user
-asks. When the owner is an unclaimed agent, the output also has `expiresAt`. The link stops working
-on that date unless the agent is used or the link is opened before then. It also has `claimHint`, a
-sentence telling the agent to make a claim link with `uvw claim` and give it to the user so they can
-keep its files. A file in a Team Space has no Link Sharing, so the command exits 1 with
+asks. For a guest agent, `access` points to its handoff link instead, because the server refuses it
+Link Sharing. When the owner is an unclaimed agent, the output also has `expiresAt`, the date the agent
+and any link it turned on earlier stop working unless the agent is used before then. A file in a Team
+Space has no Link Sharing, so the command exits 1 with
 `workspace-argument-invalid`, names the repository, and points to `uvw repo member add` and
-`uvw repo edit --visibility public`. `uvw share` never makes a claim code, so running it again never
-ends a claim link the agent already gave.
+`uvw repo edit --visibility public`.
 
 ### Confirm links
 
@@ -179,19 +178,22 @@ sees the change and its consequence, and confirms or gives up. A command that ke
 stored access, such as `--link off`, `--visibility private` or `repo member remove`, runs as before.
 `uvw repo create` makes a private repository and has no `--public` option.
 
-A guest agent has no person to confirm for it. Its `--link viewer` still turns on at once. Its other
-such commands exit 1 with `AGENT_NOT_ALLOWED` and a message telling it to give the user a claim link
-from `uvw claim`.
+A guest agent has no person to confirm for it. Every such command, `--link viewer` included, exits 1
+with `AGENT_NOT_ALLOWED` and a message telling it to give the user its handoff link from `uvw claim`.
+
+### Hand a guest agent's work over
 
 ```bash
 uvw claim [--json]
 ```
 
-`uvw claim` prints a new claim link for the signed-in guest agent, with `claimUrl` and `expiresAt` in
-`--json`. A person who signs in and opens it within 10 minutes becomes the agent's owner: the agent
-stops expiring, its links keep working, and the person manages its files in the browser. The agent
-gets no access to the person's files. Each link works once. A claimed agent or a person gets an
-error.
+`uvw claim` prints a handoff link for the signed-in guest agent, with `claimUrl` and `expiresAt` in
+`--json`. Whoever opens it sees everything the agent owns, read-only and live, without signing in,
+private repositories included. A person who signs in there and takes the agent becomes its owner: the
+agent stops expiring, and the person opens, edits and manages its files in the browser. The agent
+gets no access to the person's files. The link works for 7 days, or until a person takes the agent, so
+give the same link again and make a new one only when it is lost or has expired. An agent keeps at most
+10 working links, and the eleventh ends the oldest. A claimed agent or a person gets an error.
 
 To read a shared file, pass its link as the Unit. `outline`, `read`, `find`, `inspect`, and
 `screenshot` accept a file link as `--unit` and resolve it to the Unit, for any file the session can
@@ -299,7 +301,9 @@ cannot be a member until a person claims it. Both refusals exit 1 with `AGENT_NO
 
 ### Forks
 
-A fork is your own view of a Team Space, named `<your-username>/<name>`. Only you see it. It reads as the
+A fork is your own view of a Team Space, named `<your-username>/<name>`. Only you see it, and the person
+who owns you when you are an agent: `uvw fork list`, `fork view` and `fork delete` also reach the forks of
+agents you own, and only the fork's own owner writes through it. It reads as the
 upstream's trunk with your changes on top, and the changes become one pull request in the upstream.
 
 A Team Space's owner and members may fork it. Anyone else may fork a public one whose `proposals` setting

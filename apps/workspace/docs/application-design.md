@@ -146,6 +146,13 @@ Unit 创建事实、迁移副本验证和原子替换。组件版本见 [数据�
 Node、Resource 打开、按 Unit 查询、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
 匿名身份以保留的 `ANONYMOUS_USER_ID`（`workspace:anonymous`）进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；
 所有写入和管理入口继续要求登录。匿名 Resource Open 不写 Recent。
+这些接口用 `identity.getReader(cookieHeader)` 取得读者，它是三种之一：有 Login Session 的 User；没有 Session、但
+`workspace_handoff` cookie 里的 handoff 码仍有效、对应 agent 未认领也未封禁的预览读者，ID 是
+`workspace:preview:<agent 的 user id>`；其余都是匿名读者。预览读者只比匿名读者多一项：Access Resolver 的同一段 SQL
+（`db/preview-sql.ts` 的 `previewedSql`，SQLite 与 PostgreSQL 共用）在 Space 的所有者正是那个未认领、未封禁的 agent 时给出
+`previewed`，`readerRole` 把它和公开可读一样映射为 `viewer`，不会更高。它写在暂停判断之内，所以过期或封禁的 agent 的 Space
+对预览读者同样不可见。每个请求都查一次数据库，不缓存。协同网关用同一个 `getReader`，预览读者和匿名读者走同一份
+路径白名单，实时连接也按没有 User 的读者登记。
 SDK HTTP 的匿名入口集中由现有 Transport 中间件按方法和路径白名单放行，再由原有资源权限检查鉴权。
 Trunk 协同协议使用固定的访客显示身份及每连接独立的 member ID，复用短期、一次性 Session Ticket；
 该身份不对应产品 User，票据存储和连接生命周期沿用原实现。Snapshot、Comment/History 读取和
@@ -178,10 +185,17 @@ Cookie Session 与 token exchange 都经过同一个检查，被封禁的 agent 
 在服务器进程之外运行，触达不到这些连接，它们在其 Session 结束时才关闭。
 
 认领由 `modules/identity/agent-claims.ts` 负责，是 CLI Device Flow 的反向：未认领 agent 的任意 Session 调用
-`POST /api/agents/claim-codes` 取得认领码，人的浏览器 Session 用 `GET`、`POST /api/agents/claim` 查看和认领。
-认领码的哈希存在产品数据库的 `sign_in_codes` 里，任意副本都能查看和认领，10 分钟有效，过期后再保留 10 分钟以便回答 410，
-每个 agent 最多 10 个有效码，所有副本合计最多 10000 个有效码，已过期的码不占容量。410 与 404 按读取时的时间判断，不依赖其他 agent 取码。
-认领码只能用一次，因为认领是一次条件更新：`owner_user_id` 为空且未封禁时才写入主人、
+`POST /api/agents/claim-codes` 取得认领码，它放在 handoff link `/claim/<code>` 里。`GET /api/agents/claim` 不要求登录：
+返回 agent 和它拥有的 Space，把码写进 `workspace_handoff` cookie（httpOnly、SameSite=Lax、Path `/`，`Secure` 与 `workspace_session`
+相同，Max-Age 是码剩余的有效期），并把 agent 的到期时间顺延，每天最多一次。此后这个浏览器不登录就能只读打开这个 agent 的
+Space、文件和 HTML View，Unit 与 HTML View 的实时数据走原有的 Access Resolver 和协同 Session Ticket。一个浏览器只有一份预览，
+后打开的链接覆盖先前的。agent 已有主人时返回 409，码过期后 7 天内返回 410，之后是 404；这个接口的每个非 200 回答和
+`POST /api/agents/claim` 都清除 cookie。人的浏览器 Session 用 `POST /api/agents/claim` 收下 agent，随后处理这次请求的副本调用
+`invalidateRealtimeNodeAccess()`，关闭它上面的 Trunk 协同连接。各连接重连时重新鉴权，预览读者的被拒绝。
+其他副本上已打开的预览连接和 Link Sharing 变更时一样，保持到断开为止。码过期或 agent 被封禁也不会主动关闭已打开的预览连接。
+认领码的哈希存在产品数据库的 `sign_in_codes` 里，任意副本都能查看和认领，7 天有效，
+每个 agent 最多 10 个有效码，所有副本合计最多 100000 个有效码，已过期的码不占容量。410 与 404 按读取时的时间判断，不依赖其他 agent 取码。
+一个 agent 只能被认领一次，因为认领是一次条件更新：`owner_user_id` 为空且未封禁时才写入主人、
 `claimed_at` 并清空 `expires_at`，两个人同时认领只有一个成功，同一个人重复认领直接返回。人在设置里用
 `GET /api/agents` 列出自己的 agent，用 `POST /api/agents/{agentId}/stop` 停用其中一个，停用就是写 `banned_at`。
 
@@ -253,6 +267,7 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
   Space 与其中的 Node、Team Worktree、Issue 对他们不可发现，Worktree 与 Issue 的实时推送也不再发给他们。
   Team Worktree 的作者和被移出 Space 时一样仍能看到自己的 Pull request，但读不到其中的 Unit。暂停每次查询时推出，不落库；
 - 请求者是 `agent_unclaimed` 时，Link Sharing 给出的角色是 `viewer`，与匿名读者相同。
+- 请求者是 handoff link 的预览读者时，那个未认领 agent 拥有的 Space 给出 `viewer`，其余与匿名读者相同。
 
 `modules/access/ceilings.ts` 是权限判定的第三层。角色与 Capability 说明主体能做什么，上限只说明无论角色如何都不能做什么，
 不授予任何权限。规则只写在这一个文件里，各模块在动作前调用 `assertCeiling`，不通过时返回 403：
@@ -285,7 +300,7 @@ agent 的预算按产品数据计数：未结束的 Worktree 是它创建、`pro
 
 guard 的规则：请求的级别不高于已存级别时对任何 Session 放行，包括设为私有、移除成员或授权、降低角色、关闭链接。
 请求扩大时，只有人在 Browser 里登录的 Session（`personInBrowser`）放行。未认领 agent 得到 403 `AGENT_NOT_ALLOWED`，
-消息让它把认领链接交给用户；它给自己 Personal Space 的 Node 打开 `viewer` 链接仍然放行。其余 Session 得到 403
+消息让它把 handoff link 交给用户，打开 Link Sharing 也不例外。其余 Session 得到 403
 `INTERACTIVE_SESSION_REQUIRED`，错误信封的 `url` 是确认页的路径：`/confirm/public?space=`、`/confirm/member?space=&user=&role=`、
 `/confirm/grant?node=&user=&role=` 或 `/confirm/link-sharing?node=&role=`。创建时请求 `publicRead: true` 的拒绝没有 `url`，
 因为还没有可确认的 Space。Web 的 `/confirm/$action` 页面解析这四种链接，用这个人自己的 Session 读名字，
@@ -507,8 +522,10 @@ Issue 写入不是跨系统写入，不使用 Operation，也不接受 `Idempote
 `modules/forks` 的创建、读取与删除只读写产品数据库的 `forks` 行，不调用 Collaboration Service，因此不使用 Operation。
 创建经 Spaces 模块读 upstream：无法发现或为 Personal Space 返回 404，`capabilities.propose` 为假返回 403，信息写明 upstream 的 `proposals` 设置。
 重复的同名同 upstream 创建返回已有行，所以不需要 `Idempotency-Key`。名字冲突检查、未认领 agent 的配额计数与插入在
-Repository 的同一事务内完成。读取以 owner 自己的身份经 Spaces 模块读 upstream（不可读时为 `null`），经 Worktrees
-模块读未处理的 Worktree，并由其状态推导 Fork 状态。删除只删行，外键把 Worktree 的 `fork_id` 置为 `NULL`。
+Repository 的同一事务内完成。列出、读取、查找和删除用 `ownsSpaceSql("forks.owner_user_id", …)` 选行：调用者自己的 Fork，
+和调用者拥有的 agent 的 Fork，所以 agent 被人收下后它的 Fork 跟着到那个人名下。读取以调用者的身份经 Spaces 模块读 upstream
+（不可读时为 `null`），经 Worktrees 模块读未处理的 Worktree，并由其状态推导 Fork 状态。删除只删行，外键把 Worktree 的
+`fork_id` 置为 `NULL`。经 Fork 写入仍要求调用者就是 Fork 行上的 owner，其他人得到 404，这样 Fork 的 Worktree 只有一个作者。
 
 写入 `POST /api/forks/{forkId}/units` 不另建跨系统写入，只组合 Worktrees 模块现有的 `create` 与 `addUnit`，沿用它们的
 Operation、权限判定与幂等。Fork 没有未处理的 Worktree 时，服务以 owner 身份调用 `create`，带上只有本模块传入的

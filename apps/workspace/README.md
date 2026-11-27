@@ -277,7 +277,7 @@ A static OAuth client still needs a person signed in. A browser without one goes
 with `requiresConsent`, such as the Workspace Agent or the Space plugin, then gets its consent page with Allow
 and Deny, and any other static client gets its code at once.
 
-While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
+While an agent is unclaimed, authenticating it or opening its handoff link moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still
 authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
@@ -289,16 +289,29 @@ server, so a collaboration socket the agent already holds stays open until its s
 agent's token exchange for up to 30 seconds, so for that long a banned claimed agent's token still gets an answer from tools
 that do not call Workspace, such as `api_find`. It reads an unclaimed agent from its session on every request.
 
-A person claims an agent to keep its files. The unclaimed agent calls `POST /api/agents/claim-codes`,
-which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (`/claim/<code>` on this
-origin) to the person. The code lasts ten minutes and claims the agent once. The product database holds
-its hash, so any server replica accepts it and a restart keeps it. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
-claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
-CLI login and a token session get `403 INTERACTIVE_SESSION_REQUIRED`. On that `403` the page offers Sign out
-and continue, for a browser that holds an agent's cookie. It signs out and shows sign-in on the same page,
-which comes back to the claim link. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
-the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
-code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
+An unclaimed agent shows its work with one handoff link, and a person takes the agent there to keep its files.
+The agent calls `POST /api/agents/claim-codes`, which returns `201` with `{ code, claimUrl, expiresIn }`, and
+gives `claimUrl` (`/claim/<code>` on this origin) to the person. The code lasts seven days, or until a person
+takes the agent. The product database holds its hash, so any server replica accepts it and a restart keeps it.
+
+The page reads `GET /api/agents/claim?code=`, which needs no session. It returns the agent and the Spaces it
+owns, moves the agent's expiry, and stores the code in the `workspace_handoff` cookie: httpOnly, `SameSite=Lax`,
+`Secure` whenever `workspace_session` is, and gone when the code expires. A request with that cookie and no
+session reads the agent's Spaces, files and HTML Views as a viewer, with live data, and reads everything else as
+an anonymous visitor does. The server checks the code and the agent in the database on every request and every new
+realtime connection, so the preview ends on every replica once a person takes the agent, the agent is banned or the
+code expires. The replica that handles the claim also closes the Trunk collaboration connections it holds, which reconnect and
+are authorized again; a preview connection that another replica holds stays open until it drops, as after a Link
+Sharing change. Neither an expired code nor a ban closes a preview connection that is already open. A browser
+holds one preview, and opening another handoff link replaces it. A session always wins over the cookie, so a
+signed-in person sees the summary only and reads the files after taking the agent.
+
+`POST /api/agents/claim` `{ "code" }` takes the agent. It needs a person's browser session: an agent, a
+CLI login and a token session get `403 INTERACTIVE_SESSION_REQUIRED`, and the page then offers Sign out
+and continue, for a browser that holds an agent's cookie. Once an agent has an owner, its code answers
+`409 AGENT_ALREADY_CLAIMED` to anyone but that owner, signed out included. A code older than seven days answers
+`410 AGENT_CLAIM_EXPIRED`, and an unknown code or one older than fourteen days `404 AGENT_CLAIM_INVALID`. Each of
+these answers clears the cookie, and so does a claim. Claiming sets `owner_user_id` and
 `claimed_at` and clears the expiry. The claimer becomes an owner of the agent's Personal Space and
 of every Team Space the agent creates, before or after the claim, and manages them in the browser; the agent gets no access to the claimer's files. The claimer also
 decides the agent's pull requests: they can mark one ready, reopen, merge or discard it, in the browser,
@@ -340,8 +353,8 @@ code without `url`, because no Space exists to confirm. The server compares the 
 inside the write's own transaction. A write that keeps or lowers the stored access therefore passes for every
 session: making a Space private, removing a member or a grant, lowering a role, turning a link off, or repeating
 a role already held. An unclaimed agent has no person to confirm for it and gets `AGENT_NOT_ALLOWED`, with a
-message telling it to give the user a claim link. It can still turn on a viewer link for a file in its own
-Personal Space.
+message telling it to give the user its handoff link. That includes turning on a link for its own file. A link it
+turned on before this rule keeps working until the agent expires.
 
 The confirm page reads the Space, file and user names with the person's own session and shows no text from the
 link. It states the consequence, shows the current and the new access, and offers Confirm and Give up. Confirm
@@ -490,10 +503,10 @@ loop count.
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
 `source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
-claim page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
+handoff page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
 otherwise. OAuth sign-ups carry `returnTo` through the provider. Password and email sign-ups read it
-from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the claim page
-itself, which has its own sign-in form. The claim code is never logged, here or in request logs.
+from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, which is where the handoff
+page sends a visitor to sign in. The claim code is never logged, here or in request logs.
 
 Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
 these fields:
@@ -589,6 +602,8 @@ viewer access, even when a link grants editors access after sign-in. They cannot
 modify source content, write comments, upload, manage permissions, or access Worktrees.
 An unclaimed agent also gets only viewer access from a link.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
+A signed-out visitor who opened an unclaimed agent's handoff link also views everything that agent owns,
+as [CLI sign-in and Agent access](#cli-sign-in-and-agent-access) describes.
 
 A signed-out visitor sees a bar under the header on every file and folder page, and in the
 immersive view in place of the header. It names the author, the owner of the Personal Space,
@@ -612,10 +627,9 @@ reader cannot open one of those Sheets, nothing is copied. A signed-out visitor 
 to a copy: sign up, and the copy is made on return, or hand a short English prompt to their own
 agent, with the same two ways as `Hand to my agent`. Through MCP the agent copies the file into a
 pull request with `unit_create` and `from`, which needs no `read`; through `uvw` it uses
-`uvw unit create --from`. Either way it merges the pull request and gives the visitor a claim
-link that makes the copy theirs, and the copy's link. Both prompts have the agent tell
-the visitor to open the claim link first: the copy is theirs to edit once they claim it, and until then its link opens
-only if the agent shared it. An agent cannot copy a page, so for a page the dialog
+`uvw unit create --from`. Either way it merges the pull request and gives the visitor its handoff
+link. Both prompts have the agent tell the visitor to open the handoff link first: the copy shows there
+without signing in, and is theirs to edit once they sign in and take the agent. An agent cannot copy a page, so for a page the dialog
 offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only
 the sign-up return it was asked from makes it.
 
@@ -647,8 +661,7 @@ The Vite development server does not generate these previews.
 
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
-Serving the page of a file that an unclaimed agent owns moves that agent's expiry, at most
-once a day. A banned or expired agent's links answer as not found.
+A banned or expired agent's links answer as not found.
 The public link uses the existing Node URL, including immersive-view parameters.
 Each read request and Unit join checks current permissions. Link Sharing changes
 retain the existing realtime connection invalidation. Space public-read changes,
@@ -798,7 +811,8 @@ same SQLite file.
 A fork is a User's named view of a Team Space they can propose in: its owner, the human who claimed its agent
 owner, a Space Member of any role, or a reader its `proposals` setting admits. `POST /api/forks` takes `{ upstreamSpaceId, name }` and writes one `forks`
 row. It copies no Node, Resource, Unit, Blob or Collaboration data. `GET /api/forks`, `GET /api/forks/lookup?owner&name`,
-`GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve only the fork's owner. A fork's name shares the
+`GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve the fork's owner and the person who owns that
+agent, so a fork follows its agent to whoever takes it. Only the fork's own owner writes through it. A fork's name shares the
 owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). `POST /api/forks/{forkId}/units` writes a Unit
 through the fork, and `POST /api/forks/{forkId}/worktree` opens or returns the fork's Worktree for a write that adds no
 Unit, such as an HTML View draft. Its first write opens the fork's one Team Worktree in the upstream, and the fork's `state` follows

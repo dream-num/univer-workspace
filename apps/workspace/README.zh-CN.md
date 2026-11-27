@@ -88,13 +88,13 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 `GET /api/auth/authorize` 对 DCR 和 CIMD 客户端返回连接页，页面有两种状态。会话的 User 是 Agent 时按没有会话处理，页面也不动它的 Cookie，所以 Agent 的 Cookie 不会让客户端以这个 Agent 的身份连接。没有人登录时，页面提供 **Sign in to connect**（登录后回到同一个地址）、指向客户端回调并带 `access_denied` 的 **Deny** 链接，以及开启访客 Agent 时的 **Try without signing in**。这个按钮是一个表单，把授权请求的查询字符串作为 `oauthAuthorization` 提交给 `POST /api/auth/authorize/guest`。该接口以 `303` 跳回客户端回调，带上新访客 Agent 的授权码，或授权页本会发给客户端的 OAuth 错误。它不读取会话，也不设置 Cookie，浏览器保持未登录。请求包含 `write` 时，授权码带 `read write publish worktree:merge`，否则只带 `read`。不能交给客户端的错误显示为一个 HTML 页面，写明错误码并链接回连接页。Workspace Agent 等静态 OAuth 客户端需要人登录，返回 `400`，未知客户端和未登记的 `redirect_uri` 同样返回 `400`（客户端元数据文档暂时无法获取时返回 `503`）。已达创建上限的来源看到的按钮不可点，并写明原因，仍然提交时在获取任何内容之前返回 `429`。客户端兑换授权码之前不会创建任何 Agent。CIMD 客户端的元数据文档在显示页面之前获取，没有人登录且开启了访客 Agent 时匿名获取。服务端同时最多运行 32 个元数据获取，匿名获取最多发起其中 8 个，每个来源同时只有一个，登录用户的授权始终保留其余 24 个。每个来源每小时最多发起 10 次匿名获取，失败或超时的也计入；命中缓存或加入已在进行的获取不计次数。匿名获取被拒绝时浏览器转到登录页；关闭访客 Agent 时，未登录的 CIMD 请求也转到登录页，不获取任何内容。试用表单提交时在同样的限制下再解析一次客户端：用完每小时次数的来源返回 `429`；匿名获取全部占用，或该来源已有另一个获取在进行时，返回带 `Retry-After` 的 `503 CLIENT_METADATA_BUSY`，不获取任何内容。该客户端在动态注册记录或客户端元数据文档中给出名称时（Claude Code 属于后者），服务端以该名称为访客命名，例如 `Claude Code · 7f3k`，同一客户端的多个 Agent 仍可区分。名称遵循显示名规则：不含邮箱地址，不含控制、不可见或改变书写方向的字符，最多 40 个字符。客户端没有名称时，访客名为 `agent`。
 
-未认领的 Agent 每次认证或有人访问其 `/nodes/:nodeId` 页面时，到期时间会延至 30 天后，每天最多续期一次。Agent 到期或被封禁后，其个人空间和团队空间仅自己和认领人可读，其他人打开其链接会收到“未找到”。无论上次活跃距今多久，到期 Agent 再次认证即可恢复。被封禁的 Agent 认证时返回 `401`，兑换令牌返回 `invalid_grant`。运行 `pnpm db:ban-agent <username or user id>` 可封禁 Agent，生产构建使用 `db:ban-agent:production`。该命令只接受 Agent，重复执行不会再次变更状态。参数既是一个用户的 ID、又是另一个用户的用户名，或同时是两个仅大小写不同的用户 ID 时（两者都忽略大小写比较），命令按匹配的标识列出每个用户并拒绝执行，换用另一个标识即可。既有协同连接保持到会话结束。MCP 网关最多缓存令牌兑换结果 30 秒，此期间，`whoami` 等不访问 Workspace 的工具可能仍会响应已封禁的令牌。
+未认领的 Agent 每次认证或有人打开它的交接链接（handoff link）时，到期时间会延至 30 天后，每天最多续期一次。未认领的 Agent 用 `POST /api/agents/claim-codes` 取得交接链接 `/claim/<code>`，7 天内有效。打开它不需要登录：浏览器把码存在 httpOnly 的 `workspace_handoff` cookie 里，此后没有登录会话的请求可以只读查看这个 Agent 拥有的空间、文件和 HTML View，数据是实时的，其他内容与匿名访客相同。服务端每个请求和每次新建实时连接都在数据库里核对码和 Agent，所以有人收下 Agent、Agent 被封禁或码过期后，预览在所有副本上结束；处理收下请求的副本还会立刻关闭它上面的 Trunk 协同连接，重连时重新鉴权，其他副本上已打开的预览连接保持到断开，码过期或 Agent 被封禁也不会主动关闭已打开的预览连接。人在这个页面登录后用 `POST /api/agents/claim` 收下 Agent；已登录的会话优先于 cookie，登录的人收下之后才能打开文件。Agent 有主人之后，别人打开链接收到 `409 AGENT_ALREADY_CLAIMED`。Agent 到期或被封禁后，其个人空间和团队空间仅自己和认领人可读，其他人打开其链接会收到“未找到”。无论上次活跃距今多久，到期 Agent 再次认证即可恢复。被封禁的 Agent 认证时返回 `401`，兑换令牌返回 `invalid_grant`。运行 `pnpm db:ban-agent <username or user id>` 可封禁 Agent，生产构建使用 `db:ban-agent:production`。该命令只接受 Agent，重复执行不会再次变更状态。参数既是一个用户的 ID、又是另一个用户的用户名，或同时是两个仅大小写不同的用户 ID 时（两者都忽略大小写比较），命令按匹配的标识列出每个用户并拒绝执行，换用另一个标识即可。既有协同连接保持到会话结束。MCP 网关最多缓存令牌兑换结果 30 秒，此期间，`whoami` 等不访问 Workspace 的工具可能仍会响应已封禁的令牌。
 
 共享 MCP 执行层在同一个容器里为所有用户运行脚本，因此由运维决定谁能使用。运行 `pnpm db:executor-access grant <username or user id>` 授权，`revoke` 撤销，`list` 列出已授权的用户，没有时提示无人获得授权；生产构建使用 `db:executor-access:production`，运行时镜像内执行 `node dist/server/db/executor-access.js`。重复授权或撤销不会再次变更状态，参数同时指向两个用户时与 `db:ban-agent` 一样拒绝执行。没有任何 HTTP 接口能修改授权，用户和 Agent 都不能给自己授权。已授权用户的 `GET /api/session` 返回 `executorAccess: true`，令牌兑换返回 `executor_access: true`，未授权时不返回该字段。MCP 设置 `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` 后，网关和执行层约 30 秒后跟随授权变化，无需重启。MCP 从 `*` 或用户 ID 列表切换到 `workspace` 之前，先授权当前使用执行层的用户，`workspace` 不放行其他人。
 
 以下限制适用于所有角色，违规返回 `403`。Agent 可以创建团队空间，并成为它的所有者。未认领的 Agent 不能成为团队空间成员。已认领的 Agent 在人持有的团队空间里可以是查看者或编辑者，在 Agent 持有的团队空间里还可以是管理员（`AGENT_NOT_ALLOWED`）。未认领的 Agent 最多持有 3 个团队空间，在它的全部空间里最多保留 20 个文件（含未完成 Pull request 中的新建文件），单个文件最多 10 MiB（`AGENT_QUOTA_EXCEEDED`），通过链接分享最多获得查看者（Viewer）权限。用户搜索结果不含未认领或已停用的 Agent，未认领 Agent 发起搜索会收到 `AGENT_NOT_ALLOWED`。不是团队空间成员的提议者在一个团队空间里最多同时有 3 个未处理的 Team Worktree（`FORBIDDEN`）。每个 Agent，无论是否认领，最多同时有 10 个未结束的 Pull request，任意 24 小时内最多发起 50 次合入（`AGENT_QUOTA_EXCEEDED`），`GET /api/session` 的 `budget` 显示用量。真人用户没有这项预算。
 
-只有人在浏览器里登录 Workspace 时，才能让更多人看到数据。这类修改有四种：公开空间，添加团队空间成员或提高成员角色，把文件分享给某个用户或提高其角色，打开 Link Sharing 或把它提高到编辑者。服务端先检查 capability，没有 `manageMembers` 或 `share` 的调用者照旧收到 `FORBIDDEN`。其他会话发起这类修改时，服务端什么都不改，返回 `403 INTERACTIVE_SESSION_REQUIRED`，`error.url` 是确认页的路径：`/confirm/public?space=`、`/confirm/member?space=&user=&role=`、`/confirm/grant?node=&user=&role=` 或 `/confirm/link-sharing?node=&role=`。其他会话指 Agent、CLI 登录（包括 Workspace Agent 和 Space 插件的会话）以及为令牌签发的会话。创建时就公开的空间返回同样的 code，但没有 `url`，因为还没有可确认的空间。服务端在写入所在的事务里把请求和已存状态做比较，所以保持或收窄已存权限的写入对任何会话都放行：把空间设为私有，移除成员或授权，降低角色，关闭链接，或重复已有的角色。未认领的 Agent 没有可以替它确认的人，收到 `AGENT_NOT_ALLOWED`，消息让它把认领链接交给用户。它仍然可以给自己 Personal Space 里的文件打开查看者链接。
+只有人在浏览器里登录 Workspace 时，才能让更多人看到数据。这类修改有四种：公开空间，添加团队空间成员或提高成员角色，把文件分享给某个用户或提高其角色，打开 Link Sharing 或把它提高到编辑者。服务端先检查 capability，没有 `manageMembers` 或 `share` 的调用者照旧收到 `FORBIDDEN`。其他会话发起这类修改时，服务端什么都不改，返回 `403 INTERACTIVE_SESSION_REQUIRED`，`error.url` 是确认页的路径：`/confirm/public?space=`、`/confirm/member?space=&user=&role=`、`/confirm/grant?node=&user=&role=` 或 `/confirm/link-sharing?node=&role=`。其他会话指 Agent、CLI 登录（包括 Workspace Agent 和 Space 插件的会话）以及为令牌签发的会话。创建时就公开的空间返回同样的 code，但没有 `url`，因为还没有可确认的空间。服务端在写入所在的事务里把请求和已存状态做比较，所以保持或收窄已存权限的写入对任何会话都放行：把空间设为私有，移除成员或授权，降低角色，关闭链接，或重复已有的角色。未认领的 Agent 没有可以替它确认的人，收到 `AGENT_NOT_ALLOWED`，消息让它把交接链接交给用户，给自己的文件打开链接也不例外。它在这条规则之前打开的链接保持有效，直到 Agent 过期。
 
 确认页用这个人自己的会话读取空间、文件和用户的名字，不显示链接里的任何文字。页面说明后果，显示当前权限和修改后的权限，只有“确认”和“放弃”两个按钮。确认调用的是被拒会话调用的同一个接口，所以这个人需要同样的 capability。未登录或以 Agent 身份登录的浏览器会先被要求以人的身份登录。
 
@@ -172,7 +172,7 @@ UNIVER_LICENSE_KEY=<licenseKey.txt 的内容>
 
 除 `http_request_duration_seconds` 外，四个计数器度量传播回路：`workspace_link_sharing_changes_total`（Link Sharing 打开或关闭）、`workspace_share_page_views_total`（服务端渲染的分享页 `GET` 加载，含 `304` 再验证，不含 `HEAD`）、`workspace_signups_total`（注册，按方式和来源）、`workspace_guest_agents_created_total`（访客 agent，按入口）。标签保持低基数。每次计数另写一行 `event` 为 `workspace.*` 的 `info` 日志，Node ID、用户 ID 和 User-Agent 只出现在日志里。标签取值和日志字段见英文版 README。
 
-已知局限：密码和邮箱注册从 `/login` 页或认领页同源请求的 `Referer` 读取 `source`，客户端或代理去掉 `Referer` 时记为 `direct`。注册后的页面重载和文件所有者自己打开分享页都计为 `signed_in`。`off` 事件的 `role` 是设置中保存的角色，没有实际含义。计数不阻塞页面返回，计数失败时页面照常返回，这次打开不计入，服务端记一条警告日志。
+已知局限：密码和邮箱注册从 `/login` 页同源请求的 `Referer` 读取 `source`，客户端或代理去掉 `Referer` 时记为 `direct`。注册后的页面重载和文件所有者自己打开分享页都计为 `signed_in`。`off` 事件的 `role` 是设置中保存的角色，没有实际含义。计数不阻塞页面返回，计数失败时页面照常返回，这次打开不计入，服务端记一条警告日志。
 
 ## 常用命令
 
@@ -221,18 +221,18 @@ pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.
 
 ## 匿名访问
 
-节点开启链接分享，或所在空间开启公开读取后，持有节点链接的人即可查看内容。文件夹分享涵盖现有和将来的子项；公开空间可通过 URL 浏览。即使链接允许登录用户编辑，匿名访客和未被认领的 Agent 通过链接也只有查看权限，无法修改源内容、评论、上传、管理权限或访问 Worktree。HTML 文件与其绑定的来源 Sheet 分别鉴权。
+节点开启链接分享，或所在空间开启公开读取后，持有节点链接的人即可查看内容。文件夹分享涵盖现有和将来的子项；公开空间可通过 URL 浏览。即使链接允许登录用户编辑，匿名访客和未被认领的 Agent 通过链接也只有查看权限，无法修改源内容、评论、上传、管理权限或访问 Worktree。HTML 文件与其绑定的来源 Sheet 分别鉴权。打开过未认领 Agent 交接链接的未登录访客，还能只读查看这个 Agent 拥有的全部内容。
 
 未登录访客在每个文件和文件夹页面的顶栏下方看到一条栏；在沉浸视图中，这条栏取代顶栏。栏中写明作者，即文件所在 Personal Space 的所有者，并把无人认领的 Agent 标为“未验证的 Agent”。文件被复制过后，这条栏显示副本数；所有者在“分享”对话框的链接访问状态旁看到同一个数字。“使用 Univer Workspace 制作”链接到 GitHub 仓库，较宽的屏幕上还显示 `space.univer.ai`。“举报”打开一个对话框，把原因发送到 `POST /api/nodes/{nodeId}/reports`。“交给我的 Agent”打开一个对话框，提供一段交给读者自己 Agent 的简短英文提示词，有两种方式。默认选中的“MCP（推荐）”给出要添加到 Agent 的本实例 MCP 地址，提示词让 Agent 用 `read` 或 `inspect` 读取文件，服务器隐藏这两个工具时，提示词让 Agent 如实告诉读者，并像下文的“Remix”一样为读者复制一份可在浏览器中编辑的副本，复制不成再指向命令行。“命令行（uvw）”给出读取文件的 `uvw` 访客命令。沉浸视图中的这条栏还提供注册、登录和复制链接，并且可以收起。已登录用户打开别人 Personal Space 里的文件时，在 Workspace 顶栏下方看到同一条栏，但不含注册、登录和复制链接。所有者和团队空间成员只看到 Workspace 顶栏。
 
-栏中的“Remix”把文件复制到已登录读者的个人空间并打开副本。页面会连同它绑定的 Sheet 一起复制，页面副本改为绑定这些 Sheet 的副本；读者无法打开其中任一 Sheet 时，什么都不会复制。未登录访客有两种方式得到副本：注册，回来后自动复制；或者把一段简短的英文提示词交给自己的 Agent，方式与“交给我的 Agent”相同。通过 MCP 时，Agent 用带 `from` 的 `unit_create` 把文件复制进一个 PR，不需要 `read`；通过 `uvw` 时用 `uvw unit create --from`。两种方式都会合并这个 PR，再给访客一个认领链接，认领后副本归访客所有；通过 MCP 时还会给出副本的链接。两种提示词都让 Agent 告诉访客先打开认领链接：认领后副本归访客所有，可以编辑；认领之前，只有 Agent 分享了副本，它的链接才能打开。Agent 无法复制页面，因此对页面只提供注册。注册前请求的复制在当前标签页中保留 15 分钟，且只有发起它的那次注册返回才会执行。
+栏中的“Remix”把文件复制到已登录读者的个人空间并打开副本。页面会连同它绑定的 Sheet 一起复制，页面副本改为绑定这些 Sheet 的副本；读者无法打开其中任一 Sheet 时，什么都不会复制。未登录访客有两种方式得到副本：注册，回来后自动复制；或者把一段简短的英文提示词交给自己的 Agent，方式与“交给我的 Agent”相同。通过 MCP 时，Agent 用带 `from` 的 `unit_create` 把文件复制进一个 PR，不需要 `read`；通过 `uvw` 时用 `uvw unit create --from`。两种方式都会合并这个 PR，再把交接链接交给访客。两种提示词都让 Agent 告诉访客先打开交接链接：不用登录就能在那里看到副本，登录并收下 Agent 之后副本归访客所有，可以编辑。Agent 无法复制页面，因此对页面只提供注册。注册前请求的复制在当前标签页中保留 15 分钟，且只有发起它的那次注册返回才会执行。
 
 匿名访客和已登录的只读用户可以在 Workspace 浏览器内试算绑定了 Sheet 的 HTML 页面。首次编辑某个来源时，该来源断开协同连接，公式在访客浏览器中重新计算。试算结果只在本地生效，所有者后续的修改也暂时不会同步到这里。刷新后恢复实时数据。宿主会在首次编辑时显示试算提示，页面可通过 `window.univerWorkspace.getWriteMode(unitId)` 判断能否将修改标记为已保存。在 `/nodes/<nodeId>` 上，试算提示提供“保存我的版本”：它像“Remix”一样复制页面及其绑定的 Sheet 并打开副本，未登录访客需先注册。试算改动不会带进副本。原生 Office 预览对这些用户始终只读。Workspace Agent 等其他宿主需显式启用 HTML 试算，否则会拒绝写入。
 
 生产部署中，允许匿名访问的 `/nodes/<nodeId>` 链接（含 `?view=immersive`）在聊天预览里会显示页面标题和简短描述。HTML 视图的标题省略 `.univer.html` 后缀。描述按 `Accept-Language` 返回中文或英文，缓存按该请求头区分，沿用应用页面的重新验证策略。配置 `PUBLIC_ORIGIN` 后才会生成绝对地址 `og:url`，并按节点类型（Sheet、Doc、Slide、HTML 视图、文件夹或其他文件）附上一张 1200x630 的预览图，卡片为大图样式。未配置时两者都省略，因为 Open Graph 要求图片使用绝对地址，而请求的 Host 不可信。私有、已删除或不存在的节点显示通用应用页面。预览图是 `web/public/link-preview` 下的静态文件，可用 `node scripts/render-link-preview-images.mjs` 重新生成，需要 Google Chrome 和 ImageMagick。Vite 开发服务器不生成此类预览。
 
 升级后，原有分享设置继续生效。匿名访问不会创建账号、登录会话或最近访问记录，也无需变更 schema 或迁移数据库。
-访问未认领 Agent 拥有的文件页面会延后该 Agent 的过期时间，每天最多更新一次。被封禁或已过期的 Agent 所分享的链接返回“未找到”。
+被封禁或已过期的 Agent 所分享的链接返回“未找到”。
 
 公开链接沿用节点 URL 和沉浸视图参数。每次读取和加入 Unit 都会检查当前权限。更改链接分享设置会让现有实时连接失效；更改空间公开读取设置、移动或删除节点时，已有订阅可能持续接收更新，直至连接断开。重新连接时会再次鉴权。
 

@@ -2,21 +2,21 @@
 
 [English](agent-handoff-showcase.md)
 
-在 Univer Workspace 里，AI Agent 制作 office 文件，再交给人和其他 Agent。Agent 通过 MCP 或 `uvw` CLI 接入，在 Pull request 里创建 Sheet、Doc 或 Slide，再用链接分享结果。
+在 Univer Workspace 里，AI Agent 制作 office 文件，再交给人和其他 Agent。Agent 通过 MCP 或 `uvw` CLI 接入，在 Pull request 里创建 Sheet、Doc 或 Slide，再用一个链接把结果交出去。
 
 🤖 Agent 做文件，🧑 人在节点上做决定，链接把文件带到下一个人或 Agent 手里。
 
 ```mermaid
 flowchart TB
     Asst["🤖 你的 AI 助手<br/>以你的身份登录"] -- Pull request --> You
-    Guest["🤖 访客 Agent<br/>没有账号"] -- 文件链接和认领链接 --> You
-    You(["🧑 你<br/>认领 Agent<br/>合入、分享"]) -- 文件链接 --> Other(["🧑 别人<br/>交给 Agent<br/>合入、分享"])
+    Guest["🤖 访客 Agent<br/>没有账号"] -- 交接链接 --> You
+    You(["🧑 你<br/>收下 Agent<br/>合入、分享"]) -- 文件链接 --> Other(["🧑 别人<br/>交给 Agent<br/>合入、分享"])
     Other -- 文件链接 --> OtherAgent["🤖 别人的 Agent<br/>复制成新文件"]
     OtherAgent -- Pull request --> Other
     Other -. 新文件的链接 .-> Next(["🧑 下一个人"])
 ```
 
-下面的内容都已在 `main` 上可用。截图来自一个带示例数据的本地 Workspace，图中的访客 Agent 用 Claude Code 的客户端 ID 登录。
+下面的内容都已在 `main` 上可用。截图来自一个带示例数据的本地 Workspace，图中的访客 Agent 用 Claude Code 的客户端 ID 登录；交接页上的那个例外，它由 `uvw auth guest --label "Claude Code"` 创建。
 
 ## 开始之前
 
@@ -38,9 +38,9 @@ sequenceDiagram
     actor L as 🧑 Leo
     participant A as 🤖 Leo 的 AI 助手
     Note over G: 在 Pull request 里<br/>做 Sheet，自己合入
-    G->>M: share 和 claim：文件链接和认领链接
+    G->>M: claim：交接链接
     rect rgba(128, 128, 128, 0.25)
-    Note over M: 认领 Agent
+    Note over M: 打开链接看到 Sheet<br/>登录并收下 Agent<br/>打开文件的链接分享
     end
     M->>L: 发出文件链接
     rect rgba(128, 128, 128, 0.25)
@@ -58,9 +58,9 @@ sequenceDiagram
 | 决定                    | 谁，在哪里                                           | Agent 能不能做                                             |
 | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
 | 让 Agent 不用账号开始   | 在连接页上点 **Try without signing in** 的人，在浏览器里 | Agent 也可以自己运行 `uvw auth guest`                      |
-| 认领 Agent              | 打开认领链接的人，在浏览器里                         | 不能                                                       |
+| 收下 Agent              | 打开交接链接并登录的人，在浏览器里                   | 不能                                                       |
 | 审阅并合入 Pull request | 作者或认领人，在 Team Space 里还有能编辑的成员，在浏览器里或用 `uvw pr merge` | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
-| 打开链接分享            | 文件的所有者，在浏览器里或用 `uvw share`             | Agent 可以分享自己的文件。你的 AI 助手通过 MCP 不能        |
+| 打开链接分享            | 文件的所有者，在浏览器里。`uvw share` 和 `share` 返回一个确认链接，要在浏览器里打开 | 不能。已认领的 Agent 和你的 AI 助手把确认链接交给你，访客 Agent 改给交接链接 |
 | 公开一个空间            | 空间的所有者或管理员，在浏览器里或用 `uvw repo edit` | 不能。你的 AI 助手通过 MCP 也不能                          |
 | Remix 一份副本          | 已登录的人，在分享页                                 | Agent 用 `unit_create` 带 `from` 复制                      |
 | 把文件交给自己的 Agent  | 打开分享页的人，点 **交给我的 Agent**                | 拿到链接的 Agent 可以直接读取或复制                        |
@@ -86,13 +86,13 @@ Doc 或 Slide 用 `inspect`，并把 `target` 设为 `document` 或 `presentatio
 
 ## 没有账号的 Agent 也能开始工作
 
-**从未用过 Workspace 的 Agent 得到自己的名字和空间，创建文件，并返回一个说明谁能打开的链接。**
+**从未用过 Workspace 的 Agent 得到自己的名字和空间，创建文件，并返回一个能看到它成果的链接。**
 
 MCP 客户端打开的浏览器没有登录 Workspace 时，连接页提供 **Sign in to connect** 和 **Try without signing in**。点后者，客户端得到一个访客 Agent，浏览器保持未登录：
 
 ![没有人登录时的连接页。Claude Code (claude.ai) wants to work in Univer Workspace，页面提供 Sign in to connect，然后是 Try without signing in 和三行关于临时 Agent 的说明，最后是 Deny](images/agent-handoff/connect-signed-out.png)
 
-访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。服务器说明要求 Agent 在第一次回复里说明：它是访客 Agent，因为浏览器没有 Workspace 会话；登录后重新连接，就能以自己的账号连接；否则可以用 `claim` 返回的认领链接把它留下。它的 `whoami` 结果也写明这些。Agent 在 Pull request 里工作，合入后分享文件：
+访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。服务器说明和 `whoami` 结果都告诉它：它是一个临时 Agent，做完后用 `claim` 拿一个交接链接（handoff link）给用户。有些客户端不把服务器说明交给模型，所以 `whoami` 也写明这句话。Agent 在 Pull request 里工作，合入后生成交接链接：
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -100,7 +100,6 @@ unit_create { "worktree": "<worktree id>", "space": "<agent>/personal", "type": 
 execute     { "worktree": "<worktree id>", "unit": "<unitId>", "code": "<Facade code>" }
 pr_ready    { "repo": "<agent>/personal", "number": 1 }
 pr_merge    { "repo": "<agent>/personal", "number": 1 }
-share       { "node": "<nodeId>", "link": "viewer" }
 claim       {}
 ```
 
@@ -113,37 +112,32 @@ uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet -
 uvw execute --worktree <worktree id> --unit <unitId> --script budget.js
 uvw pr ready 1 -R <agent>/personal
 uvw pr merge 1 -R <agent>/personal
-uvw share <nodeId> --link viewer
 uvw claim
 ```
 
-MCP 的 `share` 返回链接和谁能打开它，并提示 Agent 调用 `claim`：
+`claim` 返回交接链接，`{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<7 天后>" }`，`uvw claim` 打印同一个链接。链接 7 天内有效，有人收下 Agent 后也随之结束，所以 Agent 再次给出的是同一个链接，只有链接丢了或过期了才重新生成。
 
-```text
-Q3 team budget  https://space.univer.ai/nodes/<nodeId>
-Link Sharing: viewer. Anyone with the link can read the file without signing in. The link stops working on 2026-12-18T15:23:53.488Z unless claude-code-g3wq stays active.
-To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.
-```
+交接链接是访客 Agent 展示成果的唯一方式。它不能打开链接分享、公开仓库或添加成员：服务端会拒绝，并告诉它把交接链接交给用户。
 
-然后 `claim` 返回认领链接，`{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<10 分钟后>" }`，只能用一次，10 分钟内有效。`uvw share` 打印同样的信息，措辞更简短，`uvw claim` 打印认领链接。
+在有人收下之前，访客 Agent 最多保留 20 个文件，每个不超过 10 MiB，文件 30 天不用会过期，文件上也标着 **未验证的 Agent**。它读不到任何人的私有文件，也不能加入团队空间。
 
-在有人认领之前，访客 Agent 最多保留 20 个文件，每个不超过 10 MiB，文件 30 天不用会过期，分享页也会把它标为 **未验证的 Agent**。它读不到任何人的私有文件，也不能加入团队空间。
+## 先看 Agent 的成果，再收下它
 
-## 认领 Agent，保留它的文件
-
-**人打开认领链接并登录，Agent 的文件和链接就会一直有效。**
+**打开交接链接的人不用登录，立刻就能看到 Agent 的成果，只读，数据是实时的。在那里登录后收下 Agent，它的文件就留下了。**
 
 ```mermaid
 flowchart TB
-    Guest["🤖 访客 Agent<br/>文件会过期<br/>标为未验证"] -- 认领链接 --> You(["🧑 你<br/>10 分钟内打开<br/>登录并认领"])
-    You --> Claimed["🤖 已认领的 Agent<br/>文件一直有效<br/>归你所有<br/>拿不到你的文件"]
+    Guest["🤖 访客 Agent<br/>文件会过期<br/>标为未验证"] -- 交接链接 --> Visitor(["🧑 你，未登录<br/>看到它的文件<br/>只读、实时"])
+    Visitor -- 登录后收下 --> Claimed["🤖 已认领的 Agent<br/>文件一直有效<br/>归你所有<br/>拿不到你的文件"]
 ```
 
-![访客 Agent Claude Code · g3wq 的认领页，显示它的用户名、1 个文件和将拥有它的账号](images/agent-handoff/claim-agent.zh-CN.png)
+![未登录时看到的访客 Agent Claude Code 的交接页，显示它的用户名、链接有效期、个人空间里的两个文件和"登录后收下"按钮](images/agent-handoff/claim-agent.zh-CN.png)
 
-认领页显示 Agent 的名字和文件数，点 **认领 Agent** 完成认领。认领链接只能用一次，Agent 可以用 `claim` 或 `uvw claim` 重新生成。
+交接页显示 Agent 的名字，并列出它拥有的空间和其中的文件。不用登录，你就能只读打开其中任何一个，私有仓库里的也可以，其中的 HTML View 实时读取它的 Sheet 数据。链接有效期内，浏览器一直保留这份预览：7 天，或者到有人收下 Agent 为止。
 
-认领之后，`share` 不再返回过期日期和认领提示，分享页也去掉 **未验证的 Agent** 标记。
+点 **登录后收下** 登录并回到这个页面，再点 **收下**，你就成为 Agent 的主人。随后页面打开 Agent 的成果所在的位置：只有一个团队仓库或个人空间有内容时打开它，分布在多处时打开按这个 Agent 筛选的仓库列表。你已登录时，页面只显示摘要，收下 Agent 之后才能打开文件。
+
+此后别人打开这个链接什么也看不到，页面只说明这个 Agent 已经有主人了。Agent 的文件不再过期，也去掉 **未验证的 Agent** 标记；想把某个文件发给别人时，你在浏览器里为它打开链接分享。
 
 ## 一个文件带来下一个
 
@@ -156,7 +150,7 @@ flowchart TB
     Person -- Remix --> PersonCopy[/"📄 个人空间<br/>里的副本"/]
     Agent -- unit_create 带 from --> AgentCopy[/"📄 Pull request<br/>里的副本"/]
     PersonCopy -. 分享 .-> Next(["🧑 下一个人"])
-    AgentCopy -. 合入后分享 .-> Next
+    AgentCopy -. 合入后<br/>由主人分享 .-> Next
 ```
 
 `unit_create` 带上 `from`，就会复制一个 Agent 能打开的文件，内容和图片一并复制。合入后的副本会记录来源，只有副本的所有者和编辑者能看到。
@@ -206,6 +200,6 @@ uvw pr merge 2 -R <agent>/personal
 
 - [AI agent 如何接入 Workspace](agent-sign-in.zh-CN.md)：OAuth、CIMD，以及第一次调用工具之前发生的事。
 - [Workspace MCP 服务](../apps/mcp/README.md)：所有工具及其参数和结果（英文）。
-- [Workspace CLI](../apps/cli/README.md)：访客 Agent、分享、认领和 Pull request（英文）。
+- [Workspace CLI](../apps/cli/README.md)：访客 Agent、交接链接、分享和 Pull request（英文）。
 - [Workspace CLI Skill](../skills/univer-workspace-cli/SKILL.md)：Agent 开始工作前读取的内容（英文）。
 - [HTML View 效果展示](html-view-showcase.zh-CN.md)：Agent 基于实时 Sheet 数据构建的页面。

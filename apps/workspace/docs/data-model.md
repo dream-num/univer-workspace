@@ -106,13 +106,19 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，没有主人时 `expires_at` 为创建后 30 天，
 不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
 
-agent 认证成功时 `last_active_at` 写为当前时间；未认领 agent 同时把 `expires_at` 写为 30 天后，Server
-送出它名下一个匿名读者可读的 `/nodes/:nodeId` 页面时也这样写。每个 agent 每天最多写一次，已过期的 agent
-认证成功时不受这个间隔限制。页面只在 Server 自己提供 Browser 构建产物时经过这一步，Vite 开发服务器送出的
-页面不顺延。
+agent 认证成功时 `last_active_at` 写为当前时间；未认领 agent 同时把 `expires_at` 写为 30 天后，有人打开它的
+handoff link（`GET /api/agents/claim`）时也这样写。每个 agent 每天最多写一次，已过期的 agent
+认证成功时不受这个间隔限制。打开它以前开启了 Link Sharing 的页面不再顺延。
 
 人认领 agent 时，一次条件更新在 `owner_user_id` 为空且 `banned_at` 为空时写入 `owner_user_id`、
 `claimed_at` 并把 `expires_at` 置空，所以同一个 agent 只能被认领一次。认领码的哈希存在 [`sign_in_codes`](#sign_in_codes) 里，认领不消耗它。
+认领码就是 handoff link 里的码。未认领、未封禁的 agent 的码在有效期内还是一份只读预览：浏览器把码放在
+`workspace_handoff` cookie 里，没有 Login Session 的请求带着它时，Server 以保留 ID `workspace:preview:<agent 的 user id>`
+进入 Access Resolver，对这个 agent 拥有的 Space 得到 `viewer`，对其他 Space 与匿名读者相同。这个 ID 没有 `users` 行，
+不能持有成员关系、Grant 或所有权，也不能写入。每个请求都重新查码和 agent，不在进程内存里缓存；agent 被认领、被封禁或码过期后，
+任意副本上的下一个请求和下一次实时连接起预览结束。处理认领的副本还会立刻关闭它上面的 Trunk 协同连接，它们重连时重新鉴权；其他副本上已打开的连接
+和 Link Sharing 变更时一样，保持到断开。码过期或 agent 被封禁不会主动关闭已打开的预览连接，它们同样保持到断开。
+同时带有 Login Session 的请求只按 Session 解析。
 登录的人在 MCP 连接页上以新 agent 连接时，兑换授权码经 `createAgent` 用同一条 INSERT 写入 `owner_user_id`、
 等于创建时间的 `claimed_at` 和为空的 `expires_at`，所以它和被这个人认领的访客 agent 状态相同，SQLite 与 PostgreSQL 的写法一样。
 连接页还列出这个人拥有、没有停用的 agent（最多 5 个，最近活跃的在前），选中其中一个时不创建 agent，授权码直接代表它。
@@ -379,7 +385,8 @@ Grant。
 
 Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访客与未认领 agent 固定为 `viewer`。
 策略同样按 Node 祖先链继承。
-Trigger 限制它只用于 Personal Space。
+Trigger 限制它只用于 Personal Space。未认领 agent 不能开启 Link Sharing 或提高它的角色（`AGENT_NOT_ALLOWED`），
+它用 handoff link 展示成果；它在此之前开启的行保持有效，随 agent 过期而失效。
 
 V24 追加两列，当前版本只建列，没有读写入口：`unverified_role`（`editor | viewer`，默认 `viewer`）为匿名访客与
 未认领 agent 的角色预留，Access Resolver 仍固定按 `viewer` 解析；`making_of_note`（可空）为作者自述的制作说明
@@ -387,7 +394,8 @@ V24 追加两列，当前版本只建列，没有读写入口：`unverified_role
 和随 Node 级联删除的约束，长度上限留给写入它的 Service，调整上限不需要重建表。
 
 匿名读取以保留 ID `workspace:anonymous` 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
-不创建 User、Login Session 或 Recent。匿名读取唯一的写入是上文 `agents` 的到期顺延。
+不创建 User、Login Session 或 Recent，读取本身不写入产品数据。带 handoff cookie 的预览读者在此之上多一项：对那个
+未认领 agent 拥有的 Space 是 `viewer`；打开 handoff link 时顺延 agent 的到期时间，见上文 [`agents`](#agents)。
 
 登录用户的有效 Role 由 Access Resolver 每次按以下来源计算最高权限：
 
@@ -484,7 +492,8 @@ SQLite 中 `name` 为 `TEXT COLLATE NOCASE` 并以 `UNIQUE (owner_user_id, name)
 `personal` 为保留字。创建 Fork 不复制任何 Node、Resource、Unit、Blob，也不写协同库；同一 owner 可以用不同名字多次
 Fork 同一 upstream，同名同 upstream 的重复创建返回已有 Fork。
 
-只有 Fork 的 owner 能列出、读取、按 `<owner>/<name>` 查找和删除它。创建要求调用者此刻能在 upstream 提议，即 upstream
+Fork 的 owner 和拥有这个 owner 的人（`agents.owner_user_id`）能列出、读取、按 `<owner>/<name>` 查找和删除它，所以 agent 被人
+收下后，它的 Fork 跟着到那个人名下；经 Fork 写入仍只有 Fork 自己的 owner 可以，配额也按行上的 owner 计数。创建要求调用者此刻能在 upstream 提议，即 upstream
 的 owner、认领了 agent owner 的人、任意角色的 Space Member，或 upstream 公开读取时其 `proposals` 设置接纳的读者；
 拒绝信息写明这个设置；未认领 agent 至多拥有 3 个 Fork（`AGENT_QUOTA_EXCEEDED`），
 计数与插入在同一事务内。删除 Fork 只删除这一行，upstream 不变，曾指向它的 Worktree 由外键置 `fork_id = NULL`，
@@ -1283,7 +1292,7 @@ advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回�
 
 登录流程里只用一次的码。四种码共用这张表，因为它们的形状相同：一个只存哈希的码、一个过期时间、一次性的使用状态和按种类的容量。
 `kind` 区分四种：`oauth_code`（OAuth authorization code，60 秒，包括连接页上 Try without signing in 签发的 guest 的码）、`consent`（连接页和 static client 同意页的 consent token，
-5 分钟）、`claim`（agent 认领码，10 分钟）和 `cli`（CLI 浏览器授权，10 分钟）。从 V36 起这些码不再存在进程内存里，一个副本签发的码
+5 分钟）、`claim`（agent 认领码，即 handoff link 里的码，7 天）和 `cli`（CLI 浏览器授权，10 分钟）。从 V36 起这些码不再存在进程内存里，一个副本签发的码
 任意副本都能兑换，重启不丢未过期的码。
 
 | 列 | 含义 |
@@ -1303,11 +1312,12 @@ advisory-lock 事务里建表并写入版本 15 和新指纹，失败整体回�
   看到 `replayed`，自己撤销。行保留到码过期，作为重放记录。校验不通过或创建 agent 被限速的兑换删除该行，不留重放记录。
 - static client 兑换 `oauth_code`、提交 `consent`、CLI 兑换 `cli` 时，`DELETE` 删到行的一方成功。
 - 批准 `cli` 是一条条件更新，`subject_user_id` 为空或已是批准人时才写入，所以第二个人批准得到 409。
-- 认领不消耗 `claim`：认领是 `agents` 上的条件更新，同一个人可以用同一个码重复打开页面。
+- 认领不消耗 `claim`：认领是 `agents` 上的条件更新，同一个人可以用同一个码重复打开页面。未认领期间，任何人都可以不登录
+  用同一个码重复打开页面，这个码同时是只读预览的凭据，见 [`agents`](#agents)。
 
-写入一个码时在一个事务里依次：删除本种类至多 100 个已过期的行（`claim` 过期后多留 10 分钟，用于回答 410）；`claim` 删除该 agent
+写入一个码时在一个事务里依次：删除本种类至多 100 个已过期的行（`claim` 过期后多留 7 天，用于回答 410）；`claim` 删除该 agent
 最旧的码，使它的有效码不超过 10 个；guest 的 `oauth_code` 先删除一分钟之前的 `guest_authorization` 行，同一来源一分钟内已有
-20 行时拒绝；guest 的 `oauth_code`、`claim` 与 `cli` 在本种类未过期的 `pending` 行达到 10000 时拒绝；最后插入，guest 的
+20 行时拒绝；guest 的 `oauth_code` 与 `cli` 在本种类未过期的 `pending` 行达到 10000 时拒绝，`claim` 活 7 天，上限是 100000；最后插入，guest 的
 `oauth_code` 同时写一行 `guest_authorization`。SQLite 用 `BEGIN IMMEDIATE`；PostgreSQL 用可串行化事务，冲突的一方重放后数到
 对方的行，删除过期行在事务之外。所以每种上限在所有副本间只有一份。来源的份额数一分钟内拿到的码，兑换不归还名额：码只活一分钟，
 一个地址默认每小时只能创建 5 个 agent，一次连接最多打开两次 authorize，所以正常使用到不了 20；而一个来源至多占 10000 个名额里的 20 个。没有后台清理：过期的行等同种类的下一次写入删除。`sign_in_codes_expiry (kind, expires_at, state)`

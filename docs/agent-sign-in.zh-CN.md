@@ -183,7 +183,7 @@ Workspace 返回一个连接页。页面写出客户端的名字，并列出客�
 
 除非部署关闭了访客 agent，页面还提供 **Try without signing in**。它让客户端得到一个访客 agent，而不是某个人。访客 agent 是新建的 agent 账号，名字取自客户端的名字（CIMD 文档的 `client_name`，或 DCR 注册时报的名字），例如 “Claude Code · g3wq”。它有一个空的个人空间，读不到任何人的私有文件。点这个按钮后，浏览器直接回到回调地址，带上授权码，浏览器保持未登录。客户端请求了 `write` 时，授权码带 `read write publish worktree:merge`，否则只带 `read`。Workspace 在客户端用授权码换 token 时才创建 agent，客户端没用上的授权码不留下任何东西。默认每个地址每小时最多创建 5 个 agent（`AGENT_CREATE_LIMIT_PER_HOUR`），达到上限时按钮不可点，页面说明原因。已有 10,000 个这样的授权码等着换 token，或者同一个地址一分钟内已经拿到 20 个时，客户端收到 `temporarily_unavailable` 而不是授权码，过一分钟再试即可。关闭访客 agent 时，CIMD 客户端直接去登录页。
 
-访客 agent 不会对自己的身份保持沉默：它的服务器说明和 `whoami` 结果都写明，Workspace 创建它是因为浏览器没有 Workspace 会话；你登录后重新连接，就能以自己的账号连接；否则可以认领它，把它留下。访客 agent 能做什么、怎样被人认领，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
+访客 agent 知道自己的身份：它的服务器说明和 `whoami` 结果都告诉它，它是一个临时 agent，做完后用 `claim` 拿一个交接链接（handoff link）给你。你不用登录就能打开链接看到它的成果，在那里登录后收下它，文件就留下了。访客 agent 能做什么、怎样被人收下，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
 
 ### 已登录
 
@@ -291,7 +291,7 @@ Workspace 返回一个最长 10 分钟的 session，以及这张 token 代表的
 | --- | --- | --- |
 | 个人访问令牌（PAT） | 在 Workspace 账户菜单的 **Access tokens** 里创建，选择 **Read and write**（默认，四个 scope 全部授予）或 **Read only**（只授予 `read`），然后配置为 `Authorization: Bearer uvw_pat_…` | 不支持 OAuth 的 MCP 客户端 |
 | `uvw auth login` | CLI 打印一个网址和验证码，你在浏览器里核对验证码并批准，然后运行 `uvw auth login --complete` | 在终端里运行命令的 agent |
-| `uvw auth guest` | CLI 直接新建一个访客 agent，不需要任何账号 | 先做出文件、再交给人认领 |
+| `uvw auth guest` | CLI 直接新建一个访客 agent，不需要任何账号 | 先做出文件、再交给人收下 |
 | Workspace Agent | 预先登记的客户端 `univer-workspace-harness`，走授权码流程 | 自己部署的 Workspace Agent 服务 |
 
 `uvw auth login` 的形式像 OAuth 设备码流程，但它是 Workspace 自己的接口，不签发 OAuth token。CLI 拿到的是一个独立的 Workspace session，见 [Workspace CLI 的 Login](../apps/cli/README.md#login)。
@@ -305,7 +305,7 @@ Workspace 返回一个最长 10 分钟的 session，以及这张 token 代表的
 | 自部署时出口走 fake-IP 代理，CIMD 总是失败 | 第二步，公网域名被解析到 `198.18.0.0/15`，被当成私有地址拒绝 | 设置 `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
 | 连上了，但缺少某些工具 | 第三步关闭了 **Let it change content**，或 URL 的 `?toolsets=` 没有包含它 | 在客户端里登出该服务，打开开关重新连接，或检查 `?toolsets=` |
 | 客户端连上了，但身份是一个归你所有的 agent，不是你 | 第三步，主按钮以一个归你所有的 agent 连接（新建的或已有的） | 在客户端里登出该服务，重新连接，并点 **Connect as myself** |
-| 客户端连上了，但身份是新的访客 agent，不是你 | 第三步，在未登录的连接页上点了 **Try without signing in** | 用 agent 给你的认领链接认领它；或者在客户端里登出该服务，重新连接，并点 **Sign in to connect** |
+| 客户端连上了，但身份是新的访客 agent，不是你 | 第三步，在未登录的连接页上点了 **Try without signing in** | 打开 agent 给你的交接链接，在那里收下它；或者在客户端里登出该服务，重新连接，并点 **Sign in to connect** |
 | 配了 `Authorization` 头后 Claude Code 不再弹出登录 | Claude Code 看到头就跳过 OAuth | 二选一，不要同时配置 |
 
 ## 术语和出处

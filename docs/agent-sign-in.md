@@ -183,7 +183,7 @@ For a CIMD client, Workspace fetches the document before anyone signs in, so eve
 
 Unless the deployment turned guest agents off, the page also offers **Try without signing in**. It gives the client a guest agent instead of a person. A guest agent is a new agent account named after the client (the CIMD document's `client_name`, or the name a DCR client registered), such as "Claude Code · g3wq". It has an empty Personal Space and can read nobody's private files. The button sends the browser straight back to the callback with a code, and the browser stays signed out. The code carries `read write publish worktree:merge` when the client asked for `write`, and only `read` otherwise. Workspace creates the agent only when the client trades the code for tokens, so a code the client never uses leaves nothing behind. By default each address creates at most 5 agents an hour (`AGENT_CREATE_LIMIT_PER_HOUR`). At that limit the button is disabled and the page says why. While 10,000 such codes wait to be traded, or once one address got 20 of them within a minute, the client gets `temporarily_unavailable` instead of a code, and you try again a minute later. With guest agents off, a CIMD client goes straight to the sign-in page.
 
-The guest agent does not stay silent about what it is: its server instructions and its `whoami` result say that Workspace created it because the browser had no Workspace session, that you can reconnect after you sign in to connect under your own account, and that otherwise you can keep the agent by claiming it. The [agent handoff showcase](agent-handoff-showcase.md#start-an-agent-without-an-account) covers what a guest agent can do and how a person claims it.
+The guest agent knows what it is: its server instructions and its `whoami` result tell it that it is a temporary agent, and that when it is done it gives you a handoff link from `claim`. You open the link to see its work without signing in, and sign in there to take the agent and keep its files. The [agent handoff showcase](agent-handoff-showcase.md#start-an-agent-without-an-account) covers what a guest agent can do and how a person takes it.
 
 ### Signed in
 
@@ -291,7 +291,7 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 | --- | --- | --- |
 | Personal access token (PAT) | Create one under **Access tokens** in the Workspace account menu and choose **Read and write** (the default, all four scopes) or **Read only** (`read`), then configure `Authorization: Bearer uvw_pat_…` | MCP clients that cannot run OAuth |
 | `uvw auth login` | The CLI prints a URL and a code. You match the code in the browser and approve, then run `uvw auth login --complete` | Agents that run terminal commands |
-| `uvw auth guest` | The CLI creates a guest agent with no account | Making a file first and handing it to a person to claim |
+| `uvw auth guest` | The CLI creates a guest agent with no account | Making a file first and handing it to a person to take |
 | Workspace Agent | The pre-registered client `univer-workspace-harness`, through the authorization code flow | A self-hosted Workspace Agent service |
 
 `uvw auth login` looks like the OAuth device code flow, but it is Workspace's own API and issues no OAuth token. The CLI gets a separate Workspace session. See [Login](../apps/cli/README.md#login) in the CLI guide.
@@ -305,7 +305,7 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 | On a self-hosted server behind a fake-IP proxy, CIMD always fails | Step 2, public names resolve into `198.18.0.0/15` and are refused as private addresses | Set `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
 | Connected, but some tools are missing | **Let it change content** was off in step 3, or the URL's `?toolsets=` leaves the tools out | Sign out of the server in the client, connect again with the switch on, or fix `?toolsets=` |
 | The client connected as an agent you own, not as you | Step 3, the main button connects as an agent you own, new or continued | Sign out of the server in the client, connect again, and click **Connect as myself** |
-| The client connected as a new guest agent, not as you | Step 3, **Try without signing in** was clicked on the signed-out page | Claim the agent with the link it gives you, or sign out of the server in the client, connect again, and click **Sign in to connect** |
+| The client connected as a new guest agent, not as you | Step 3, **Try without signing in** was clicked on the signed-out page | Open the handoff link the agent gives you and take the agent there, or sign out of the server in the client, connect again, and click **Sign in to connect** |
 | Claude Code no longer opens sign-in after you configured an `Authorization` header | Claude Code skips OAuth when it sees the header | Use one or the other, not both |
 
 ## Terms and sources

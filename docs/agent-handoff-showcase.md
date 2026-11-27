@@ -2,21 +2,21 @@
 
 [中文](agent-handoff-showcase.zh-CN.md)
 
-In Univer Workspace, AI agents make office files and hand them to people and to other agents. An agent connects through MCP or the `uvw` CLI, builds a Sheet, Doc, or Slide in a pull request, and shares the result as a link.
+In Univer Workspace, AI agents make office files and hand them to people and to other agents. An agent connects through MCP or the `uvw` CLI, builds a Sheet, Doc, or Slide in a pull request, and hands the result over as a link.
 
 🤖 Agents make the files, 🧑 people decide at the nodes, and links carry each file to the next person or agent.
 
 ```mermaid
 flowchart TB
     Asst["🤖 Your AI<br/>assistant<br/>signed in as you"] -- Pull request --> You
-    Guest["🤖 Guest agent<br/>no account"] -- File link and claim link --> You
-    You(["🧑 You<br/>claim agents<br/>merge, share"]) -- File link --> Other(["🧑 Others<br/>hand to agents<br/>merge, share"])
+    Guest["🤖 Guest agent<br/>no account"] -- Handoff link --> You
+    You(["🧑 You<br/>take agents<br/>merge, share"]) -- File link --> Other(["🧑 Others<br/>hand to agents<br/>merge, share"])
     Other -- File link --> OtherAgent["🤖 Their agent<br/>makes a copy"]
     OtherAgent -- Pull request --> Other
     Other -. Link to the new file .-> Next(["🧑 Next person"])
 ```
 
-Everything below works on `main`. The screenshots come from a local Workspace with sample data. The guest agent in them signed in with Claude Code's client ID.
+Everything below works on `main`. The screenshots come from a local Workspace with sample data. The guest agent in them signed in with Claude Code's client ID, except on the handoff page, where `uvw auth guest --label "Claude Code"` made it.
 
 ## Before you start
 
@@ -38,9 +38,9 @@ sequenceDiagram
     actor L as 🧑 Leo
     participant A as 🤖 Leo's AI assistant
     Note over G: Makes a Sheet in a pull request<br/>and merges it
-    G->>M: share and claim: file link and claim link
+    G->>M: claim: handoff link
     rect rgba(128, 128, 128, 0.25)
-    Note over M: Claims the agent
+    Note over M: Opens it and sees the Sheet<br/>signs in and takes the agent<br/>turns on the file's link
     end
     M->>L: Sends the file link
     rect rgba(128, 128, 128, 0.25)
@@ -58,9 +58,9 @@ People make these decisions:
 | Decision                          | Who, and where                                                                        | Can an agent do it?                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Start an agent without an account | The person who clicks **Try without signing in** on the connect page, in the browser | An agent can also run `uvw auth guest` itself                                         |
-| Claim an agent                    | The person who opens the claim link, in the browser                                   | No                                                                                    |
+| Take an agent                     | The person who opens its handoff link and signs in, in the browser                    | No                                                                                    |
 | Review and merge a pull request   | The author or the person who claimed the agent, or in a Team Space a member who can edit, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
-| Turn on Link Sharing              | The file's owner, in the browser or with `uvw share`                                  | An agent can share its own files. Your AI assistant cannot through MCP                |
+| Turn on Link Sharing              | The file's owner, in the browser. `uvw share` and `share` return a confirm link to open there | No. A claimed agent and your AI assistant give you the confirm link. A guest agent gives its handoff link instead |
 | Make a Space public               | The Space's owner or an admin, in the browser or with `uvw repo edit`                 | No. Your AI assistant cannot through MCP either                                       |
 | Remix a copy                      | A signed-in person, on the share page                                                 | An agent copies with `unit_create` and `from`                                         |
 | Hand a file to your agent         | Whoever opens the share page, with **Hand to my agent**                               | An agent that gets the link can read or copy it directly                              |
@@ -86,13 +86,13 @@ For a Doc or a Slide, use `inspect` with `target` set to `document` or `presenta
 
 ## Start an agent without an account
 
-**An agent that has never used Workspace gets its own name and space, makes a file, and returns a link that says who can open it.**
+**An agent that has never used Workspace gets its own name and space, makes a file, and returns one link that shows its work.**
 
 When the browser an MCP client opens is not signed in to Workspace, the connect page offers **Sign in to connect** and **Try without signing in**. The second one gives the client a guest agent, and the browser stays signed out:
 
 ![The connect page with nobody signed in. Claude Code (claude.ai) wants to work in Univer Workspace. The page offers Sign in to connect, then Try without signing in with three lines about the temporary agent, and Deny](images/agent-handoff/connect-signed-out.png)
 
-The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. Its server instructions and its `whoami` result tell it to say in its first reply that it is a guest agent because the browser had no Workspace session, that the person can reconnect after signing in to connect under their own account, and that otherwise they can keep it through the claim link that `claim` returns. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, and shares the file:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. Its server instructions and its `whoami` result tell it that it is a temporary agent and that, when it is done, it gives the user a handoff link from `claim`. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, and makes its handoff link:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -100,7 +100,6 @@ unit_create { "worktree": "<worktree id>", "space": "<agent>/personal", "type": 
 execute     { "worktree": "<worktree id>", "unit": "<unitId>", "code": "<Facade code>" }
 pr_ready    { "repo": "<agent>/personal", "number": 1 }
 pr_merge    { "repo": "<agent>/personal", "number": 1 }
-share       { "node": "<nodeId>", "link": "viewer" }
 claim       {}
 ```
 
@@ -113,37 +112,32 @@ uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet -
 uvw execute --worktree <worktree id> --unit <unitId> --script budget.js
 uvw pr ready 1 -R <agent>/personal
 uvw pr merge 1 -R <agent>/personal
-uvw share <nodeId> --link viewer
 uvw claim
 ```
 
-MCP `share` returns the link and who can open it, and points the agent to `claim`:
+`claim` returns the handoff link, `{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<in 7 days>" }`, and `uvw claim` prints it. The link works for 7 days, or until a person takes the agent, so the agent gives the same link again and makes a new one only when it is lost or has expired.
 
-```text
-Q3 team budget  https://space.univer.ai/nodes/<nodeId>
-Link Sharing: viewer. Anyone with the link can read the file without signing in. The link stops working on 2026-12-18T15:23:53.488Z unless claude-code-g3wq stays active.
-To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.
-```
+The handoff link is the one way a guest agent shows its work. It cannot turn on Link Sharing, make a repository public or add members: the server refuses, and tells it to give the user the handoff link.
 
-`claim` then returns the claim link, `{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<in 10 minutes>" }`. It works once, within 10 minutes. `uvw share` prints the same facts more briefly, and `uvw claim` prints the claim link.
+Until a person takes it, a guest agent keeps at most 20 files of up to 10 MiB each, its files expire after 30 days without use, and its files are marked **Unverified agent**. It cannot read anyone's private files or join a Team Space.
 
-Until a person claims it, a guest agent keeps at most 20 files of up to 10 MiB each, its files expire after 30 days without use, and its share page marks it **Unverified agent**. It cannot read anyone's private files or join a Team Space.
+## See the agent's work, then take the agent
 
-## Claim the agent and keep its files
-
-**A person opens the claim link, signs in, and the agent's files and links keep working.**
+**Whoever opens the handoff link sees the agent's work at once, read-only and live, without signing in. A person signs in there to take the agent and keep its files.**
 
 ```mermaid
 flowchart TB
-    Guest["🤖 Guest agent<br/>files expire<br/>not verified"] -- Claim link --> You(["🧑 You<br/>open it within<br/>10 minutes<br/>sign in, claim"])
-    You --> Claimed["🤖 Claimed agent<br/>files stay<br/>you own them<br/>no access to<br/>your files"]
+    Guest["🤖 Guest agent<br/>files expire<br/>not verified"] -- Handoff link --> Visitor(["🧑 You, signed out<br/>see its files<br/>read-only, live"])
+    Visitor -- Sign in<br/>and take it --> Claimed["🤖 Claimed agent<br/>files stay<br/>you own them<br/>no access to<br/>your files"]
 ```
 
-![The claim page for the guest agent Claude Code · g3wq, showing its username, one file, and the account that will own it](images/agent-handoff/claim-agent.png)
+![The handoff page for the guest agent Claude Code, seen without signing in. It shows the agent's username, the date the link works until, the two files in its Personal Space, and the button Sign in and take it](images/agent-handoff/claim-agent.png)
 
-The claim page names the agent and counts the files in its Personal Space, and **Claim agent** completes the claim. It then opens where the agent's work is: the one Team repository or Personal Space that holds it, or, when its work is in more than one of them, the repository list filtered to the agent. A claim link works once, and the agent makes a new one with `claim` or `uvw claim`.
+The handoff page names the agent and lists the Spaces it owns with their files. Without signing in, you open any of them read-only, private repositories included, and an HTML View among them reads its Sheet data live. The browser keeps this preview for as long as the link works: 7 days, or until a person takes the agent.
 
-After the claim, `share` returns no expiry date and no claim hint, and the share page drops the **Unverified agent** mark.
+**Sign in and take it** signs you in and comes back to the page, and **Take it** makes you the agent's owner. The page then opens where the agent's work is: the one Team repository or Personal Space that holds it, or, when its work is in more than one of them, the repository list filtered to the agent. Once you are signed in, the page shows the summary only, and you open the files after you take the agent.
+
+After that, the link shows nothing to anyone else: it says that the agent has an owner. The agent's files stop expiring and lose the **Unverified agent** mark, and you turn on Link Sharing in the browser for a file you want to send on.
 
 ## One file brings the next
 
@@ -156,7 +150,7 @@ flowchart TB
     Person -- Remix --> PersonCopy[/"📄 A copy in<br/>Personal Space"/]
     Agent -- unit_create with from --> AgentCopy[/"📄 A copy in<br/>a pull request"/]
     PersonCopy -. Share .-> Next(["🧑 Next person"])
-    AgentCopy -. Merge, then share .-> Next
+    AgentCopy -. Merge, then<br/>its owner shares .-> Next
 ```
 
 `unit_create` with `from` copies a file the agent can open, content and images included. The merged copy records its source, which only the copy's owner and editors can see.
@@ -206,6 +200,6 @@ If a merge stops partway, call `pr_merge` again to finish it.
 
 - [How an AI agent signs in](agent-sign-in.md): OAuth, CIMD, and what happens before the first tool call.
 - [Workspace MCP server](../apps/mcp/README.md): every tool, with its arguments and results.
-- [Workspace CLI](../apps/cli/README.md): guest agents, sharing, claiming, and pull requests.
+- [Workspace CLI](../apps/cli/README.md): guest agents, handoff links, sharing, and pull requests.
 - [Workspace CLI Skill](../skills/univer-workspace-cli/SKILL.md): what an agent reads before it starts.
 - [HTML View showcase](html-view-showcase.md): pages that agents build on live Sheet data.
