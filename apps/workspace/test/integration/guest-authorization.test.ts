@@ -502,7 +502,6 @@ async function start(options: { agentCreateLimitPerHour: number; fetchDocument: 
   return `http://127.0.0.1:${address.port}`;
 }
 
-/** The connect page's try button: a form post of the authorize query string. */
 function tryWithoutSignIn(origin: string, oauthAuthorization: string, forwardedFor?: string, cookie?: string): Promise<Response> {
   return fetch(`${origin}/api/auth/authorize/guest`, {
     method: "POST",

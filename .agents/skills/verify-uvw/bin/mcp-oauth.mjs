@@ -63,7 +63,6 @@ if (command === 'login') {
   if (!guest && !username) usage('No user to sign in as; run verify-uvw user, or pass --guest');
   if (agentCookie && !guest) usage('--agent-cookie gives the browser an agent session before the trial, so it needs --guest');
   if (clientId && clientName) usage('--client-name names a client this login registers, so it takes no --client-id');
-  // A guest gets the tier the request allows, and the signed-out page has no buttons for the run user.
   if (guest && (connectAs || access)) usage('--connect-as and --access are for the run user; a guest takes the trial');
   const sessionUser = () => {
     browser('open', `${origin}/api/session`);
@@ -152,7 +151,6 @@ if (command === 'login') {
     const answer = await Promise.race([received, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No callback within 30 s')), 30000); })])
       .finally(() => clearTimeout(timer))
       .catch(error => {
-        // The trial and the connect form answer an error they cannot send to the client as a page that names its code.
         const code = browser('get', 'text', 'body').match(/(?:Error: |"code":")([A-Z_]+)/)?.[1];
         if (code === 'AGENT_CREATE_RATE_LIMITED') throw new Error(`the page says ${limited}`);
         throw code ? new Error(`the page answered ${code} instead of the callback`) : error;

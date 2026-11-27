@@ -6,7 +6,6 @@ import { hashSessionSecret } from "./session-token.js";
 export const MCP_SCOPES = ["read", "write", "publish", "worktree:merge"] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 
-/** The two levels a person chooses for a connection. Mirrors `AccessTier` in the HTTP contract. */
 export type AccessTier = "read" | "read_write";
 
 export const ACCESS_TIER_SCOPES: Readonly<Record<AccessTier, readonly McpScope[]>> = {
@@ -14,12 +13,10 @@ export const ACCESS_TIER_SCOPES: Readonly<Record<AccessTier, readonly McpScope[]
   read_write: MCP_SCOPES,
 };
 
-/** The most a request allows: read and write only when its scope names `write`. */
 export function requestTier(requested: readonly McpScope[]): AccessTier {
   return requested.includes("write") ? "read_write" : "read";
 }
 
-/** The tier a submitted form picks, never above `requestTier`. Anything but "read_write" is read only. */
 export function chosenTier(requested: readonly McpScope[], submitted: unknown): AccessTier {
   return submitted === "read_write" ? requestTier(requested) : "read";
 }

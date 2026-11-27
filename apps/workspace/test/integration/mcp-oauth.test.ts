@@ -559,7 +559,6 @@ describe("MCP OAuth", () => {
       client_id: clientId, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"],
       grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
     }) });
-    // With guests on, a signed-out browser would fetch the document anonymously to show the connect page.
     const origin = await start({ fetchDocument, maxRegisteredClients: 1, guests: false });
     await registeredClientId(origin);
     const redirectUri = "http://127.0.0.1:61234/callback";
@@ -720,7 +719,6 @@ function consentTokenOf(page: string): string {
   return /name="consent_token" value="([^"]+)"/u.exec(page)![1]!;
 }
 
-/** Submits the connect page as its buttons do: with the content toggle on and connecting as the person, unless `fields` says otherwise. */
 function submitConsent(origin: string, cookie: string, consentToken: string, fields: Record<string, string | undefined> = {}): Promise<Response> {
   const body = new URLSearchParams();
   for (const [key, value] of Object.entries({ consent_token: consentToken, access: "read_write", connect_as: "self", ...fields })) if (value !== undefined) body.set(key, value);

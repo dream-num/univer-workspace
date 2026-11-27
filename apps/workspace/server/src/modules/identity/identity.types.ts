@@ -28,13 +28,11 @@ export interface AgentCreation {
   readonly clientName?: string | null;
   /** Only the creation rate limit reads it; `source_rate_events` keeps its source bucket for about an hour. */
   readonly originIp: string | undefined;
-  /** The person who creates the agent from the connect page. It is born owned: no expiry and no claim step. */
   readonly ownerUserId?: string;
 }
 
 export interface CreatedAgent {
   readonly user: User;
-  /** null for an owned agent, which never expires. */
   readonly expiresAt: number | null;
 }
 

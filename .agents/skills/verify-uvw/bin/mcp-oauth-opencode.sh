@@ -93,7 +93,6 @@ grep -E 'button.*Deny' "$oauth_dir/connect.snapshot.txt"
 agent-browser uncheck 'input[name=access]'
 agent-browser snapshot -i -c > "$oauth_dir/connect.snapshot.txt"
 if grep -E 'checkbox.*Let it change content.*checked=true' "$oauth_dir/connect.snapshot.txt"; then exit 1; fi
-# MO1 proves opencode acting as the run user, so it passes over the main button, an agent the run user owns.
 agent-browser screenshot "$EVIDENCE/mcp-oauth-connect.png"
 agent-browser click 'button[name=connect_as][value=self]'
 agent-browser wait --url 'http://127.0.0.1:*/callback?*'

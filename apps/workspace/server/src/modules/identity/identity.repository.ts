@@ -86,7 +86,6 @@ export interface StoredAgent {
   readonly files: number;
 }
 
-/** The two legal states of an `agents` row's account: the CHECK ties `owner_user_id` and `claimed_at` together. */
 export type NewAgentAccount =
   | { readonly kind: "temporary"; readonly expiresAt: number }
   | { readonly kind: "owned"; readonly ownerUserId: string };

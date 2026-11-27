@@ -72,7 +72,6 @@ export function createOAuthAuthorizationRouter(options: {
 
   router.get("/authorize", async (request, response) => {
     const session = await options.identity.getSession(request.headers.cookie);
-    // A browser that holds only an agent's cookie is signed out here, and the page leaves that cookie alone.
     const person = signedInPerson(session) ? (await options.identity.requireInteractiveSession(request.headers.cookie)).user : null;
     const authorizationRequest = await resolveAuthorizationRequest(request, response, person);
     if (authorizationRequest === null) return;
@@ -160,7 +159,6 @@ export function createOAuthAuthorizationRouter(options: {
       throw invalidConsent();
     }
     let authorizationRequest = JSON.parse(pending.payload) as ConsentedRequest;
-    // Only an explicit deny refuses: the connect page's buttons send no decision.
     const allowed = request.body.decision !== "deny";
     let subject: AuthorizationSubject = { kind: "user", userId: session.user.id };
     // Every refusal below keeps the consent token valid, so the user can go back and choose again.
@@ -331,7 +329,6 @@ export function createOAuthAuthorizationRouter(options: {
     if (source.kind === "dcr") {
       client = source.client;
     } else {
-      // With guests off a signed-out page offers only sign-in, which is not worth an anonymous fetch.
       if (person === null && !options.identity.guestAuthEnabled) {
         response.redirect(signInPath(request.originalUrl));
         return null;
@@ -349,7 +346,6 @@ export function createOAuthAuthorizationRouter(options: {
         sendPage(response, error.temporary ? 503 : 400, renderAuthorizationError({
           title: "This application could not be checked",
           code: error.temporary ? "temporarily_unavailable" : "invalid_client",
-          // A signed-out browser learns nothing of the cause, which stays in the fetch log.
           message: person === null ? "The application's metadata document could not be checked." : error.message,
         }));
         return null;
@@ -770,7 +766,6 @@ function authorizationErrorTarget(redirectUri: string, state: string | null, err
   return target.toString();
 }
 
-/** The query that reproduces a parsed request across the sign-in redirect and the trial form. */
 function authorizationQuery(request: AuthorizationRequest): URLSearchParams {
   if (request.kind === "static") {
     return new URLSearchParams({
@@ -801,7 +796,6 @@ function signInPath(returnTo: string): string {
   return `/login?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
-/** Every page authorize serves: never cached or framed, and its forms reach only Workspace and the verified callback. */
 function sendPage(response: Response, status: number, html: string, redirectUri?: string): void {
   const formAction = redirectUri === undefined ? "'self'" : `'self' ${callbackSource(redirectUri)}`;
   response.status(status).set({

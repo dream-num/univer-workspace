@@ -4,13 +4,8 @@ import type { StoredAgent } from "./identity.repository.js";
 import { agentClientLabel } from "./identity.service.js";
 import type { User } from "./identity.types.js";
 
-/** The page lists at most this many of a person's own agents, the primary choice included. */
 const OWNED_AGENT_CHOICES = 5;
 
-/**
- * What an agent that a person owns can touch, true for the server as it is now. An owned agent with
- * read and write is not yet stopped from widening who can see its own work, so the page says so.
- */
 export const OWNED_AGENT_LINES: Readonly<Record<AccessTier, readonly string[]>> = {
   read: [
     "It works in its own space and sees your files only when you share them.",
@@ -24,7 +19,6 @@ export const OWNED_AGENT_LINES: Readonly<Record<AccessTier, readonly string[]>> 
   ],
 };
 
-/** A guest with read alone cannot write a file or make a claim link, which needs publish. */
 export const TRIAL_LINES: Readonly<Record<AccessTier, readonly string[]>> = {
   read: [
     "A temporary agent with an empty space of its own. No account needed.",
@@ -38,7 +32,6 @@ export const TRIAL_LINES: Readonly<Record<AccessTier, readonly string[]>> = {
   ],
 };
 
-/** The part of a verified MCP authorization request that the page shows. */
 export interface McpAuthorizationRequestView {
   readonly client: { readonly clientName: string | null; readonly host?: string };
   readonly clientId: string;
@@ -48,7 +41,6 @@ export interface McpAuthorizationRequestView {
 }
 
 export interface ClientView {
-  /** The cleaned client name, with the metadata document's host for a CIMD client. Never empty. */
   readonly name: string;
   readonly clientId: string;
   readonly resource: string;
@@ -70,10 +62,8 @@ export interface PersonPage {
   readonly state: "person";
   readonly client: ClientView;
   readonly person: Pick<User, "displayName" | "username">;
-  /** null only when the person owns no agent and a new one is refused. */
   readonly primary: AgentOption | null;
   readonly others: readonly StoredAgent[];
-  /** Why the primary choice is not a new agent, when that is the reason. */
   readonly newAgentRefusal: string | null;
   readonly access: AccessOffer;
   readonly consentToken: string;
@@ -84,17 +74,14 @@ export interface SignedOutPage {
   readonly client: ClientView;
   readonly signInUrl: string;
   readonly trial: TrialOffer;
-  /** What a guest from the try button can do: the most the request allows. */
   readonly trialTier: AccessTier;
-  /** The authorize query string the try button posts to POST /api/auth/authorize/guest. */
   readonly oauthAuthorization: string;
-  /** An access_denied callback for the verified redirect_uri. A link, since there is no consent token to spend. */
   readonly denyUrl: string;
 }
 
 export type ConnectPage = PersonPage | SignedOutPage;
 
-/** The callback as CSP and the page name it: its origin, or the scheme of a private-use URI, whose origin is opaque. */
+/** A private-use URI has the opaque origin "null", so CSP and the page name it by its scheme. */
 export function callbackSource(redirectUri: string): string {
   const callback = new URL(redirectUri);
   return callback.origin === "null" ? callback.protocol : callback.origin;
@@ -111,10 +98,6 @@ export function clientView(request: McpAuthorizationRequestView): ClientView {
   };
 }
 
-/**
- * The primary choice is the person's agent made for a client of this name, else a new agent, else (a new
- * one refused) their most recently active agent. `owned` comes most recently active first.
- */
 export function personPage(input: {
   readonly request: McpAuthorizationRequestView;
   readonly person: Pick<User, "displayName" | "username">;
@@ -125,7 +108,6 @@ export function personPage(input: {
   const label = agentClientLabel(input.request.client.clientName);
   const match = label === "" ? undefined : input.owned.find((agent) => agent.originLabel === label);
   const top = input.owned.slice(0, OWNED_AGENT_CHOICES);
-  // The agent this client used stays listed even when five others were active more recently.
   const listed = match === undefined || top.includes(match) ? top : [...top.slice(0, -1), match];
   const fallback = match ?? (input.newAgentRefusal === null ? undefined : listed[0]);
   const primary: AgentOption | null = fallback !== undefined
@@ -205,7 +187,6 @@ function lines(items: readonly string[], tier?: AccessTier): string {
   return `<ul class="lines"${tier === undefined ? "" : ` data-tier="${tier}"`}>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
-/** The consent page of a static client that requires consent, such as the Workspace Agent or the Space plugin. */
 export function renderStaticConsentPage(clientId: string, scope: string, displayName: string, consentToken: string): string {
   return documentHtml(
     `Authorize ${clientId}`,

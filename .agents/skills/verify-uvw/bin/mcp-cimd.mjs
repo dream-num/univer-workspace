@@ -60,7 +60,6 @@ if (command === 'vscode') {
     browser('screenshot', join(evidence, `mcp-cimd-reject-${label}.png`));
     save(`mcp-cimd-reject-${label}`, { client_id: clientId, status: response.status, location: null, body, ...(label === 'dns-loopback' ? { hostname, addresses, public_domain: 'localtest.me', public_domain_addresses: publicAddresses } : {}) });
   }
-  // With nobody signed in, authorize fetches the document anonymously, once, to name the client on the signed-out page.
   const before = fetchEvents();
   const anonymous = {};
   for (const [label, clientId] of [['claude', claude], ['missing', `${claude}/anonymous-probe`]]) {
@@ -83,7 +82,6 @@ if (command === 'vscode') {
     }
     anonymous[label] = { status: response.status, fetches: fetched };
   }
-  // The consent hop is gone: the connect page is the only page authorize serves.
   const hop = await fetch(new URL(`/api/auth/authorize/consent${authorize(claude).search}`, origin), { redirect: 'manual' });
   assert.equal(hop.status, 404);
   save('mcp-cimd-anonymous', { ...anonymous, consent_hop_status: hop.status, fetches_before: before.length, fetches_after: fetchEvents().length });

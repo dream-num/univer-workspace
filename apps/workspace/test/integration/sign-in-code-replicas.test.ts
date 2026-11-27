@@ -379,7 +379,6 @@ function authorizeQuery(fields: Record<string, string>): string {
   }).toString();
 }
 
-/** The connect page's try button, which a browser with no session posts. */
 function tryWithoutSignIn(origin: string, fields: Record<string, string>, forwardedFor?: string): Promise<Response> {
   return fetch(`${origin}/api/auth/authorize/guest`, {
     method: "POST",

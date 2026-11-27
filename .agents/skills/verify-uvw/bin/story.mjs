@@ -248,7 +248,6 @@ async function main() {
   process.exitCode = result.status === 0 ? 0 : 1;
 }
 
-/** opencode's own `mcp auth`, as a user would run it, in a signed-out browser that takes the connect page's trial. */
 async function signInAsGuest({ origin, session, home, evidence, opencode, env }) {
   const browser = (...a) => {
     // Arguments carry the authorize URL with its state, so a failure names only the subcommand.
