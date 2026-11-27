@@ -4,7 +4,12 @@ import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { createAccessToken, revokeAccessToken } from "./access-tokens.commands";
 import { accessTokensQueryOptions } from "./access-tokens.queries";
-import { isAccessTokenExpired, isAccessTokenName } from "./access-tokens.rules";
+import {
+  accessTierScopes,
+  defaultAccessTier,
+  isAccessTokenExpired,
+  isAccessTokenName,
+} from "./access-tokens.rules";
 
 const record = {
   id: "pat-1",
@@ -37,6 +42,17 @@ describe("access tokens", () => {
     { name: " ", valid: false },
   ])("accepts a name of 1 to 100 characters, counting each emoji once: %#", ({ name, valid }) => {
     expect(isAccessTokenName(name)).toBe(valid);
+  });
+
+  it.each([
+    { tier: "read", scopes: ["read"] },
+    { tier: "read_write", scopes: ["read", "write", "publish", "worktree:merge"] },
+  ] as const)("submits the $tier tier as $scopes", ({ tier, scopes }) => {
+    expect(accessTierScopes[tier]).toEqual(scopes);
+  });
+
+  it("defaults to read and write", () => {
+    expect(defaultAccessTier).toBe("read_write");
   });
 
   it("loads metadata through the account's cookie-authenticated API", async () => {
