@@ -3084,8 +3084,8 @@ export interface components {
             /**
              * Format: date-time
              * @description When the link stops working because its owner, an unclaimed agent, expires. The date moves
-             *     30 days out while the agent stays active or someone opens its handoff page. Null when the owner
-             *     does not expire.
+             *     30 days out while the agent stays active or someone opens its handoff page or the page of one
+             *     of its files. Null when the owner does not expire.
              */
             expiresAt: string | null;
             createdBy: components["schemas"]["PublicUser"] | null;
@@ -3706,7 +3706,7 @@ export interface components {
             spaceId: string;
             /** @description Files in the agent's Personal Space outside Trash. */
             files: number;
-            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page. Recorded at most once a day. */
+            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page or the page of one of its files. Recorded at most once a day. */
             lastActiveAt: number;
             /** @description The agent can no longer sign in. Its owner stopped it, or an operator banned it. */
             stopped: boolean;

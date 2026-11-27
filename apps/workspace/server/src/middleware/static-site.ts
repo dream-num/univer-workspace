@@ -12,7 +12,7 @@ import { recordLoopEvent } from "./loop-metrics.js";
 
 export function createStaticSiteRouter(publicDirectory: string, options?: {
   readonly nodes: Pick<NodesModule, "get">;
-  readonly identity: Pick<IdentityModule, "hasSession">;
+  readonly identity: Pick<IdentityModule, "recordAgentPageView" | "hasSession">;
   readonly permissions: Pick<PermissionsModule, "nodeOwnerCategory">;
   readonly publicOrigin?: string | null | undefined;
 }): Router {
@@ -40,8 +40,12 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
       return next();
     }
     if (request.method === "GET") {
-      // Not awaited: counting must neither fail nor delay the page.
+      // Not awaited: neither renewing the agent nor counting may fail or delay the page.
       const { identity, permissions } = options;
+      // Only a page the anonymous reader got: an expired agent's page stays closed until the agent returns.
+      void identity.recordAgentPageView(node.id).catch((error: unknown) => {
+        logger.warn({ err: error, node_id: node.id }, "Agent expiry not renewed by a page view");
+      });
       void (async () => {
         try {
           const [signedIn, owner] = await Promise.all([

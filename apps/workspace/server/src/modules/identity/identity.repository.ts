@@ -194,8 +194,9 @@ export interface IdentityRepository {
   usernameExists(username: string): Promise<boolean>;
   findUser(userId: string): Promise<User | null>;
   findPrincipal(userId: string): Promise<StoredPrincipal | null>;
+  /** `nodeId` names the unclaimed agent that owns the Node's Space, and nobody when it has an owner. */
   touchAgent(
-    target: { readonly userId: string },
+    target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,
     expiresAt: number

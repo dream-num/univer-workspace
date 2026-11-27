@@ -534,7 +534,7 @@ AgentSummary:
       description: Files in the agent's Personal Space outside Trash.
     lastActiveAt:
       type: integer
-      description: Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page. Recorded at most once a day.
+      description: Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page or the page of one of its files. Recorded at most once a day.
     stopped:
       type: boolean
       description: The agent can no longer sign in. Its owner stopped it, or an operator banned it.

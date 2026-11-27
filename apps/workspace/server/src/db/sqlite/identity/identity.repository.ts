@@ -420,7 +420,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
    * already expired is always pushed out, so its next use brings it back.
    */
   async touchAgent(
-    target: { readonly userId: string },
+    target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
@@ -892,9 +892,15 @@ export function touchAgent(
   const stale = db
     .prepare(
       `SELECT user_id FROM agents
-       WHERE (last_active_at <= ? OR expires_at <= ?) AND user_id = ?`
+       WHERE (last_active_at <= ? OR expires_at <= ?)
+         AND ${
+           "userId" in target
+             ? "user_id = ?"
+             : `owner_user_id IS NULL AND user_id = (SELECT spaces.owner_user_id FROM nodes
+                 JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
+         }`
     )
-    .get(staleBefore, at, target.userId) as
+    .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
     | { readonly user_id: string }
     | undefined;
   if (!stale) return;

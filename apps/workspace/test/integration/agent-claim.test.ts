@@ -385,6 +385,9 @@ describe("a temporary agent's file links", () => {
       expect([401, 403], reader).toContain((await send(origin, "GET", `/universer-api/snapshot/2/unit/${unitId}/rev/0`, undefined, cookie)).status);
     }
     expect(await accessRole(origin, sheet, alice.cookie)).toBe("owner");
+
+    await repositories.identity.touchAgent({ nodeId: expiredSheet }, Date.now(), Date.now() - 24 * HOUR, Date.now() + 24 * HOUR);
+    expect(await accessRole(origin, expiredSheet, undefined)).toBe("viewer");
   });
 });
 
