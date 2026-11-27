@@ -11,7 +11,7 @@ Browser, uvw and Workspace Agent sign-in unchanged.
 - MA3 refuses a write tool to a read-only PAT.
 - MA4 revokes a PAT and gets HTTP 401 on the next Workspace-backed call.
 - MA5 keeps development session authentication available with `--auth dev`.
-- MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
+- MA6 checks PAT defaults (all scopes, the Read and write tier, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
 - MA8 checks Browser sign-in, both `uvw auth login` paths, and Workspace Agent browser OAuth with `agent-up` while MCP OAuth is enabled.
 
@@ -136,7 +136,7 @@ $V mcp-oauth exchange mcp-pat-exchange pat
 jq -e --arg id "$(cat "$EVIDENCE/mcp-pat-default.id")" '.status == 200 and .body.scope == "read write publish worktree:merge" and .body.subject == {kind:"pat",id:$id,client_id:null} and .body.expires_in == 600' "$EVIDENCE/mcp-pat-exchange.json"
 ```
 
-The Browser part creates a PAT with the dialog's defaults, uses it, and revokes it from the same
+The Browser part creates a PAT with the dialog's defaults (Read and write, Never), checks its scopes, uses it, and revokes it from the same
 dialog. The Account menu can ignore a click that lands before the page settles, hence the retry.
 The plaintext PAT goes straight to `home/mcp-token` (mode 0600) and never into evidence.
 
@@ -163,7 +163,8 @@ agent-browser wait --text 'New token'
 agent-browser find role button click --name 'New token'
 agent-browser wait --text 'Create token'
 agent-browser snapshot -i -c > "$EVIDENCE/mcp-pat-browser-form.txt"
-for scope in read write publish worktree:merge; do grep -E "checkbox \"$scope .*checked=true" "$EVIDENCE/mcp-pat-browser-form.txt"; done
+grep -E 'radio "Read and write .*checked=true' "$EVIDENCE/mcp-pat-browser-form.txt"
+grep -E 'radio "Read only .*checked=false' "$EVIDENCE/mcp-pat-browser-form.txt"
 grep -E 'combobox "Expires".*: Never$' "$EVIDENCE/mcp-pat-browser-form.txt"
 agent-browser find label Name fill "browser-pat-$VERIFY_UVW_RUN"
 agent-browser screenshot "$EVIDENCE/mcp-pat-browser-form.png"
@@ -174,6 +175,8 @@ agent-browser get value 'input[readonly], textarea' > "$RUN/home/mcp-token"
 grep -q '^uvw_pat_' "$RUN/home/mcp-token"
 curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" |
   jq -r --arg name "browser-pat-$VERIFY_UVW_RUN" '.tokens[] | select(.name == $name) | .id' > "$RUN/home/mcp-token-id"
+curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" |
+  jq -e --arg name "browser-pat-$VERIFY_UVW_RUN" '.tokens[] | select(.name == $name) | .scopes == ["read","write","publish","worktree:merge"]'
 $V mcp mcp-pat-browser repo_list
 agent-browser find role button click --name Done
 agent-browser find role button click --name "Revoke browser-pat-$VERIFY_UVW_RUN"
