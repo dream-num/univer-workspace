@@ -1,6 +1,6 @@
 import { sessionIdentity } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
-import { readOnlyAnnotations, toolPrincipal, type AgentOwner, type ToolContext, type ToolDefinition, type ToolPrincipal } from "../definition.js";
+import { readOnlyAnnotations, toolPrincipal, type AgentOwner, type ToolContext, type ToolDefinition } from "../definition.js";
 
 const budgetUse = z.object({ used: z.number().int(), limit: z.number().int() });
 const whoamiOutput = z.object({
@@ -9,22 +9,15 @@ const whoamiOutput = z.object({
   budget: z.object({ openWorktrees: budgetUse, merges: budgetUse }).optional(),
 });
 
-/** An unclaimed agent reached over OAuth came from a browser sign-in with no Workspace session; a PAT's agent made itself. */
-export function guestAgentNotice(principal: ToolPrincipal, authKind: ToolContext["authKind"], claimable: boolean): string | undefined {
-  return principal === "agent_unclaimed" && authKind === "oauth"
-    ? `This connection is a guest agent, which Workspace created because the browser had no Workspace session. A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client. Otherwise the user can keep this agent by claiming it${claimable ? " with claim" : ""}. Tell the user this in your first reply.`
-    : undefined;
-}
+/** For an unclaimed agent that lists claim, which needs the publish scope. */
+export const TEMPORARY_AGENT_NOTICE =
+  "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
 
 export function ownedAgentNotice(owner: AgentOwner | undefined): string {
   return `${owner ? `${owner.name} (@${owner.username}) owns this agent and` : "The person who claimed this agent"} can open everything it owns, so to show them a repository or file, give them its link. You cannot let anyone else see one yourself: the server answers such a call with a confirm link, which you give to the user.`;
 }
 
-export function linkAfterMerge(canShare: boolean): string {
-  return canShare
-    ? "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link."
-    : "Then give the user the pull request link.";
-}
+export const PULL_REQUEST_LINK_AFTER_MERGE = "Then give the user the pull request link.";
 
 // Some clients never give the model the server instructions, so an agent's whoami repeats, in the instructions' words, what it must tell the user and how it finishes.
 const finish = {
@@ -37,11 +30,11 @@ const leaveMerging =
 function agentNotice(context: ToolContext): string | undefined {
   const principal = toolPrincipal(context.user);
   if (principal === "human") return undefined;
+  const handsOver = principal === "agent_unclaimed" && context.scopes.has("publish");
   const notice = [
-    guestAgentNotice(principal, context.authKind, context.scopes.has("publish")),
-    principal === "agent_claimed" ? ownedAgentNotice(context.owner) : undefined,
+    principal === "agent_claimed" ? ownedAgentNotice(context.owner) : handsOver ? TEMPORARY_AGENT_NOTICE : undefined,
     context.scopes.has("worktree:merge")
-      ? `${finish[principal]} ${linkAfterMerge(principal === "agent_unclaimed" && context.scopes.has("publish"))}`
+      ? handsOver ? finish[principal] : `${finish[principal]} ${PULL_REQUEST_LINK_AFTER_MERGE}`
       : context.scopes.has("write") ? leaveMerging : undefined,
   ].filter((part) => part !== undefined);
   return notice.length ? notice.join(" ") : undefined;

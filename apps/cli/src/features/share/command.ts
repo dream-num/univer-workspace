@@ -11,7 +11,7 @@ import {
 } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, oneOf, type JsonFieldsOption } from "../../command.js";
 
-export const SHARE_JSON_FIELDS = ["access", "claimHint", "expiresAt", "link", "name", "owner", "url"] as const satisfies
+export const SHARE_JSON_FIELDS = ["access", "expiresAt", "link", "name", "owner", "url"] as const satisfies
   readonly (keyof WorkspaceShare)[];
 
 export const CLAIM_JSON_FIELDS = ["claimUrl", "expiresAt"] as const satisfies readonly (keyof WorkspaceClaimLink)[];
@@ -43,7 +43,7 @@ export function createShareCommand(
 
 export function createClaimCommand(spaces: WorkspaceSpaceFeature, origin: () => Promise<string>): Command {
   const claim = new Command("claim")
-    .description("Make a link that lets a person claim this guest agent and keep its files")
+    .description("Make this guest agent's handoff link: a person opens it to see the agent's work, and signs in to take the agent")
     .addOption(jsonFieldsOption(CLAIM_JSON_FIELDS))
     .action(async (options: JsonFieldsOption) => {
       const link = await executeCommand(claim, async () => await createClaimLink(spaces, await origin()));
@@ -52,8 +52,8 @@ export function createClaimCommand(spaces: WorkspaceSpaceFeature, origin: () => 
         options,
         link,
         [
-          `Claim link: ${link.claimUrl}`,
-          "Give it to the user. Signing in and opening it within 10 minutes lets them claim this agent and keep its files.",
+          `Handoff link: ${link.claimUrl}`,
+          "Give it to the user. They open it to see everything this agent owns without signing in, and sign in there to take the agent and keep its files. The link works for 7 days.",
         ].join("\n"),
       );
     });

@@ -164,7 +164,7 @@ describe("repository member tools", () => {
       arguments: { repo: "agent-a/notes", action: "add", user: "agent-b", role: "viewer" },
     }))).toEqual({
       code: "AGENT_NOT_ALLOWED",
-      message: "An unclaimed agent cannot add Team Space members. A person must claim it first.",
+      message: "An unclaimed agent cannot add Team Space members. Give the user your handoff link from claim (uvw claim in the CLI). Once they take you, try again.",
     });
     session = { id: "u-h", username: "hana", displayName: "hana" };
     expect(toolError(await (await connect("?toolsets=admin")).callTool({

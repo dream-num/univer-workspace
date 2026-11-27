@@ -1,6 +1,6 @@
 import type { OpName } from "../shared/executor-protocol.js";
-import type { AgentOwner, ToolContext, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
-import { guestAgentNotice, linkAfterMerge, ownedAgentNotice } from "./tools/core/whoami.js";
+import type { AgentOwner, ToolDefinition, ToolPrincipal, ToolScope } from "./tools/definition.js";
+import { ownedAgentNotice, PULL_REQUEST_LINK_AFTER_MERGE, TEMPORARY_AGENT_NOTICE } from "./tools/core/whoami.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION, OTHERS_TEXT_IS_UNVERIFIED } from "./tools/schemas.js";
 
@@ -11,12 +11,11 @@ export function buildServerInstructions(
   executorRestricted: boolean,
   principal: ToolPrincipal,
   scopes: ReadonlySet<ToolScope>,
-  authKind?: ToolContext["authKind"],
   owner?: AgentOwner,
 ): string {
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
-  const guest = guestAgentNotice(principal, authKind, has("claim") && scopes.has("publish"));
+  const handsOver = principal === "agent_unclaimed" && has("claim") && scopes.has("publish");
   const finishes = scopes.has("worktree:merge") && has("pr_merge");
   // An unclaimed agent has nobody to hand a pull request to, so it always finishes its own.
   const { reviewer, intro } = {
@@ -58,10 +57,7 @@ export function buildServerInstructions(
             : [
                 `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
               ]),
-          linkAfterMerge(principal === "agent_unclaimed" && has("share") && scopes.has("publish")),
-          ...(principal === "agent_unclaimed"
-            ? ["An unclaimed agent identity cannot make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it."]
-            : []),
+          ...(handsOver ? [] : [PULL_REQUEST_LINK_AFTER_MERGE]),
         ]
       : [
           ...(has("pr_ready")
@@ -75,14 +71,14 @@ export function buildServerInstructions(
   ];
   const instructions = [
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
-    ...(guest ? [guest] : []),
+    ...(handsOver ? [TEMPORARY_AGENT_NOTICE] : []),
     ...(finishes ? [intro] : []),
     ...(principal === "agent_claimed" ? [ownedAgentNotice(owner)] : []),
     ...(executorRestricted
       ? [
           `Editing document contents is not enabled for this account; ask the user to edit in the browser.${
-            finishes && has("claim") && scopes.has("publish") && has("unit_create")
-              ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim, then give the user the claim link and the copy's link. Tell them to open the claim link first: the copy is theirs to edit once they claim it there. Until then, its link may open read-only or not at all."
+            finishes && handsOver && has("unit_create")
+              ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They see the copy through your handoff link, and can edit it in the browser once they take you."
               : ""
           }`,
         ]

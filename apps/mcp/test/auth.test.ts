@@ -342,11 +342,11 @@ describe("gateway authentication", () => {
     const share = async () => toolError(await client.callTool({ name: "share", arguments: { node: "n1", link: "viewer" } }));
     const inTeam = `Link Sharing works only for files in a Personal Space, and "Budget" is in the repository budget-x7k2/docs. To let more people open it, add them as members with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI). Either one needs the user, and the server's answer says what to give them.`;
     expect(await names()).toContain("claim");
-    expect(await share()).toMatchObject({ code: "workspace-argument-invalid", message: inTeam });
+    expect(await names(), "an unclaimed agent shows its work with claim, and never turns Link Sharing on").not.toContain("share");
     agent.claimed = true;
     expect(await names()).not.toContain("claim");
     expect(await share()).toMatchObject({ code: "workspace-argument-invalid", message: inTeam });
-    expect(gateway.events().map(({ principal_category }) => principal_category)).toEqual(["agent_unclaimed", "agent_claimed"]);
+    expect(gateway.events().map(({ principal_category }) => principal_category)).toEqual(["agent_claimed"]);
     expect(gateway.exchanges).toHaveLength(1);
     expect(products).not.toContain("/api/agents/claim-codes");
   });
@@ -363,13 +363,9 @@ describe("gateway authentication", () => {
       expect(whoami.isError).not.toBe(true);
       return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice, whoami: whoami.structuredContent };
     };
-    const guestFacts =
-      "This connection is a guest agent, which Workspace created because the browser had no Workspace session. A user who has a Workspace account and meant to connect under it should sign in to Workspace in that browser and reconnect the client.";
-    const tell = "Tell the user this in your first reply.";
-    const linkAfterMerge =
-      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.";
+    const temporary =
+      "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
     const mergeOwn = "Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge.";
-    const finishOwn = `${mergeOwn} ${linkAfterMerge}`;
     const pullLink = "Then give the user the pull request link.";
     const owns = (who: string) =>
       `${who} can open everything it owns, so to show them a repository or file, give them its link. You cannot let anyone else see one yourself: the server answers such a call with a confirm link, which you give to the user.`;
@@ -384,28 +380,21 @@ describe("gateway authentication", () => {
       "Give the user the pull request link so they can review it.",
       "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
     ];
-    const guest = await told("uvw_at_guest");
-    expect(guest.notice, "a client that drops server instructions still hears the guest notice, to pass on, how to finish and which link to give").toBe(
-      `${guestFacts} Otherwise the user can keep this agent by claiming it with claim. ${tell} ${finishOwn}`,
-    );
-    expect(guest.instructions).toContain(`${guestFacts} Otherwise the user can keep this agent by claiming it with claim. ${tell}`);
-    expect(guest.instructions).toContain(linkAfterMerge);
+    for (const bearer of ["uvw_at_guest", "uvw_pat_agent"]) {
+      const guest = await told(bearer);
+      expect(guest.notice, "a client that drops server instructions still hears how a temporary agent hands its work over and finishes").toBe(`${temporary} ${mergeOwn}`);
+      expect(guest.instructions).toContain(`${temporary}\n\n`);
+      expect(guest.instructions).toContain("works in its own Personal Space");
+      for (const gone of [pullLink, "call share", "guest agent"]) expect(guest.instructions, gone).not.toContain(gone);
+    }
     const readOnly = await told("uvw_at_guest_read");
-    expect(readOnly.notice, "a connection that cannot call claim or open a pull request names neither, nor how to finish one").toBe(
-      `${guestFacts} Otherwise the user can keep this agent by claiming it. ${tell}`,
-    );
-    expect(readOnly.instructions).toContain(`Otherwise the user can keep this agent by claiming it. ${tell}`);
+    expect(readOnly.notice, "a connection that cannot call claim or open a pull request names neither, nor how to finish one").toBeUndefined();
+    expect(readOnly.instructions).not.toContain("handoff");
 
     const noPublish = await told("uvw_at_merge");
-    expect(noPublish.notice, "share refuses a connection without publish, so neither names it").toBe(
-      `${guestFacts} Otherwise the user can keep this agent by claiming it. ${tell} ${mergeOwn} ${pullLink}`,
-    );
+    expect(noPublish.notice, "claim needs publish, so a connection without it gives the pull request link").toBe(`${mergeOwn} ${pullLink}`);
     expect(noPublish.instructions).toContain(`merge it with pr_merge. 8) ${pullLink}`);
-    expect(noPublish.instructions).not.toContain("call share");
-
-    const self = await told("uvw_pat_agent");
-    expect(self.instructions).toContain("works in its own Personal Space");
-    expect([self.instructions.includes("guest agent"), self.notice]).toEqual([false, finishOwn]);
+    expect(noPublish.instructions).not.toContain("handoff");
 
     agent.claimed = true;
     const claimed = await told("uvw_at_guest");
@@ -432,7 +421,7 @@ describe("gateway authentication", () => {
     const people = await start(exchangeEnv);
     for (const bearer of ["uvw_pat_full", "uvw_at_oauth"]) {
       const person = await people.connect(bearer);
-      expect(person.getInstructions()).not.toContain("guest agent");
+      expect(person.getInstructions()).not.toContain("temporary agent");
       expect((await person.callTool({ name: "whoami", arguments: {} })).structuredContent, bearer).not.toHaveProperty("notice");
     }
   });
@@ -445,13 +434,13 @@ describe("gateway authentication", () => {
       product: (path) => (path === "/api/session" ? { body: { authenticated: true, user: agent } } : undefined),
     });
     const restricted = "Editing document contents is not enabled for this account; ask the user to edit in the browser.";
-    const copy = "make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim";
+    const copy = "make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They see the copy through your handoff link";
     const withPublish = (await gateway.connect("uvw_at_guest")).getInstructions()!;
     expect(withPublish).toContain(`${restricted} Reading them is not enabled either.`);
     expect(withPublish).toContain(copy);
     const withoutPublish = (await gateway.connect("uvw_at_merge")).getInstructions()!;
     expect(withoutPublish).toContain(`${restricted}\n\n`);
-    expect(withoutPublish).not.toContain("call claim");
+    expect(withoutPublish).not.toContain("handoff");
   });
 
   it("asks Workspace nothing more for a claimed agent's or a person's tool lists", async () => {

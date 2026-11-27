@@ -72,7 +72,7 @@ describe("uvw repo member", () => {
   });
 
   it.each([
-    ["agent_unclaimed", ["add", "agent-b", "--role", "viewer"], "AGENT_NOT_ALLOWED: An unclaimed agent cannot add Team Space members. A person must claim it first."],
+    ["agent_unclaimed", ["add", "agent-b", "--role", "viewer"], "AGENT_NOT_ALLOWED: An unclaimed agent cannot add Team Space members. Give the user your handoff link from claim (uvw claim in the CLI). Once they take you, try again."],
     ["human", ["add", "agent-b", "--role", "admin"], `AGENT_NOT_ALLOWED: ${CEILING}`],
     ["human", ["add", "agent-b", "--role", "editor"],
       `INTERACTIVE_SESSION_REQUIRED: A person confirms it. Give the user this link so they can confirm it in the browser: ${ORIGIN}${CONFIRM}`],

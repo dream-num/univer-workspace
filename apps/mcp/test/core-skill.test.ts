@@ -79,7 +79,10 @@ describe("MCP core Skill tool bindings", () => {
   });
 
   it("keeps claim and irreversible discard rules in tool descriptions and defers readiness and merging", () => {
-    expect(tools.find(({ name }) => name === "claim")!.description).toContain("For an unclaimed agent only");
+    const claim = tools.find(({ name }) => name === "claim")!;
+    expect(claim.principals).toEqual(["agent_unclaimed"]);
+    expect(claim.description).toContain("They open it to see everything you own without signing in");
+    expect(claim.description).toContain("The link works for 7 days, or until a person takes you.");
     const ready = tools.find(({ name }) => name === "pr_ready")!.description;
     expect(ready).toContain("With undo true, move a ready pull request back to draft before an explicitly requested write");
     expect(ready, "a client that never shows server instructions still finds the rule in whoami").toContain(

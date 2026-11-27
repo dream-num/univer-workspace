@@ -327,7 +327,8 @@ On `FILES_IN_TRASH`, `pr_edit` leave_out_trashed, then merge.
 pull request link instead.
 Letting more people see data needs a person. Turning a link on or raising it to editor,
 making a repository public, adding a member or raising a role changes nothing and returns
-a confirm link: give it to the user. An unclaimed agent's viewer link still turns on at once.
-An agent's `share` url also says, in `access`, who can open it. While unclaimed, it also gives the user a claim link
-from `claim`.
+a confirm link: give it to the user. An unclaimed agent has no `share` and gets no confirm link.
+When it is done, it gives the user the handoff link from `claim`: they open it to see everything
+the agent owns, and sign in there to take it.
+A `share` url also says, in `access`, who can open it.
 There is no separate close or reopen tool for a pull request.

@@ -42,7 +42,6 @@ export interface ToolContext {
   readonly skills?: Promise<WorkspaceSkills>;
   readonly resources: () => ResourceLibrary;
   readonly scopes: ReadonlySet<ToolScope>;
-  readonly authKind?: "pat" | "oauth" | "dev";
   readonly owner?: AgentOwner;
 }
 
