@@ -68,7 +68,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It lists `pr_merge` with `core`, and for an agent User also `repo_create`, `repo_edit`, the repository member tools, `space_node` and `blob_upload`. When the connection holds the
   `worktree:merge` scope, it tells the caller to merge its own verified work, and a person or a claimed agent to hand the
   pull request over instead when asked to or when a person must decide; without that scope it leaves merging to the user.
-  An unclaimed agent gets `claim` in place of `share` and shows its work with one handoff link. It runs
+  An unclaimed agent gets `claim` in place of `share`. It shows its work with the links of its files and hands
+  everything over with one handoff link. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G. Its executor runs resident or, from the same image, on Alibaba Cloud Function Compute
   with HeaderField session affinity; the gateway finds the form through capability discovery.
@@ -152,6 +153,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   An unclaimed agent's handoff link admits a signed-out visitor as a viewer of everything that agent owns, private Spaces
   included, for 7 days or until a person takes the agent; the visitor's browser holds the link's code in a cookie, and no
   User or Login Session is created.
+  Every file an unclaimed agent owns, in its Personal Space and its Team Spaces, admits anyone who has the file's link as
+  a viewer, signed in or not, without Link Sharing. The link opens that file only, never a folder or the Space. This ends
+  when a person takes the agent, when the agent is banned, and while it is expired. The person who takes the agent
+  chooses whether its Personal Space file links keep working, as viewer Link Sharing.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;

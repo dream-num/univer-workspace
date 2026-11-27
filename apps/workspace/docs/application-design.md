@@ -144,7 +144,7 @@ Unit 创建事实、迁移副本验证和原子替换。组件版本见 [数据�
 产品 HTTP、Changeset 与 Worktree 入口异步校验同一个登录 Session。产品模块通过 `identity.requireSession(cookieHeader)` 取得 `Principal`，需要交互登录的操作使用 `requireInteractiveSession`。Space、Node、Resource 和 Worktree 的权限在执行对应操作时解析。
 
 Node、Resource 打开、按 Unit 查询、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
-匿名身份以保留的 `ANONYMOUS_USER_ID`（`workspace:anonymous`）进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；
+匿名身份以保留的 `ANONYMOUS_USER_ID`（`workspace:anonymous`）进入 Access Resolver，仅由 Link Sharing、Space 公开可读或未认领 agent 的文件凭链接可见提供 viewer 权限；
 所有写入和管理入口继续要求登录。匿名 Resource Open 不写 Recent。
 这些接口用 `identity.getReader(cookieHeader)` 取得读者，它是三种之一：有 Login Session 的 User；没有 Session、但
 `workspace_handoff` cookie 里的 handoff 码仍有效、对应 agent 未认领也未封禁的预览读者，ID 是
@@ -153,6 +153,11 @@ Node、Resource 打开、按 Unit 查询、Blob 与 Trunk Asset 的指定读取�
 `previewed`，`readerRole` 把它和公开可读一样映射为 `viewer`，不会更高。它写在暂停判断之内，所以过期或封禁的 agent 的 Space
 对预览读者同样不可见。每个请求都查一次数据库，不缓存。协同网关用同一个 `getReader`，预览读者和匿名读者走同一份
 路径白名单，实时连接也按没有 User 的读者登记。
+同一个文件里的 `linkViewableSql` 是另一段共用 SQL：Space 的所有者是未认领、未封禁的 agent，且 Node 带 Resource 时给出
+`link_viewable`，对任何读者成立，不限于预览读者。`readerRole` 同样把它映射为 `viewer`。它不进入 Space 的角色，所以 Space、
+文件夹和文件列表不因此打开；这样的读者没有整个 Space 的读权限，导航根退回到文件自己，响应里没有上级 Node。
+Server 的 `/nodes/<nodeId>` 页面路由在匿名读者能打开页面时调用 `identity.recordAgentPageView`，顺延未认领 agent 的到期时间，
+每天最多一次，不等待写入。
 SDK HTTP 的匿名入口集中由现有 Transport 中间件按方法和路径白名单放行，再由原有资源权限检查鉴权。
 Trunk 协同协议使用固定的访客显示身份及每连接独立的 member ID，复用短期、一次性 Session Ticket；
 该身份不对应产品 User，票据存储和连接生命周期沿用原实现。Snapshot、Comment/History 读取和
@@ -190,8 +195,10 @@ Cookie Session 与 token exchange 都经过同一个检查，被封禁的 agent 
 相同，Max-Age 是码剩余的有效期），并把 agent 的到期时间顺延，每天最多一次。此后这个浏览器不登录就能只读打开这个 agent 的
 Space、文件和 HTML View，Unit 与 HTML View 的实时数据走原有的 Access Resolver 和协同 Session Ticket。一个浏览器只有一份预览，
 后打开的链接覆盖先前的。agent 已有主人时返回 409，码过期后 7 天内返回 410，之后是 404；这个接口的每个非 200 回答和
-`POST /api/agents/claim` 都清除 cookie。人的浏览器 Session 用 `POST /api/agents/claim` 收下 agent，随后处理这次请求的副本调用
-`invalidateRealtimeNodeAccess()`，关闭它上面的 Trunk 协同连接。各连接重连时重新鉴权，预览读者的被拒绝。
+`POST /api/agents/claim` 都清除 cookie。人的浏览器 Session 用 `POST /api/agents/claim` 收下 agent。请求带 `keepFileLinks: true` 时，
+`permissions.keepAgentFileLinks` 接着给它 Personal Space 里没有 Link Sharing 行的文件各写一行 `viewer`，走 `upsertLinkSharing` 和
+`exposureGuard`；agent 已经属于调用者时这一步也执行，所以中途失败后重试能补齐。随后处理这次请求的副本调用
+`invalidateRealtimeNodeAccess()`，关闭它上面的 Trunk 协同连接。各连接重连时重新鉴权，预览读者的被拒绝，链接访客只在文件有 Link Sharing 行时重新连上。
 其他副本上已打开的预览连接和 Link Sharing 变更时一样，保持到断开为止。码过期或 agent 被封禁也不会主动关闭已打开的预览连接。
 认领码的哈希存在产品数据库的 `sign_in_codes` 里，任意副本都能查看和认领，7 天有效，
 每个 agent 最多 10 个有效码，所有副本合计最多 100000 个有效码，已过期的码不占容量。410 与 404 按读取时的时间判断，不依赖其他 agent 取码。
@@ -268,6 +275,7 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
   Team Worktree 的作者和被移出 Space 时一样仍能看到自己的 Pull request，但读不到其中的 Unit。暂停每次查询时推出，不落库；
 - 请求者是 `agent_unclaimed` 时，Link Sharing 给出的角色是 `viewer`，与匿名读者相同。
 - 请求者是 handoff link 的预览读者时，那个未认领 agent 拥有的 Space 给出 `viewer`，其余与匿名读者相同。
+- Space 所有者是未认领、未封禁的 agent 时，其中带 Resource 的 Node 对任何请求者给出 `viewer`，Space 和文件夹不给。
 
 `modules/access/ceilings.ts` 是权限判定的第三层。角色与 Capability 说明主体能做什么，上限只说明无论角色如何都不能做什么，
 不授予任何权限。规则只写在这一个文件里，各模块在动作前调用 `assertCeiling`，不通过时返回 403：
@@ -300,7 +308,7 @@ agent 的预算按产品数据计数：未结束的 Worktree 是它创建、`pro
 
 guard 的规则：请求的级别不高于已存级别时对任何 Session 放行，包括设为私有、移除成员或授权、降低角色、关闭链接。
 请求扩大时，只有人在 Browser 里登录的 Session（`personInBrowser`）放行。未认领 agent 得到 403 `AGENT_NOT_ALLOWED`，
-消息让它把 handoff link 交给用户，打开 Link Sharing 也不例外。其余 Session 得到 403
+消息说明它的文件已经凭链接可见，公开仓库、加人和可编辑的链接要等人经 handoff link 收下它，打开 Link Sharing 也不例外。其余 Session 得到 403
 `INTERACTIVE_SESSION_REQUIRED`，错误信封的 `url` 是确认页的路径：`/confirm/public?space=`、`/confirm/member?space=&user=&role=`、
 `/confirm/grant?node=&user=&role=` 或 `/confirm/link-sharing?node=&role=`。创建时请求 `publicRead: true` 的拒绝没有 `url`，
 因为还没有可确认的 Space。Web 的 `/confirm/$action` 页面解析这四种链接，用这个人自己的 Session 读名字，

@@ -277,7 +277,8 @@ A static OAuth client still needs a person signed in. A browser without one goes
 with `requiresConsent`, such as the Workspace Agent or the Space plugin, then gets its consent page with Allow
 and Deny, and any other static client gets its code at once.
 
-While an agent is unclaimed, authenticating it or opening its handoff link moves its
+While an agent is unclaimed, authenticating it, opening its handoff link or opening the page of one
+of its files (`/nodes/<nodeId>` on the server) moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still
 authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
@@ -289,7 +290,15 @@ server, so a collaboration socket the agent already holds stays open until its s
 agent's token exchange for up to 30 seconds, so for that long a banned claimed agent's token still gets an answer from tools
 that do not call Workspace, such as `api_find`. It reads an unclaimed agent from its session on every request.
 
-An unclaimed agent shows its work with one handoff link, and a person takes the agent there to keep its files.
+Anyone who has the link of a file an unclaimed agent owns can view that file, signed in or not, and no
+Link Sharing is needed or read. The rule covers every Node that holds a Resource in a Space the agent owns,
+Personal or Team, and gives the viewer role and no more. The link opens that file only: the answer names no
+parent, and folders, the Space and its file list stay closed. An HTML View opens with live data from the
+agent's own Sheets, because the page and its sources resolve through the same rule. The rule ends when a
+person takes the agent, when the agent is banned, and while it is expired. The agent cannot close it for one
+file: turning that file's Link Sharing off changes nothing until a person takes the agent.
+
+An unclaimed agent hands everything over with one handoff link, and a person takes the agent there to keep its files.
 The agent calls `POST /api/agents/claim-codes`, which returns `201` with `{ code, claimUrl, expiresIn }`, and
 gives `claimUrl` (`/claim/<code>` on this origin) to the person. The code lasts seven days, or until a person
 takes the agent. The product database holds its hash, so any server replica accepts it and a restart keeps it.
@@ -304,11 +313,19 @@ code expires. The replica that handles the claim also closes the Trunk collabora
 are authorized again; a preview connection that another replica holds stays open until it drops, as after a Link
 Sharing change. Neither an expired code nor a ban closes a preview connection that is already open. A browser
 holds one preview, and opening another handoff link replaces it. A session always wins over the cookie, so a
-signed-in person sees the summary only and reads the files after taking the agent.
+signed-in person sees the summary only on this page. They open a file by its own link, and browse the Spaces
+after taking the agent.
 
-`POST /api/agents/claim` `{ "code" }` takes the agent. It needs a person's browser session: an agent, a
+`POST /api/agents/claim` `{ "code", "keepFileLinks" }` takes the agent. It needs a person's browser session: an agent, a
 CLI login and a token session get `403 INTERACTIVE_SESSION_REQUIRED`, and the page then offers Sign out
-and continue, for a browser that holds an agent's cookie. Once an agent has an owner, its code answers
+and continue, for a browser that holds an agent's cookie. The claim ends the reading of the agent's files by
+link. The page has one checkbox, checked by default, **Keep its file links working for anyone who has them**,
+which sends `keepFileLinks: true`. The server then turns on viewer Link Sharing, as the person who takes the
+agent, for each file the agent made before the claim in its Personal Space that is not in Trash and has no
+Link Sharing setting. A file whose Link Sharing the agent turned off stays off. The rows are written after the
+claim is stored, in the same request. If that step fails, the claim stands, and the same request sent again
+writes the rest. Without `keepFileLinks`, the links stop with the claim. A Team Space has no Link Sharing, so
+links to its files always stop, and the page names those Team Spaces. Once an agent has an owner, its code answers
 `409 AGENT_ALREADY_CLAIMED` to anyone but that owner, signed out included. A code older than seven days answers
 `410 AGENT_CLAIM_EXPIRED`, and an unknown code or one older than fourteen days `404 AGENT_CLAIM_INVALID`. Each of
 these answers clears the cookie, and so does a claim. Claiming sets `owner_user_id` and
@@ -352,9 +369,10 @@ plugin's sessions included) and a session issued for a token. Creating a Space t
 code without `url`, because no Space exists to confirm. The server compares the request with the stored state
 inside the write's own transaction. A write that keeps or lowers the stored access therefore passes for every
 session: making a Space private, removing a member or a grant, lowering a role, turning a link off, or repeating
-a role already held. An unclaimed agent has no person to confirm for it and gets `AGENT_NOT_ALLOWED`, with a
-message telling it to give the user its handoff link. That includes turning on a link for its own file. A link it
-turned on before this rule keeps working until the agent expires.
+a role already held. An unclaimed agent has no person to confirm for it and gets `AGENT_NOT_ALLOWED`. The
+message says that its files can already be viewed by link, and that a public repository, a new member and an
+editor link wait until a person takes it through its handoff link. That includes turning on a link for its own
+file or folder. A link it turned on before this rule keeps working until the agent expires.
 
 The confirm page reads the Space, file and user names with the person's own session and shows no text from the
 link. It states the consequence, shows the current and the new access, and offers Confirm and Give up. Confirm
@@ -602,7 +620,8 @@ viewer access, even when a link grants editors access after sign-in. They cannot
 modify source content, write comments, upload, manage permissions, or access Worktrees.
 An unclaimed agent also gets only viewer access from a link.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
-A signed-out visitor who opened an unclaimed agent's handoff link also views everything that agent owns,
+Anyone who has the link of an unclaimed agent's file views that file, and a signed-out visitor who opened
+its handoff link also views everything that agent owns,
 as [CLI sign-in and Agent access](#cli-sign-in-and-agent-access) describes.
 
 A signed-out visitor sees a bar under the header on every file and folder page, and in the
@@ -629,7 +648,8 @@ agent, with the same two ways as `Hand to my agent`. Through MCP the agent copie
 pull request with `unit_create` and `from`, which needs no `read`; through `uvw` it uses
 `uvw unit create --from`. Either way it merges the pull request and gives the visitor its handoff
 link. Both prompts have the agent tell the visitor to open the handoff link first: the copy shows there
-without signing in, and is theirs to edit once they sign in and take the agent. An agent cannot copy a page, so for a page the dialog
+without signing in, and is theirs to edit once they sign in and take the agent. Until then the copy's own link
+opens read-only, for the visitor and for anyone they forward it to. An agent cannot copy a page, so for a page the dialog
 offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only
 the sign-up return it was asked from makes it.
 
