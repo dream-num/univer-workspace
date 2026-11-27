@@ -1,8 +1,8 @@
 import { ApplicationError } from "../../middleware/errors.js";
 import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import { conflict, notFound, requireManageMembers, requireShare, requireTeam } from "./permissions.policy.js";
-import { assertCeiling, type AccessResolver } from "../access/index.js";
-import { principalCategory, type PrincipalCategory } from "../identity/index.js";
+import { assertCeiling, exposureGuard, type AccessResolver } from "../access/index.js";
+import { principalCategory, type Principal, type PrincipalCategory } from "../identity/index.js";
 import type {
   PermissionsRepository,
   GrantRow,
@@ -35,7 +35,7 @@ export interface PermissionsModule {
     readonly members: readonly TeamMembership[];
   }>;
   upsertTeamMember(
-    actorUserId: string,
+    actor: Principal,
     spaceId: string,
     userId: string,
     input: unknown
@@ -50,7 +50,7 @@ export interface PermissionsModule {
     nodeId: string
   ): Promise<{ readonly grants: readonly NodeGrant[] }>;
   upsertNodeGrant(
-    actorUserId: string,
+    actor: Principal,
     nodeId: string,
     userId: string,
     input: unknown
@@ -65,7 +65,7 @@ export interface PermissionsModule {
     nodeId: string
   ): Promise<NodeLinkSharing>;
   updateNodeLinkSharing(
-    actorUserId: string,
+    actor: Principal,
     nodeId: string,
     input: unknown
   ): Promise<NodeLinkSharing>;
@@ -114,14 +114,14 @@ export function createPermissionsModule(options: {
       };
     },
 
-    async upsertTeamMember(actorUserId, spaceId, userId, input) {
-      const space = requireManageMembers(await options.access.resolveSpace(actorUserId, spaceId));
+    async upsertTeamMember(actor, spaceId, userId, input) {
+      const space = requireManageMembers(await options.access.resolveSpace(actor.user.id, spaceId));
       if (space.ownerUserId === userId) {
         throw conflict("The space owner cannot be a member.");
       }
       await requireUser(options.repository, userId);
       const role = validTeamRole(input);
-      assertCeiling(await options.access.principalCategory(actorUserId), "addTeamMember", {
+      assertCeiling(principalCategory(actor.user), "addTeamMember", {
         member: await options.access.principalCategory(userId),
         role,
         owner: await options.access.principalCategory(space.ownerUserId),
@@ -130,9 +130,9 @@ export function createPermissionsModule(options: {
         spaceId,
         userId,
         role,
-        grantedBy: actorUserId,
+        grantedBy: actor.user.id,
         now: now(),
-      });
+      }, exposureGuard(actor, { kind: "member", spaceId, userId, role }));
       return membershipView(row);
     },
 
@@ -150,17 +150,18 @@ export function createPermissionsModule(options: {
       };
     },
 
-    async upsertNodeGrant(actorUserId, nodeId, userId, input) {
-      requireShare(await options.access.resolveNode(actorUserId, nodeId));
-      if (actorUserId === userId) throw conflict("The space owner already has access.");
+    async upsertNodeGrant(actor, nodeId, userId, input) {
+      requireShare(await options.access.resolveNode(actor.user.id, nodeId));
+      if (actor.user.id === userId) throw conflict("The space owner already has access.");
       await requireUser(options.repository, userId);
+      const role = validGrantRole(input);
       const row = await options.repository.upsertGrant({
         nodeId,
         userId,
-        role: validGrantRole(input),
-        grantedBy: actorUserId,
+        role,
+        grantedBy: actor.user.id,
         now: now(),
-      });
+      }, exposureGuard(actor, { kind: "grant", nodeId, userId, role }));
       return grantView(row);
     },
 
@@ -179,22 +180,22 @@ export function createPermissionsModule(options: {
       };
     },
 
-    async updateNodeLinkSharing(actorUserId, nodeId, input) {
-      requireShare(await options.access.resolveNode(actorUserId, nodeId));
+    async updateNodeLinkSharing(actor, nodeId, input) {
+      requireShare(await options.access.resolveNode(actor.user.id, nodeId));
       const settings = validLinkSharing(input);
       const { row, owner, changed, wasEnabled } = await options.repository.upsertLinkSharing({
         nodeId,
         ...settings,
-        actorUserId,
+        actorUserId: actor.user.id,
         now: now(),
-      });
+      }, exposureGuard(actor, settings.enabled ? { kind: "link-sharing", nodeId, role: settings.role } : null));
       if (changed) options.onLinkSharingUpdated?.(nodeId);
       const sharing = { ...linkSharingView(row), ...ownerView(owner) };
       if (sharing.enabled !== wasEnabled) {
         recordLoopEvent(
           "workspace.link_sharing",
           { state: sharing.enabled ? "on" : "off", role: sharing.role, owner_category: principalCategory(sharing.owner) },
-          { node_id: nodeId, user_id: actorUserId }
+          { node_id: nodeId, user_id: actor.user.id }
         );
       }
       return sharing;

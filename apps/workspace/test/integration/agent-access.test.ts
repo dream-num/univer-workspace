@@ -194,7 +194,9 @@ describe("access rules for agents", () => {
     const agent = await createAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Agent sheet");
     expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie)).status).toBe(200);
-    expect((await put(origin, `/api/nodes/${nodeId}/grants/${reader.id}`, { role: "editor" }, agent.cookie)).status).toBe(200);
+    await expectRefused(put(origin, `/api/nodes/${nodeId}/grants/${reader.id}`, { role: "editor" }, agent.cookie), "AGENT_NOT_ALLOWED");
+    // No session can share an unclaimed agent's file with a person, so the repository writes a grant made before that rule.
+    await application.repositories.permissions.upsertGrant({ nodeId, userId: reader.id, role: "editor", grantedBy: agent.id, now: Date.now() }, () => {});
     const sharedWithReader = async () =>
       ((await (await fetch(`${origin}/api/shared-with-me`, { headers: { cookie: reader.cookie } })).json()) as { items: unknown[] }).items.length;
     const suspend = (column: "expires_at" | "banned_at", value: number | null) =>
@@ -217,7 +219,7 @@ describe("access rules for agents", () => {
 });
 
 describe("ceilings", () => {
-  it("keeps an unclaimed agent from making a Space public, and lets it once a human claims it", async () => {
+  it("keeps an unclaimed agent from making a Space public, and gives a claimed one a confirm link its claimer can act on", async () => {
     const { origin, application } = await start();
     const human = await register(origin, "owner");
     const agent = await createAgent(origin);
@@ -230,7 +232,11 @@ describe("ceilings", () => {
       spaces: [{ type: "personal", name: "Renamed", publicRead: false }],
     });
     claim(application, agent.id, human.id);
-    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie })).status).toBe(200);
+    const asked = await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie });
+    expect({ status: asked.status, body: await asked.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "INTERACTIVE_SESSION_REQUIRED", url: `/confirm/public?space=${personal}`,
+    } } });
+    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: human.cookie })).status).toBe(200);
 
     const other = await register(origin, "member");
     expect((await put(origin, `/api/team-spaces/${team.id}/members/${other.id}`, { role: "viewer" }, human.cookie)).status).toBe(200);

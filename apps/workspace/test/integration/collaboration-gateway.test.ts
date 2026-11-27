@@ -1,4 +1,4 @@
-import { interactivePrincipal } from "../fixtures/principal.js";
+import { agentPrincipal, interactivePrincipal } from "../fixtures/principal.js";
 import { getDocsEmptySnapshot, JSONX, TextXActionType, getBasesEmptySnapshot } from "@univerjs/core";
 import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univerjs-pro/slides";
 import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
@@ -106,12 +106,12 @@ describe("collaboration gateway", () => {
       expect((await fetch(`${origin}/api/nodes/${node.id}`)).status).toBe(404);
       expect((await fetch(snapshotUrl)).status).toBe(403);
       if (policy !== "space") {
-        await application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+        await application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), shared.id, {
           enabled: true,
           role: "editor",
         });
       } else {
-        await application.spaces.update(ownerId, space.id, { publicRead: true });
+        await application.spaces.update(interactivePrincipal(ownerId), space.id, { publicRead: true });
       }
 
       const metadata = await fetch(`${origin}/api/nodes/${node.id}`);
@@ -216,12 +216,12 @@ describe("collaboration gateway", () => {
       }
 
       if (policy === "link") {
-        await application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+        await application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), shared.id, {
           enabled: false,
           role: "editor",
         });
       } else if (policy === "space") {
-        await application.spaces.update(ownerId, space.id, { publicRead: false });
+        await application.spaces.update(interactivePrincipal(ownerId), space.id, { publicRead: false });
       } else if (policy === "move") {
         await application.nodes.update(interactivePrincipal(ownerId), node.id, { parentNodeId: parent.id });
       } else if (policy === "trash") {
@@ -291,7 +291,7 @@ describe("collaboration gateway", () => {
         throw new Error("Created Resource is not a Univer Resource");
       }
       await application.permissions.updateNodeLinkSharing(
-        owner.view.user.id,
+        interactivePrincipal(owner.view.user.id),
         created.body.node.id,
         { enabled: true, role: "editor" }
       );
@@ -567,7 +567,7 @@ describe("collaboration gateway", () => {
       displayName: "History Viewer",
       password: "correct horse battery staple",
     });
-    await application.permissions.updateNodeLinkSharing(ownerId, first.nodeId, {
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), first.nodeId, {
       enabled: true,
       role: "viewer",
     });
@@ -1766,7 +1766,7 @@ describe("content permission integration", () => {
     const viewer = await account("protection-viewer");
     const outsider = await account("protection-outsider");
     const space = team
-      ? await application.spaces.createTeamSpace(owner.id, { name: "Protected" })
+      ? await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Protected" })
       : (await application.spaces.list(owner.id)).spaces[0]!;
     const created = await application.resources.create(
       owner.id,
@@ -1785,8 +1785,8 @@ describe("content permission integration", () => {
     const node = created.body.node;
     const unitId = created.body.node.resource.unitId;
     for (const [member, role] of [[editor, "editor"], [viewer, "viewer"]] as const) {
-      if (team) await application.permissions.upsertTeamMember(owner.id, space.id, member.id, { role });
-      else await application.permissions.upsertNodeGrant(owner.id, node.id, member.id, { role });
+      if (team) await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), space.id, member.id, { role });
+      else await application.permissions.upsertNodeGrant(interactivePrincipal(owner.id), node.id, member.id, { role });
     }
     async function authz(cookie: string, path: string, body?: unknown, method = "POST") {
       return fetch(`${origin}/universer-api/authz${path}`, {
@@ -1822,7 +1822,7 @@ describe("content permission integration", () => {
       objectType: 3, selectRangeObject: { unitID: f.unitId, name: "Original" },
     });
     const setEditorRole = (role: "editor" | "viewer") =>
-      f.application.permissions.upsertNodeGrant(f.owner.id, f.node.id, f.editor.id, { role });
+      f.application.permissions.upsertNodeGrant(interactivePrincipal(f.owner.id), f.node.id, f.editor.id, { role });
 
     const insert = repository.create.bind(repository);
     let deniedId = "";
@@ -2143,7 +2143,7 @@ describe("content permission integration", () => {
 
   it("holds an unclaimed agent to Viewer on an Editor link, like the anonymous reader", async () => {
     const f = await fixture();
-    await f.application.permissions.updateNodeLinkSharing(f.owner.id, f.node.id, { enabled: true, role: "editor" });
+    await f.application.permissions.updateNodeLinkSharing(interactivePrincipal(f.owner.id), f.node.id, { enabled: true, role: "editor" });
     const edit = { cellValue: { 0: { 0: { v: "link edit" } } } };
     const agent = await sheetSubmit(f, (await agentSession(f)).cookie);
     expect(await agent.submit(1, "sheet.mutation.set-range-values", edit)).toBe("permission_rej");
@@ -2165,7 +2165,7 @@ describe("content permission integration", () => {
     if (created.status === 202 || created.body.node.resource?.kind !== "univer")
       throw new Error("Missing Unit");
     const unitId = created.body.node.resource.unitId;
-    await f.application.permissions.updateNodeLinkSharing(agent.id, created.body.node.id, { enabled: true, role: "viewer" });
+    await f.application.permissions.updateNodeLinkSharing(agentPrincipal(agent.id, false), created.body.node.id, { enabled: true, role: "viewer" });
     const snapshot = () =>
       fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${unitId}/rev/0`, {
         headers: { cookie: f.outsider.cookie },
@@ -2381,7 +2381,7 @@ describe("content permission integration", () => {
         .run(f.owner.id, user.id);
       const issued = await f.application.identity.issueSession(user, "agent");
       const agent = { id: user.id, cookie: `${f.application.identity.cookieName}=${issued.cookieValue}` };
-      await f.application.permissions.upsertTeamMember(f.owner.id, f.space.id, agent.id, { role: "editor" });
+      await f.application.permissions.upsertTeamMember(interactivePrincipal(f.owner.id), f.space.id, agent.id, { role: "editor" });
       const folder = await f.application.nodes.create(f.owner.id, { spaceId: f.space.id, parentNodeId: null, name: ".agents" });
       const bytes = Buffer.from("## smoke\nOpen the sheet.\n");
       const owner = interactivePrincipal(f.owner.id);
@@ -2390,7 +2390,7 @@ describe("content permission integration", () => {
       });
       await f.application.blobs.upload(f.owner.id, body.upload.id, String(bytes.length), Readable.from([bytes]));
       await f.application.blobs.complete(owner, body.upload.id);
-      await f.application.spaces.update(f.owner.id, f.space.id, { landing: "checks" });
+      await f.application.spaces.update(interactivePrincipal(f.owner.id), f.space.id, { landing: "checks" });
       const head = () => {
         const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
         try {
@@ -3159,11 +3159,11 @@ it('closes existing collaboration sockets when Team membership is removed', asyn
     displayName: 'Revoke Member',
     password: 'correct horse battery staple',
   });
-  const space = await application.spaces.createTeamSpace(owner.view.user.id, {
+  const space = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), {
     name: 'Revoke access',
   });
   await application.permissions.upsertTeamMember(
-    owner.view.user.id,
+    interactivePrincipal(owner.view.user.id),
     space.id,
     member.view.user.id,
     { role: 'editor' },

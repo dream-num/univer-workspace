@@ -75,7 +75,7 @@ describe("permissions", () => {
       parentNodeId: null,
       name: "Private sibling",
     });
-    await application.permissions.updateNodeLinkSharing(owner, root.id, {
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner), root.id, {
       enabled: true,
       role: "editor",
     });
@@ -91,8 +91,8 @@ describe("permissions", () => {
       },
     });
     expect(await application.access.resolveNode(ANONYMOUS_USER_ID, sibling.id)).toBeNull();
-    await application.spaces.update(owner, space.id, { publicRead: true });
-    await application.permissions.updateNodeLinkSharing(owner, root.id, {
+    await application.spaces.update(interactivePrincipal(owner), space.id, { publicRead: true });
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner), root.id, {
       enabled: false,
       role: "editor",
     });
@@ -101,10 +101,10 @@ describe("permissions", () => {
       navigationRootNodeId: null,
     });
     expect((await application.access.resolveNode(ANONYMOUS_USER_ID, sibling.id))?.role).toBe("viewer");
-    await application.spaces.update(owner, space.id, { publicRead: false });
+    await application.spaces.update(interactivePrincipal(owner), space.id, { publicRead: false });
     expect(await application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toBeNull();
 
-    await application.permissions.updateNodeLinkSharing(owner, root.id, {
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner), root.id, {
       enabled: true,
       role: "editor",
     });
@@ -115,7 +115,7 @@ describe("permissions", () => {
     await application.trash.restore(owner, trash.id);
     expect((await application.access.resolveNode(ANONYMOUS_USER_ID, root.id))?.role).toBe("viewer");
 
-    const team = await application.spaces.createTeamSpace(owner, {
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner), {
       name: "Public team",
       publicRead: true,
     });
@@ -126,7 +126,7 @@ describe("permissions", () => {
     });
     expect((await application.access.resolveSpace(ANONYMOUS_USER_ID, team.id))?.role).toBe("viewer");
     expect((await application.access.resolveNode(ANONYMOUS_USER_ID, teamNode.id))?.role).toBe("viewer");
-    await application.spaces.update(owner, team.id, { publicRead: false });
+    await application.spaces.update(interactivePrincipal(owner), team.id, { publicRead: false });
     expect(await application.access.resolveSpace(ANONYMOUS_USER_ID, team.id)).toBeNull();
     expect(await application.access.resolveNode(ANONYMOUS_USER_ID, teamNode.id)).toBeNull();
   });
@@ -136,7 +136,7 @@ describe("permissions", () => {
     const owner = await register(application, "public-team-owner");
     const visitor = await register(application, "public-team-visitor");
 
-    const team = await application.spaces.createTeamSpace(owner, {
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner), {
       name: "Public team",
       publicRead: true,
     });
@@ -173,7 +173,7 @@ describe("permissions", () => {
     expect(await application.access.resolveResource(visitor, resourceId)).toBeNull();
 
     expect(
-      await application.spaces.update(owner, space.id, { publicRead: true })
+      await application.spaces.update(interactivePrincipal(owner), space.id, { publicRead: true })
     ).toMatchObject({ publicRead: true });
     expect((await application.spaces.list(visitor)).spaces).not.toContainEqual(
       expect.objectContaining({
@@ -197,11 +197,11 @@ describe("permissions", () => {
     expect(await application.resources.open(visitor, resourceId)).toMatchObject({
       resource: { accessRole: "viewer", editorMode: "readOnly" },
     });
-    await expect(application.spaces.update(visitor, space.id, { publicRead: false })).rejects.toThrowError(
+    await expect(application.spaces.update(interactivePrincipal(visitor), space.id, { publicRead: false })).rejects.toThrowError(
       expect.objectContaining({ code: "FORBIDDEN", status: 403 })
     );
 
-    await application.spaces.update(owner, space.id, { publicRead: false });
+    await application.spaces.update(interactivePrincipal(owner), space.id, { publicRead: false });
     expect(await application.access.resolveResource(visitor, resourceId)).toBeNull();
   });
 
@@ -211,7 +211,7 @@ describe("permissions", () => {
     const member = await register(application, "member");
     const other = await register(application, "other");
     const contributor = await register(application, "contributor");
-    const team = await application.spaces.createTeamSpace(owner, {
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner), {
       name: "Product",
     });
 
@@ -222,7 +222,7 @@ describe("permissions", () => {
     });
     expect(
       await application.permissions.upsertTeamMember(
-        owner,
+        interactivePrincipal(owner),
         team.id,
         member,
         { role: "viewer" }
@@ -242,7 +242,7 @@ describe("permissions", () => {
       members: [{ user: { id: member }, role: "viewer" }],
     });
     await expect(application.permissions.upsertTeamMember(
-        member,
+        interactivePrincipal(member),
         team.id,
         other,
         { role: "editor" }
@@ -255,19 +255,19 @@ describe("permissions", () => {
     );
 
     await application.permissions.upsertTeamMember(
-      owner,
+      interactivePrincipal(owner),
       team.id,
       member,
       { role: "admin" }
     );
     await application.permissions.upsertTeamMember(
-      owner,
+      interactivePrincipal(owner),
       team.id,
       other,
       { role: "admin" }
     );
     await expect(application.permissions.upsertTeamMember(
-        member,
+        interactivePrincipal(member),
         team.id,
         other,
         { role: "viewer" }
@@ -276,7 +276,7 @@ describe("permissions", () => {
       expect.objectContaining({ code: "FORBIDDEN" })
     );
     await expect(application.permissions.upsertTeamMember(
-        member,
+        interactivePrincipal(member),
         team.id,
         contributor,
         { role: "admin" }
@@ -286,7 +286,7 @@ describe("permissions", () => {
     );
     expect(
       (await application.permissions.upsertTeamMember(
-        member,
+        interactivePrincipal(member),
         team.id,
         contributor,
         { role: "editor" }
@@ -302,15 +302,15 @@ describe("permissions", () => {
     const owner = await register(app, "owner");
     const admin = await register(app, "admin");
     const member = await register(app, "member");
-    const team = await app.spaces.createTeamSpace(owner, { name: "Members" });
+    const team = await app.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Members" });
     const writes = await Promise.all([
-      app.permissions.upsertTeamMember(owner, team.id, member, { role: "viewer" }),
-      app.permissions.upsertTeamMember(owner, team.id, member, { role: "editor" }),
+      app.permissions.upsertTeamMember(interactivePrincipal(owner), team.id, member, { role: "viewer" }),
+      app.permissions.upsertTeamMember(interactivePrincipal(owner), team.id, member, { role: "editor" }),
     ]);
     expect(writes.map((write) => write.role)).toEqual(["viewer", "editor"]);
 
-    await app.permissions.upsertTeamMember(owner, team.id, admin, { role: "admin" });
-    const change = app.permissions.upsertTeamMember(admin, team.id, member, { role: "viewer" });
+    await app.permissions.upsertTeamMember(interactivePrincipal(owner), team.id, admin, { role: "admin" });
+    const change = app.permissions.upsertTeamMember(interactivePrincipal(admin), team.id, member, { role: "viewer" });
     await app.permissions.removeTeamMember(owner, team.id, admin);
     await expect(change).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await app.access.resolveSpace(member, team.id))?.role).toBe("editor");
@@ -324,15 +324,15 @@ describe("permissions", () => {
     if (!space) throw new Error("Personal space is missing");
     const group = await app.nodes.create(owner, { spaceId: space.id, parentNodeId: null, name: "Shared" });
     const grants = await Promise.all([
-      app.permissions.upsertNodeGrant(owner, group.id, member, { role: "viewer" }),
-      app.permissions.upsertNodeGrant(owner, group.id, member, { role: "editor" }),
+      app.permissions.upsertNodeGrant(interactivePrincipal(owner), group.id, member, { role: "viewer" }),
+      app.permissions.upsertNodeGrant(interactivePrincipal(owner), group.id, member, { role: "editor" }),
     ]);
     expect(grants.map(({ role, effectiveRole }) => [role, effectiveRole])).toEqual([
       ["viewer", "viewer"], ["editor", "editor"],
     ]);
     const links = await Promise.all([
-      app.permissions.updateNodeLinkSharing(owner, group.id, { enabled: true, role: "viewer" }),
-      app.permissions.updateNodeLinkSharing(owner, group.id, { enabled: false, role: "editor" }),
+      app.permissions.updateNodeLinkSharing(interactivePrincipal(owner), group.id, { enabled: true, role: "viewer" }),
+      app.permissions.updateNodeLinkSharing(interactivePrincipal(owner), group.id, { enabled: false, role: "editor" }),
     ]);
     expect(links.map(({ enabled, role }) => [enabled, role])).toEqual([[true, "viewer"], [false, "editor"]]);
   });
@@ -365,7 +365,7 @@ describe("permissions", () => {
 
     expect(
       await application.permissions.upsertNodeGrant(
-        owner,
+        interactivePrincipal(owner),
         groupNode.id,
         recipient,
         { role: "viewer" }
@@ -400,7 +400,7 @@ describe("permissions", () => {
 
     expect(
       await application.permissions.upsertNodeGrant(
-        owner,
+        interactivePrincipal(owner),
         created.body.node.id,
         recipient,
         { role: "editor" }
@@ -483,7 +483,7 @@ describe("permissions", () => {
 
     expect(
       await application.permissions.updateNodeLinkSharing(
-        owner,
+        interactivePrincipal(owner),
         groupNode.id,
         { enabled: true, role: "viewer" }
       )
@@ -529,7 +529,7 @@ describe("permissions", () => {
       })).items
     ).toEqual([]);
 
-    await application.permissions.updateNodeLinkSharing(owner, groupNode.id, {
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner), groupNode.id, {
       enabled: true,
       role: "editor",
     });
@@ -547,7 +547,7 @@ describe("permissions", () => {
       kind: "univer", editorMode: "edit",
     });
 
-    await application.permissions.updateNodeLinkSharing(owner, groupNode.id, {
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner), groupNode.id, {
       enabled: false,
       role: "editor",
     });

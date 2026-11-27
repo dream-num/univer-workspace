@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createSqliteTestRuntime } from "../support/sqlite/collaboration-runtime.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -89,12 +90,12 @@ describe("Resources", () => {
     const application = await createTestApplication(createUnit);
     const owner = await register(application, "resource-race-owner");
     const editor = await register(application, "resource-race-editor");
-    const space = await application.spaces.createTeamSpace(owner, { name: "Research" });
-    await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "editor" });
+    const space = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Research" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner), space.id, editor, { role: "editor" });
     const repo = application.repositories.resources;
     const reserve = repo.reserveCreateResource.bind(repo);
     vi.spyOn(repo, "reserveCreateResource").mockImplementationOnce(async (input) => {
-      await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "viewer" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner), space.id, editor, { role: "viewer" });
       return reserve(input);
     });
     const key = "create-resource-target-revoked";
@@ -116,7 +117,7 @@ describe("Resources", () => {
     const editor = await register(application, "resource-publish-editor");
     const space = (await application.spaces.list(owner)).spaces[0]!;
     const folder = await application.nodes.create(owner, { name: "Shared", spaceId: space.id, parentNodeId: null });
-    await application.permissions.upsertNodeGrant(owner, folder.id, editor, { role: "editor" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner), folder.id, editor, { role: "editor" });
     revoke = async () => { await application.permissions.removeNodeGrant(owner, folder.id, editor); };
     const key = "resource-target-changed-before-publish";
     const input = { kind: "univer", unitType: "sheet", name: "Budget", spaceId: space.id, parentNodeId: folder.id };
@@ -127,7 +128,7 @@ describe("Resources", () => {
     expect(application.database.connection.prepare("SELECT COUNT(*) AS n FROM resources").get()).toEqual({ n: 0 });
     await expect(application.operations.retry(editor, key)).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(created).toHaveLength(1);
-    await application.permissions.upsertNodeGrant(owner, folder.id, editor, { role: "editor" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner), folder.id, editor, { role: "editor" });
     await expect(application.operations.retry(editor, key)).resolves.toMatchObject({ state: "completed" });
     expect(created).toEqual([created[0], created[0]]);
   });

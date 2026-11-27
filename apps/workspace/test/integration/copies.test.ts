@@ -40,7 +40,7 @@ import type { CopyPayload } from "../../server/src/modules/copies/copies.types.j
 import type { Principal } from "../../server/src/modules/identity/index.js";
 import type { NodeSummary } from "../../server/src/modules/nodes/index.js";
 import type { WorktreeUnit } from "../../server/src/modules/worktrees/index.js";
-import { interactivePrincipal } from "../fixtures/principal.js";
+import { agentPrincipal, interactivePrincipal } from "../fixtures/principal.js";
 import { createTestBucket } from "../support/postgres/s3.js";
 import { createPostgresTestDatabase } from "../support/postgres/schema.js";
 
@@ -231,7 +231,7 @@ const post = (origin: string, path: string, cookie: string | null, body: unknown
 
 const toPersonalSpace = { target: { kind: "personalSpace" } };
 const shareByLink = (h: Harness, ownerId: string, nodeId: string, enabled = true) =>
-  h.application.permissions.updateNodeLinkSharing(ownerId, nodeId, { enabled, role: "viewer" });
+  h.application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), nodeId, { enabled, role: "viewer" });
 const copiedNode = (result: { readonly status: number; readonly body: object }) => {
   expect(result.status).toBe(201);
   return (result.body as { readonly node: NodeSummary }).node;
@@ -457,7 +457,7 @@ describe("copying a file", () => {
     await shareByLink(h, reader.id, node.id);
     expect(await provenance()).toBeNull();
     expect(await provenance(owner.cookie)).toBeNull();
-    await h.application.permissions.upsertNodeGrant(reader.id, node.id, owner.id, { role: "editor" });
+    await h.application.permissions.upsertNodeGrant(interactivePrincipal(reader.id), node.id, owner.id, { role: "editor" });
     expect(await provenance(owner.cookie)).toBe(source.nodeId);
     const stored = await fetch(`${origin}/api/operations/${key}`, { headers: { cookie: reader.cookie } });
     expect(await stored.json()).toMatchObject({ kind: "copyNode", state: "completed", result: { nodeId: node.id } });
@@ -472,7 +472,7 @@ describe("copying a file", () => {
     const claimer = await h.human("claimer");
     const stranger = await h.human("claimer-stranger");
     const source = await createSheet(h, { id: agentId, spaceId: await h.personal(agentId) });
-    await shareByLink(h, agentId, source.nodeId);
+    await h.application.permissions.updateNodeLinkSharing(agentPrincipal(agentId, false), source.nodeId, { enabled: true, role: "viewer" });
     const { code } = (await (await post(origin, "/api/agents/claim-codes", agentCookie, undefined)).json()) as { code: string };
     expect((await post(origin, "/api/agents/claim", claimer.cookie, { code })).status).toBe(200);
     expect((await post(origin, `/api/agents/${agentId}/stop`, claimer.cookie, undefined)).status).toBe(204);

@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -47,7 +48,7 @@ it("checks live content access for collaborators and persists embedded assets", 
   expect(await permissions.create({ ...object, collaborators: [] }, "sheet")).toBe("saved");
   const patch = { name: null, scope: null, strategies: null, collaborators: object.collaborators };
   expect(await permissions.update(owner, unitId, object.id, patch)).toBe("invalid-collaborator");
-  await app.permissions.upsertNodeGrant(owner, created.body.node.id, stranger, { role: "viewer" });
+  await app.permissions.upsertNodeGrant(interactivePrincipal(owner), created.body.node.id, stranger, { role: "viewer" });
   expect(await permissions.update(owner, unitId, object.id, patch)).toBe("saved");
   expect(await permissions.get(unitId, object.id)).toEqual(object);
 

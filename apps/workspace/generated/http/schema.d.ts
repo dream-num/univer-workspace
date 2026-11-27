@@ -1360,7 +1360,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a Team Space owned by the current User. */
+        /**
+         * Create a Team Space owned by the current User.
+         * @description `publicRead: true` lets more people see data, so only a person signed in to Workspace in a browser
+         *     may send it. Any other session gets `403 INTERACTIVE_SESSION_REQUIRED` without `url`, because no
+         *     Space exists to confirm yet, and an unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Create the Space
+         *     private, then update it.
+         */
         post: operations["createTeamSpace"];
         delete?: never;
         options?: never;
@@ -1405,7 +1411,14 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Space settings. */
+        /**
+         * Update Space settings.
+         * @description `publicRead: true` on a private Space lets more people see data, so only a person signed in to
+         *     Workspace in a browser may send it. Any other session gets `403 INTERACTIVE_SESSION_REQUIRED` with
+         *     `url` set to `/confirm/public?space=<spaceId>`, and the Space does not change. An unclaimed agent
+         *     gets `403 AGENT_NOT_ALLOWED`. Every session may set `publicRead: false`, or repeat `true` on a
+         *     Space that is already public.
+         */
         patch: operations["updateSpace"];
         trace?: never;
     };
@@ -2209,7 +2222,15 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Add a Team Member or change their Role. */
+        /**
+         * Add a Team Member or change their Role.
+         * @description Adding a member or raising a member's Role lets more people see data, so only a person signed in
+         *     to Workspace in a browser may do it. Any other session that may manage members gets
+         *     `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+         *     `/confirm/member?space=<spaceId>&user=<userId>&role=<role>`, and the Membership does not change.
+         *     An unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Every session that may manage members may lower
+         *     a Role or repeat the stored one. A caller without that capability gets `403 FORBIDDEN` and no `url`.
+         */
         put: operations["upsertTeamMember"];
         post?: never;
         /** Remove a Team Member or leave the Team Space. */
@@ -2249,7 +2270,15 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Create or change a Direct Share. */
+        /**
+         * Create or change a Direct Share.
+         * @description Sharing a Node with a User or raising that User's Role lets more people see data, so only a person
+         *     signed in to Workspace in a browser may do it. Any other session that may share the Node gets
+         *     `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+         *     `/confirm/grant?node=<nodeId>&user=<userId>&role=<role>`, and the Grant does not change. An
+         *     unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Every session that may share the Node may lower a
+         *     Role or repeat the stored one. A caller without that capability gets `403 FORBIDDEN` and no `url`.
+         */
         put: operations["upsertNodeGrant"];
         post?: never;
         /** Remove one direct Grant. */
@@ -2270,7 +2299,16 @@ export interface paths {
         };
         /** Get Link Sharing settings for a Personal Space Node. */
         get: operations["getNodeLinkSharing"];
-        /** Enable, disable, or change Link Sharing for a Personal Space Node. */
+        /**
+         * Enable, disable, or change Link Sharing for a Personal Space Node.
+         * @description Turning Link Sharing on, or changing its role from `viewer` to `editor`, lets more people see
+         *     data, so only a person signed in to Workspace in a browser may do it. Any other session that may
+         *     share the Node gets `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+         *     `/confirm/link-sharing?node=<nodeId>&role=<role>`, and the settings do not change. An unclaimed
+         *     agent may turn on a `viewer` link and gets `403 AGENT_NOT_ALLOWED` for an `editor` link. Every
+         *     session that may share the Node may turn Link Sharing off or change `editor` to `viewer`. A
+         *     caller without that capability gets `403 FORBIDDEN` and no `url`.
+         */
         put: operations["updateNodeLinkSharing"];
         post?: never;
         delete?: never;
@@ -2882,6 +2920,8 @@ export interface components {
             message: string;
             /** @description Input field related to the error, when applicable. */
             field?: string;
+            /** @description A path on the Workspace origin of the browser page where a person finishes this action. A refused write that would let more people see data carries the path of its confirm page. */
+            url?: string;
         };
         ErrorResponse: {
             error: components["schemas"]["Error"];
@@ -4911,8 +4951,8 @@ export interface components {
         /**
          * @description The current User cannot perform this action. The code is `FORBIDDEN` when its role is
          *     insufficient, and when a proposer who is not a Space Member would hold more than 3 open
-         *     proposals in one Team Space. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
-         *     unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
+         *     proposals in one Team Space. Three codes name a rule that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+         *     unclaimed agent would let more people see data, or the User added as a Team
          *     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns, or an agent
          *     that does not own a Team Space whose `landing` is `checks` writes its Trunk directly or changes `landing`),
          *     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
@@ -4922,8 +4962,15 @@ export interface components {
          *     `INTERACTIVE_SESSION_REQUIRED` (an action taken for a person, such as creating an access token,
          *     approving a CLI login, authorizing an OAuth client, claiming an agent or publishing a draft,
          *     comes from a session that is not a person signed in to Workspace in a browser: an agent, a CLI
-         *     login or a session issued by token exchange; or a human's token-issued session writes Link
-         *     Sharing, or creates or updates a Space with `publicRead: true`).
+         *     login or a session issued by token exchange; or such a session would let more people see data).
+         *
+         *     A write lets more people see data when it makes a Space public, adds a Team Space member or
+         *     raises a member's role, shares a Node with a User or raises that User's role, or turns on Link
+         *     Sharing or raises its role. Only a person signed in to Workspace in a browser does that. For any
+         *     other session the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED` with `url`,
+         *     the path of the page where a person confirms the same write. An unclaimed agent has no person to
+         *     confirm for it and gets `AGENT_NOT_ALLOWED` without `url`. A write that keeps or lowers the
+         *     stored level passes for every session.
          */
         Forbidden: {
             headers: {

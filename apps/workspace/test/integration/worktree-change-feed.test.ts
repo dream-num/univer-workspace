@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -251,11 +252,11 @@ describe("worktree change feed", () => {
         displayName: "Worktree Feed Team Viewer",
         password: "correct horse battery staple",
       });
-      const team = await application.spaces.createTeamSpace(owner.view.user.id, {
+      const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), {
         name: "Realtime Team",
       });
       await application.permissions.upsertTeamMember(
-        owner.view.user.id,
+        interactivePrincipal(owner.view.user.id),
         team.id,
         viewer.view.user.id,
         { role: "viewer" }

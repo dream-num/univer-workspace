@@ -32,7 +32,6 @@ export interface CeilingContexts {
   readonly openProposal: { readonly open: number };
   readonly openWorktree: BudgetUse;
   readonly mergeWorktree: BudgetUse;
-  readonly updateSpace: { readonly publicRead: boolean };
   /** `landing` is the Space's setting; `owns` is whether the principal owns the Space. */
   readonly changeTrunk: { readonly landing: SpaceLanding; readonly owns: boolean };
   readonly changeLanding: { readonly owns: boolean };
@@ -41,9 +40,6 @@ export interface CeilingContexts {
   /** `held` counts the files the principal's Spaces already have or are about to get. */
   readonly createFiles: { readonly held: number; readonly adding: number };
   readonly storeFile: { readonly byteSize: number };
-  /** `tokenIssued` is true for a session issued for a personal access token or an OAuth grant. */
-  readonly writeLinkSharing: { readonly tokenIssued: boolean };
-  readonly publishSpace: { readonly publicRead: boolean; readonly tokenIssued: boolean };
 }
 
 export type CeilingAction = keyof CeilingContexts;
@@ -63,9 +59,7 @@ export function landsByChecks(principal: PrincipalCategory, { landing, owns }: C
 }
 
 // An agent identity costs nothing, so it gets no organisation-wide reach and, until a human claims
-// it, a small storage budget and no one else in its Spaces. A human's token session reads all of
-// that human's private files, so it may not publish one without the human present; an agent's token
-// session reads only the agent's own Space, where the role check already confines it.
+// it, a small storage budget and no one else in its Spaces.
 const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   createTeamSpace: {
     code: "AGENT_QUOTA_EXCEEDED",
@@ -94,11 +88,6 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     message: `An agent can start at most ${AGENT_MAX_MERGES} merges in 24 hours. Merge again once the oldest of them is 24 hours old.`,
     forbids: (principal, { merged, adding }) => isAgent(principal) && merged + adding > AGENT_MAX_MERGES,
   },
-  updateSpace: {
-    code: "AGENT_NOT_ALLOWED",
-    message: `An unclaimed agent cannot make a Space public. Keep it private, ${CLAIM_LIFTS} Claiming also lets that person open every Space you own.`,
-    forbids: (principal, { publicRead }) => principal === "agent_unclaimed" && publicRead,
-  },
   // Checks stand in for the person who reviews a merge, so the agents they gate get no other way onto Trunk.
   changeTrunk: {
     code: "AGENT_NOT_ALLOWED",
@@ -113,9 +102,9 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   // A Team Space an agent owns reaches only the agent and its claimer, so an agent may be its admin.
   addTeamMember: {
     code: "AGENT_NOT_ALLOWED",
-    message: "An unclaimed agent cannot add or be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.",
-    forbids: (principal, { member, role, owner }) =>
-      principal === "agent_unclaimed" || member === "agent_unclaimed" || (isAgent(member) && role === "admin" && owner === "human"),
+    message: "An unclaimed agent cannot be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.",
+    forbids: (_principal, { member, role, owner }) =>
+      member === "agent_unclaimed" || (isAgent(member) && role === "admin" && owner === "human"),
   },
   // Anyone can create an agent, so an unclaimed one must not read the User directory.
   searchUsers: {
@@ -134,16 +123,6 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     message: `An unclaimed agent can store files of at most ${UNCLAIMED_AGENT_MAX_FILE_BYTES} bytes. Store a smaller file, ${CLAIM_LIFTS}`,
     forbids: (principal, { byteSize }) =>
       principal === "agent_unclaimed" && byteSize > UNCLAIMED_AGENT_MAX_FILE_BYTES,
-  },
-  writeLinkSharing: {
-    code: "INTERACTIVE_SESSION_REQUIRED",
-    message: "Changing Link Sharing requires an interactive sign-in, not a session issued for an access token.",
-    forbids: (principal, { tokenIssued }) => principal === "human" && tokenIssued,
-  },
-  publishSpace: {
-    code: "INTERACTIVE_SESSION_REQUIRED",
-    message: "Making a Space public requires an interactive sign-in, not a session issued for an access token.",
-    forbids: (principal, { publicRead, tokenIssued }) => publicRead && principal === "human" && tokenIssued,
   },
 };
 

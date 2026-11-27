@@ -42,9 +42,9 @@ describe("standalone HTML Apps", () => {
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(await entry.text()).toBe(html);
-    await ctx.application.permissions.updateNodeLinkSharing(ctx.userId, published.nodeId, {enabled: true, role: 'viewer'});
+    await ctx.application.permissions.updateNodeLinkSharing(interactivePrincipal(ctx.userId), published.nodeId, {enabled: true, role: 'viewer'});
     expect(await (await fetch(url)).text()).toBe(html);
-    await ctx.application.permissions.updateNodeLinkSharing(ctx.userId, published.nodeId, {enabled: false, role: 'viewer'});
+    await ctx.application.permissions.updateNodeLinkSharing(interactivePrincipal(ctx.userId), published.nodeId, {enabled: false, role: 'viewer'});
     const revoked = await fetch(url);
     expect(revoked.status).toBe(200);
     const revokedBody = await revoked.text();
@@ -64,7 +64,7 @@ describe("standalone HTML Apps", () => {
     const response = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {headers: {cookie: ctx.cookie}, redirect: "manual"});
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(`/nodes/${encodeURIComponent(bound.nodeId)}?view=immersive`);
-    await ctx.application.permissions.updateNodeLinkSharing(ctx.userId, bound.nodeId, {enabled: true, role: 'viewer'});
+    await ctx.application.permissions.updateNodeLinkSharing(interactivePrincipal(ctx.userId), bound.nodeId, {enabled: true, role: 'viewer'});
     const publicEntry = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {redirect: "manual"});
     expect(publicEntry.status).toBe(302);
     expect(publicEntry.headers.get("location")).toBe(response.headers.get("location"));

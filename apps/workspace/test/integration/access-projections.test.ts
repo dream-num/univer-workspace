@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -82,7 +83,7 @@ describe("access projections", () => {
       role: "owner",
       capabilities: { openContent: true, editContent: true, downloadContent: true },
     });
-    await app.permissions.upsertNodeGrant(owner, folder.id, reader, { role: "viewer" });
+    await app.permissions.upsertNodeGrant(interactivePrincipal(owner), folder.id, reader, { role: "viewer" });
     expect((await app.access.resolveResourceContent(reader, "blob-resource"))?.capabilities).toEqual(
       (await app.access.resolveResource(reader, "blob-resource"))?.capabilities,
     );
@@ -105,17 +106,17 @@ describe("access projections", () => {
     }
     await check(owner, "owner");
     await check(reader, null);
-    await app.permissions.upsertNodeGrant(owner, folder.id, reader, { role: "viewer" });
+    await app.permissions.upsertNodeGrant(interactivePrincipal(owner), folder.id, reader, { role: "viewer" });
     await check(reader, "viewer");
-    await app.permissions.updateNodeLinkSharing(owner, folder.id, { enabled: true, role: "editor" });
+    await app.permissions.updateNodeLinkSharing(interactivePrincipal(owner), folder.id, { enabled: true, role: "editor" });
     await check(reader, "editor");
     await check(ANONYMOUS_USER_ID, "viewer");
-    await app.permissions.updateNodeLinkSharing(owner, folder.id, { enabled: false, role: "editor" });
+    await app.permissions.updateNodeLinkSharing(interactivePrincipal(owner), folder.id, { enabled: false, role: "editor" });
     await check(reader, "viewer");
     await check(ANONYMOUS_USER_ID, null);
     await app.permissions.removeNodeGrant(owner, folder.id, reader);
     await check(reader, null);
-    await app.spaces.update(owner, space.id, { publicRead: true });
+    await app.spaces.update(interactivePrincipal(owner), space.id, { publicRead: true });
     await check(reader, "viewer");
     await check(ANONYMOUS_USER_ID, "viewer");
     await app.trash.trashNode(owner, node.id);
@@ -126,16 +127,16 @@ describe("access projections", () => {
 
   it("checks team membership afresh and does not treat publicly readable content as owned", async () => {
     const { app, owner, reader, create } = await setup();
-    const team = await app.spaces.createTeamSpace(owner, { name: "Team", publicRead: true });
+    const team = await app.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Team", publicRead: true });
     const { resource } = await create(team.id, null);
     for (const role of ["viewer", "editor", "admin"] as const) {
-      await app.permissions.upsertTeamMember(owner, team.id, reader, { role });
+      await app.permissions.upsertTeamMember(interactivePrincipal(owner), team.id, reader, { role });
       expect((await app.access.resolveResourceContent(reader, resource.id))?.role).toBe(role);
       expect((await app.access.resolveOwnedResources(reader, [resource.id])).size).toBe(0);
     }
     await app.permissions.removeTeamMember(owner, team.id, reader);
     expect((await app.access.resolveResourceContent(reader, resource.id))?.role).toBe("viewer");
-    await app.spaces.update(owner, team.id, { publicRead: false });
+    await app.spaces.update(interactivePrincipal(owner), team.id, { publicRead: false });
     expect(await app.access.resolveResourceContent(reader, resource.id)).toBeNull();
     expect((await app.access.resolveOwnedResources(ANONYMOUS_USER_ID, [resource.id])).size).toBe(0);
   });

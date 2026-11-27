@@ -12,6 +12,11 @@ Error:
     field:
       type: string
       description: Input field related to the error, when applicable.
+    url:
+      type: string
+      description: >-
+        A path on the Workspace origin of the browser page where a person finishes this action.
+        A refused write that would let more people see data carries the path of its confirm page.
 
 ErrorResponse:
   type: object
@@ -81,8 +86,8 @@ Forbidden:
   description: |
     The current User cannot perform this action. The code is `FORBIDDEN` when its role is
     insufficient, and when a proposer who is not a Space Member would hold more than 3 open
-    proposals in one Team Space. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
-    unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
+    proposals in one Team Space. Three codes name a rule that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+    unclaimed agent would let more people see data, or the User added as a Team
     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns, or an agent
     that does not own a Team Space whose `landing` is `checks` writes its Trunk directly or changes `landing`),
     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
@@ -92,12 +97,26 @@ Forbidden:
     `INTERACTIVE_SESSION_REQUIRED` (an action taken for a person, such as creating an access token,
     approving a CLI login, authorizing an OAuth client, claiming an agent or publishing a draft,
     comes from a session that is not a person signed in to Workspace in a browser: an agent, a CLI
-    login or a session issued by token exchange; or a human's token-issued session writes Link
-    Sharing, or creates or updates a Space with `publicRead: true`).
+    login or a session issued by token exchange; or such a session would let more people see data).
+
+    A write lets more people see data when it makes a Space public, adds a Team Space member or
+    raises a member's role, shares a Node with a User or raises that User's role, or turns on Link
+    Sharing or raises its role. Only a person signed in to Workspace in a browser does that. For any
+    other session the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED` with `url`,
+    the path of the page where a person confirms the same write. An unclaimed agent has no person to
+    confirm for it and gets `AGENT_NOT_ALLOWED` without `url`. A write that keeps or lowers the
+    stored level passes for every session.
   content:
     application/json:
       schema:
         $ref: "#/ErrorResponse"
+      examples:
+        confirmInBrowser:
+          value:
+            error:
+              code: INTERACTIVE_SESSION_REQUIRED
+              message: Adding a repository member or raising a member's role needs a person to confirm it in the browser.
+              url: /confirm/member?space=5c0e7c0a-6a2b-4f2e-9d0b-0c6c8f6f2a11&user=8f1f6f2a-1d3e-4b7a-8a55-2f3c9f0e6b21&role=editor
 
 NotFound:
   description: The resource does not exist or is not discoverable.

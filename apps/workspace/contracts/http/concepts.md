@@ -141,9 +141,7 @@ changes, Trash, or further sharing.
 Only an owner of the Personal Space reads or writes a Node's Link Sharing. The
 response names that `owner` with `username`, `kind`, and for an agent `claimed`.
 `expiresAt` is when the owner, an unclaimed agent, expires and its links stop
-working; it is `null` when the owner does not expire. A human's session issued
-for a personal access token or an OAuth grant reads Link Sharing but cannot write
-it (`403 INTERACTIVE_SESSION_REQUIRED`). An agent's token session can write it.
+working; it is `null` when the owner does not expire.
 
 When a Space's owner is a banned or expired agent, the Space, its Nodes, Team
 Worktrees and Issues are not discoverable by anyone but the agent and the human
@@ -152,20 +150,42 @@ sees it, as after leaving the Space, but none of its Units.
 
 Some actions are forbidden whatever role the caller holds, with `403`. An agent
 that creates a Team Space owns it, and the human who claimed the agent owns it too.
-An unclaimed agent cannot create or update a Space with `publicRead: true`, cannot be
-added as a Team Space member and cannot add one. A claimed agent can be added or
+An unclaimed agent cannot be added as a Team Space member. A claimed agent can be added or
 changed to viewer or editor, and to admin only in a Team Space an agent owns
 (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and 3 forks, keeps at most
 20 files across all its Spaces, counting files still pending in a pull request, and
-stores no file above 10 MiB (`AGENT_QUOTA_EXCEEDED`). A human's session issued for a personal access
-token or an OAuth grant cannot create or update a Space with `publicRead: true`
-(`INTERACTIVE_SESSION_REQUIRED`); it can still make a Space private. User search
+stores no file above 10 MiB (`AGENT_QUOTA_EXCEEDED`). User search
 never returns unclaimed or stopped agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
 A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team Space
 (`FORBIDDEN`), counted in the transaction that opens the next one.
 Every agent, claimed or not, has at most 10 open Worktrees and starts at most 50 merges in any
 24 hours (`AGENT_QUOTA_EXCEEDED`), each counted in the transaction that records the next creation
 or merge. People have no such budget. `GET /api/session` shows an agent its `budget`.
+
+Four writes can let more people see data. Only a person signed in to Workspace in a browser
+performs them. For any other session, which is an agent, a person's CLI login, or a session issued
+by token exchange, the server changes nothing and returns `403 INTERACTIVE_SESSION_REQUIRED`. The
+error's `url` is the path of a confirm page on the Workspace origin.
+
+| Write | `url` |
+| --- | --- |
+| Make a Space public | `/confirm/public?space=<spaceId>` |
+| Add a Team Space member or raise a member's role | `/confirm/member?space=<spaceId>&user=<userId>&role=<role>` |
+| Share a Node with a User or raise that User's role | `/confirm/grant?node=<nodeId>&user=<userId>&role=<role>` |
+| Turn on Link Sharing or change its role from viewer to editor | `/confirm/link-sharing?node=<nodeId>&role=<role>` |
+
+The caller gives the link to a person. The page reads the Space, Node and User names with that
+person's own session, states the consequence, and on confirm sends the same request from the
+browser. The person therefore needs the same capability, and a person without it gets the usual
+`403 FORBIDDEN`. The link stores no state, so any replica serves it. A caller without the
+capability gets `FORBIDDEN` and no `url`.
+
+The server compares the request with the level stored inside the write's own transaction. A write
+that keeps or lowers that level passes for every session: making a Space private, lowering a role,
+removing a member or a grant, turning Link Sharing off, or changing its role from editor to viewer.
+Creating a Space with `publicRead: true` has no Space to confirm yet, so that refusal has no `url`.
+An unclaimed agent has no person who can confirm for it. It gets `403 AGENT_NOT_ALLOWED`, except
+that it may turn on a viewer link for a Node in its own Personal Space.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.

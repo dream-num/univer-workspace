@@ -1,6 +1,7 @@
 import { ownsSpaceSql, type PostgresAccessRepository } from "../access/access.repository.js";
 import { conflict, forbidden, notFound, requireManageMembers, requireShare, requireTeam } from "../../../modules/permissions/permissions.policy.js";
 import type { PostgresDatabase } from "../connection.js";
+import type { ExposureGuard } from "../../../modules/access/index.js";
 import type { GrantRole, PublicUser, TeamRole } from "../../../modules/permissions/permissions.types.js";
 import type {
   MembershipRow,
@@ -88,14 +89,14 @@ export class PostgresPermissionsRepository implements PermissionsRepository {
     readonly role: TeamRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): Promise<MembershipRow> {
+  }, guard: ExposureGuard<TeamRole>): Promise<MembershipRow> {
     return await this._database.transaction(async () => {
       const team = requireManageMembers(await this.access.readSpaceAccess(input.grantedBy, input.spaceId));
       if (team.ownerUserId === input.userId) throw conflict("The space owner cannot be a member.");
       await this.requireUser(input.userId);
-      if (team.role === "admin" && (input.role === "admin" || (await this.readMembers(input.spaceId, input.userId))[0]?.role === "admin")) {
-        throw forbidden();
-      }
+      const before = (await this.readMembers(input.spaceId, input.userId))[0]?.role ?? null;
+      if (team.role === "admin" && (input.role === "admin" || before === "admin")) throw forbidden();
+      guard(before);
       await this._database
         .prepare(
           `INSERT INTO space_members
@@ -178,11 +179,12 @@ export class PostgresPermissionsRepository implements PermissionsRepository {
     readonly role: GrantRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): Promise<GrantRow> {
+  }, guard: ExposureGuard<GrantRole>): Promise<GrantRow> {
     return await this._database.transaction(async () => {
       requireShare(await this.access.readNodeAccess(input.grantedBy, input.nodeId));
       if (input.userId === input.grantedBy) throw conflict("The space owner already has access.");
       await this.requireUser(input.userId);
+      guard((await this.readGrants(input.nodeId, input.userId))[0]?.role ?? null);
       await this._database
         .prepare(
           `INSERT INTO node_grants
@@ -304,10 +306,12 @@ export class PostgresPermissionsRepository implements PermissionsRepository {
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }> {
+  }, guard: ExposureGuard<GrantRole>): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }> {
     return await this._database.transaction(async () => {
       requireShare(await this.access.readNodeAccess(input.actorUserId, input.nodeId));
-      const wasEnabled = (await this.readLinkSharing(input.nodeId))?.enabled === 1;
+      const before = await this.readLinkSharing(input.nodeId);
+      const wasEnabled = before?.enabled === 1;
+      guard(wasEnabled ? before.role : null);
       const result = await this._database
         .prepare(
           `INSERT INTO node_link_sharing

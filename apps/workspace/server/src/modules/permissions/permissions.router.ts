@@ -1,6 +1,5 @@
 import { json, Router } from "express";
-import { assertCeiling } from "../access/index.js";
-import { principalCategory, type IdentityModule } from "../identity/index.js";
+import type { IdentityModule } from "../identity/index.js";
 import type { PermissionsModule } from "./permissions.service.js";
 
 export function createPermissionsRouter(options: {
@@ -31,7 +30,7 @@ export function createPermissionsRouter(options: {
       const session = await options.identity.requireSession(request.headers.cookie);
       response.json(
         await options.permissions.upsertTeamMember(
-          session.user.id,
+          session,
           parameter(request.params.spaceId),
           parameter(request.params.userId),
           request.body
@@ -66,7 +65,7 @@ export function createPermissionsRouter(options: {
       const session = await options.identity.requireSession(request.headers.cookie);
       response.json(
         await options.permissions.upsertNodeGrant(
-          session.user.id,
+          session,
           parameter(request.params.nodeId),
           parameter(request.params.userId),
           request.body
@@ -103,12 +102,9 @@ export function createPermissionsRouter(options: {
     "/nodes/:nodeId/link-sharing",
     async (request, response) => {
       const session = await options.identity.requireSession(request.headers.cookie);
-      assertCeiling(principalCategory(session.user), "writeLinkSharing", {
-        tokenIssued: session.tokenIssued,
-      });
       response.json(
         await options.permissions.updateNodeLinkSharing(
-          session.user.id,
+          session,
           parameter(request.params.nodeId),
           request.body
         )

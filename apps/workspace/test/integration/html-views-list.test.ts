@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,7 +37,7 @@ async function setup() {
   const member = await register("member");
   const outsider = await register("outsider");
   const space = (await app.spaces.list(owner)).spaces[0]!;
-  const team = await app.spaces.createTeamSpace(owner, { name: "Supply" });
+  const team = await app.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Supply" });
   const db = app.database.connection;
   const insertBlob = async (input: {
     actor: string;
@@ -163,7 +164,7 @@ describe("html view list", () => {
     ).toEqual([oldest.resourceId]);
 
     expect((await app.views.listHtmlViews(member, page)).items).toEqual([]);
-    await app.permissions.upsertTeamMember(owner, team.id, member, { role: "viewer" });
+    await app.permissions.upsertTeamMember(interactivePrincipal(owner), team.id, member, { role: "viewer" });
     expect((await app.views.listHtmlViews(member, page)).items.map((item) => item.resource.id)).toEqual([
       oldest.resourceId,
     ]);
@@ -171,7 +172,7 @@ describe("html view list", () => {
     expect((await app.views.listHtmlViews(outsider, page)).items.map((item) => item.resource.id)).toEqual([
       hidden.resourceId,
     ]);
-    await app.permissions.upsertNodeGrant(owner, newest.nodeId, outsider, { role: "viewer" });
+    await app.permissions.upsertNodeGrant(interactivePrincipal(owner), newest.nodeId, outsider, { role: "viewer" });
     expect(
       (await app.views
         .listHtmlViews(outsider, { limit: 10, cursor: undefined }))
@@ -202,9 +203,9 @@ describe("html view list", () => {
     const stranger = await register("stranger");
     const agent = (await app.identity.createAgent({ label: "Guest", originIp: "127.0.0.1" })).user.id;
     const personal = (await app.spaces.list(owner)).spaces[0]!.id;
-    const team = (await app.spaces.createTeamSpace(owner, { name: "Supply" })).id;
-    const gallery = (await app.spaces.createTeamSpace(owner, { name: "Gallery", publicRead: true })).id;
-    await app.permissions.upsertTeamMember(owner, team, member, { role: "viewer" });
+    const team = (await app.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Supply" })).id;
+    const gallery = (await app.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Gallery", publicRead: true })).id;
+    await app.permissions.upsertTeamMember(interactivePrincipal(owner), team, member, { role: "viewer" });
     const folder = async (name: string) =>
       (await app.nodes.create(owner, { spaceId: personal, parentNodeId: null, name })).id;
     const publish = async (name: string, spaceId: string, parentNodeId: string | null = null) => {
@@ -225,9 +226,9 @@ describe("html view list", () => {
     const publicView = await publish("Public", gallery);
     const trashed = await publish("Trashed", personal);
     const grantedNew = await publish("Granted new", personal, grantedFolder);
-    await app.permissions.upsertNodeGrant(owner, grantedFolder, grantee, { role: "viewer" });
-    await app.permissions.updateNodeLinkSharing(owner, linkFolder, { enabled: true, role: "editor" });
-    await app.permissions.updateNodeLinkSharing(owner, linked.nodeId, { enabled: true, role: "viewer" });
+    await app.permissions.upsertNodeGrant(interactivePrincipal(owner), grantedFolder, grantee, { role: "viewer" });
+    await app.permissions.updateNodeLinkSharing(interactivePrincipal(owner), linkFolder, { enabled: true, role: "editor" });
+    await app.permissions.updateNodeLinkSharing(interactivePrincipal(owner), linked.nodeId, { enabled: true, role: "viewer" });
     await app.trash.trashNode(owner, trashed.nodeId);
 
     const list = async (userId: string, spaceId?: string) => {
@@ -255,7 +256,7 @@ describe("html view list", () => {
       expect(await list(reader, personal)).toEqual([]);
     }
 
-    await app.spaces.update(owner, personal, { publicRead: true });
+    await app.spaces.update(interactivePrincipal(owner), personal, { publicRead: true });
     const personalViews = ids(grantedOld, linkedChild, linked, own, grantedNew);
     expect(await list(grantee, personal)).toEqual(personalViews);
     const onePage = await app.views.listHtmlViews(grantee, { limit: 10, cursor: undefined, spaceId: personal });

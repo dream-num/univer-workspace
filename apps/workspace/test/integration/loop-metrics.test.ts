@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { EmailMessage } from "../../server/src/integrations/email/index.js";
 import { logger } from "../../server/src/logging/logger.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
 const METRICS_TOKEN = "loop-metrics-test-token";
@@ -38,11 +39,11 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const agentId = ((await guest.json()) as { agent: { id: string } }).agent.id;
   const personal = (await application!.spaces.list(agentId)).spaces[0]!;
   const node = await application!.nodes.create(agentId, { spaceId: personal.id, parentNodeId: null, name: "Budget" });
-  const share = async (enabled: boolean, role = "viewer") => {
+  const share = async (enabled: boolean) => {
     const response = await fetch(`${origin}/api/nodes/${node.id}/link-sharing`, {
       method: "PUT",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ enabled, role }),
+      body: JSON.stringify({ enabled, role: "viewer" }),
     });
     expect(response.status).toBe(200);
   };
@@ -52,16 +53,15 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   let arrived = 0;
   let release!: () => void;
   const bothArrived = new Promise<void>((resolve) => (release = resolve));
-  vi.spyOn(repository, "upsertLinkSharing").mockImplementation(async (input) => {
+  vi.spyOn(repository, "upsertLinkSharing").mockImplementation(async (input, guard) => {
     if (++arrived === 2) release();
     await bothArrived;
-    return await upsert(input);
+    return await upsert(input, guard);
   });
   await Promise.all([share(true), share(true)]);
   vi.mocked(repository.upsertLinkSharing).mockRestore();
   await share(false);
   await share(true);
-  await share(true, "editor");
   const page = await fetch(`${origin}/nodes/${node.id}`, { headers: { "user-agent": "Slackbot-LinkExpanding 1.0" } });
   // A browser reload; without an explicit Cache-Control, fetch adds no-cache and the server never answers 304.
   const revalidated = await fetch(`${origin}/nodes/${node.id}`, {
@@ -106,6 +106,12 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   await oauthSignup("/api/auth/authorize?client_id=cli");
   await oauthSignup("/claim/c0de-in-path");
 
+  // Only a person in a browser raises a link to editor, and a role change on a link that is on is not a new share.
+  const own = await application!.nodes.create(reader, { spaceId: (await application!.spaces.list(reader)).spaces[0]!.id, parentNodeId: null, name: "Plan" });
+  for (const role of ["viewer", "editor"] as const) {
+    await application!.permissions.updateNodeLinkSharing(interactivePrincipal(reader), own.id, { enabled: true, role });
+  }
+
   // Share pages are counted beside the response, so wait for the counts to land.
   const after = await vi.waitFor(async () => {
     const metrics = await scrape();
@@ -121,7 +127,8 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     agentsFromApi: added('workspace_guest_agents_created_total{entry="api_agents"}'),
     agentsFromGuestCard: added('workspace_guest_agents_created_total{entry="auth_guest"}'),
     sharingOn: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="agent_unclaimed"}'),
-    sharingOnByRoleChange: added('workspace_link_sharing_changes_total{state="on",role="editor",owner_category="agent_unclaimed"}'),
+    sharingOnByPerson: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="human"}'),
+    sharingOnByRoleChange: added('workspace_link_sharing_changes_total{state="on",role="editor",owner_category="human"}'),
     sharingOff: added('workspace_link_sharing_changes_total{state="off",role="viewer",owner_category="agent_unclaimed"}'),
     signupsFromShareLink: added('workspace_signups_total{method="password",source="share_link"}'),
     signupsFromConsent: added('workspace_signups_total{method="password",source="oauth_consent"}'),
@@ -137,6 +144,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     agentsFromApi: 1,
     agentsFromGuestCard: 1,
     sharingOn: 2,
+    sharingOnByPerson: 1,
     sharingOnByRoleChange: 0,
     sharingOff: 1,
     signupsFromShareLink: 1,
@@ -170,10 +178,11 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   expect(JSON.stringify(logged)).not.toContain("c0de-in-path");
 });
 
-it("counts a ceiling denial by action, code and the category of the principal it stopped", async () => {
+it("counts a ceiling denial and a refused widening by what was asked, the code and the category of the principal it stopped", async () => {
   const origin = await start();
   const guest = await fetch(`${origin}/api/auth/guest`, { method: "POST" });
   const cookie = guest.headers.get("set-cookie")!.split(";")[0]!;
+  expect((await fetch(`${origin}/api/users/search?query=someone`, { headers: { cookie } })).status).toBe(403);
   const refused = await fetch(`${origin}/api/team-spaces`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
@@ -183,9 +192,13 @@ it("counts a ceiling denial by action, code and the category of the principal it
 
   const metrics = await (await fetch(`${origin}/metrics`, { headers: { authorization: `Bearer ${METRICS_TOKEN}` } })).text();
   const denials = (category: string) =>
-    value(metrics, `workspace_ceiling_denials_total{action="updateSpace",code="AGENT_NOT_ALLOWED",principal_category="${category}"}`);
+    value(metrics, `workspace_ceiling_denials_total{action="searchUsers",code="AGENT_NOT_ALLOWED",principal_category="${category}"}`);
   expect({ unclaimed: denials("agent_unclaimed"), human: denials("human") }).toEqual({ unclaimed: 1, human: 0 });
   expect(value(metrics, `workspace_ceiling_denials_total{action="createTeamSpace",code="AGENT_QUOTA_EXCEEDED",principal_category="agent_unclaimed"}`)).toBe(0);
+  const refusals = (code: string, category: string) =>
+    value(metrics, `workspace_exposure_refusals_total{change="create-public",code="${code}",principal_category="${category}"}`);
+  expect({ unclaimed: refusals("AGENT_NOT_ALLOWED", "agent_unclaimed"), claimed: refusals("INTERACTIVE_SESSION_REQUIRED", "agent_claimed") })
+    .toEqual({ unclaimed: 1, claimed: 0 });
 });
 
 function value(metrics: string, series: string): number {

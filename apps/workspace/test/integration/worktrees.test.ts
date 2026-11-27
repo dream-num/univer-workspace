@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -37,8 +38,8 @@ describe("Worktrees", () => {
     const merger = await register(application, "page-merger");
     const author = await register(application, "page-author");
     const viewer = await register(application, "page-viewer");
-    const team = await application.spaces.createTeamSpace(merger.id, { name: "Sources" });
-    for (const [user, role] of [[author, "editor"], [viewer, "viewer"]] as const) await application.permissions.upsertTeamMember(merger.id, team.id, user.id, { role });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(merger.id), { name: "Sources" });
+    for (const [user, role] of [[author, "editor"], [viewer, "viewer"]] as const) await application.permissions.upsertTeamMember(interactivePrincipal(merger.id), team.id, user.id, { role });
     const source = (await application.worktrees.create(merger.id, "page-source-create", {
       kind: "team", teamSpaceId: team.id, name: "Source", visibility: "space", summary: null,
     })).body;
@@ -60,7 +61,7 @@ describe("Worktrees", () => {
     const unlinked = (await application.htmlViewDrafts.submit(author.id, crypto.randomUUID(), { kind: "create", spaceId: space.id, name: "Unlinked", html })).draft;
     expect((await application.worktrees.get(viewer.id, source.id)).worktree.pendingPageDrafts).toBe(2);
     expect((await application.worktrees.list(viewer.id, { scope: "active", kind: "team", teamSpaceId: team.id, cursor: undefined, limit: 20 })).items[0]?.pendingPageDrafts).toBe(2);
-    await application.permissions.upsertTeamMember(merger.id, team.id, viewer.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(merger.id), team.id, viewer.id, { role: "admin" });
     await application.worktrees.update(merger.id, source.id, { visibility: "private" });
     const summary = (await application.worktrees.list(viewer.id, { scope: "active", kind: "team", teamSpaceId: team.id, cursor: undefined, limit: 20 })).items[0]!;
     expect(summary.capabilities.review).toBe(false);
@@ -124,7 +125,7 @@ describe("Worktrees", () => {
         expect(registered.user).not.toHaveProperty("writeSource");
         const registrationCookie = registration.headers.get("set-cookie")!.split(";", 1)[0]!;
         expectSessionSource(application.database.connection, registrationCookie, "browser");
-        const team = await application.spaces.createTeamSpace(registered.user.id, { name: "Attribution" });
+        const team = await application.spaces.createTeamSpace(interactivePrincipal(registered.user.id), { name: "Attribution" });
         const route = source === "agent" ? "/api/auth/cli/password/login" : "/api/auth/password/login";
         const login = await fetch(`${origin}${route}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials),
@@ -251,8 +252,8 @@ describe("Worktrees", () => {
     expect(await application.worktrees.list(owner.id, {})).toMatchObject({
       items: [], hasCreatedWorktree: false,
     });
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Onboarding" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Onboarding" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, member.id, { role: "editor" });
     const task = await application.worktrees.create(owner.id, "onboarding-team-task", {
       kind: "team", teamSpaceId: team.id, visibility: "space", name: "Team draft", summary: null,
     });
@@ -279,8 +280,8 @@ describe("Worktrees", () => {
     const app = await createTestApplication();
     const owner = await register(app, "reservation-owner");
     const editor = await register(app, "reservation-editor");
-    const team = await app.spaces.createTeamSpace(owner.id, { name: "Target" });
-    await app.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    const team = await app.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Target" });
+    await app.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "editor" });
     const { body } = await app.worktrees.create(editor.id, "create-before-role-change", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "Draft", summary: null,
     });
@@ -317,8 +318,8 @@ describe("Worktrees", () => {
     const application = await createTestApplication();
     const owner = await register(application, "summary-owner");
     const editor = await register(application, "summary-editor");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Summary permissions" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Summary permissions" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "editor" });
     const resource = await createResource(application, editor.id, team.id);
     const created = await application.worktrees.create(editor.id, "summary-permissions-create", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "Changes", summary: null,
@@ -340,7 +341,7 @@ describe("Worktrees", () => {
     expect((await application.worktrees.list(owner.id, {})).items[0])
       .toMatchObject({ unitCount: 1, capabilities: { review: false, editDraft: false } });
 
-    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "viewer" });
     resolve.mockClear();
     const second = await application.worktrees.list(editor.id, {});
     expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
@@ -360,8 +361,8 @@ describe("Worktrees", () => {
     const owner = await register(application, "page-owner");
     const viewer = await register(application, "page-viewer");
     const outsider = await register(application, "page-outsider");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Pagination team" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, viewer.id, { role: "viewer" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Pagination team" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, viewer.id, { role: "viewer" });
     const visibleIds: string[] = [];
     for (let i = 0; i < 110; i += 1) {
       const visible = i < 55;
@@ -663,8 +664,8 @@ describe("Worktrees", () => {
     const application = await createRealTestApplication();
     const owner = await register(application, "removal-team-owner");
     const editor = await register(application, "removal-team-editor");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Removal review" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Removal review" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "editor" });
     const resource = await createResource(application, editor.id, team.id);
     const created = await application.worktrees.create(editor.id, "removal-team-create-0001", {
       kind: "team",
@@ -683,17 +684,17 @@ describe("Worktrees", () => {
         removed: true,
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "admin" });
     await application.worktrees.setUnitRemoved(editor.id, id, added.body.unit.unitId, {
       removed: true,
     });
     await application.worktrees.markReady(editor.id, id);
-    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "editor" });
     await expect(
       application.worktrees.merge(editor.id, id, "removal-team-merge-0001"),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect((await application.trash.list(owner.id, team.id, {})).items).toEqual([]);
-    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, editor.id, { role: "editor" });
     await application.worktrees.discard(editor.id, id, "removal-team-discard-0001");
     expect((await application.resources.get(owner.id, resource.id)).resource.id).toBe(resource.id);
     expect((await application.trash.list(owner.id, team.id, {})).items).toEqual([]);
@@ -909,17 +910,17 @@ describe("Worktrees", () => {
     const owner = await register(application, "team-owner");
     const creator = await register(application, "team-editor");
     const viewer = await register(application, "team-viewer");
-    const team = await application.spaces.createTeamSpace(owner.id, {
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), {
       name: "Product",
     });
     await application.permissions.upsertTeamMember(
-      owner.id,
+      interactivePrincipal(owner.id),
       team.id,
       creator.id,
       { role: "editor" }
     );
     await application.permissions.upsertTeamMember(
-      owner.id,
+      interactivePrincipal(owner.id),
       team.id,
       viewer.id,
       { role: "viewer" }

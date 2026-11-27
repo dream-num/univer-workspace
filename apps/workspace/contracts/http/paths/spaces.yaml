@@ -103,6 +103,11 @@
     tags: [Spaces]
     operationId: createTeamSpace
     summary: Create a Team Space owned by the current User.
+    description: |
+      `publicRead: true` lets more people see data, so only a person signed in to Workspace in a browser
+      may send it. Any other session gets `403 INTERACTIVE_SESSION_REQUIRED` without `url`, because no
+      Space exists to confirm yet, and an unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Create the Space
+      private, then update it.
     requestBody:
       required: true
       content:
@@ -240,6 +245,12 @@
     tags: [Spaces]
     operationId: updateSpace
     summary: Update Space settings.
+    description: |
+      `publicRead: true` on a private Space lets more people see data, so only a person signed in to
+      Workspace in a browser may send it. Any other session gets `403 INTERACTIVE_SESSION_REQUIRED` with
+      `url` set to `/confirm/public?space=<spaceId>`, and the Space does not change. An unclaimed agent
+      gets `403 AGENT_NOT_ALLOWED`. Every session may set `publicRead: false`, or repeat `true` on a
+      Space that is already public.
     requestBody:
       required: true
       content:

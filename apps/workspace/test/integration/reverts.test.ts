@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -196,7 +197,7 @@ it("refuses a revert by an agent that a checks repository gates, and lets one re
   await f.merge(f.owner.id, pull);
   const path = `/api/spaces/${f.team}/issues/${issue.number}/revert`;
 
-  await f.h.application.spaces.update(f.owner.id, f.team, { landing: "checks" });
+  await f.h.application.spaces.update(interactivePrincipal(f.owner.id), f.team, { landing: "checks" });
   const plan = (await (await f.get(f.bot, path)).json()) as RevertPlan;
   expect(plan.capabilities).toEqual({ revert: false, force: false });
   expect(plan.refusal).toBe("A revert changes Trunk without a merge. This repository requires checks, so an agent that does not own it changes its files only by merging a pull request whose declared checks all passed.");
@@ -207,7 +208,7 @@ it("refuses a revert by an agent that a checks repository gates, and lets one re
   expect((await (await f.get(f.reader, path)).json()) as RevertPlan, "only someone who may accept the Issue reverts it")
     .toMatchObject({ capabilities: { revert: false }, refusal: "Only someone who may accept this Issue can revert it." });
 
-  await f.h.application.spaces.update(f.owner.id, f.team, { landing: "review" });
+  await f.h.application.spaces.update(interactivePrincipal(f.owner.id), f.team, { landing: "review" });
   const reverted = await f.post(f.bot, path, randomUUID());
   expect(reverted.status).toBe(201);
   expect(await f.h.a1(north.unitId)).toBeNull();
@@ -253,9 +254,9 @@ async function repository() {
   const bob = await h.person("bob");
   const reader = await h.person("reader");
   const bot = await h.agent(owner, "bot");
-  const { id: team } = await application.spaces.createTeamSpace(owner.id, { name: "Sales" });
-  for (const member of [alice, bob, bot]) await application.permissions.upsertTeamMember(owner.id, team, member.id, { role: "editor" });
-  await application.permissions.upsertTeamMember(owner.id, team, reader.id, { role: "viewer" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Sales" });
+  for (const member of [alice, bob, bot]) await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, member.id, { role: "editor" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, reader.id, { role: "viewer" });
   const file = async (name: string, unitType: "sheet" | "doc") => {
     const created = await application.resources.create(owner.id, randomUUID(), { kind: "univer", spaceId: team, parentNodeId: null, name, unitType });
     if (created.status === 202 || created.body.node.resource?.kind !== "univer") throw new Error("File missing");

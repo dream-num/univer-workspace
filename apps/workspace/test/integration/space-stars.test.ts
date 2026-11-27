@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -38,11 +39,11 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
     const cookie = (value: string) => `${application.identity.cookieName}=${value}`;
     const ownerCookie = cookie(owner.cookieValue);
     const readerCookie = cookie(reader.cookieValue);
-    const team = await application.spaces.createTeamSpace(owner.view.user.id, {
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), {
       name: "Repository",
       publicRead: true,
     });
-    const hidden = await application.spaces.createTeamSpace(owner.view.user.id, { name: "Hidden" });
+    const hidden = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), { name: "Hidden" });
     const personal = (await application.spaces.list(owner.view.user.id))
       .spaces.find((space) => space.type === "personal")!;
     expect(team).toMatchObject({ owner: { id: owner.view.user.id, username: "owner" } });
@@ -120,7 +121,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
     });
     // A retained star never grants access after a public Space becomes private.
     await request(team.id, "PUT", readerCookie);
-    await application.spaces.update(owner.view.user.id, team.id, { publicRead: false });
+    await application.spaces.update(interactivePrincipal(owner.view.user.id), team.id, { publicRead: false });
     expect((await request(team.id, "GET", readerCookie)).status).toBe(404);
     expect((await request(team.id, "PUT", readerCookie)).status).toBe(404);
   } finally {

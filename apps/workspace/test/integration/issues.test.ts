@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createProductTestApplication,
@@ -125,7 +126,7 @@ describe("Issues", () => {
 
   it("validates assignees, labels and referenced files", async () => {
     const { application, issues, team, owner, stranger } = await setup();
-    const other = await application.spaces.createTeamSpace(owner, { name: "Other" });
+    const other = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Other" });
     const foreignNode = await application.nodes.create(owner, { spaceId: other.id, parentNodeId: null, name: "Elsewhere" });
     const foreignLabel = await issues.createLabel(owner, other.id, { name: "foreign", color: "gray" });
     await issues.create(owner, team, { title: "base" });
@@ -178,7 +179,7 @@ describe("Issues", () => {
 
   it("lists cross-space Issues only for spaces the caller belongs to", async () => {
     const { application, issues, team, owner, reader } = await setup();
-    const other = await application.spaces.createTeamSpace(owner, { name: "Private" });
+    const other = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Private" });
     await issues.create(owner, team, { title: "Shared" });
     await issues.create(owner, other.id, { title: "Owner only" });
 
@@ -298,12 +299,12 @@ async function setup(changes?: IssueProductChange[]) {
   const viewer = await register(application, "viewer");
   const reader = await register(application, "reader");
   const stranger = await register(application, "stranger");
-  const { id: team } = await application.spaces.createTeamSpace(owner, { name: "Team", publicRead: true });
-  await application.permissions.upsertTeamMember(owner, team, admin, { role: "admin" });
-  await application.permissions.upsertTeamMember(owner, team, editor, { role: "editor" });
-  await application.permissions.upsertTeamMember(owner, team, viewer, { role: "viewer" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Team", publicRead: true });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, admin, { role: "admin" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, editor, { role: "editor" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, viewer, { role: "viewer" });
   // Not public, so `stranger` cannot discover it at all.
-  const { id: hidden } = await application.spaces.createTeamSpace(owner, { name: "Hidden" });
+  const { id: hidden } = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Hidden" });
   return { application, issues, team, hidden, owner, admin, editor, viewer, reader, stranger };
 }
 

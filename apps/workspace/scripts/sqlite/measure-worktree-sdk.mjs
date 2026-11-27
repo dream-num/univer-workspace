@@ -20,6 +20,7 @@ import { loadConfig } from "../../server/src/config.ts";
 import { openProductDatabase } from "../../server/src/db/index.js";
 import { openCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/open-collaboration-database.ts";
 import { blankUnitData, collaborationCallOptions } from "../../server/src/integrations/univer/unit-store.ts";
+import { interactivePrincipal } from "../../test/fixtures/principal.ts";
 
 const help = `Usage: LOG_LEVEL=silent node --expose-gc --import tsx scripts/sqlite/measure-worktree-sdk.mjs --output PATH [flags]
 Measures the Collaboration SDK Worktree for Agent Mode phase 0 (spec 6.1, A0.1 to A0.4), and
@@ -247,8 +248,8 @@ async function person(username) {
 }
 async function team() {
   const H = await person("owner"), E1 = await person("editor-one"), E2 = await person("editor-two"), V = await person("viewer");
-  const space = await app.application.spaces.createTeamSpace(H.id, { name: "Agent Mode measurements" });
-  for (const [user, role] of [[E1, "editor"], [E2, "editor"], [V, "viewer"]]) await app.application.permissions.upsertTeamMember(H.id, space.id, user.id, { role });
+  const space = await app.application.spaces.createTeamSpace(interactivePrincipal(H.id), { name: "Agent Mode measurements" });
+  for (const [user, role] of [[E1, "editor"], [E2, "editor"], [V, "viewer"]]) await app.application.permissions.upsertTeamMember(interactivePrincipal(H.id), space.id, user.id, { role });
   return { H, E1, E2, V, S: space.id };
 }
 const changeset = (actor, target, mutations) => ({ unitID: target.unitId, type: target.type ?? SHEET, baseRev: target.head, revision: target.head + 1, sid: actor.sid, reqId: ++actor.reqId, mutations });

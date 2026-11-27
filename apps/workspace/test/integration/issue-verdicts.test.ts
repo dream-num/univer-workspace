@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
@@ -161,9 +162,9 @@ async function setup() {
     return user.id;
   };
   const [viewerAgent, editorAgent] = [await agent("viewer-agent"), await agent("editor-agent")];
-  const { id: team } = await application.spaces.createTeamSpace(owner, { name: "Team" });
-  await application.permissions.upsertTeamMember(owner, team, viewerAgent, { role: "viewer" });
-  await application.permissions.upsertTeamMember(owner, team, otherViewer, { role: "viewer" });
-  await application.permissions.upsertTeamMember(owner, team, editorAgent, { role: "editor" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Team" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, viewerAgent, { role: "viewer" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, otherViewer, { role: "viewer" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, editorAgent, { role: "editor" });
   return { application, owner, otherViewer, viewerAgent, editorAgent, team };
 }

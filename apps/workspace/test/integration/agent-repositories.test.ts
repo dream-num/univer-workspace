@@ -19,9 +19,10 @@ interface Actor {
 }
 
 describe("a Team Space an agent owns", () => {
-  it("is created, filled, merged and made public by a claimed agent with no human action (A3.1)", async () => {
+  it("is created, filled and merged by a claimed agent with no human action, and made public only by its claimer (A3.1)", async () => {
     const { origin } = await start();
-    const agent = await claimedAgent(origin, await person(origin, "claimer"));
+    const claimer = await person(origin, "claimer");
+    const agent = await claimedAgent(origin, claimer);
 
     const created = await send(origin, "POST", "/api/team-spaces", { name: "Research" }, agent.cookie);
     expect(created.status).toBe(201);
@@ -34,11 +35,16 @@ describe("a Team Space an agent owns", () => {
     expect(await fileNames(origin, repo.id, agent)).toEqual(["Budget sheet"]);
     expect((await send(origin, "GET", `/api/spaces/${repo.id}/nodes`)).status).toBe(404);
 
-    expect((await send(origin, "PATCH", `/api/spaces/${repo.id}`, { publicRead: true }, agent.cookie)).status).toBe(200);
+    const refused = await send(origin, "PATCH", `/api/spaces/${repo.id}`, { publicRead: true }, agent.cookie);
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "INTERACTIVE_SESSION_REQUIRED", url: `/confirm/public?space=${repo.id}`,
+    } } });
+    expect((await send(origin, "GET", `/api/spaces/${repo.id}/nodes`)).status).toBe(404);
+    expect((await send(origin, "PATCH", `/api/spaces/${repo.id}`, { publicRead: true }, claimer.cookie)).status).toBe(200);
     expect(await fileNames(origin, repo.id)).toEqual(["Budget sheet"]);
   }, 30_000);
 
-  it("takes another claimed agent as admin with a human admin's capabilities, and a person as editor (A3.2)", async () => {
+  it("takes another claimed agent as admin with a human admin's capabilities, though a person confirms the members it adds (A3.2)", async () => {
     const { origin } = await start();
     const [claimer, peerClaimer, admin, editor, viewer] = await Promise.all(
       ["claimer", "peer-claimer", "admin", "editor", "viewer"].map((name) => person(origin, name)),
@@ -47,14 +53,18 @@ describe("a Team Space an agent owns", () => {
     const peer = await claimedAgent(origin, peerClaimer);
     const repo = await createRepo(origin, agent, "Research");
 
-    expect((await setRole(origin, repo, agent, peer.id, "admin")).status).toBe(200);
-    expect((await setRole(origin, repo, agent, admin.id, "admin")).status).toBe(200);
-    expect((await setRole(origin, repo, agent, editor.id, "editor")).status).toBe(200);
+    expect((await setRole(origin, repo, claimer, peer.id, "admin")).status).toBe(200);
+    expect((await setRole(origin, repo, claimer, admin.id, "admin")).status).toBe(200);
+    expect((await setRole(origin, repo, claimer, editor.id, "editor")).status).toBe(200);
     expect(await spaceAccess(origin, repo, peer)).toEqual(await spaceAccess(origin, repo, admin));
     expect(await spaceAccess(origin, repo, peer)).toMatchObject({ accessRole: "admin", capabilities: { manageMembers: true } });
     expect(await spaceAccess(origin, repo, editor)).toMatchObject({ accessRole: "editor" });
 
-    expect((await setRole(origin, repo, peer, viewer.id, "viewer")).status).toBe(200);
+    const asked = await setRole(origin, repo, peer, viewer.id, "viewer");
+    expect({ status: asked.status, body: await asked.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "INTERACTIVE_SESSION_REQUIRED", url: `/confirm/member?space=${repo}&user=${viewer.id}&role=viewer`,
+    } } });
+    expect((await setRole(origin, repo, admin, viewer.id, "viewer")).status).toBe(200);
     expect(await members(origin, repo, agent)).toEqual([
       [peer.id, "admin"], [admin.id, "admin"], [editor.id, "editor"], [viewer.id, "viewer"],
     ].sort());
@@ -104,7 +114,7 @@ describe("a Team Space an agent owns", () => {
     const peer = await claimedAgent(origin, peerClaimer);
     const repo = await createRepo(origin, agent, "Research");
     const file = await createFile(origin, agent, repo, "Budget");
-    expect((await setRole(origin, repo, agent, peer.id, "admin")).status).toBe(200);
+    expect((await setRole(origin, repo, claimer, peer.id, "admin")).status).toBe(200);
     const pull = await createPull(origin, agent, repo);
     const [peerEvents, claimerEvents] = await Promise.all([events(origin, peer), events(origin, claimer)]);
     const issue = await createIssue(origin, agent, repo, "Secret plan");
@@ -215,17 +225,17 @@ describe("unclaimed agent quotas", () => {
     const refused = await send(origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, unclaimed.cookie);
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_NOT_ALLOWED",
-      message: "An unclaimed agent cannot make a Space public. Keep it private, or give a person a claim link so they can claim you, which lifts this limit. Claiming also lets that person open every Space you own.",
+      message: "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again.",
     } } });
 
-    // Only the repository, below the ceiling, can publish these Spaces, so a reader can see the suspension.
+    // No session can publish these Spaces, so the repository does it with a guard that passes, and a reader can see the suspension.
     for (const spaceId of [repo, unclaimed.spaceId]) {
-      await repositories.spaces.updateSettings(unclaimed.id, spaceId, { publicRead: true }, Date.now());
+      await repositories.spaces.updateSettings(unclaimed.id, spaceId, { publicRead: true }, Date.now(), () => {});
       expect((await send(origin, "GET", `/api/spaces/${spaceId}/nodes`)).status).toBe(200);
     }
-    // Likewise only the repository can give this Space a member, so the member path can be seen to close.
+    // Likewise the repository gives this Space a member, so the member path can be seen to close.
     const member = await person(origin, "member");
-    await repositories.permissions.upsertMember({ spaceId: repo, userId: member.id, role: "admin", grantedBy: unclaimed.id, now: Date.now() });
+    await repositories.permissions.upsertMember({ spaceId: repo, userId: member.id, role: "admin", grantedBy: unclaimed.id, now: Date.now() }, () => {});
     const pull = await createPull(origin, unclaimed, repo);
     await createIssue(origin, unclaimed, repo, "Secret plan");
     expect(await reach(origin, repo, pull, member)).toEqual(reachesAll);

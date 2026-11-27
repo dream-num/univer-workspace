@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import {
   assertCeiling,
+  exposureGuard,
   resolveStoredSpaceAccess,
   SPACE_LANDINGS,
   type AccessResolver,
   type SpaceLanding,
   type SpaceType,
 } from "../access/index.js";
+import { principalCategory, type Principal } from "../identity/index.js";
 import { spaceNotFound, spaceUpdateForbidden } from "./spaces.errors.js";
 import type { SpacesRepository, SpaceListScope, SpaceListEntry } from "./spaces.repository.js";
 import type { SpacePinsRepository, StoredSpacePins } from "./space-pins.repository.js";
@@ -22,7 +24,7 @@ export interface SpacesModule {
   setPins(userId: string, spaceIds: unknown): Promise<SpacePins>;
   resetPins(userId: string): Promise<SpacePins>;
   createTeamSpace(
-    userId: string,
+    actor: Principal,
     input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown; readonly proposals?: unknown }
   ): Promise<SpaceView>;
   get(userId: string, spaceId: string): Promise<SpaceView>;
@@ -30,7 +32,7 @@ export interface SpacesModule {
   getStar(userId: string, spaceId: string): Promise<SpaceStar>;
   setStar(userId: string, spaceId: string, starred: boolean): Promise<SpaceStar>;
   update(
-    userId: string,
+    actor: Principal,
     spaceId: string,
     input: {
       readonly name?: unknown;
@@ -96,14 +98,15 @@ export function createSpacesModule(options: {
       return pinView(userId, await options.pins.resetPins(userId, DEFAULT_PIN_COUNT));
     },
 
-    async createTeamSpace(userId, input) {
+    async createTeamSpace(actor, input) {
+      const userId = actor.user.id;
       const id = randomUUID();
       const name = validName(input.name);
       const publicRead = input.publicRead === undefined
         ? false
         : validBoolean(input.publicRead, "publicRead");
       const proposals = input.proposals === undefined ? "members" : validProposals(input.proposals);
-      assertCeiling(await options.access.principalCategory(userId), "updateSpace", { publicRead });
+      exposureGuard(actor, publicRead ? { kind: "create-public" } : null)(null);
       const row = await options.repository.createTeamSpace({
         id,
         name,
@@ -144,7 +147,8 @@ export function createSpacesModule(options: {
       return star;
     },
 
-    async update(userId, spaceId, input) {
+    async update(actor, spaceId, input) {
+      const userId = actor.user.id;
       const access = await options.access.resolveSpace(userId, spaceId);
       if (!access) throw spaceNotFound();
       if (!access.capabilities.renameSpace) throw spaceUpdateForbidden();
@@ -165,8 +169,6 @@ export function createSpacesModule(options: {
       }
       const name = input.name === undefined ? undefined : validName(input.name);
       const publicRead = input.publicRead === undefined ? undefined : validBoolean(input.publicRead, "publicRead");
-      const principal = await options.access.principalCategory(userId);
-      assertCeiling(principal, "updateSpace", { publicRead: publicRead ?? access.publicRead });
       const description = input.description === undefined ? undefined : validDescription(input.description);
       if (input.slug !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");
@@ -183,7 +185,7 @@ export function createSpacesModule(options: {
       if (landing !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space can require checks.", "landing");
       }
-      if (landing !== undefined) assertCeiling(principal, "changeLanding", { owns: access.role === "owner" });
+      if (landing !== undefined) assertCeiling(principalCategory(actor.user), "changeLanding", { owns: access.role === "owner" });
       const row = await options.repository.updateSettings(userId, spaceId, {
         ...(name !== undefined && { name }),
         ...(publicRead !== undefined && { publicRead }),
@@ -192,7 +194,7 @@ export function createSpacesModule(options: {
         ...(proposals !== undefined && { proposals }),
         ...(acceptAfterHours !== undefined && { acceptAfterHours }),
         ...(landing !== undefined && { landing }),
-      }, now());
+      }, now(), exposureGuard(actor, publicRead === true ? { kind: "public", spaceId } : null));
       if (!row) throw slugTaken();
       return spaceView(userId, row);
     },

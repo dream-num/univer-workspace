@@ -23,7 +23,7 @@ async function publish(html: string, shared = true) {
     name: "Standalone.univer.html", originalFilename: "Standalone.univer.html", byteSize: bytes.length});
   await application.blobs.upload(userId, body.upload.id, String(bytes.length), Readable.from([bytes]));
   await application.blobs.complete(interactivePrincipal(userId), body.upload.id);
-  if (shared) await application.permissions.updateNodeLinkSharing(userId, body.upload.nodeId, {enabled: true, role: "viewer"});
+  if (shared) await application.permissions.updateNodeLinkSharing(interactivePrincipal(userId), body.upload.nodeId, {enabled: true, role: "viewer"});
   return `http://127.0.0.1:3092/apps/${body.upload.nodeId}/run`;
 }
 const probe = await publish(`<!doctype html><title>Standalone sandbox probe</title><h1>Standalone sandbox probe</h1>

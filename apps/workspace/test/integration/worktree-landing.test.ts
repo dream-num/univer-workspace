@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -35,10 +36,10 @@ it("lets an agent that does not own a checks repository merge only once every de
   const early = await f.readyPull(f.bot.id);
   expect(await f.merge(f.bot.id, early), "a review repository lets an editor agent merge as before").toMatchObject({ worktree: { state: "merged" } });
 
-  await expect(spaces.update(f.owner.id, f.team, { landing: "strict" })).rejects.toMatchObject({ code: "INVALID_INPUT", field: "landing" });
+  await expect(spaces.update(interactivePrincipal(f.owner.id), f.team, { landing: "strict" })).rejects.toMatchObject({ code: "INVALID_INPUT", field: "landing" });
   const personal = (await spaces.list(f.owner.id)).spaces.find((space) => space.type === "personal")!;
-  await expect(spaces.update(f.owner.id, personal.id, { landing: "checks" })).rejects.toMatchObject({ message: "Only a Team Space can require checks." });
-  expect((await spaces.update(f.owner.id, f.team, { landing: "checks" })).landing).toBe("checks");
+  await expect(spaces.update(interactivePrincipal(f.owner.id), personal.id, { landing: "checks" })).rejects.toMatchObject({ message: "Only a Team Space can require checks." });
+  expect((await spaces.update(interactivePrincipal(f.owner.id), f.team, { landing: "checks" })).landing).toBe("checks");
 
   const pull = await f.readyPull(f.bot.id);
   const mergeable = async (userId: string) => (await worktrees.get(userId, pull)).worktree.capabilities.merge;
@@ -292,9 +293,9 @@ it("lets only a person or the agent that owns the repository merge a pull reques
 
   // Only an admin proposes removing a file, and an agent is an admin only where an agent owns the repository.
   const lead = await f.agent(f.owner, "lead");
-  const { id: crew } = await spaces.createTeamSpace(lead.id, { name: "Crew" });
-  await spaces.update(lead.id, crew, { landing: "checks" });
-  await permissions.upsertTeamMember(lead.id, crew, f.bot.id, { role: "admin" });
+  const { id: crew } = await spaces.createTeamSpace(await f.principal(lead), { name: "Crew" });
+  await spaces.update(await f.principal(lead), crew, { landing: "checks" });
+  await permissions.upsertTeamMember(interactivePrincipal(f.owner.id), crew, f.bot.id, { role: "admin" });
   const crewFolder = (await nodes.create(lead.id, { spaceId: crew, parentNodeId: null, name: ".agents" })).id;
   const created = await resources.create(lead.id, randomUUID(), { kind: "univer", spaceId: crew, parentNodeId: crewFolder, name: "Rules", unitType: "sheet" });
   if (created.status === 202 || !created.body.node.resource) throw new Error("Sheet missing");
@@ -314,7 +315,7 @@ it("opens Trunk files read-only for an agent that lands by checks, as Trunk refu
   const { resources, worktrees, spaces } = f.application;
   const editorMode = async (userId: string) => (await resources.open(userId, f.sheet.id)).resource;
   expect(await editorMode(f.bot.id)).toMatchObject({ editorMode: "edit" });
-  await spaces.update(f.owner.id, f.team, { landing: "checks" });
+  await spaces.update(interactivePrincipal(f.owner.id), f.team, { landing: "checks" });
   expect(await editorMode(f.bot.id)).toMatchObject({ editorMode: "readOnly" });
   expect(await editorMode(f.alice.id), "a person is not gated").toMatchObject({ editorMode: "edit" });
   const pull = await f.openPull(f.bot.id);
@@ -334,7 +335,7 @@ it("keeps such an agent from changing Trunk's files outside a merge, its check d
   await blobs.upload(f.bot.id, started.upload.id, String(notes.length), Readable.from([notes]));
   const old = await f.upload(f.owner, null, "old.md", "old");
   const removed = await trash.trashNode(f.owner.id, old.nodeId);
-  await f.application.spaces.update(f.owner.id, f.team, { landing: "checks" });
+  await f.application.spaces.update(interactivePrincipal(f.owner.id), f.team, { landing: "checks" });
 
   expect((await access.resolveResourceContent(f.bot.id, f.sheet.id))?.landsByChecks).toBe(true);
   expect((await access.resolveResourceContent(f.alice.id, f.sheet.id))?.landsByChecks).toBe(false);
@@ -384,10 +385,10 @@ it("does not gate the agent that owns a checks repository, and gates an agent ad
   const f = await repository();
   const owner = await f.agent(f.owner, "builder");
   const admin = await f.agent(f.owner, "helper");
-  const { id: space } = await f.application.spaces.createTeamSpace(owner.id, { name: "Bots" });
-  await f.application.permissions.upsertTeamMember(owner.id, space, admin.id, { role: "admin" });
-  await expect(f.application.spaces.update(admin.id, space, { landing: "checks" })).rejects.toMatchObject({ code: "AGENT_NOT_ALLOWED" });
-  expect((await f.application.spaces.update(owner.id, space, { landing: "checks" })).landing).toBe("checks");
+  const { id: space } = await f.application.spaces.createTeamSpace(await f.principal(owner), { name: "Bots" });
+  await f.application.permissions.upsertTeamMember(interactivePrincipal(f.owner.id), space, admin.id, { role: "admin" });
+  await expect(f.application.spaces.update(await f.principal(admin), space, { landing: "checks" })).rejects.toMatchObject({ code: "AGENT_NOT_ALLOWED" });
+  expect((await f.application.spaces.update(await f.principal(owner), space, { landing: "checks" })).landing).toBe("checks");
   const created = await f.application.resources.create(owner.id, randomUUID(), {
     kind: "univer", spaceId: space, parentNodeId: null, name: "Totals", unitType: "sheet",
   });
@@ -589,16 +590,16 @@ async function repository(landing: "review" | "checks" = "review") {
   const alice = await person("alice");
   const bot = await agent(owner, "bot");
   const reader = await agent(owner, "reader");
-  const { id: team } = await application.spaces.createTeamSpace(owner.id, { name: "Sales" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Sales" });
   for (const [member, role] of [[alice, "editor"], [bot, "editor"], [reader, "viewer"]] as const) {
-    await application.permissions.upsertTeamMember(owner.id, team, member.id, { role });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, member.id, { role });
   }
   const folder = (await application.nodes.create(owner.id, { spaceId: team, parentNodeId: null, name: ".agents" })).id;
   const uploaded = await upload(owner, folder, "checks.md", CHECKS_MD);
   const declaration = { ...uploaded, objectKey: await objectKey(uploaded.resourceId) };
   const sheet = await sheetNamed("North");
   const otherSheet = await sheetNamed("South");
-  if (landing === "checks") await application.spaces.update(owner.id, team, { landing });
+  if (landing === "checks") await application.spaces.update(interactivePrincipal(owner.id), team, { landing });
 
   /** Moves the draft head of the pull request's first Unit by one changeset. */
   const editDraft = async (userId: string, pull: string) => {
