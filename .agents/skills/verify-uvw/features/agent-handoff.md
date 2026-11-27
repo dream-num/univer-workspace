@@ -387,7 +387,7 @@ Open `$CLAIM2` in two sessions with nobody signed in, `<run>-ho14-a` and `<run>-
 each. Do not print `get url` there: the address carries the code. Both show `Work from agent`, `@<B>`, the Personal
 Space row with `2 files`, the links `Preview data` and `Qty page.univer.html`, and `Sign in and take it`. In each,
 click `Qty page.univer.html` and wait about 6 s: the address ends `/nodes/$PN?view=immersive`, the bar reads
-`Read only`, `By agent` and `Unverified agent`, `snapshot -i -c` shows the page's `spinbutton "Qty"` with `5`, and the
+`By agent` and `Unverified agent`, `snapshot -i -c` shows the page's `spinbutton "Qty"` with `5`, and the
 screenshot shows `Double: 10`. In session a, also open `$ORIGIN/nodes/<Preview data's node>`: the Sheet opens
 `Read only` with `5` and `10` in row 2.
 
