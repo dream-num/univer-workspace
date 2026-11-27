@@ -15,7 +15,7 @@ export const OWNED_AGENT_LINES: Readonly<Record<AccessTier, readonly string[]>> 
     "It works in its own space and sees your files only when you share them.",
     "You own the repositories it creates, except forks, which stay with it.",
     "It can create and edit files, and open and merge pull requests where a repository allows it.",
-    "It can make its own repositories public, add members, or share its files by link without asking you.",
+    "To make a repository public, add a member, or share a file, it gives you a link to confirm in the browser.",
   ],
 };
 

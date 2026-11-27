@@ -51,6 +51,12 @@ describe("the connect page for a signed-in person", () => {
     expect(readOnly).toContain("It can read, and cannot change anything.");
   });
 
+  it("tells the person that widening who can see data waits for their confirmation", () => {
+    const html = renderConnectPage(page([]));
+    expect(html).toContain("it gives you a link to confirm in the browser.");
+    expect(html).not.toContain("without asking you");
+  });
+
   it("escapes what the client and the agents name themselves", () => {
     const hostile = renderConnectPage(personPage({
       request: { ...request, client: { clientName: "<script>x</script>", host: "evil.example" } },
