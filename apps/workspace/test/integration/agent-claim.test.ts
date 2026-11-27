@@ -344,6 +344,7 @@ describe("a temporary agent's file links", () => {
         const text = await response.text();
         expect(JSON.parse(text), reader).toMatchObject({
           node: { id: file, parentNodeId: null, accessRole: "viewer" }, navigationRootNodeId: file, breadcrumbs: [{ id: file }],
+          owner: { kind: "agent", claimed: false },
         });
         expect(text, reader).not.toContain(folder);
         expect(text, reader).not.toContain(sibling);
@@ -385,6 +386,7 @@ describe("a temporary agent's file links", () => {
       expect([401, 403], reader).toContain((await send(origin, "GET", `/universer-api/snapshot/2/unit/${unitId}/rev/0`, undefined, cookie)).status);
     }
     expect(await accessRole(origin, sheet, alice.cookie)).toBe("owner");
+    expect(await (await send(origin, "GET", `/api/nodes/${teamSheet}`, undefined, alice.cookie)).json()).toMatchObject({ owner: null });
 
     await repositories.identity.touchAgent({ nodeId: expiredSheet }, Date.now(), Date.now() - 24 * HOUR, Date.now() + 24 * HOUR);
     expect(await accessRole(origin, expiredSheet, undefined)).toBe("viewer");

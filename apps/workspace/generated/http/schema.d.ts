@@ -4252,7 +4252,7 @@ export interface components {
         NodeResponse: {
             node: components["schemas"]["NodeSummary"];
             space: components["schemas"]["SpaceSummary"];
-            /** @description Null for a Node in a Team Space, which has no single author. */
+            /** @description Null for a Node in a Team Space, which has no single author, unless an unclaimed agent owns that Space. */
             owner: components["schemas"]["NodeOwner"] | null;
             breadcrumbs: components["schemas"]["Breadcrumb"][];
             navigationRootNodeId: string | null;
