@@ -265,7 +265,6 @@ export class WorkspaceHttp {
 
 const GIVE_LINK = "Give the user this link so they can confirm it in the browser:";
 
-/** The server names a browser page by its path. A value that resolves to another origin is dropped. */
 function browserLink(raw: unknown, origin: string): string | undefined {
   if (typeof raw !== "string") return undefined;
   try {

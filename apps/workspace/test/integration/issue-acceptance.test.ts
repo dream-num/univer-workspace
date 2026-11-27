@@ -292,7 +292,6 @@ describe("the Issue acceptance panel's data", () => {
       return { id: created.body.node.id, resourceId: created.body.node.resource!.id };
     };
     const [before, shared, granted] = [await sheet("Before"), await sheet("Shared"), await sheet("Granted")];
-    // A claimed agent no longer widens access itself, so the repository writes the rows it made before that rule.
     const { permissions } = application.repositories;
     const link = (nodeId: string) =>
       permissions.upsertLinkSharing({ nodeId, enabled: true, role: "viewer", actorUserId: agent.id, now: Date.now() }, () => {});

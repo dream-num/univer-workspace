@@ -20,7 +20,6 @@ interface Actor {
   readonly cookie: string;
 }
 
-/** A session, a Team Space and a Personal Space file its User owns, and the browser session of the person who can confirm for it. */
 interface Target {
   readonly cookie: string;
   readonly team: string;
@@ -99,7 +98,6 @@ it("refuses an agent that sets a link to viewer after the owner turned the link 
   const link = (by: string, enabled: boolean, role: string) => send(w.origin, "PUT", `/api/nodes/${file}/link-sharing`, { enabled, role }, by);
   expect((await link(confirmer, true, "editor")).status).toBe(200);
   expect((await link(confirmer, false, "editor")).status).toBe(200);
-  // The agent last read an editor link, so to it viewer is a narrowing.
   expect(await answer(link(cookie, true, "viewer")))
     .toEqual({ status: 403, code: "INTERACTIVE_SESSION_REQUIRED", url: `/confirm/link-sharing?node=${file}&role=viewer` });
   expect((await exposure(w.origin, w.refusedWithLink["a claimed agent"])).link).toBe("off");
@@ -123,7 +121,6 @@ it("gives someone without the capability the refusal they always got, and no con
   }
 }, 60_000);
 
-/** The four writes that widen, each with the confirm page a refusal names. */
 function widenings(w: { readonly origin: string; readonly bob: Actor }, { cookie, team, file }: Target) {
   const bob = w.bob.id;
   return [

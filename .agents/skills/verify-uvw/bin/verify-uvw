@@ -242,8 +242,6 @@ mcp_doctor_processes() {
   else bad "MCP gateway port $MCP_PORT is not owned by this run's gateway, or healthz fails: down, then up"; fi
 }
 
-# Only a person signed in to a browser lets more people see data. This signs the run user in as the browser does,
-# keeps the session in home/browser-session, and gives `person` a copy of uvw's home that holds it.
 person_session() {
   node --input-type=module - "$RUN" "$ORIGIN" "$USERNAME" <<'JS'
 import {cpSync,mkdirSync,readdirSync,readFileSync,writeFileSync} from 'node:fs';
@@ -1005,7 +1003,6 @@ cmd_cli() {
   record_uvw "$@"
 }
 
-# uvw with the run user's browser session: what that person does in the browser, for a recipe's setup.
 cmd_person() {
   [[ $# -ge 2 ]] || die "usage: verify-uvw person <label> <uvw args...>"
   load_run

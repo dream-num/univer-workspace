@@ -82,7 +82,6 @@ export function pullRequestUrl(value: unknown, origin: string): string | null {
 
 const refusalSchema = z.object({ isError: z.literal(true), content: z.tuple([z.object({ text: z.string() })], z.unknown()) });
 const confirmLinkSchema = z.object({ detail: z.object({ url: z.url() }) });
-/** The confirm page a refused tool call names. The gateway returns its error as JSON in the first text block. */
 export function confirmUrl(output: unknown, origin: string): string | null {
   const refusal = refusalSchema.safeParse(output);
   if (!refusal.success) return null;

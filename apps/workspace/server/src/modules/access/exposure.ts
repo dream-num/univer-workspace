@@ -17,7 +17,6 @@ export type ExposureChange =
   | { readonly kind: "member"; readonly spaceId: string; readonly userId: string; readonly role: TeamRole }
   | { readonly kind: "grant"; readonly nodeId: string; readonly userId: string; readonly role: GrantRole }
   | { readonly kind: "link-sharing"; readonly nodeId: string; readonly role: GrantRole }
-  /** No Space exists to link to yet, so this refusal carries no url. */
   | { readonly kind: "create-public" };
 
 type Confirmable = Exclude<ExposureChange, { readonly kind: "create-public" }>;
@@ -31,13 +30,9 @@ type LevelOf<C extends ExposureChange> = C extends { readonly role: infer R exte
  */
 export type ExposureGuard<L extends Level> = (before: L | null) => void;
 
-/**
- * Only a person in a browser widens who can see data. Every session narrows or repeats the stored
- * level. `change` is null for a write that cannot widen.
- */
 export function exposureGuard<C extends ExposureChange>(actor: Principal, change: C | null): ExposureGuard<LevelOf<C>> {
   return (before) => {
-    if (change !== null && widens(change, before) && !mayWiden(actor, change)) throw refusal(actor, change);
+    if (change !== null && widens(change, before) && !mayWiden(actor, change)) throw countedRefusal(actor, change);
   };
 }
 
@@ -78,8 +73,7 @@ for (const change of Object.keys(REFUSED)) {
   }
 }
 
-// PostgreSQL replays a transaction after a serialization failure, so only the throw is counted.
-function refusal(actor: Principal, change: ExposureChange): ApplicationError {
+function countedRefusal(actor: Principal, change: ExposureChange): ApplicationError {
   const category = principalCategory(actor.user);
   const code = refusalCode(category);
   refusals.inc({ change: change.kind, code, principal_category: category });
@@ -90,7 +84,6 @@ function refusal(actor: Principal, change: ExposureChange): ApplicationError {
   );
 }
 
-// A path, not a URL: every client already holds the browser origin, and no replica needs to know it.
 function confirmPath(change: Confirmable): string {
   const query =
     change.kind === "public" ? { space: change.spaceId }

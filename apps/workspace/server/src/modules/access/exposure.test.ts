@@ -18,7 +18,6 @@ const refusedWithLink = {
 };
 const unclaimedAgent = session("agent", "agent", true, false);
 
-/** Each confirmable change with the stored levels it widens, repeats and narrows, and its confirm link. */
 const cases = [
   { change: { kind: "public", spaceId: "s 1" }, widens: [null], keeps: ["public"], url: "/confirm/public?space=s+1" },
   {

@@ -27,7 +27,6 @@ const people = {
 const wang = { id: "USER-ID", username: "wang", displayName: "Wang", avatarUrl: null };
 const forbidden = () => Response.json({ error: { code: "FORBIDDEN", message: "You do not have permission to perform this action." } }, { status: 403 });
 
-/** What the fake server stores, and what it answers a person who lacks the capability. */
 let server: {
   signedIn: keyof typeof people | null;
   member: string | null;

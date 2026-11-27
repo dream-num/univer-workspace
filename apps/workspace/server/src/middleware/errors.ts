@@ -70,7 +70,6 @@ export class ApplicationError extends Error {
     message: string,
     readonly field?: string,
     readonly retryAfterSeconds?: number,
-    /** A path on the Workspace origin of the browser page where a person finishes this action. */
     readonly url?: string
   ) {
     super(message);

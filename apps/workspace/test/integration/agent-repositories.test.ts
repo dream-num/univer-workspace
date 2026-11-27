@@ -228,12 +228,10 @@ describe("unclaimed agent quotas", () => {
       message: "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again.",
     } } });
 
-    // No session can publish these Spaces, so the repository does it with a guard that passes, and a reader can see the suspension.
     for (const spaceId of [repo, unclaimed.spaceId]) {
       await repositories.spaces.updateSettings(unclaimed.id, spaceId, { publicRead: true }, Date.now(), () => {});
       expect((await send(origin, "GET", `/api/spaces/${spaceId}/nodes`)).status).toBe(200);
     }
-    // Likewise the repository gives this Space a member, so the member path can be seen to close.
     const member = await person(origin, "member");
     await repositories.permissions.upsertMember({ spaceId: repo, userId: member.id, role: "admin", grantedBy: unclaimed.id, now: Date.now() }, () => {});
     const pull = await createPull(origin, unclaimed, repo);

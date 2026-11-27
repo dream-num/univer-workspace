@@ -195,7 +195,6 @@ describe("access rules for agents", () => {
     const nodeId = await createFile(origin, agent.cookie, "Agent sheet");
     expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie)).status).toBe(200);
     await expectRefused(put(origin, `/api/nodes/${nodeId}/grants/${reader.id}`, { role: "editor" }, agent.cookie), "AGENT_NOT_ALLOWED");
-    // No session can share an unclaimed agent's file with a person, so the repository writes a grant made before that rule.
     await application.repositories.permissions.upsertGrant({ nodeId, userId: reader.id, role: "editor", grantedBy: agent.id, now: Date.now() }, () => {});
     const sharedWithReader = async () =>
       ((await (await fetch(`${origin}/api/shared-with-me`, { headers: { cookie: reader.cookie } })).json()) as { items: unknown[] }).items.length;

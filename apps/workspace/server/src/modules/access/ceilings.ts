@@ -58,8 +58,6 @@ export function landsByChecks(principal: PrincipalCategory, { landing, owns }: C
   return isAgent(principal) && landing === "checks" && !owns;
 }
 
-// An agent identity costs nothing, so it gets no organisation-wide reach and, until a human claims
-// it, a small storage budget and no one else in its Spaces.
 const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   createTeamSpace: {
     code: "AGENT_QUOTA_EXCEEDED",

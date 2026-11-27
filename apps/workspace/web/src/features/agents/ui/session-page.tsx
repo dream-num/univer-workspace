@@ -322,7 +322,6 @@ function StepRow({ part, session, replaced, feedback }: {
   const skillDraftId = part.type !== "reasoning" && part.state === "output-available" ? skillDraftResultId(toolName(part), part.output) : null;
   const draftId = parsedDraft?.success && !parsedDraft.data.isError ? parsedDraft.data.structuredContent.draft.id : null;
   const styles = part.type !== "reasoning" && part.state === "output-available" ? htmlViewStylesResult(toolName(part), part.output) : null;
-  // The step list also renders to static markup, where no window exists.
   const confirm = part.type !== "reasoning" && part.state === "output-available" && typeof window !== "undefined"
     ? confirmUrl(part.output, window.location.origin) : null;
   return <div className="agent-step" data-status={state}>

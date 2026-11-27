@@ -27,7 +27,6 @@ export function ConfirmPage({ action, search, returnTo }: { readonly action: str
   const session = useQuery(sessionQueryOptions);
   const { t } = useI18n();
   if (session.isPending) return <Loading />;
-  // A browser that holds only an agent's cookie has no person in it, so it signs in like a signed-out one.
   if (!session.data?.authenticated || session.data.user.kind !== "human") {
     return (
       <main className="auth-backdrop grid min-h-dvh place-items-center px-5 py-8">
@@ -88,14 +87,13 @@ const repositoryName = (space: components["schemas"]["SpaceView"] | undefined) =
 const fileName = (data: components["schemas"]["NodeResponse"] | undefined): ConfirmNames =>
   data ? { file: data.node.name, folder: data.node.resource === null } : {};
 
-/** `known` is the row a member or grant list already returned. User search finds everyone else by exact ID. */
-function useNamedUser(userId: string, known: PublicUser | undefined, listed: boolean): Read & { readonly name: string | undefined } {
+function useNamedUser(userId: string, listedUser: PublicUser | undefined, listLoaded: boolean): Read & { readonly name: string | undefined } {
   const { t } = useI18n();
-  const search = useQuery({ ...userSearchQueryOptions(userId), enabled: listed && !known });
-  const user = known ?? search.data?.users.find(({ id }) => id === userId);
+  const search = useQuery({ ...userSearchQueryOptions(userId), enabled: listLoaded && !listedUser });
+  const user = listedUser ?? search.data?.users.find(({ id }) => id === userId);
   return {
     name: user && `${user.displayName} (@${user.username})`,
-    isPending: !known && search.isPending,
+    isPending: !listedUser && search.isPending,
     error: search.error ?? (search.isSuccess && !user ? new Error(t("confirmUserUnknown")) : null),
   };
 }

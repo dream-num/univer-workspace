@@ -20,7 +20,6 @@ export function ownedAgentNotice(owner: AgentOwner | undefined): string {
   return `${owner ? `${owner.name} (@${owner.username}) owns this agent and` : "The person who claimed this agent"} can open everything it owns, so to show them a repository or file, give them its link. You cannot let anyone else see one yourself: the server answers such a call with a confirm link, which you give to the user.`;
 }
 
-/** Only an unclaimed agent turns a link on itself, and share refuses a connection without publish. */
 export function linkAfterMerge(canShare: boolean): string {
   return canShare
     ? "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link."

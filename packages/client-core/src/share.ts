@@ -67,7 +67,6 @@ export async function shareNode(
           });
   } catch (error) {
     if (!(error instanceof WorkspaceApplicationError)) throw error;
-    // Only Personal Space files have Link Sharing, in the Browser too. For a Team Space file the server answers NOT_FOUND.
     if (error.code === "NOT_FOUND") {
       // Someone else's Personal Space can hide from the caller, so a failed lookup keeps the server's own refusal.
       const space = await spaces.get(spaceId).catch((lookup: unknown) => {

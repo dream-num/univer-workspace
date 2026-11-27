@@ -250,7 +250,6 @@ export class WorkspaceSpaceFeature {
     try {
       found = await findUser(http, user);
     } catch (error) {
-      // User search refuses only an unclaimed agent, which the server does not let add a member either.
       if (!(error instanceof WorkspaceApplicationError) || error.code !== "AGENT_NOT_ALLOWED") throw error;
       throw workspaceError(error.code, "An unclaimed agent cannot add Team Space members. A person must claim it first.");
     }

@@ -70,7 +70,7 @@ export interface NodeOwnerRow {
 
 /**
  * Mutations recheck access and capture their result in the same transaction. A write that can widen
- * access calls its guard there too, after the capability checks, with the level it replaces.
+ * access calls its guard after the capability checks.
  */
 export interface PermissionsRepository {
   findUser(userId: string): Promise<PublicUser | null>;

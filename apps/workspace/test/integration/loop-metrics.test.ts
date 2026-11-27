@@ -106,7 +106,6 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   await oauthSignup("/api/auth/authorize?client_id=cli");
   await oauthSignup("/claim/c0de-in-path");
 
-  // Only a person in a browser raises a link to editor, and a role change on a link that is on is not a new share.
   const own = await application!.nodes.create(reader, { spaceId: (await application!.spaces.list(reader)).spaces[0]!.id, parentNodeId: null, name: "Plan" });
   for (const role of ["viewer", "editor"] as const) {
     await application!.permissions.updateNodeLinkSharing(interactivePrincipal(reader), own.id, { enabled: true, role });
