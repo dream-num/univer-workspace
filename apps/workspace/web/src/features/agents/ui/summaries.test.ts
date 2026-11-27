@@ -6,7 +6,7 @@ import { AgentStepsGroup } from "./session-page";
 import { SessionStatus } from "./sessions";
 import { ApprovalCard } from "./approval-card";
 import type { StepPart, ToolPart } from "./summaries";
-import { argumentSummary, cacheHitRate, durationLabel, newestSessions, visibleSessions, messageBlocks, sessionStatus, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { argumentSummary, cacheHitRate, confirmUrl, durationLabel, newestSessions, visibleSessions, messageBlocks, sessionStatus, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { session } from "../test-helpers";
 import { agentSessionIdSchema } from "../agent.types";
 import { agentMessages } from "./messages";
@@ -90,6 +90,25 @@ describe("Agent tool cards", () => {
       `${origin}/spaces//pulls/1`, "javascript:alert(1)", "data:text/html,test", "/spaces/s/pulls/1",
     ]) expect(pullRequestUrl({ url }, origin), url).toBeNull();
     expect(pullRequestUrl(null, origin)).toBeNull();
+  });
+  it("reads a confirm link only from a tool error, and only for a confirm page on this origin", () => {
+    const origin = "https://space.test";
+    const refused = (url: unknown, isError = true) => ({
+      isError,
+      content: [{ type: "text", text: JSON.stringify({ code: "INTERACTIVE_SESSION_REQUIRED", message: "A person confirms it.", detail: { status: 403, url } }) }],
+    });
+    const link = `${origin}/confirm/member?space=s1&user=u2&role=editor`;
+    expect(confirmUrl(refused(link), origin)).toBe(link);
+    for (const url of [
+      "https://other.test/confirm/public?space=s1", "https://space.test.evil.test/confirm/public?space=s1",
+      "http://space.test/confirm/public?space=s1", `${origin}/spaces/s1/settings`, `${origin}/confirmed/public`,
+      "/confirm/public?space=s1", "javascript:alert(1)", undefined, 42,
+    ]) expect(confirmUrl(refused(url), origin), String(url)).toBeNull();
+    expect(confirmUrl(refused(link, false), origin), "a result that is not an error").toBeNull();
+    expect(confirmUrl({ isError: true, content: [{ type: "text", text: "not JSON" }] }, origin)).toBeNull();
+    expect(confirmUrl({ isError: true, content: [] }, origin)).toBeNull();
+    expect(confirmUrl({ structuredContent: { url: link } }, origin)).toBeNull();
+    expect(confirmUrl(null, origin)).toBeNull();
   });
   it("shows newest sessions first and isolates repository sessions", () => {
     const older = session({ id: agentSessionIdSchema.parse("older") });
