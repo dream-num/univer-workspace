@@ -373,3 +373,41 @@ describe("Workspace HTTP transport", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+describe("a refusal that names a browser page", () => {
+  const refuse = async (url: unknown) => {
+    const http = new WorkspaceHttp({
+      cookie: "session=x",
+      fetcher: async () => Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "A person confirms it.", url } }, { status: 403 }),
+      origin: "https://workspace.test",
+      role: "client",
+      transportOrigin: "http://host.docker.internal:3920/",
+    });
+    return await http.request("/api/spaces/s1", { method: "PATCH", body: {} }).catch((error: unknown) => error);
+  };
+
+  it("resolves the page against the browser origin, tells the agent to give it to the user, and keeps it in the detail", async () => {
+    const link = "https://workspace.test/confirm/member?space=s1&user=u2&role=editor";
+    for (const url of ["/confirm/member?space=s1&user=u2&role=editor", link]) {
+      expect(await refuse(url)).toMatchObject({
+        code: "INTERACTIVE_SESSION_REQUIRED",
+        message: `A person confirms it. Give the user this link so they can confirm it in the browser: ${link}`,
+        detail: { status: 403, path: "/api/spaces/s1", url: link },
+      });
+    }
+  });
+
+  it.each([
+    "https://evil.test/confirm/public?space=s1",
+    "//evil.test/confirm/public?space=s1",
+    "http://workspace.test/confirm/public?space=s1",
+    "javascript:alert(1)",
+    "http://[",
+    42,
+    undefined,
+  ])("drops %s, which is not a page on the browser origin, and keeps the server's message", async (url) => {
+    const error = await refuse(url);
+    expect(error).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED", message: "A person confirms it." });
+    expect((error as { detail: object }).detail).toEqual({ status: 403, path: "/api/spaces/s1" });
+  });
+});

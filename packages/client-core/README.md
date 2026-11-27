@@ -6,7 +6,9 @@
 
 ## 职责
 
-- 提供 Workspace HTTP transport、错误和 result-unknown 语义。
+- 提供 Workspace HTTP transport、错误和 result-unknown 语义。服务端的错误带 `url`（确认页的路径）时，
+  transport 按自己的 origin 把它解析成绝对链接，放进错误的 `detail.url`，并在消息后加一句让 agent 把链接交给用户的话；
+  指向别的 origin 的 `url` 被丢弃。
 - 提供 storage-neutral 的 password login、browser approval、访客 agent 创建（`createGuestAgent`）、`whoami` 和 remote logout 协议。
   `whoami` 的 subject 只在主体是 agent 时带 `kind` 和 `claimed`，agent 的 `whoami` 还带服务端给出的 `budget`。
 - 提供 Space/Node 模型、严格响应解析和远程 workflow。服务端报全 Space `capabilities` 时，Space 视图保留它（如 `manageMembers`、`propose`）；Team Space 的 `proposals` 设置随 Space 视图读出，也能在创建和修改仓库时传入。

@@ -127,6 +127,11 @@ export class WorkspaceHttp {
       const body = await readOptionalJson(response);
       const error = isRecord(body?.["error"]) ? body["error"] : undefined;
       const code = error?.["code"];
+      const message =
+        typeof error?.["message"] === "string"
+          ? error["message"]
+          : `Workspace request failed with HTTP ${String(response.status)}.`;
+      const link = browserLink(error?.["url"], this.origin);
       // Collaboration routes answer with the protocol's numeric ErrorCode; its name reads like every other code.
       throw workspaceError(
         typeof code === "string"
@@ -134,10 +139,8 @@ export class WorkspaceHttp {
           : typeof code === "number"
             ? (ErrorCode[code] ?? String(code))
             : `HTTP_${String(response.status)}`,
-        typeof error?.["message"] === "string"
-          ? error["message"]
-          : `Workspace request failed with HTTP ${String(response.status)}.`,
-        { status: response.status, path: url.pathname },
+        link === undefined ? message : `${message} ${GIVE_LINK} ${link}`,
+        { status: response.status, path: url.pathname, ...(link === undefined ? {} : { url: link }) },
       );
     }
     return response;
@@ -257,6 +260,19 @@ export class WorkspaceHttp {
     transportUrl.search = url.search;
     transportUrl.hash = url.hash;
     return transportUrl;
+  }
+}
+
+const GIVE_LINK = "Give the user this link so they can confirm it in the browser:";
+
+/** The server names a browser page by its path. A value that resolves to another origin is dropped. */
+function browserLink(raw: unknown, origin: string): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  try {
+    const url = new URL(raw, origin);
+    return url.origin === origin ? url.href : undefined;
+  } catch {
+    return undefined;
   }
 }
 
