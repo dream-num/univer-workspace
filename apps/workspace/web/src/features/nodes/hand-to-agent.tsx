@@ -12,12 +12,12 @@ export type AgentTask = "read" | "copy";
 export const HAND_OFFS = ["mcp", "cli"] as const;
 export type HandOff = (typeof HAND_OFFS)[number];
 
-const CLAIM_FIRST = "Tell me to open the claim link first: the copy is mine to edit once I claim it there. Until then, its link may open read-only or not at all.";
+const HANDOFF_FIRST = "Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only or not at all.";
 
 const mcpCopySteps = (origin: string) => `1. Call \`repo_list\` to find your Personal Space repository, then \`pr_create\` in it with the title "My copy".
 2. Call \`unit_create\` with that pull request's id as \`worktree\`, the repository as \`space\`, \`type\` sheet, the name "My copy" and the link as \`from\`. If the file is a Doc or a Slide, the error says so: use \`type\` doc or slide.
 3. Call \`pr_ready\`, then \`pr_merge\`. If you have no \`pr_merge\` or it is refused, give me the pull request link to merge.
-4. If you have a \`claim\` tool, call it and give me the claim link. ${CLAIM_FIRST}
+4. If you have a \`claim\` tool, call it and give me the handoff link. ${HANDOFF_FIRST}
 5. Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned. I open it to edit the copy in the browser.
 You do not need \`read\` for this. If \`unit_create\` has no \`from\`, tell me to use the Command line (uvw) option of Hand to my agent.`;
 
@@ -47,7 +47,7 @@ uvw pr ready <id> --json
 uvw pr merge <id> --json
 uvw claim
 
-<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link. ${CLAIM_FIRST}
+<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the handoff link that uvw claim prints. ${HANDOFF_FIRST}
 Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the nodeId that unit create returns. I open it to edit the copy in the browser.`,
     mcp: "call `pr_create`, `unit_create` with the link as `from`, `pr_ready`, `pr_merge` and `claim`. If `unit_create` has no `from`, use the CLI.",
     mcpSteps: mcpCopySteps,
