@@ -108,11 +108,16 @@ An agent also carries `claimed`. The token exchange of a claimed agent also carr
 person who claimed it. A banned agent's login session returns
 `401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.
 
-A human claims an agent to keep its files. The unclaimed agent calls
-`POST /api/agents/claim-codes` with any of its sessions and hands the returned
-`/claim/<code>` page to the human. The code lasts ten minutes, claims once, and
-works on any server replica. `GET /api/agents/claim?code=` shows the agent and
-`POST /api/agents/claim` claims it; both need a human's browser session. A used
+An unclaimed agent shows its work with one handoff link, and a human takes the agent
+through it to keep its files. The agent calls `POST /api/agents/claim-codes` with any of
+its sessions and hands the returned `/claim/<code>` page to the human. The code lasts
+seven days and works on any server replica. `GET /api/agents/claim?code=` needs no login
+session. It shows the agent and its Spaces and sets the `workspace_handoff` cookie, with
+which a browser that holds no login session reads every Space the agent owns as a viewer
+and writes nothing. The server checks the code and the agent on every request, so that
+reading ends when a human takes the agent, when the agent is banned, and when the code
+expires. `POST /api/agents/claim` takes the agent and needs a human's browser session.
+One human takes it. A used
 code answers `409 AGENT_ALREADY_CLAIMED` to anyone but its claimer, an old code
 `410 AGENT_CLAIM_EXPIRED`, an unknown one `404 AGENT_CLAIM_INVALID`. The claimer
 becomes an owner of the agent's Personal Space, the agent stops expiring, and the
@@ -184,8 +189,8 @@ The server compares the request with the level stored inside the write's own tra
 that keeps or lowers that level passes for every session: making a Space private, lowering a role,
 removing a member or a grant, turning Link Sharing off, or changing its role from editor to viewer.
 Creating a Space with `publicRead: true` has no Space to confirm yet, so that refusal has no `url`.
-An unclaimed agent has no person who can confirm for it. It gets `403 AGENT_NOT_ALLOWED`, except
-that it may turn on a viewer link for a Node in its own Personal Space.
+An unclaimed agent has no person who can confirm for it. It gets `403 AGENT_NOT_ALLOWED`, and
+shows its work with its handoff link.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.

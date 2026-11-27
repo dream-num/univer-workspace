@@ -1,6 +1,6 @@
 import { json, Router } from "express";
 import { contentDisposition, pipeBlobContent } from "../../integrations/blob/blob-http.js";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
+import type { IdentityModule } from "../identity/index.js";
 import type { BlobsModule } from "./blobs.service.js";
 
 export function createBlobsRouter(options: {
@@ -77,10 +77,10 @@ export function createBlobsRouter(options: {
     router.get(
       `/blob-resources/:resourceId/${disposition}`,
       async (request, response) => {
-        const reader = await options.identity.getSession(request.headers.cookie);
+        const reader = await options.identity.getReader(request.headers.cookie);
         response.setHeader("Cache-Control", "private, no-store");
         const opened = await options.blobs.openContent(
-          reader.authenticated ? reader.user.id : ANONYMOUS_USER_ID,
+          reader.userId,
           required(request.params.resourceId),
           request.headers.range
         );

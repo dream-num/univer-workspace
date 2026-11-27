@@ -67,17 +67,18 @@ it("passes a write that cannot widen for every session, whatever is stored", () 
   }
 });
 
-it("tells an unclaimed agent to hand over a claim link, with no confirm link, except for a viewer link", () => {
+it("tells an unclaimed agent to hand over its handoff link, with no confirm link, a viewer link included", () => {
   for (const { change, widens } of cases) {
     for (const before of widens) {
       const refusal = (() => { try { guard(unclaimedAgent, change)(before); } catch (error) { return error; } })();
       expect(refusal, `${change.kind} from ${before}`).toMatchObject({ code: "AGENT_NOT_ALLOWED", status: 403 });
       expect(refusal).not.toHaveProperty("url", expect.anything());
-      expect((refusal as Error).message).toContain("claim link");
+      expect((refusal as Error).message).toContain("handoff link");
     }
   }
   const viewerLink = { kind: "link-sharing", nodeId: "n1", role: "viewer" } as const;
-  expect(() => guard(unclaimedAgent, viewerLink)(null)).not.toThrow();
+  expect(() => guard(unclaimedAgent, viewerLink)(null)).toThrow(expect.objectContaining({ code: "AGENT_NOT_ALLOWED" }));
+  expect(() => guard(unclaimedAgent, viewerLink)("viewer")).not.toThrow();
   expect(() => guard(refusedWithLink["a claimed agent"], viewerLink)(null))
     .toThrow(expect.objectContaining({ code: "INTERACTIVE_SESSION_REQUIRED", url: "/confirm/link-sharing?node=n1&role=viewer" }));
 });

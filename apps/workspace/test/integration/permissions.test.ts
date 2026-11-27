@@ -1,5 +1,5 @@
 import { interactivePrincipal } from "../fixtures/principal.js";
-import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/index.js";
+import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/anonymous-user.js";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createSqliteTestApplication,

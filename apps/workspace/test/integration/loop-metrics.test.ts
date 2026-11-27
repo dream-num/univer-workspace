@@ -34,11 +34,13 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     fetch(`${origin}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
   expect((await post("/api/agents", {})).status).toBe(201);
-  const guest = await post("/api/auth/guest", {});
-  const cookie = guest.headers.get("set-cookie")!.split(";")[0]!;
-  const agentId = ((await guest.json()) as { agent: { id: string } }).agent.id;
-  const personal = (await application!.spaces.list(agentId)).spaces[0]!;
-  const node = await application!.nodes.create(agentId, { spaceId: personal.id, parentNodeId: null, name: "Budget" });
+  expect((await post("/api/auth/guest", {})).status).toBe(201);
+  // Only a person in a browser turns Link Sharing on, so a person shares the page the loop counts.
+  const sharer = await post("/api/auth/password/register", { username: "sharer", displayName: "sharer", password: "correct horse battery staple" });
+  const cookie = sharer.headers.get("set-cookie")!.split(";")[0]!;
+  const sharerId = ((await sharer.json()) as { user: { id: string } }).user.id;
+  const personal = (await application!.spaces.list(sharerId)).spaces[0]!;
+  const node = await application!.nodes.create(sharerId, { spaceId: personal.id, parentNodeId: null, name: "Budget" });
   const share = async (enabled: boolean) => {
     const response = await fetch(`${origin}/api/nodes/${node.id}/link-sharing`, {
       method: "PUT",
@@ -79,10 +81,10 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const reader = await register("reader", `/nodes/${node.id}?view=immersive`);
   await register("consenting", "/api/auth/authorize?client_id=cli&scope=read");
   await register("direct");
-  const claimPage = `${origin}/claim/c0de-in-path`;
-  const claimer = await post("/api/auth/password/register", { username: "claimer", displayName: "claimer", password: "correct horse battery staple" }, { referer: claimPage });
-  expect(claimer.status).toBe(201);
-  for (const [username, referer] of [["sharepage", `${origin}/nodes/${node.id}`], ["dotdot", `${origin}/claim/../nodes/${node.id}`]]) {
+  const claimPage = `${origin}/login?returnTo=${encodeURIComponent("/claim/c0de-in-path")}`;
+  await register("claimer", "/claim/c0de-in-path");
+  // A page's own address is not a returnTo: only the sign-in page carries one.
+  for (const [username, referer] of [["sharepage", `${origin}/nodes/${node.id}`], ["handoffpage", `${origin}/claim/c0de-in-path`]]) {
     expect((await post("/api/auth/password/register", { username, displayName: username, password: "correct horse battery staple" }, { referer })).status).toBe(201);
   }
   const emailSignup = async (email: string, referer?: string) => {
@@ -115,7 +117,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const after = await vi.waitFor(async () => {
     const metrics = await scrape();
     const views = (session: string) => {
-      const series = `workspace_share_page_views_total{session="${session}",owner_category="agent_unclaimed"}`;
+      const series = `workspace_share_page_views_total{session="${session}",owner_category="human"}`;
       return value(metrics, series) - value(before, series);
     };
     expect({ signedOut: views("signed_out"), signedIn: views("signed_in") }).toEqual({ signedOut: 2, signedIn: 1 });
@@ -125,10 +127,10 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   expect({
     agentsFromApi: added('workspace_guest_agents_created_total{entry="api_agents"}'),
     agentsFromGuestCard: added('workspace_guest_agents_created_total{entry="auth_guest"}'),
-    sharingOn: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="agent_unclaimed"}'),
-    sharingOnByPerson: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="human"}'),
+    sharingOn: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="human"}'),
+    sharingOnByAgent: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="agent_unclaimed"}'),
     sharingOnByRoleChange: added('workspace_link_sharing_changes_total{state="on",role="editor",owner_category="human"}'),
-    sharingOff: added('workspace_link_sharing_changes_total{state="off",role="viewer",owner_category="agent_unclaimed"}'),
+    sharingOff: added('workspace_link_sharing_changes_total{state="off",role="viewer",owner_category="human"}'),
     signupsFromShareLink: added('workspace_signups_total{method="password",source="share_link"}'),
     signupsFromConsent: added('workspace_signups_total{method="password",source="oauth_consent"}'),
     signupsDirect: added('workspace_signups_total{method="password",source="direct"}'),
@@ -142,13 +144,13 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   }).toEqual({
     agentsFromApi: 1,
     agentsFromGuestCard: 1,
-    sharingOn: 2,
-    sharingOnByPerson: 1,
+    sharingOn: 3,
+    sharingOnByAgent: 0,
     sharingOnByRoleChange: 0,
     sharingOff: 1,
     signupsFromShareLink: 1,
     signupsFromConsent: 1,
-    signupsDirect: 3,
+    signupsDirect: 4,
     signupsFromClaimLink: 1,
     emailFromShareLink: 1,
     emailDirect: 1,
@@ -157,7 +159,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     oauthFromConsent: 1,
     oauthFromClaimLink: 1,
   });
-  for (const identifying of [node.id, agentId, reader, "Slackbot", "c0de-in-path"]) expect(after).not.toContain(identifying);
+  for (const identifying of [node.id, sharerId, reader, "Slackbot", "c0de-in-path"]) expect(after).not.toContain(identifying);
 
   const logged = events.mock.calls.map(([line]) => line as Record<string, unknown>)
     .filter((line) => typeof line.event === "string" && line.event.startsWith("workspace."));
@@ -168,7 +170,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     event: "workspace.signup", source: "share_link", user_id: reader, node_id: node.id,
   }));
   expect(logged).toContainEqual(expect.objectContaining({
-    event: "workspace.link_sharing", state: "off", node_id: node.id, user_id: agentId,
+    event: "workspace.link_sharing", state: "off", node_id: node.id, user_id: sharerId,
   }));
   expect(logged.filter((line) => line.event === "workspace.guest_agent")).toHaveLength(2);
   const claimSignups = logged.filter((line) => line.event === "workspace.signup" && line.source === "claim_link");

@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type { SpaceListEntry, SpaceListScope } from "../../../modules/spaces/spaces.repository.js";
 import type { SpaceStar } from "../../../modules/spaces/spaces.types.js";
+import { previewedSql } from "../../preview-sql.js";
 import { ownsSpaceSql, proposesSql } from "../access/access.repository.js";
 
 type Connection = Pool | PoolClient;
@@ -8,12 +9,13 @@ type Connection = Pool | PoolClient;
 const memberJoin = `LEFT JOIN space_members
   ON space_members.space_id = spaces.id AND space_members.user_id = $1`;
 const owned = ownsSpaceSql("spaces.owner_user_id", "$1");
+const previewed = previewedSql("spaces.owner_user_id", "$1");
 const mine = `(${owned} OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
 const visible = `(${owned} OR (
   NOT EXISTS (
     SELECT 1 FROM agents WHERE agents.user_id = spaces.owner_user_id
       AND (agents.banned_at IS NOT NULL OR agents.expires_at <= EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)
-  ) AND ((spaces.type = 'team' AND space_members.user_id IS NOT NULL) OR spaces.public_read)
+  ) AND ((spaces.type = 'team' AND space_members.user_id IS NOT NULL) OR spaces.public_read OR ${previewed})
 ))`;
 const starred = `EXISTS (SELECT 1 FROM space_stars WHERE space_stars.space_id = spaces.id AND space_stars.user_id = $1)`;
 const pinnable = `(${mine} OR (spaces.public_read AND ${starred}))`;
@@ -47,7 +49,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
 
 const selectSpaceView = `
   SELECT spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId", ${owned} AS "owned",
-    spaces.public_read AS "publicRead", space_members.role AS "memberRole", ${proposesSql("spaces", "$1")} AS "proposes", spaces.landing,
+    spaces.public_read AS "publicRead", ${previewed} AS "previewed", space_members.role AS "memberRole", ${proposesSql("spaces", "$1")} AS "proposes", spaces.landing,
     users.username AS "ownerUsername", spaces.description, spaces.slug, spaces.proposals,
     spaces.accept_after_hours AS "acceptAfterHours"
   FROM spaces JOIN users ON users.id = spaces.owner_user_id

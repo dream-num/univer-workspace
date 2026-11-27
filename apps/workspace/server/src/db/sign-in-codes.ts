@@ -11,6 +11,9 @@ export const signInCodeSql = {
   insert: `INSERT INTO sign_in_codes (kind, code_hash, user_code_hash, subject_user_id, payload_json, created_at, expires_at)
     VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
   find: "SELECT * FROM sign_in_codes WHERE kind = ? AND code_hash = ?",
+  findPreviewGrant: `SELECT agents.user_id FROM sign_in_codes JOIN agents ON agents.user_id = sign_in_codes.subject_user_id
+    WHERE sign_in_codes.kind = 'claim' AND sign_in_codes.code_hash = ? AND sign_in_codes.expires_at > ?
+      AND agents.owner_user_id IS NULL AND agents.banned_at IS NULL`,
   findByUserCode: "SELECT * FROM sign_in_codes WHERE kind = ? AND user_code_hash = ?",
   delete: "DELETE FROM sign_in_codes WHERE kind = ? AND code_hash = ?",
   redeem: `UPDATE sign_in_codes SET state = CASE state WHEN 'pending' THEN 'consumed' ELSE 'replayed' END

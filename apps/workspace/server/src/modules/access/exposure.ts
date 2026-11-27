@@ -32,7 +32,7 @@ export type ExposureGuard<L extends Level> = (before: L | null) => void;
 
 export function exposureGuard<C extends ExposureChange>(actor: Principal, change: C | null): ExposureGuard<LevelOf<C>> {
   return (before) => {
-    if (change !== null && widens(change, before) && !mayWiden(actor, change)) throw countedRefusal(actor, change);
+    if (change !== null && widens(change, before) && !personInBrowser(actor)) throw countedRefusal(actor, change);
   };
 }
 
@@ -40,12 +40,6 @@ const RANK: Readonly<Record<Level, number>> = { public: 1, viewer: 1, editor: 2,
 
 function widens(change: ExposureChange, before: Level | null): boolean {
   return before === null || RANK["role" in change ? change.role : "public"] > RANK[before];
-}
-
-function mayWiden(actor: Principal, change: ExposureChange): boolean {
-  return personInBrowser(actor)
-    // Step 5 of docs/design/agent-identity-and-access.zh-CN.md deletes this line. Until its handoff link exists, a temporary agent shows its work with a viewer link.
-    || (principalCategory(actor.user) === "agent_unclaimed" && change.kind === "link-sharing" && change.role === "viewer");
 }
 
 const REFUSED: Readonly<Record<ExposureChange["kind"], string>> = {
@@ -56,7 +50,7 @@ const REFUSED: Readonly<Record<ExposureChange["kind"], string>> = {
   "create-public": "A repository is created private. Create it, then make it public, which needs a person to confirm it in the browser.",
 };
 const UNCLAIMED_REFUSED =
-  "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again.";
+  "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again.";
 
 const refusalCode = (category: PrincipalCategory) =>
   category === "agent_unclaimed" ? "AGENT_NOT_ALLOWED" : "INTERACTIVE_SESSION_REQUIRED";

@@ -2,7 +2,7 @@ import { ErrorCode } from "@univerjs/protocol";
 import { Router, type Request, type Response } from "express";
 import { contentDisposition, pipeBlobContent } from "../../integrations/blob/blob-http.js";
 import { receiveSingleMultipartFile } from "../../integrations/blob/multipart.js";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
+import type { IdentityModule } from "../identity/index.js";
 import {
   MAX_UNIVER_ASSET_BYTES,
   type UniverAssetsModule,
@@ -45,9 +45,9 @@ export function createUniverAssetsRouter(options: {
   );
 
   router.get("/file/:fileId/sign-url", async (request, response) => {
-    const session = await options.identity.getSession(request.headers.cookie);
+    const reader = await options.identity.getReader(request.headers.cookie);
     const url = await options.assets.resolveContentUrl(
-      session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
+      reader.userId,
       { kind: "trunk" },
       required(request.params.fileId)
     );
@@ -71,12 +71,12 @@ export function createUniverAssetsRouter(options: {
   );
 
   router.get("/file/:fileId/content", async (request, response) => {
-    const session = await options.identity.getSession(request.headers.cookie);
+    const reader = await options.identity.getReader(request.headers.cookie);
     await sendContent(
       request,
       response,
       options.assets,
-      session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
+      reader.userId,
       { kind: "trunk" },
       required(request.params.fileId)
     );

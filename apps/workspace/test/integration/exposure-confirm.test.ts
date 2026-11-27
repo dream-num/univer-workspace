@@ -51,24 +51,23 @@ it("refuses to widen for every session but a person in a browser, changes nothin
   expect((await send(w.origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, w.alice.cookie)).status).toBe(201);
 }, 60_000);
 
-it("tells a temporary agent to hand over a claim link, with no confirm page, and still lets it turn on a viewer link", async () => {
+it("tells a temporary agent to hand over its handoff link, with no confirm page, a viewer link included", async () => {
   const w = await world();
   const target = w.temporary;
   for (const [request] of [
     ...widenings(w, target),
     [send(w.origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, target.cookie)],
+    [send(w.origin, "PUT", `/api/nodes/${target.file}/link-sharing`, { enabled: true, role: "viewer" }, target.cookie)],
   ] as const) {
     const response = await request;
     expect({ status: response.status, body: await response.json() }).toEqual({ status: 403, body: { error: {
       code: "AGENT_NOT_ALLOWED",
-      message: expect.stringContaining("Make a claim link with claim (uvw claim in the CLI) and give it to the user."),
+      message: expect.stringContaining("Get a handoff link with claim (uvw claim in the CLI) and give it to the user."),
     } } });
   }
   expect(await exposure(w.origin, target)).toEqual(PRIVATE);
 
-  const link = (enabled: boolean) => send(w.origin, "PUT", `/api/nodes/${target.file}/link-sharing`, { enabled, role: "viewer" }, target.cookie);
-  for (const enabled of [true, true, false]) expect((await link(enabled)).status).toBe(200);
-  expect(await exposure(w.origin, target)).toEqual(PRIVATE);
+  expect((await send(w.origin, "PUT", `/api/nodes/${target.file}/link-sharing`, { enabled: false, role: "viewer" }, target.cookie)).status).toBe(200);
 }, 60_000);
 
 it("lets every session repeat the stored level and narrow it", async () => {

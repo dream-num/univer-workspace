@@ -1,4 +1,4 @@
-import { agentPrincipal, interactivePrincipal } from "../fixtures/principal.js";
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { getDocsEmptySnapshot, JSONX, TextXActionType, getBasesEmptySnapshot } from "@univerjs/core";
 import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univerjs-pro/slides";
 import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
@@ -2165,7 +2165,9 @@ describe("content permission integration", () => {
     if (created.status === 202 || created.body.node.resource?.kind !== "univer")
       throw new Error("Missing Unit");
     const unitId = created.body.node.resource.unitId;
-    await f.application.permissions.updateNodeLinkSharing(agentPrincipal(agent.id, false), created.body.node.id, { enabled: true, role: "viewer" });
+    // An unclaimed agent can no longer turn Link Sharing on, so the repository writes a link opened before that rule.
+    await f.application.repositories.permissions.upsertLinkSharing(
+      { nodeId: created.body.node.id, enabled: true, role: "viewer", actorUserId: agent.id, now: Date.now() }, () => {});
     const snapshot = () =>
       fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${unitId}/rev/0`, {
         headers: { cookie: f.outsider.cookie },
@@ -2186,6 +2188,52 @@ describe("content permission integration", () => {
       await joinUnit(f.origin, f.outsider.cookie, unitId);
       expect(await snapshot()).toBe(ErrorCode.OK);
     }
+  });
+
+  it("lets a handoff preview join a temporary agent's Unit read-only, and closes it when a person takes the agent", async () => {
+    const f = await fixture();
+    const agent = await agentSession(f);
+    const agentSpace = (await f.application.spaces.list(agent.id)).spaces[0]!;
+    const created = await f.application.resources.create(agent.id, "handoff-preview-unit-0001", {
+      kind: "univer",
+      spaceId: agentSpace.id,
+      parentNodeId: null,
+      name: "Agent sheet",
+      unitType: "sheet",
+    });
+    if (created.status === 202 || created.body.node.resource?.kind !== "univer")
+      throw new Error("Missing Unit");
+    const unitId = created.body.node.resource.unitId;
+    const { code } = (await (await fetch(`${f.origin}/api/agents/claim-codes`, { method: "POST", headers: { cookie: agent.cookie } })).json()) as { code: string };
+    const preview = `workspace_handoff=${code}`;
+    expect((await requestJoin(f.origin, "", unitId)).joined.code).not.toBe(CmdRspCode.OK);
+
+    const joined = await joinUnit(f.origin, preview, unitId);
+    expect(joined.members).toHaveLength(1);
+    const allowed = await fetch(`${f.origin}/universer-api/authz/-/object/-/batch_allowed`, {
+      method: "POST",
+      headers: { cookie: preview, "content-type": "application/json" },
+      body: JSON.stringify({ requests: [{ unitID: unitId, actions: [UnitAction.View, UnitAction.Edit] }] }),
+    });
+    await expect(allowed.json()).resolves.toMatchObject({
+      objectActions: [{ actions: [{ action: UnitAction.View, allowed: true }, { action: UnitAction.Edit, allowed: false }] }],
+    });
+    for (const [path, method] of [
+      [`/universer-api/comb/${f.protocolType}/unit/${unitId}/new_changes`, "POST"],
+      [`/universer-api/comment/unit/${unitId}/add`, "POST"],
+      ["/universer-api/worktrees/unknown", "GET"],
+    ] as const) {
+      expect((await fetch(`${f.origin}${path}`, { method, headers: { cookie: preview } })).status, `${method} ${path}`).toBe(401);
+    }
+
+    const claimed = await fetch(`${f.origin}/api/agents/claim`, {
+      method: "POST",
+      headers: { cookie: f.outsider.cookie, "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    expect(claimed.status).toBe(200);
+    await expect.poll(() => joined.socket.readyState).toBe(WebSocket.CLOSED);
+    expect((await requestJoin(f.origin, preview, unitId)).joined.code).not.toBe(CmdRspCode.OK);
   });
 
   async function agentSession(f: Awaited<ReturnType<typeof fixture>>) {

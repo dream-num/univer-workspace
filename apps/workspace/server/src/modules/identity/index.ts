@@ -1,4 +1,4 @@
-export { ANONYMOUS_USER_ID } from "./anonymous-user.js";
+export { isUserlessReader, previewReaderId } from "./anonymous-user.js";
 export { createIdentityModule } from "./identity.service.js";
 export { createAgentClaims, type AgentClaims } from "./agent-claims.js";
 export type { IdentityModule } from "./identity.service.js";

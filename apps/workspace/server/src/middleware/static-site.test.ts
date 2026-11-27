@@ -6,7 +6,7 @@ import { join } from "node:path";
 import express from "express";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { UnitType } from "../modules/access/access.types.js";
-import { ANONYMOUS_USER_ID } from "../modules/identity/index.js";
+import { ANONYMOUS_USER_ID } from "../modules/identity/anonymous-user.js";
 import type { NodeSummary } from "../modules/nodes/index.js";
 import { createStaticSiteRouter } from "./static-site.js";
 
@@ -14,7 +14,7 @@ let directory: string;
 let server: Server;
 let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
-const identity = { recordAgentPageView: vi.fn(), hasSession: vi.fn().mockResolvedValue(false) };
+const identity = { hasSession: vi.fn().mockResolvedValue(false) };
 const permissions = { nodeOwnerCategory: vi.fn().mockResolvedValue("human") };
 const unitTypes: readonly string[] = ["sheet", "doc", "slide", "board"];
 const getNode = vi.fn(async (userId: string, nodeId: string) => {
@@ -73,14 +73,12 @@ describe("public Node link metadata", () => {
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     expect(response.headers.get("vary")).toBe("Accept-Language");
     expect(getNode).toHaveBeenCalledWith(ANONYMOUS_USER_ID, "public");
-    expect(identity.recordAgentPageView).toHaveBeenCalledWith("public");
   });
 
   it.each(["private", "missing", "deleted", "failure"])("leaves the shell byte-identical for %s", async (nodeId) => {
     const response = await fetch(`${origin}/nodes/${nodeId}`, { headers: { cookie: "session=owner", "Accept-Language": "zh" } });
     expect(response.status).toBe(200);
     expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from(indexHtml));
-    expect(identity.recordAgentPageView).not.toHaveBeenCalledWith(nodeId);
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     expect(response.headers.get("vary")).toBeNull();
   });

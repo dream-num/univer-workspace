@@ -3,7 +3,7 @@ import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
-import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/index.js";
+import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/anonymous-user.js";
 
 const applications: SqliteTestApplication[] = [];
 afterEach(async () => {

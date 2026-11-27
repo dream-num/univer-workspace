@@ -236,7 +236,7 @@
       data, so only a person signed in to Workspace in a browser may do it. Any other session that may
       share the Node gets `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
       `/confirm/link-sharing?node=<nodeId>&role=<role>`, and the settings do not change. An unclaimed
-      agent may turn on a `viewer` link and gets `403 AGENT_NOT_ALLOWED` for an `editor` link. Every
+      agent gets `403 AGENT_NOT_ALLOWED`. Every
       session that may share the Node may turn Link Sharing off or change `editor` to `viewer`. A
       caller without that capability gets `403 FORBIDDEN` and no `url`.
     requestBody:

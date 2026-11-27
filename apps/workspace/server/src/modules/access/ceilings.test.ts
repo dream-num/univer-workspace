@@ -17,7 +17,7 @@ it("holds claimed and unclaimed agents, never people, to 10 open pull requests a
 });
 
 it("names the way out of each unclaimed-agent limit, and a claim lifts every one of them", () => {
-  const claim = "or give a person a claim link so they can claim you, which lifts this limit.";
+  const claim = "or give a person a handoff link so they can take you, which lifts this limit.";
   const refused = (message: string) => expect.objectContaining({ code: "AGENT_QUOTA_EXCEEDED", status: 403, message });
   expect(() => assertCeiling("agent_unclaimed", "createTeamSpace", { held: 3 }))
     .toThrow(refused(`An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, ${claim}`));
@@ -35,7 +35,7 @@ it("names the way out of each unclaimed-agent limit, and a claim lifts every one
 });
 
 it("names a claim as the way out of an unclaimed agent's refusal to search Users", () => {
-  const claim = "or give a person a claim link so they can claim you, which lifts this limit.";
+  const claim = "or give a person a handoff link so they can take you, which lifts this limit.";
   expect(() => assertCeiling("agent_unclaimed", "searchUsers", {})).toThrow(expect.objectContaining({
     code: "AGENT_NOT_ALLOWED", status: 403, message: `An unclaimed agent cannot search Users. Leave other Users out, ${claim}`,
   }));

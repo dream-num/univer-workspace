@@ -187,7 +187,7 @@ describe("unclaimed agent quotas", () => {
     const refused = await send(origin, "POST", "/api/team-spaces", { name: "Four" }, unclaimed.cookie);
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_QUOTA_EXCEEDED",
-      message: "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a claim link so they can claim you, which lifts this limit.",
+      message: "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a handoff link so they can take you, which lifts this limit.",
     } } });
 
     const racing = await guestAgent(origin);
@@ -225,7 +225,7 @@ describe("unclaimed agent quotas", () => {
     const refused = await send(origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, unclaimed.cookie);
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_NOT_ALLOWED",
-      message: "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Make a claim link with claim (uvw claim in the CLI) and give it to the user. Once they claim you, try again.",
+      message: "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again.",
     } } });
 
     for (const spaceId of [repo, unclaimed.spaceId]) {

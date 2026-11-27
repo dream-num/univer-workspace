@@ -4,6 +4,7 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
 import type { AgentClaims } from "./agent-claims.js";
+import { HANDOFF_COOKIE } from "./handoff.js";
 import type { IdentityModule } from "./identity.service.js";
 import type { AgentBudget } from "./identity.types.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
@@ -129,12 +130,30 @@ export function createIdentityRouter(options: {
 
   router.get("/agents/claim", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    response.json(await options.agentClaims.inspect(request.headers.cookie, request.query.code));
+    const { code } = request.query;
+    const { view, previewMs } = await options.agentClaims.handoff(request.headers.cookie, code).catch((error: unknown) => {
+      response.clearCookie(HANDOFF_COOKIE, { path: "/" });
+      throw error;
+    });
+    if (previewMs === null) {
+      response.clearCookie(HANDOFF_COOKIE, { path: "/" });
+    } else {
+      response.cookie(HANDOFF_COOKIE, String(code), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: options.secureCookies,
+        maxAge: previewMs,
+        path: "/",
+      });
+    }
+    response.json(view);
   });
 
   router.post("/agents/claim", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    response.json(await options.agentClaims.claim(request.headers.cookie, request.body?.code));
+    const claimed = await options.agentClaims.claim(request.headers.cookie, request.body?.code);
+    response.clearCookie(HANDOFF_COOKIE, { path: "/" });
+    response.json(claimed);
   });
 
   router.post("/agents/:agentId/stop", async (request, response) => {
@@ -519,12 +538,9 @@ function logOAuthFailure(
   console.error(`[identity] ${provider} OAuth callback failed`, error);
 }
 
-// The browser signs up from /login?returnTo=…, or on the claim page, which has its own sign-in form,
-// and a same-origin request's Referer keeps that query or that page.
+// The browser signs up from /login?returnTo=…, and a same-origin request's Referer keeps that query.
 function loginReturnTo(request: Request): string | undefined {
-  const referer = URL.parse(request.get("referer") ?? "");
-  const claimPage = referer?.pathname.startsWith("/claim/") ? referer.pathname : undefined;
-  return referer?.searchParams.get("returnTo") ?? claimPage;
+  return URL.parse(request.get("referer") ?? "")?.searchParams.get("returnTo") ?? undefined;
 }
 
 function emailSourceLimited(message: string): ApplicationError {

@@ -688,16 +688,18 @@
   post:
     tags: [Authentication]
     operationId: createAgentClaimCode
-    summary: Create a link that lets a human claim the current agent.
+    summary: Create the handoff link of the current agent.
     description: |
       Needs the login session of an unclaimed agent, from any credential. The
-      code lasts ten minutes and claims the agent once. The product database
-      holds its hash, so any server replica accepts it and a restart keeps it.
-      An agent holds at most ten live codes, and an eleventh replaces its
-      oldest. All responses have Cache-Control: no-store.
+      code lasts seven days. Until a person takes the agent, anyone who opens
+      the link reads the agent's Spaces without signing in. One person takes
+      the agent with it. The product database holds its hash, so any server
+      replica accepts it and a restart keeps it. An agent holds at most ten
+      live codes, and an eleventh replaces its oldest. All responses have
+      Cache-Control: no-store.
     responses:
       "201":
-        description: The claim code and the page that uses it.
+        description: The claim code and the handoff page that uses it.
         content:
           application/json:
             schema:
@@ -722,11 +724,24 @@
 /api/agents/claim:
   get:
     tags: [Authentication]
-    operationId: inspectAgentClaim
-    summary: Show the agent a claim code names, before the current human claims it.
+    operationId: openAgentHandoff
+    summary: Show the agent a claim code names and let this browser read its Spaces.
     description: |
-      Needs a human's browser login session, like POST, and fails the same way
-      for a code that cannot claim. All responses have Cache-Control: no-store.
+      Needs no login session. While the agent has no owner, the response sets
+      the `workspace_handoff` cookie to the code, for as long as the code
+      lasts. A request that carries the cookie and no login session reads
+      every Space the agent owns as a viewer, through the same routes an
+      anonymous reader uses, and can write nothing. The server checks the code
+      and the agent on every request, so the reading stops when a person takes
+      the agent, when the agent is banned, and when the code expires. A browser
+      holds one such cookie, and the last link opened wins. A login session
+      takes precedence over the cookie. Opening the page also moves an
+      unclaimed agent's expiry out, at most once a day. Every answer but this
+      `200` for an unowned agent clears the cookie. A human's browser login
+      session that already owns the agent gets `claimed: true`. Every other
+      login session counts as signed out. All responses have Cache-Control:
+      no-store.
+    security: []
     parameters:
       - name: code
         in: query
@@ -735,15 +750,15 @@
           type: string
     responses:
       "200":
-        description: The agent, and whether the current human already owns it.
+        description: The agent, its Spaces, and whether the current human already owns it.
+        headers:
+          Set-Cookie:
+            schema:
+              type: string
         content:
           application/json:
             schema:
-              $ref: ../schemas/identity.yaml#/AgentClaimPreview
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
-      "403":
-        $ref: ../schemas/common.yaml#/Forbidden
+              $ref: ../schemas/identity.yaml#/AgentHandoff
       "404":
         $ref: ../schemas/identity.yaml#/AgentClaimInvalid
       "409":
@@ -760,7 +775,9 @@
       claim time and stops expiring. The owner holds the owner role in the
       agent's Personal Space; the agent gains no access to the owner's
       content. Claiming again as the same owner returns the agent unchanged.
-      All responses have Cache-Control: no-store.
+      A successful claim clears the `workspace_handoff` cookie, and from then
+      on the code lets nobody read without signing in. All responses have
+      Cache-Control: no-store.
     requestBody:
       required: true
       content:

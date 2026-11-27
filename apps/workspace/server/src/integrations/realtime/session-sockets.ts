@@ -1,6 +1,6 @@
 import type { SessionTicketRecord } from "@univerjs-pro/collaboration-endpoint";
 import type { NodeTransportConnection } from "@univerjs-pro/collaboration-transport-node";
-import { ANONYMOUS_USER_ID } from "../../modules/identity/anonymous-user.js";
+import { isUserlessReader } from "../../modules/identity/anonymous-user.js";
 
 export interface SessionSockets {
   track(ticket: SessionTicketRecord, connection: NodeTransportConnection): Promise<boolean>;
@@ -37,7 +37,7 @@ export function createSessionSockets(isSessionActive: (sessionId: string, userId
         untrack(connection);
         connection.close(1008, "Workspace session ended");
       };
-      if (ticket.userID === ANONYMOUS_USER_ID) {
+      if (isUserlessReader(ticket.userID)) {
         state.ready = true;
         return true;
       }

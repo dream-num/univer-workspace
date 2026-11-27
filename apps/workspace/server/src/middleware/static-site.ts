@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import express, { type Router } from "express";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../modules/identity/index.js";
+import { ANONYMOUS_USER_ID } from "../modules/identity/anonymous-user.js";
+import type { IdentityModule } from "../modules/identity/index.js";
 import type { NodesModule, NodeSummary } from "../modules/nodes/index.js";
 import type { PermissionsModule } from "../modules/permissions/index.js";
 import { logger } from "../logging/logger.js";
@@ -11,7 +12,7 @@ import { recordLoopEvent } from "./loop-metrics.js";
 
 export function createStaticSiteRouter(publicDirectory: string, options?: {
   readonly nodes: Pick<NodesModule, "get">;
-  readonly identity: Pick<IdentityModule, "recordAgentPageView" | "hasSession">;
+  readonly identity: Pick<IdentityModule, "hasSession">;
   readonly permissions: Pick<PermissionsModule, "nodeOwnerCategory">;
   readonly publicOrigin?: string | null | undefined;
 }): Router {
@@ -38,8 +39,6 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
       // Metadata must never disclose a failed or unauthorized lookup.
       return next();
     }
-    // Only a page the anonymous reader got: an expired agent's page stays closed until the agent returns.
-    await options.identity.recordAgentPageView(node.id);
     if (request.method === "GET") {
       // Not awaited: counting must neither fail nor delay the page.
       const { identity, permissions } = options;

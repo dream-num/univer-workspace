@@ -1,5 +1,5 @@
 import { json, Router } from "express";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
+import type { IdentityModule } from "../identity/index.js";
 import type { ResourcesModule } from "./resources.service.js";
 
 export function createResourcesRouter(options: {
@@ -39,22 +39,22 @@ export function createResourcesRouter(options: {
   });
 
   router.get("/unit-resources/:unitId", async (request, response) => {
-    const session = await options.identity.getSession(request.headers.cookie);
+    const reader = await options.identity.getReader(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       await options.resources.getByUnit(
-        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
+        reader.userId,
         requiredParameter(request.params.unitId)
       )
     );
   });
 
   router.post("/resources/:resourceId/open", async (request, response) => {
-    const session = await options.identity.getSession(request.headers.cookie);
+    const reader = await options.identity.getReader(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       await options.resources.open(
-        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
+        reader.userId,
         requiredParameter(request.params.resourceId)
       )
     );

@@ -1,18 +1,24 @@
 import { randomBytes } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
+import { agentActivityWindow } from "./agent-activity.js";
 import type { IdentityRepository, StoredAgent } from "./identity.repository.js";
 import type { IdentityModule } from "./identity.service.js";
-import type { AgentClaimCode, AgentView } from "./identity.types.js";
+import type { AgentClaimCode, AgentHandoff, AgentView } from "./identity.types.js";
 import { hashSessionSecret } from "./session-token.js";
 
-const CLAIM_CODE_TTL_MS = 10 * 60 * 1000;
+const CLAIM_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const EXPIRED_CODE_ANSWERED_FOR_MS = CLAIM_CODE_TTL_MS;
 const CLAIM_CODES_PER_AGENT = 10;
-const CLAIM_CODE_CAPACITY = 10_000;
+// A source makes at most 5 agents an hour and each agent holds 10 codes for 7 days, about 8,400 live codes. The cap fits 12 sources doing that.
+const CLAIM_CODE_CAPACITY = 100_000;
 
 export interface AgentClaims {
   createCode(cookieHeader: string | undefined): Promise<AgentClaimCode>;
-  inspect(cookieHeader: string | undefined, code: unknown): Promise<{ readonly agent: AgentView; readonly claimed: boolean }>;
+  /**
+   * Needs no session. `previewMs` is how long the caller's browser may keep the code as its handoff
+   * cookie, and null when the code no longer previews: the agent already belongs to the caller.
+   */
+  handoff(cookieHeader: string | undefined, code: unknown): Promise<{ readonly view: AgentHandoff; readonly previewMs: number | null }>;
   claim(cookieHeader: string | undefined, code: unknown): Promise<{ readonly agent: AgentView }>;
   list(cookieHeader: string | undefined): Promise<{ readonly agents: readonly AgentView[] }>;
   stop(cookieHeader: string | undefined, agentUserId: string): Promise<void>;
@@ -20,32 +26,43 @@ export interface AgentClaims {
 
 export function createAgentClaims(options: {
   readonly identity: Pick<IdentityModule, "requireSession" | "requireInteractiveSession">;
-  readonly repository: Pick<IdentityRepository, "findAgents" | "claimAgent" | "banClaimedAgent" | "putSignInCode" | "findSignInCode">;
+  readonly repository: Pick<IdentityRepository, "findAgents" | "listAgentSpaces" | "touchAgent" | "claimAgent" | "banClaimedAgent" | "putSignInCode" | "findSignInCode">;
+  readonly onAgentClaimed: () => void;
   readonly onAgentStopped: (agentUserId: string) => void;
   readonly now?: () => number;
 }): AgentClaims {
   const { identity, repository } = options;
   const now = options.now ?? (() => Date.now());
 
-  async function claimable(code: unknown, humanId: string): Promise<{ readonly agent: StoredAgent; readonly claimed: boolean }> {
+  /** `humanId` is null for a visitor who is not a person signed in through a browser. */
+  async function claimable(code: unknown, humanId: string | null): Promise<{ readonly agent: StoredAgent; readonly claimed: boolean; readonly expiresAt: number }> {
     const claim = typeof code === "string" ? await repository.findSignInCode("claim", hashSessionSecret(code)) : null;
     const at = now();
     if (!claim || claim.expiresAt + EXPIRED_CODE_ANSWERED_FOR_MS <= at) throw invalidCode();
     if (claim.expiresAt <= at) {
-      throw new ApplicationError("AGENT_CLAIM_EXPIRED", 410, "This claim link has expired. Ask the agent for a new one.");
+      throw new ApplicationError("AGENT_CLAIM_EXPIRED", 410, "This handoff link has expired. Ask the agent for a new one.");
     }
     const [agent] = await repository.findAgents({ userId: claim.subjectUserId! });
-    if (agent?.ownerUserId === humanId) return { agent, claimed: true };
+    if (agent && humanId !== null && agent.ownerUserId === humanId) return { agent, claimed: true, expiresAt: claim.expiresAt };
     if (!agent || agent.banned) throw invalidCode();
     if (agent.ownerUserId !== null) throw alreadyClaimed();
-    return { agent, claimed: false };
+    return { agent, claimed: false, expiresAt: claim.expiresAt };
+  }
+
+  async function personInBrowserId(cookieHeader: string | undefined): Promise<string | null> {
+    try {
+      return (await identity.requireInteractiveSession(cookieHeader)).user.id;
+    } catch (error) {
+      if (error instanceof ApplicationError) return null;
+      throw error;
+    }
   }
 
   return {
     async createCode(cookieHeader) {
       const { user } = await identity.requireSession(cookieHeader);
       if (user.kind !== "agent") {
-        throw new ApplicationError("FORBIDDEN", 403, "Only an agent can ask to be claimed.");
+        throw new ApplicationError("FORBIDDEN", 403, "Only an agent can ask for a handoff link.");
       }
       if (user.claimed) throw alreadyClaimed();
       const at = now();
@@ -55,21 +72,35 @@ export function createAgentClaims(options: {
         { expiredBefore: at - EXPIRED_CODE_ANSWERED_FOR_MS, perSubject: CLAIM_CODES_PER_AGENT, capacity: CLAIM_CODE_CAPACITY },
       );
       if (stored !== "stored") {
-        throw new ApplicationError("AGENT_CLAIM_UNAVAILABLE", 503, "Claim links are temporarily unavailable. Try again shortly.");
+        throw new ApplicationError("AGENT_CLAIM_UNAVAILABLE", 503, "Handoff links are temporarily unavailable. Try again shortly.");
       }
       return { code, claimUrl: `/claim/${code}`, expiresIn: CLAIM_CODE_TTL_MS / 1000 };
     },
 
-    async inspect(cookieHeader, code) {
-      const human = (await identity.requireInteractiveSession(cookieHeader)).user;
-      const { agent, claimed } = await claimable(code, human.id);
-      return { agent: agentView(agent), claimed };
+    async handoff(cookieHeader, code) {
+      const { agent, claimed, expiresAt } = await claimable(code, await personInBrowserId(cookieHeader));
+      if (!claimed) {
+        const activity = agentActivityWindow(now());
+        await repository.touchAgent({ userId: agent.user.id }, activity.at, activity.staleBefore, activity.expiresAt);
+      }
+      return {
+        view: {
+          agent: agentView(agent),
+          claimed,
+          expiresAt: new Date(expiresAt).toISOString(),
+          spaces: await repository.listAgentSpaces(agent.user.id),
+        },
+        previewMs: claimed ? null : expiresAt - now(),
+      };
     },
 
     async claim(cookieHeader, code) {
       const human = (await identity.requireInteractiveSession(cookieHeader)).user;
       const { agent, claimed } = await claimable(code, human.id);
-      if (!claimed && !(await repository.claimAgent(agent.user.id, human.id, now()))) throw alreadyClaimed();
+      if (!claimed) {
+        if (!(await repository.claimAgent(agent.user.id, human.id, now()))) throw alreadyClaimed();
+        options.onAgentClaimed();
+      }
       return { agent: agentView(agent) };
     },
 
@@ -99,9 +130,9 @@ function agentView(agent: StoredAgent): AgentView {
 }
 
 function invalidCode(): ApplicationError {
-  return new ApplicationError("AGENT_CLAIM_INVALID", 404, "This claim link is not valid. Ask the agent for a new one.");
+  return new ApplicationError("AGENT_CLAIM_INVALID", 404, "This handoff link is not valid. Ask the agent for a new one.");
 }
 
 function alreadyClaimed(): ApplicationError {
-  return new ApplicationError("AGENT_ALREADY_CLAIMED", 409, "This agent has already been claimed.");
+  return new ApplicationError("AGENT_ALREADY_CLAIMED", 409, "This agent already has an owner.");
 }

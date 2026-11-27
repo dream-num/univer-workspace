@@ -496,10 +496,10 @@ AgentClaimCode:
     claimUrl:
       type: string
       pattern: "^/claim/"
-      description: The claim page as a path on this Workspace origin.
+      description: The handoff page as a path on this Workspace origin.
     expiresIn:
       type: integer
-      const: 600
+      const: 604800
       description: Seconds until the code stops working.
 
 AgentClaim:
@@ -534,21 +534,47 @@ AgentSummary:
       description: Files in the agent's Personal Space outside Trash.
     lastActiveAt:
       type: integer
-      description: Unix epoch milliseconds when the agent last signed in or, before its claim, a reader opened one of its shared pages. Recorded at most once a day.
+      description: Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page. Recorded at most once a day.
     stopped:
       type: boolean
       description: The agent can no longer sign in. Its owner stopped it, or an operator banned it.
 
-AgentClaimPreview:
+AgentSpace:
   type: object
   additionalProperties: false
-  required: [agent, claimed]
+  required: [id, type, name, files]
+  properties:
+    id:
+      type: string
+    type:
+      type: string
+      enum: [personal, team]
+    name:
+      type: string
+    files:
+      type: integer
+      minimum: 0
+      description: Files in the Space outside Trash.
+
+AgentHandoff:
+  type: object
+  additionalProperties: false
+  required: [agent, claimed, expiresAt, spaces]
   properties:
     agent:
       $ref: "#/AgentSummary"
     claimed:
       type: boolean
       description: The current human already owns the agent.
+    expiresAt:
+      type: string
+      format: date-time
+      description: When the code stops working.
+    spaces:
+      type: array
+      description: Every Space the agent owns, its Personal Space first.
+      items:
+        $ref: "#/AgentSpace"
 
 AgentClaimed:
   type: object
@@ -559,14 +585,14 @@ AgentClaimed:
       $ref: "#/AgentSummary"
 
 AgentClaimInvalid:
-  description: AGENT_CLAIM_INVALID. The code is unknown, expired over ten minutes ago, predates a server restart, or names a banned agent.
+  description: AGENT_CLAIM_INVALID. The code is unknown, expired over seven days ago, or names a banned agent.
   content:
     application/json:
       schema:
         $ref: common.yaml#/ErrorResponse
 
 AgentClaimExpired:
-  description: AGENT_CLAIM_EXPIRED. The code is more than ten minutes old.
+  description: AGENT_CLAIM_EXPIRED. The code is more than seven days old.
   content:
     application/json:
       schema:

@@ -3,7 +3,7 @@ import { Router, json, type ErrorRequestHandler } from "express";
 import { CollabError, type RequiredUnitPermission } from "@univerjs-pro/collaboration-service";
 import { ErrorCode, ObjectScope, UnitAction, UnitObject, UnitRole } from "@univerjs/protocol";
 import type { AccessResolver, ResourceContentAccess } from "../../modules/access/index.js";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
+import { isUserlessReader, type IdentityModule } from "../../modules/identity/index.js";
 import {
   canManageContentPermission,
   type ContentPermissionWriteResult,
@@ -236,8 +236,7 @@ export function createContentPermissions(options: {
   const router = Router({ mergeParams: true });
   router.use(json({ limit: "1mb" }));
   router.use(async (request, response, next) => {
-    const session = await identity.getSession(request.headers.cookie);
-    response.locals.contentUserId = session.authenticated ? session.user.id : ANONYMOUS_USER_ID;
+    response.locals.contentUserId = (await identity.getReader(request.headers.cookie)).userId;
     response.setHeader("Cache-Control", "private, no-store");
     next();
   });
@@ -314,7 +313,7 @@ export function createContentPermissions(options: {
     });
   });
   router.use((_request, response, next) => {
-    if (response.locals.contentUserId === ANONYMOUS_USER_ID) deny();
+    if (isUserlessReader(response.locals.contentUserId)) deny();
     next();
   });
   router.post("/-/object/list", async (request, response) => {

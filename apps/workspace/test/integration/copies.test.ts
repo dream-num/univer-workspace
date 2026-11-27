@@ -40,7 +40,7 @@ import type { CopyPayload } from "../../server/src/modules/copies/copies.types.j
 import type { Principal } from "../../server/src/modules/identity/index.js";
 import type { NodeSummary } from "../../server/src/modules/nodes/index.js";
 import type { WorktreeUnit } from "../../server/src/modules/worktrees/index.js";
-import { agentPrincipal, interactivePrincipal } from "../fixtures/principal.js";
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createTestBucket } from "../support/postgres/s3.js";
 import { createPostgresTestDatabase } from "../support/postgres/schema.js";
 
@@ -472,7 +472,9 @@ describe("copying a file", () => {
     const claimer = await h.human("claimer");
     const stranger = await h.human("claimer-stranger");
     const source = await createSheet(h, { id: agentId, spaceId: await h.personal(agentId) });
-    await h.application.permissions.updateNodeLinkSharing(agentPrincipal(agentId, false), source.nodeId, { enabled: true, role: "viewer" });
+    // An unclaimed agent can no longer turn Link Sharing on, so the repository writes a link opened before that rule.
+    await h.repositories.permissions.upsertLinkSharing(
+      { nodeId: source.nodeId, enabled: true, role: "viewer", actorUserId: agentId, now: Date.now() }, () => {});
     const { code } = (await (await post(origin, "/api/agents/claim-codes", agentCookie, undefined)).json()) as { code: string };
     expect((await post(origin, "/api/agents/claim", claimer.cookie, { code })).status).toBe(200);
     expect((await post(origin, `/api/agents/${agentId}/stop`, claimer.cookie, undefined)).status).toBe(204);

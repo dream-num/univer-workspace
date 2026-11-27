@@ -100,10 +100,10 @@ describe("the connect page with nobody signed in", () => {
     expect(unavailable).not.toContain("/api/auth/authorize/guest");
   });
 
-  it("promises a claim link only to a trial that may write", () => {
-    expect(renderConnectPage(signedOut({ kind: "offered" }))).toContain("ask it for a claim link");
+  it("promises a handoff link only to a trial that may write", () => {
+    expect(renderConnectPage(signedOut({ kind: "offered" }))).toContain("ask it for a handoff link");
     const readOnly = renderConnectPage(signedOut({ kind: "offered" }, ["read"]));
     expect(readOnly).toContain("It can read, and cannot change anything.");
-    expect(readOnly).not.toContain("claim link");
+    expect(readOnly).not.toContain("handoff link");
   });
 });

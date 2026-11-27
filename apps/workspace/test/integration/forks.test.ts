@@ -131,7 +131,7 @@ describe("forks", () => {
     const repo = await createRepo(origin, agent, "Research");
     const [one] = [await createFork(origin, agent, repo, "one"), await createFork(origin, agent, repo, "two"), await createFork(origin, agent, repo, "three")];
     expect((await expectError(send(origin, "POST", "/api/forks", { upstreamSpaceId: repo, name: "four" }, agent.cookie), 403, "AGENT_QUOTA_EXCEEDED")).message)
-      .toBe("An unclaimed agent can own at most 3 forks. Delete a fork you no longer need, or give a person a claim link so they can claim you, which lifts this limit.");
+      .toBe("An unclaimed agent can own at most 3 forks. Delete a fork you no longer need, or give a person a handoff link so they can take you, which lifts this limit.");
     expect((await send(origin, "POST", "/api/forks", { upstreamSpaceId: repo, name: "two" }, agent.cookie)).status).toBe(200);
     expect((await send(origin, "DELETE", `/api/forks/${one}`, undefined, agent.cookie)).status).toBe(200);
     await createFork(origin, agent, repo, "four");

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { previewReaderId } from "../../server/src/modules/identity/index.js";
 import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
@@ -21,12 +22,11 @@ describe("claiming an agent", () => {
     const origin = await start();
     const agent = await guestAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Budget");
-    expect((await send(origin, "PUT", `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie)).status).toBe(200);
 
     const created = await send(origin, "POST", "/api/agents/claim-codes", undefined, agent.cookie);
     expect(created.status).toBe(201);
     const { code, claimUrl, expiresIn } = (await created.json()) as { code: string; claimUrl: string; expiresIn: number };
-    expect({ claimUrl, expiresIn }).toEqual({ claimUrl: `/claim/${code}`, expiresIn: 600 });
+    expect({ claimUrl, expiresIn }).toEqual({ claimUrl: `/claim/${code}`, expiresIn: 7 * 24 * 60 * 60 });
 
     const alice = await register(origin, "alice");
     const preview = await send(origin, "GET", `/api/agents/claim?code=${code}`, undefined, alice.cookie);
@@ -40,7 +40,7 @@ describe("claiming an agent", () => {
     expect(await claimed.json()).toMatchObject({ agent: { id: agent.id, files: 1 } });
     expect(await searchAgent()).toMatchObject([{ id: agent.id, username: agent.username }]);
     expect(await sessionUser(origin, agent.cookie)).toMatchObject({ kind: "agent", claimed: true });
-    const sharing = (await (await send(origin, "GET", `/api/nodes/${nodeId}/link-sharing`, undefined, alice.cookie)).json()) as { owner: unknown; expiresAt: unknown };
+    const sharing = (await (await send(origin, "PUT", `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, alice.cookie)).json()) as { owner: unknown; expiresAt: unknown };
     expect(sharing).toMatchObject({ owner: { kind: "agent", claimed: true }, expiresAt: null });
     expect((await fetch(`${origin}/api/nodes/${nodeId}`)).status).toBe(200);
 
@@ -52,7 +52,7 @@ describe("claiming an agent", () => {
     await expectError(send(origin, "POST", "/api/agents/claim-codes", undefined, agent.cookie), 409, "AGENT_ALREADY_CLAIMED");
   });
 
-  it("refuses an agent, a CLI session, an unknown code and a code older than ten minutes", async () => {
+  it("refuses an agent, a CLI session, an unknown code and a code older than seven days", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const origin = await start();
     const agent = await guestAgent(origin);
@@ -67,10 +67,11 @@ describe("claiming an agent", () => {
 
     const dave = await register(origin, "dave");
     await expectError(send(origin, "POST", "/api/agents/claim", { code: "not-a-code" }, dave.cookie), 404, "AGENT_CLAIM_INVALID");
-    vi.setSystemTime(Date.now() + 10 * 60 * 1000 + 1);
-    await expectError(send(origin, "POST", "/api/agents/claim", { code }, dave.cookie), 410, "AGENT_CLAIM_EXPIRED");
-    expect(await sessionUser(origin, agent.cookie)).toMatchObject({ claimed: false });
-    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, dave.cookie)).status).toBe(200);
+    vi.setSystemTime(Date.now() + 7 * 24 * HOUR + 1);
+    // Every session above ended with the clock, so a person who signs in now tries the old code.
+    const erin = await register(origin, "erin");
+    await expectError(send(origin, "POST", "/api/agents/claim", { code }, erin.cookie), 410, "AGENT_CLAIM_EXPIRED");
+    expect(await agents(origin, erin.cookie)).toEqual([]);
   });
 
   it("answers a body that is not JSON, or too large, with a client error on any route", async () => {
@@ -162,10 +163,11 @@ describe("claiming an agent", () => {
     const origin = await start();
     const agent = await guestAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Report");
-    expect((await send(origin, "PUT", `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie)).status).toBe(200);
     const alice = await register(origin, "alice");
     const bob = await register(origin, "bob");
     expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+    expect((await send(origin, "PUT", `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, alice.cookie)).status).toBe(200);
+    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
     expect(await agents(origin, bob.cookie)).toEqual([]);
 
     vi.setSystemTime(Date.now() + 25 * HOUR);
@@ -198,6 +200,116 @@ describe("claiming an agent", () => {
 
     expect(await closed).toEqual([1008, 1008]);
     expect(control.map((socket) => socket.readyState)).toEqual([WebSocket.OPEN, WebSocket.OPEN]);
+  });
+});
+
+describe("the handoff link", () => {
+  it("shows a signed-out visitor everything a temporary agent owns, read-only, until a person takes the agent", async () => {
+    const origin = await start({ realtime: true });
+    const { access } = applications.at(-1)!;
+    const agent = await guestAgent(origin);
+    const personal = await personalSpaceId(origin, agent.cookie);
+    const sheet = await createFile(origin, agent.cookie, "Budget");
+    const team = await teamSpaceId(origin, agent.cookie, "Reports");
+    const teamSheet = await createFile(origin, agent.cookie, "Q4", team);
+    const other = await guestAgent(origin);
+    const otherSheet = await createFile(origin, other.cookie, "Elsewhere");
+    const code = await claimCode(origin, agent.cookie);
+    expect((await send(origin, "GET", `/api/nodes/${sheet}`)).status).toBe(404);
+
+    const opened = await send(origin, "GET", `/api/agents/claim?code=${code}`);
+    expect(opened.status).toBe(200);
+    expect(await opened.json()).toMatchObject({
+      agent: { id: agent.id, username: agent.username, files: 1 },
+      claimed: false,
+      expiresAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u),
+      spaces: [{ id: personal, type: "personal", files: 1 }, { id: team, type: "team", name: "Reports", files: 1 }],
+    });
+    const [setCookie] = opened.headers.getSetCookie();
+    expect(setCookie).toMatch(new RegExp(`^workspace_handoff=${code}; Max-Age=6047\\d\\d; Path=/; Expires=[^;]+; HttpOnly; SameSite=Lax$`, "u"));
+    const preview = `workspace_handoff=${code}`;
+
+    for (const [spaceId, nodeId] of [[personal, sheet], [team, teamSheet]] as const) {
+      expect(await spaceFileNames(origin, spaceId, preview)).toHaveLength(1);
+      expect(await accessRole(origin, nodeId, preview)).toBe("viewer");
+    }
+    expect(await accessRole(origin, otherSheet, preview)).toBeNull();
+    const { resource } = ((await (await send(origin, "GET", `/api/nodes/${sheet}`, undefined, preview)).json()) as { node: { resource: { id: string; unitId: string } } }).node;
+    expect((await send(origin, "GET", `/api/unit-resources/${resource.unitId}`, undefined, preview)).status).toBe(200);
+    expect(await (await send(origin, "POST", `/api/resources/${resource.id}/open`, undefined, preview)).json())
+      .toMatchObject({ resource: { editorMode: "readOnly", accessRole: "viewer" } });
+    const snapshot = () => send(origin, "GET", `/universer-api/snapshot/2/unit/${resource.unitId}/rev/0`, undefined, preview);
+    expect((await snapshot()).status).toBe(200);
+    expect(await access.resolveSpace(previewReaderId(agent.id), personal)).toMatchObject({ role: "viewer", member: false, publicRead: false });
+    expect(await access.resolveSpace(previewReaderId(other.id), personal)).toBeNull();
+
+    for (const [method, path, body] of [
+      ["PATCH", `/api/nodes/${sheet}`, { name: "Renamed" }],
+      ["PUT", `/api/nodes/${sheet}/link-sharing`, { enabled: true, role: "viewer" }],
+      ["POST", "/api/resources", { kind: "univer", spaceId: personal, parentNodeId: null, name: "New", unitType: "sheet" }],
+      ["POST", `/universer-api/comb/2/unit/${resource.unitId}/new_changes`, {}],
+      ["POST", "/api/agents/claim", { code }],
+      ["GET", "/api/spaces", undefined],
+      ["GET", "/api/forks", undefined],
+    ] as const) {
+      expect((await send(origin, method, path, body, preview)).status, `${method} ${path}`).toBe(401);
+    }
+
+    const [held] = await connectBoth(origin, preview);
+    const closed = socketClosed(held!);
+    const alice = await register(origin, "alice");
+    const claimed = await send(origin, "POST", "/api/agents/claim", { code }, alice.cookie);
+    expect(claimed.status).toBe(200);
+    expect(claimed.headers.getSetCookie()).toEqual([expect.stringMatching(/^workspace_handoff=; Path=\/; Expires=Thu, 01 Jan 1970/u)]);
+    expect(await closed).toBe(1008);
+
+    expect(await accessRole(origin, sheet, preview)).toBeNull();
+    expect(await accessRole(origin, teamSheet, preview)).toBeNull();
+    expect((await send(origin, "GET", `/api/spaces/${personal}/nodes`, undefined, preview)).status).toBe(404);
+    expect((await snapshot()).status).toBe(403);
+    const taken = send(origin, "GET", `/api/agents/claim?code=${code}`, undefined, preview);
+    expect((await taken).headers.getSetCookie()).toEqual([expect.stringMatching(/^workspace_handoff=; /u)]);
+    await expectError(taken, 409, "AGENT_ALREADY_CLAIMED");
+    const mine = await send(origin, "GET", `/api/agents/claim?code=${code}`, undefined, alice.cookie);
+    expect(await mine.json()).toMatchObject({ claimed: true, agent: { id: agent.id } });
+    expect(mine.headers.getSetCookie()).toEqual([expect.stringMatching(/^workspace_handoff=; /u)]);
+  });
+
+  it("reads as the signed-in person when a session comes with the cookie, and as anonymous when the code cannot preview", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const origin = await start();
+    const { repositories } = applications.at(-1)!;
+    const agent = await guestAgent(origin);
+    const sheet = await createFile(origin, agent.cookie, "Budget");
+    const code = await claimCode(origin, agent.cookie);
+    const preview = `workspace_handoff=${code}`;
+    expect(await accessRole(origin, sheet, preview)).toBe("viewer");
+
+    const bob = await register(origin, "bob");
+    expect(await accessRole(origin, sheet, `${bob.cookie}; ${preview}`)).toBeNull();
+    expect(await accessRole(origin, sheet, `workspace_handoff=${code}x`)).toBeNull();
+    expect(await accessRole(origin, sheet, `workspace_handoff=${(await claimCode(origin, (await guestAgent(origin)).cookie))}`)).toBeNull();
+
+    await repositories.identity.touchAgent({ userId: agent.id }, Date.now(), Date.now() + 1, Date.now() - 1);
+    expect(await accessRole(origin, sheet, preview)).toBeNull();
+    expect((await send(origin, "GET", `/api/agents/claim?code=${code}`)).status).toBe(200);
+    expect(await accessRole(origin, sheet, preview)).toBe("viewer");
+
+    vi.setSystemTime(Date.now() + 7 * 24 * HOUR);
+    expect(await accessRole(origin, sheet, preview)).toBeNull();
+    const expired = send(origin, "GET", `/api/agents/claim?code=${code}`, undefined, preview);
+    expect((await expired).headers.getSetCookie()).toEqual([expect.stringMatching(/^workspace_handoff=; /u)]);
+    await expectError(expired, 410, "AGENT_CLAIM_EXPIRED");
+    vi.setSystemTime(Date.now() + 7 * 24 * HOUR);
+    await expectError(send(origin, "GET", `/api/agents/claim?code=${code}`), 404, "AGENT_CLAIM_INVALID");
+
+    const stopped = await guestAgent(origin);
+    const stoppedSheet = await createFile(origin, stopped.cookie, "Stopped");
+    const stoppedCode = await claimCode(origin, stopped.cookie);
+    expect(await accessRole(origin, stoppedSheet, `workspace_handoff=${stoppedCode}`)).toBe("viewer");
+    await repositories.identity.banAgent(stopped.id, Date.now());
+    expect(await accessRole(origin, stoppedSheet, `workspace_handoff=${stoppedCode}`)).toBeNull();
+    await expectError(send(origin, "GET", `/api/agents/claim?code=${stoppedCode}`), 404, "AGENT_CLAIM_INVALID");
   });
 });
 
@@ -426,9 +538,15 @@ function draftWorktreeBackend(): WorktreeBackend {
   };
 }
 
-async function createFile(origin: string, cookie: string, name: string): Promise<string> {
+async function teamSpaceId(origin: string, cookie: string, name: string): Promise<string> {
+  const response = await send(origin, "POST", "/api/team-spaces", { name }, cookie);
+  if (response.status !== 201) throw new Error(`Team Space creation failed with ${response.status}`);
+  return ((await response.json()) as { id: string }).id;
+}
+
+async function createFile(origin: string, cookie: string, name: string, spaceId?: string): Promise<string> {
   const response = await send(origin, "POST", "/api/resources",
-    { kind: "univer", spaceId: await personalSpaceId(origin, cookie), parentNodeId: null, name, unitType: "sheet" },
+    { kind: "univer", spaceId: spaceId ?? await personalSpaceId(origin, cookie), parentNodeId: null, name, unitType: "sheet" },
     cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 201) throw new Error(`File creation failed with ${response.status}`);
   return ((await response.json()) as { node: { id: string } }).node.id;

@@ -689,12 +689,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a link that lets a human claim the current agent.
+         * Create the handoff link of the current agent.
          * @description Needs the login session of an unclaimed agent, from any credential. The
-         *     code lasts ten minutes and claims the agent once. The product database
-         *     holds its hash, so any server replica accepts it and a restart keeps it.
-         *     An agent holds at most ten live codes, and an eleventh replaces its
-         *     oldest. All responses have Cache-Control: no-store.
+         *     code lasts seven days. Until a person takes the agent, anyone who opens
+         *     the link reads the agent's Spaces without signing in. One person takes
+         *     the agent with it. The product database holds its hash, so any server
+         *     replica accepts it and a restart keeps it. An agent holds at most ten
+         *     live codes, and an eleventh replaces its oldest. All responses have
+         *     Cache-Control: no-store.
          */
         post: operations["createAgentClaimCode"];
         delete?: never;
@@ -711,11 +713,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Show the agent a claim code names, before the current human claims it.
-         * @description Needs a human's browser login session, like POST, and fails the same way
-         *     for a code that cannot claim. All responses have Cache-Control: no-store.
+         * Show the agent a claim code names and let this browser read its Spaces.
+         * @description Needs no login session. While the agent has no owner, the response sets
+         *     the `workspace_handoff` cookie to the code, for as long as the code
+         *     lasts. A request that carries the cookie and no login session reads
+         *     every Space the agent owns as a viewer, through the same routes an
+         *     anonymous reader uses, and can write nothing. The server checks the code
+         *     and the agent on every request, so the reading stops when a person takes
+         *     the agent, when the agent is banned, and when the code expires. A browser
+         *     holds one such cookie, and the last link opened wins. A login session
+         *     takes precedence over the cookie. Opening the page also moves an
+         *     unclaimed agent's expiry out, at most once a day. Every answer but this
+         *     `200` for an unowned agent clears the cookie. A human's browser login
+         *     session that already owns the agent gets `claimed: true`. Every other
+         *     login session counts as signed out. All responses have Cache-Control:
+         *     no-store.
          */
-        get: operations["inspectAgentClaim"];
+        get: operations["openAgentHandoff"];
         put?: never;
         /**
          * Make the current human the owner of the agent a claim code names.
@@ -724,7 +738,9 @@ export interface paths {
          *     claim time and stops expiring. The owner holds the owner role in the
          *     agent's Personal Space; the agent gains no access to the owner's
          *     content. Claiming again as the same owner returns the agent unchanged.
-         *     All responses have Cache-Control: no-store.
+         *     A successful claim clears the `workspace_handoff` cookie, and from then
+         *     on the code lets nobody read without signing in. All responses have
+         *     Cache-Control: no-store.
          */
         post: operations["claimAgent"];
         delete?: never;
@@ -2310,7 +2326,7 @@ export interface paths {
          *     data, so only a person signed in to Workspace in a browser may do it. Any other session that may
          *     share the Node gets `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
          *     `/confirm/link-sharing?node=<nodeId>&role=<role>`, and the settings do not change. An unclaimed
-         *     agent may turn on a `viewer` link and gets `403 AGENT_NOT_ALLOWED` for an `editor` link. Every
+         *     agent gets `403 AGENT_NOT_ALLOWED`. Every
          *     session that may share the Node may turn Link Sharing off or change `editor` to `viewer`. A
          *     caller without that capability gets `403 FORBIDDEN` and no `url`.
          */
@@ -3068,7 +3084,7 @@ export interface components {
             /**
              * Format: date-time
              * @description When the link stops working because its owner, an unclaimed agent, expires. The date moves
-             *     30 days out while the agent stays active or the shared page is read. Null when the owner
+             *     30 days out while the agent stays active or someone opens its handoff page. Null when the owner
              *     does not expire.
              */
             expiresAt: string | null;
@@ -3690,7 +3706,7 @@ export interface components {
             spaceId: string;
             /** @description Files in the agent's Personal Space outside Trash. */
             files: number;
-            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, a reader opened one of its shared pages. Recorded at most once a day. */
+            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page. Recorded at most once a day. */
             lastActiveAt: number;
             /** @description The agent can no longer sign in. Its owner stopped it, or an operator banned it. */
             stopped: boolean;
@@ -3723,18 +3739,33 @@ export interface components {
         };
         AgentClaimCode: {
             code: string;
-            /** @description The claim page as a path on this Workspace origin. */
+            /** @description The handoff page as a path on this Workspace origin. */
             claimUrl: string;
             /**
              * @description Seconds until the code stops working.
              * @constant
              */
-            expiresIn: 600;
+            expiresIn: 604800;
         };
-        AgentClaimPreview: {
+        AgentSpace: {
+            id: string;
+            /** @enum {string} */
+            type: "personal" | "team";
+            name: string;
+            /** @description Files in the Space outside Trash. */
+            files: number;
+        };
+        AgentHandoff: {
             agent: components["schemas"]["AgentSummary"];
             /** @description The current human already owns the agent. */
             claimed: boolean;
+            /**
+             * Format: date-time
+             * @description When the code stops working.
+             */
+            expiresAt: string;
+            /** @description Every Space the agent owns, its Personal Space first. */
+            spaces: components["schemas"]["AgentSpace"][];
         };
         AgentClaim: {
             code: string;
@@ -5030,7 +5061,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description AGENT_CLAIM_INVALID. The code is unknown, expired over ten minutes ago, predates a server restart, or names a banned agent. */
+        /** @description AGENT_CLAIM_INVALID. The code is unknown, expired over seven days ago, or names a banned agent. */
         AgentClaimInvalid: {
             headers: {
                 [name: string]: unknown;
@@ -5039,7 +5070,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description AGENT_CLAIM_EXPIRED. The code is more than ten minutes old. */
+        /** @description AGENT_CLAIM_EXPIRED. The code is more than seven days old. */
         AgentClaimExpired: {
             headers: {
                 [name: string]: unknown;
@@ -6133,7 +6164,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The claim code and the page that uses it. */
+            /** @description The claim code and the handoff page that uses it. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -6164,7 +6195,7 @@ export interface operations {
             };
         };
     };
-    inspectAgentClaim: {
+    openAgentHandoff: {
         parameters: {
             query: {
                 code: string;
@@ -6175,17 +6206,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The agent, and whether the current human already owns it. */
+            /** @description The agent, its Spaces, and whether the current human already owns it. */
             200: {
                 headers: {
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentClaimPreview"];
+                    "application/json": components["schemas"]["AgentHandoff"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["AgentClaimInvalid"];
             409: components["responses"]["AgentAlreadyClaimed"];
             410: components["responses"]["AgentClaimExpired"];

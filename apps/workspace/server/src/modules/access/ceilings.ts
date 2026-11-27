@@ -13,7 +13,7 @@ const AGENT_MAX_OPEN_WORKTREES = 10;
 const AGENT_MAX_MERGES = 50;
 export const AGENT_MERGE_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Every unclaimed-agent ceiling forbids only `agent_unclaimed`, so a claim lifts each of them.
-const CLAIM_LIFTS = "or give a person a claim link so they can claim you, which lifts this limit.";
+const CLAIM_LIFTS = "or give a person a handoff link so they can take you, which lifts this limit.";
 
 /** An agent's open Worktrees, those still being created included, the merges it started within the window, and what the action adds. */
 export interface BudgetUse {

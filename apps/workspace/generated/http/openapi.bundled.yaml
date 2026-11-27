@@ -1318,16 +1318,18 @@ paths:
       tags:
         - Authentication
       operationId: createAgentClaimCode
-      summary: Create a link that lets a human claim the current agent.
+      summary: Create the handoff link of the current agent.
       description: |
         Needs the login session of an unclaimed agent, from any credential. The
-        code lasts ten minutes and claims the agent once. The product database
-        holds its hash, so any server replica accepts it and a restart keeps it.
-        An agent holds at most ten live codes, and an eleventh replaces its
-        oldest. All responses have Cache-Control: no-store.
+        code lasts seven days. Until a person takes the agent, anyone who opens
+        the link reads the agent's Spaces without signing in. One person takes
+        the agent with it. The product database holds its hash, so any server
+        replica accepts it and a restart keeps it. An agent holds at most ten
+        live codes, and an eleventh replaces its oldest. All responses have
+        Cache-Control: no-store.
       responses:
         '201':
-          description: The claim code and the page that uses it.
+          description: The claim code and the handoff page that uses it.
           content:
             application/json:
               schema:
@@ -1352,11 +1354,24 @@ paths:
     get:
       tags:
         - Authentication
-      operationId: inspectAgentClaim
-      summary: Show the agent a claim code names, before the current human claims it.
+      operationId: openAgentHandoff
+      summary: Show the agent a claim code names and let this browser read its Spaces.
       description: |
-        Needs a human's browser login session, like POST, and fails the same way
-        for a code that cannot claim. All responses have Cache-Control: no-store.
+        Needs no login session. While the agent has no owner, the response sets
+        the `workspace_handoff` cookie to the code, for as long as the code
+        lasts. A request that carries the cookie and no login session reads
+        every Space the agent owns as a viewer, through the same routes an
+        anonymous reader uses, and can write nothing. The server checks the code
+        and the agent on every request, so the reading stops when a person takes
+        the agent, when the agent is banned, and when the code expires. A browser
+        holds one such cookie, and the last link opened wins. A login session
+        takes precedence over the cookie. Opening the page also moves an
+        unclaimed agent's expiry out, at most once a day. Every answer but this
+        `200` for an unowned agent clears the cookie. A human's browser login
+        session that already owns the agent gets `claimed: true`. Every other
+        login session counts as signed out. All responses have Cache-Control:
+        no-store.
+      security: []
       parameters:
         - name: code
           in: query
@@ -1365,15 +1380,15 @@ paths:
             type: string
       responses:
         '200':
-          description: The agent, and whether the current human already owns it.
+          description: The agent, its Spaces, and whether the current human already owns it.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentClaimPreview'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: '#/components/schemas/AgentHandoff'
         '404':
           $ref: '#/components/responses/AgentClaimInvalid'
         '409':
@@ -1391,7 +1406,9 @@ paths:
         claim time and stops expiring. The owner holds the owner role in the
         agent's Personal Space; the agent gains no access to the owner's
         content. Claiming again as the same owner returns the agent unchanged.
-        All responses have Cache-Control: no-store.
+        A successful claim clears the `workspace_handoff` cookie, and from then
+        on the code lets nobody read without signing in. All responses have
+        Cache-Control: no-store.
       requestBody:
         required: true
         content:
@@ -4025,7 +4042,7 @@ paths:
         data, so only a person signed in to Workspace in a browser may do it. Any other session that may
         share the Node gets `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
         `/confirm/link-sharing?node=<nodeId>&role=<role>`, and the settings do not change. An unclaimed
-        agent may turn on a `viewer` link and gets `403 AGENT_NOT_ALLOWED` for an `editor` link. Every
+        agent gets `403 AGENT_NOT_ALLOWED`. Every
         session that may share the Node may turn Link Sharing off or change `editor` to `viewer`. A
         caller without that capability gets `403 FORBIDDEN` and no `url`.
       requestBody:
@@ -5756,7 +5773,7 @@ components:
           format: date-time
           description: |
             When the link stops working because its owner, an unclaimed agent, expires. The date moves
-            30 days out while the agent stays active or the shared page is read. Null when the owner
+            30 days out while the agent stays active or someone opens its handoff page. Null when the owner
             does not expire.
         createdBy:
           oneOf:
@@ -7407,7 +7424,7 @@ components:
           description: Files in the agent's Personal Space outside Trash.
         lastActiveAt:
           type: integer
-          description: Unix epoch milliseconds when the agent last signed in or, before its claim, a reader opened one of its shared pages. Recorded at most once a day.
+          description: Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page. Recorded at most once a day.
         stopped:
           type: boolean
           description: The agent can no longer sign in. Its owner stopped it, or an operator banned it.
@@ -7479,23 +7496,56 @@ components:
         claimUrl:
           type: string
           pattern: ^/claim/
-          description: The claim page as a path on this Workspace origin.
+          description: The handoff page as a path on this Workspace origin.
         expiresIn:
           type: integer
-          const: 600
+          const: 604800
           description: Seconds until the code stops working.
-    AgentClaimPreview:
+    AgentSpace:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - name
+        - files
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - personal
+            - team
+        name:
+          type: string
+        files:
+          type: integer
+          minimum: 0
+          description: Files in the Space outside Trash.
+    AgentHandoff:
       type: object
       additionalProperties: false
       required:
         - agent
         - claimed
+        - expiresAt
+        - spaces
       properties:
         agent:
           $ref: '#/components/schemas/AgentSummary'
         claimed:
           type: boolean
           description: The current human already owns the agent.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the code stops working.
+        spaces:
+          type: array
+          description: Every Space the agent owns, its Personal Space first.
+          items:
+            $ref: '#/components/schemas/AgentSpace'
     AgentClaim:
       type: object
       additionalProperties: false
@@ -10782,13 +10832,13 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     AgentClaimInvalid:
-      description: AGENT_CLAIM_INVALID. The code is unknown, expired over ten minutes ago, predates a server restart, or names a banned agent.
+      description: AGENT_CLAIM_INVALID. The code is unknown, expired over seven days ago, or names a banned agent.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     AgentClaimExpired:
-      description: AGENT_CLAIM_EXPIRED. The code is more than ten minutes old.
+      description: AGENT_CLAIM_EXPIRED. The code is more than seven days old.
       content:
         application/json:
           schema:

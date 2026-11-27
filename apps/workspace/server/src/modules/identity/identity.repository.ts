@@ -1,4 +1,5 @@
 import type {
+  AgentSpace,
   AuthenticationMethods,
   ExternalIdentityProvider,
   PrincipalUser,
@@ -145,6 +146,8 @@ export interface IdentityRepository {
   findUsersByIdOrUsername(target: string): Promise<readonly NamedUser[]>;
   banAgent(agentUserId: string, at: number): Promise<void>;
   findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]>;
+  /** Every Space the agent owns, its Personal Space first, then by creation. */
+  listAgentSpaces(agentUserId: string): Promise<readonly AgentSpace[]>;
   claimAgent(agentUserId: string, ownerUserId: string, at: number): Promise<boolean>;
   banClaimedAgent(ownerUserId: string, agentUserId: string, at: number): Promise<boolean>;
   /** Grants or revokes the shared MCP executor; false when the User already had, or already lacked, it. */
@@ -192,7 +195,7 @@ export interface IdentityRepository {
   findUser(userId: string): Promise<User | null>;
   findPrincipal(userId: string): Promise<StoredPrincipal | null>;
   touchAgent(
-    target: { readonly userId: string } | { readonly nodeId: string },
+    target: { readonly userId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
@@ -248,6 +251,8 @@ export interface IdentityRepository {
    */
   putSignInCode(code: NewSignInCode, limits: SignInCodeLimits): Promise<SignInCodePut>;
   findSignInCode(kind: SignInCodeKind, hash: string, by?: "user_code_hash"): Promise<SignInCode | null>;
+  /** The agent an unexpired `claim` code names, while that agent has no owner and is not banned. */
+  findPreviewGrant(codeHash: string, now: number): Promise<string | null>;
   /** Of concurrent callers, exactly one deletes the code and gets true. */
   deleteSignInCode(kind: SignInCodeKind, codeHash: string): Promise<boolean>;
   /**

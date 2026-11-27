@@ -26,6 +26,8 @@ import type {
 } from "./identity.repository.js";
 import { deriveDisplayName, deriveUserDisplayName, personalSpaceName, validDisplayName } from "./display-name.js";
 import { emailLoginMessage } from "./email-login-mail.js";
+import { ANONYMOUS_USER_ID, previewReaderId } from "./anonymous-user.js";
+import { readHandoffCode } from "./handoff.js";
 import { personInBrowser } from "./principal-category.js";
 import { createSourceRateLimiter } from "./source-rate-limiter.js";
 import type {
@@ -78,6 +80,12 @@ export function agentClientLabel(clientName: string | null | undefined): string 
   return deriveDisplayName(clientName, MAX_AGENT_CLIENT_NAME_LENGTH);
 }
 
+/** `userId` names a Users row only for `user`. The other two are reserved IDs that can read and never write. */
+export interface Reader {
+  readonly kind: "user" | "preview" | "anonymous";
+  readonly userId: string;
+}
+
 export interface IdentityModule {
   initialize(): Promise<void>;
   readonly cookieName: string;
@@ -113,6 +121,12 @@ export interface IdentityModule {
     input: PasswordChange
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): Promise<SessionView>;
+  /**
+   * Who a read is for. A session wins. Without one, the handoff cookie of a live code whose agent is
+   * still temporary reads as that agent's preview reader, and everything else as the anonymous reader.
+   * The code is looked up on every call, so a claim ends the preview on every replica at once.
+   */
+  getReader(cookieHeader: string | undefined): Promise<Reader>;
   /** Whether the operator granted the User the shared MCP executor (`db:executor-access`). */
   hasExecutorAccess(userId: string): Promise<boolean>;
   getRealtimeSession(cookieHeader: string | undefined): Promise<{
@@ -189,11 +203,6 @@ export interface IdentityModule {
   }>;
   unlinkDiscord(cookieHeader: string | undefined): Promise<AuthenticatedSession>;
   findUsers(userIds: readonly string[]): Promise<readonly User[]>;
-  /**
-   * A shared page of this Node was served to a reader. When an unclaimed agent owns it, its expiry
-   * moves 30 days out, as when the agent authenticates; either happens at most once a day.
-   */
-  recordAgentPageView(nodeId: string): Promise<void>;
   /** Whether the cookie holds a valid session, without the cleanup and agent activity that reading one causes. */
   hasSession(cookieHeader: string | undefined): Promise<boolean>;
   requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal>;
@@ -409,11 +418,6 @@ export function createIdentityModule(options: {
 
     async hasSession(cookieHeader) {
       return (await storedSession(cookieHeader, true)) !== null;
-    },
-
-    async recordAgentPageView(nodeId) {
-      const { at, staleBefore, expiresAt } = agentActivityWindow(now());
-      await repository.touchAgent({ nodeId }, at, staleBefore, expiresAt);
     },
 
     async registerWithPassword(input) {
@@ -851,6 +855,15 @@ export function createIdentityModule(options: {
     },
 
     getSession,
+    async getReader(cookieHeader) {
+      const stored = await storedSession(cookieHeader);
+      if (stored) return { kind: "user", userId: stored.id };
+      const code = readHandoffCode(cookieHeader);
+      const agentUserId = code && await repository.findPreviewGrant(hashSessionSecret(code), now());
+      return agentUserId
+        ? { kind: "preview", userId: previewReaderId(agentUserId) }
+        : { kind: "anonymous", userId: ANONYMOUS_USER_ID };
+    },
     hasExecutorAccess: (userId) => repository.hasExecutorAccess(userId),
     async getRealtimeSession(cookieHeader) {
       const stored = await storedSession(cookieHeader);
