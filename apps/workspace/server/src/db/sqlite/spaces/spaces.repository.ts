@@ -1,4 +1,4 @@
-import { resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import { resolveStoredSpaceAccess, type ExposureGuard } from "../../../modules/access/index.js";
 import { spaceNotFound, spaceUpdateForbidden } from "../../../modules/spaces/spaces.errors.js";
 import type {
   CreateTeamSpaceInput, SpaceListEntry, SpaceListScope, SpaceSettingsPatch, SpacesRepository,
@@ -67,11 +67,14 @@ export class SqliteSpacesRepository implements SpacesRepository {
     });
   }
 
-  async updateSettings(userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number): Promise<SpaceListEntry | null> {
+  async updateSettings(
+    userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number, guard: ExposureGuard<"public">,
+  ): Promise<SpaceListEntry | null> {
     return this._database.transaction((database) => {
       const before = findSpaceView(this._database, userId, { spaceId });
       if (!before) throw spaceNotFound();
       if (!resolveStoredSpaceAccess(userId, before)?.capabilities.renameSpace) throw spaceUpdateForbidden();
+      guard(before.publicRead ? "public" : null);
       if (settings.slug !== undefined && database.prepare(`
         SELECT 1 FROM spaces WHERE owner_user_id = $owner AND slug = $slug AND id <> $spaceId
         UNION ALL SELECT 1 FROM forks WHERE owner_user_id = $owner AND name = $slug

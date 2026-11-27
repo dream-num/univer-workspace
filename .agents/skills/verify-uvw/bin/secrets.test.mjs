@@ -15,6 +15,7 @@ test('token, cookie, bearer and OAuth field shapes are redacted and nothing is l
     [`token ${pat} end`, 'token [REDACTED] end', 'Workspace token'],
     ['uvw_at_abc and uvw_rt_def', '[REDACTED] and [REDACTED]', 'Workspace token'],
     [`Cookie: workspace_session=${session}; Path=/`, 'Cookie: workspace_session=[REDACTED]; Path=/', 'session cookie'],
+    [`Set-Cookie: workspace_handoff=${session.slice(0, 22)}; Max-Age=604800; Path=/`, 'Set-Cookie: workspace_handoff=[REDACTED]; Max-Age=604800; Path=/', 'handoff cookie'],
     [`Authorization: Bearer ${session}`, 'Authorization: Bearer [REDACTED]', 'bearer credential'],
     [`{"access_token":"${session}","expires_in":600}`, '{"access_token":"[REDACTED]","expires_in":600}', 'OAuth token field'],
     [JSON.stringify({ output: `{"refresh_token": "${session}"}` }), JSON.stringify({ output: '{"refresh_token": "[REDACTED]"}' }), 'OAuth token field'],
@@ -33,6 +34,7 @@ test('challenges, placeholders, token shapes and ordinary tool arguments stay re
     'Authorization: Bearer <token>',
     '{"access_token":"<uvw_at_… 52 chars>","refresh_token":"[REDACTED]"}',
     'workspace_session=<session>',
+    'Set-Cookie: workspace_handoff=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
     JSON.stringify({ input: { code: 'return tools.ws.whoami()', state: 'open', token: 'page-2' }, tokens: { input: 12 } }),
   ]) {
     assert.equal(redact(text), text);
@@ -70,6 +72,7 @@ test('run secrets cover the human, the principals, the model credential, story s
     for (const directory of ['home/principals', 'home/stories/codex-human/.codex', `home/${sessions}`, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}`, 'evidence/story']) mkdirSync(join(run, directory), { recursive: true });
     writeFileSync(join(run, 'user.pw'), 'human-password');
     writeFileSync(join(run, 'home/mcp-session'), 'human-session\n');
+    writeFileSync(join(run, 'home/browser-session'), 'human-browser-session\n');
     writeFileSync(join(run, 'home/principals/a1.token'), 'principal-token\n');
     writeFileSync(join(run, 'home/principals/a1.id'), 'principal-id\n');
     writeFileSync(join(run, 'home/opencode-credential-opencode.json'), JSON.stringify([{ value: { access: 'model-access', refresh: 'model-refresh' } }]));
@@ -78,7 +81,7 @@ test('run secrets cover the human, the principals, the model credential, story s
     const stored = cookie => JSON.stringify({ sessions: { 'http://127.0.0.1:1': { cookie, subject: { id: 'subject-id-1' } } } });
     writeFileSync(join(run, `home/${sessions}/session.json`), stored('human-cli-session'));
     writeFileSync(join(run, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}/session.json`), stored('story-session'));
-    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-env-key', 'story-env-region', 'story-session']);
+    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-browser-session', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-env-key', 'story-env-region', 'story-session']);
 
     writeFileSync(join(run, 'evidence/story/transcript.jsonl'), 'agent principal-id said hello\n');
     assert.equal(check().status, 0, check().stdout);
@@ -96,7 +99,7 @@ test('run secrets cover the human, the principals, the model credential, story s
 test('a claim code fails the check and stays readable for the recipe, and the printed command redacts it', () => {
   const code = randomBytes(16).toString('base64url');
   const url = `http://127.0.0.1:5993/claim/${code}`;
-  for (const text of [url, `{"claimUrl": "${url}", "expiresAt": "2026-11-24T10:00:00Z"}`, `Claim link: ${url}\n`]) {
+  for (const text of [url, `{"claimUrl": "${url}", "expiresAt": "2026-11-24T10:00:00Z"}`, `Handoff link: ${url}\n`]) {
     assert.deepEqual(findSecrets(text), ['claim code'], text);
     assert.equal(redact(text), text);
   }
@@ -115,7 +118,7 @@ test('a claim code fails the check and stays readable for the recipe, and the pr
     assert.equal(failed.status, 1);
     const lines = failed.stdout.trim().split('\n');
     assert.deepEqual(lines.slice(0, 2).sort(), ["FAIL  it's claimed.txt: claim code", 'FAIL  mh-bot1-claim.out: claim code']);
-    assert.equal(lines[2], 'Once the claim link has been used, redact its code with:');
+    assert.equal(lines[2], 'Once the handoff link has been used, redact its code with:');
     assert.doesNotMatch(failed.stdout, new RegExp(code));
     assert.equal(spawnSync('sh', ['-c', lines[3]], { encoding: 'utf8' }).status, 0, lines[3]);
     assert.equal(check().status, 0, check().stdout);

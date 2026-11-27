@@ -70,6 +70,13 @@
     tags: [Membership]
     operationId: upsertTeamMember
     summary: Add a Team Member or change their Role.
+    description: |
+      Adding a member or raising a member's Role lets more people see data, so only a person signed in
+      to Workspace in a browser may do it. Any other session that may manage members gets
+      `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+      `/confirm/member?space=<spaceId>&user=<userId>&role=<role>`, and the Membership does not change.
+      An unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Every session that may manage members may lower
+      a Role or repeat the stored one. A caller without that capability gets `403 FORBIDDEN` and no `url`.
     requestBody:
       required: true
       content:
@@ -148,6 +155,13 @@
     tags: [Sharing]
     operationId: upsertNodeGrant
     summary: Create or change a Direct Share.
+    description: |
+      Sharing a Node with a User or raising that User's Role lets more people see data, so only a person
+      signed in to Workspace in a browser may do it. Any other session that may share the Node gets
+      `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+      `/confirm/grant?node=<nodeId>&user=<userId>&role=<role>`, and the Grant does not change. An
+      unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Every session that may share the Node may lower a
+      Role or repeat the stored one. A caller without that capability gets `403 FORBIDDEN` and no `url`.
     requestBody:
       required: true
       content:
@@ -217,6 +231,14 @@
     tags: [Sharing]
     operationId: updateNodeLinkSharing
     summary: Enable, disable, or change Link Sharing for a Personal Space Node.
+    description: |
+      Turning Link Sharing on, or changing its role from `viewer` to `editor`, lets more people see
+      data, so only a person signed in to Workspace in a browser may do it. Any other session that may
+      share the Node gets `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+      `/confirm/link-sharing?node=<nodeId>&role=<role>`, and the settings do not change. An unclaimed
+      agent gets `403 AGENT_NOT_ALLOWED`. Every
+      session that may share the Node may turn Link Sharing off or change `editor` to `viewer`. A
+      caller without that capability gets `403 FORBIDDEN` and no `url`.
     requestBody:
       required: true
       content:

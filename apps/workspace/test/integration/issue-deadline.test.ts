@@ -1,3 +1,4 @@
+import { agentPrincipal, interactivePrincipal } from "../fixtures/principal.js";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, expect, it, vi } from "vitest";
@@ -28,7 +29,7 @@ it("accepts a submitted Issue when its Space deadline passes and attributes the 
   });
   for (const invalid of [0, 721, 1.5, "72"]) expect((await patch({ acceptAfterHours: invalid })).status).toBe(400);
   expect(await (await patch({ acceptAfterHours: 72 })).json()).toMatchObject({ acceptAfterHours: 72 });
-  await expect(application!.spaces.update(agent, team, { acceptAfterHours: null })).rejects.toEqual(refused("FORBIDDEN"));
+  await expect(application!.spaces.update(agentPrincipal(agent, true), team, { acceptAfterHours: null })).rejects.toEqual(refused("FORBIDDEN"));
 
   const issue = await issues.create(owner, team, { title: "Fix totals", assigneeUserIds: [agent] });
   const { acceptance } = await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Fixed B12." });
@@ -64,7 +65,7 @@ it("stops the clock on a send-back, restarts it on the next submission, and neve
   await verdict(agent, "submitted", "Done.");
   expect(await issues.acceptDue(Date.now() + 1000 * HOUR, 25), "the setting is off by default").toBe(0);
 
-  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   const first = Date.now();
   vi.setSystemTime(first + HOUR / 2);
   await verdict(owner, "sent_back", "West is missing.");
@@ -75,9 +76,9 @@ it("stops the clock on a send-back, restarts it on the next submission, and neve
   const second = Date.parse((await verdict(agent, "submitted", "Added West.")).acceptance!.createdAt);
   expect(await issues.acceptDue(second + HOUR - 1, 25), "the first submission no longer counts").toBe(0);
 
-  await application!.spaces.update(owner, team, { acceptAfterHours: null });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: null });
   expect(await issues.acceptDue(second + 1000 * HOUR, 25), "turning it off stops it").toBe(0);
-  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   expect(await issues.acceptDue(second + HOUR, 25)).toBe(1);
   expect(await issues.get(owner, team, issue.number)).toMatchObject({ state: "closed", acceptance: { kind: "accepted", actor: null } });
 }, 120_000);
@@ -85,7 +86,7 @@ it("stops the clock on a send-back, restarts it on the next submission, and neve
 it("restarts the clock when someone reopens a submitted Issue another person closed", async () => {
   const { applications: [application], owner, agent, team } = await setup();
   const { issues } = application!;
-  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   const issue = await issues.create(owner, team, { title: "Add North", assigneeUserIds: [agent] });
   const { acceptance } = await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
   const submitted = Date.parse(acceptance!.createdAt);
@@ -112,7 +113,7 @@ it("passes over an Issue whose acceptance fails and still accepts the rest up to
   const failing = new Set<string>();
   const { applications: [application], owner, agent, team } = await setup(1, { failAccepting: failing });
   const { issues } = application!;
-  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   const numbers: number[] = [];
   for (const title of ["Oldest", "Next", "Last"]) {
     const issue = await issues.create(owner, team, { title, assigneeUserIds: [agent] });
@@ -130,7 +131,7 @@ it("tries at most four times its limit per pass, and Issues that keep failing do
   const failing = new Set<string>();
   const { applications: [application], owner, agent, team, attempts } = await setup(1, { failAccepting: failing });
   const { issues } = application!;
-  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   const submit = async (title: string) => {
     const issue = await issues.create(owner, team, { title, assigneeUserIds: [agent] });
     await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
@@ -152,7 +153,7 @@ it("announces the Issues a pass accepted even when listing due Issues again woul
   const failing = new Set<string>();
   const { applications: [application], owner, agent, team, origin } = await setup(1, { failAccepting: failing, listings: 1 });
   const { issues } = application!;
-  await application!.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await application!.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   for (const title of ["Oldest", "Next"]) {
     const issue = await issues.create(owner, team, { title, assigneeUserIds: [agent] });
     await issues.verdict(agent, team, issue.number, { kind: "submitted", body: "Done." });
@@ -169,7 +170,7 @@ it("announces the Issues a pass accepted even when listing due Issues again woul
 it("records one acceptance and one close per Issue when two replicas run the job together, in bounded passes", async () => {
   const { applications, owner, agent, team } = await setup(2);
   const [first, second] = [applications[0]!, applications.at(-1)!];
-  await first.spaces.update(owner, team, { acceptAfterHours: 1 });
+  await first.spaces.update(interactivePrincipal(owner), team, { acceptAfterHours: 1 });
   const numbers: number[] = [];
   for (const title of ["One", "Two", "Three"]) {
     const { number } = await first.issues.create(owner, team, { title, assigneeUserIds: [agent] });
@@ -256,8 +257,8 @@ async function setup(
   const owner = (await application!.identity.registerWithPassword({ username: "owner", displayName: "Owner", password: PASSWORD })).view.user.id;
   const { user } = await application!.identity.createAgent({ label: "worker", originIp: "203.0.113.9" });
   await claimAgent!(user.id, owner);
-  const { id: team } = await application!.spaces.createTeamSpace(owner, { name: "Team" });
-  await application!.permissions.upsertTeamMember(owner, team, user.id, { role: "viewer" });
+  const { id: team } = await application!.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Team" });
+  await application!.permissions.upsertTeamMember(interactivePrincipal(owner), team, user.id, { role: "viewer" });
   return { applications, owner, agent: user.id, team, origin, attempts };
 }
 

@@ -24,9 +24,8 @@ operator granted with `db:executor-access` receive them (see [Executor access](#
 listed users receive them. `*` admits every user, which is acceptable only where every user of the Workspace is trusted,
 such as an internal staging deployment.
 Other users retain every tool that does not need the executor, and their server instructions
-ask them to edit document contents in the browser. An unclaimed agent with the `publish` scope that `claim` needs is also told to give the user an editable copy
-instead, with its claim link and the copy's link, and to tell the user to open the claim link first: the copy is
-theirs to edit once they claim it, and until then its link opens only if the agent shared it. The executor checks each grant on its own: against its list before
+ask them to edit document contents in the browser. An unclaimed agent with the `publish` scope that `claim` needs is also told to make the user an editable copy
+instead: they see it through its handoff link, and can edit it in the browser once they take the agent. The executor checks each grant on its own: against its list before
 contacting Workspace, and in `workspace` mode against the access Workspace reports for the grant's session.
 
 The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response
@@ -42,9 +41,9 @@ Instructions follow each connection's visible tools and direct callers to `?tool
 file capabilities missing from their list. With `space_node`, `blob_upload` and `repo_edit` listed, they say how to declare
 checks in `.agents/checks.md` of a repository the caller owns and turn on `landing` `checks`.
 The granted scopes choose the merge workflow. A connection that has `worktree:merge` and `pr_merge` in its list is told
-to mark the verified pull request ready, merge it, and give the user the pull request link, or for an agent's file in its
-Personal Space the `share` link. Link Sharing applies only to Personal Space files, so an agent in a Team repository gives
-the pull request link.
+to mark the verified pull request ready, merge it, and give the user the pull request link. An unclaimed agent that
+lists `claim` is told instead that it is a temporary agent, and to give the user its handoff link from `claim` when it is
+done: the user opens it to see the agent's work and signs in to take the agent.
 A person, and a claimed agent, are told instead to give the pull request link to the user, or to the person who claimed the
 agent, and stop, when that person asked to review the work or the change needs a person's decision; nothing enforces either
 choice. Any other connection is told to hand over the pull request link and leave merging to the user. The core Skill and the
@@ -58,7 +57,7 @@ without edit access gets `FORBIDDEN` with a message saying so.
 Each Unit in a pull request carries `freshness` from the server: `current`, `behind` or `stale` for a file from trunk while the
 pull request is draft or ready, otherwise null. When `pr_view` is listed, the instructions and the `freshness` description in its output schema say what each label means and tell
 the caller to redo a stale pull request in a new one and then discard the stale one. Freshness never blocks a merge.
-An unclaimed agent also gets `claim`, which its `share` result points to; a person and a claimed agent see neither.
+An unclaimed agent gets `claim` and no `share`, because the server refuses it Link Sharing; a person and a claimed agent get `share` and no `claim`.
 With `search` listed, the instructions and the core Skill tell the caller that, asked to check its work or given no task, it
 finds the work itself: `search` for open Issues assigned to it, also those sent back, for Issues it wrote that wait for its
 verdict, and for reviewable pull requests. They tell it to submit each Issue it finishes with `issue_verdict`, that some repositories accept a submitted Issue by deadline unless it is sent back, and to treat Issue and
@@ -189,25 +188,25 @@ carries a short-lived downstream session, the user and the granted scopes. Produ
 that session. The user's `kind` is `human` or `agent`, and an agent also carries `claimed`. The gateway
 keeps both for an agent and treats any other user as `human`. The kind selects the listed tools and the
 server instructions. Workspace answers a banned agent's token with `invalid_grant`. A client that a signed-in
-person approves with the consent page's default acts for an agent that person owns, new or continued, so its first
+person connects with the connect page's main button acts for an agent that person owns, new or continued, so its first
 exchange already carries `claimed: true`. The exchange of a claimed agent also names its `owner`. The server
-instructions of a claimed agent name that owner, say that the agent sees the owner's files only when they are shared
-with it, and say that to let the client act as the owner, the owner reconnects it and chooses to connect as
-themselves. Its `whoami` result carries `owner`, and its `notice` says the same and tells the agent to tell the user
-this when the user expects it to see their files. Right after a person claims an agent, its cached exchange may still
-lack the owner for up to 30 seconds, and the instructions then say only that a person claimed it.
-An unclaimed agent that reaches the gateway with an OAuth access token was created by a browser sign-in that had no
-Workspace session. Its server instructions and `whoami` `notice` say so, say that a user with a Workspace account who meant
-to connect under it should sign in to Workspace in that browser and reconnect the client, and say that the user can
-otherwise keep the agent by claiming it, naming `claim` only when the connection can call it. Both tell the agent to pass this on in its first reply.
-An agent that made itself with `POST /api/agents` and connects with its PAT, a claimed agent and a person get none of it.
+instructions of a claimed agent name that owner, say that the owner can open everything the agent owns, so the agent
+shows them a repository or file by giving its link, and say that the agent cannot let anyone else see one: the server
+answers such a call with a confirm link, which the agent gives to the user. Its `whoami` result carries `owner`, and its
+`notice` says the same. Right after a person claims an agent, its cached exchange may still
+lack the owner for up to 30 seconds, and the instructions then name only the person who claimed it.
+An unclaimed agent with the `publish` scope that `claim` needs gets one sentence in its server instructions and its
+`whoami` `notice`, however it was created: "You are a temporary agent. When you are done, use claim to get a handoff link
+for the user, who can open it to see your work and sign in to take it." An unclaimed agent without `publish`, a claimed
+agent and a person do not get it.
 Some MCP clients, WorkBuddy 5.11.3 among them, never give the model the server instructions. They pass on tool names,
 the descriptions of the tools the model looks up, and tool results. So an agent's `whoami` description asks it to call
 `whoami` before its first reply, and an agent's `notice` also says, in the instructions' words, how it finishes a pull request.
 With `worktree:merge`, an unclaimed agent marks its own ready and merges it. A claimed agent marks it ready and merges it
-unless the person who claimed it asked to review the work or it needs a person's decision. With the `publish` scope that
-`share` needs, both give the user the `share` url for a merged file in their Personal Space, and the pull request link in a
-Team repository. Without `publish`, they give the pull request link. With `write` but not
+unless the person who claimed it asked to review the work or it needs a person's decision. A claimed agent then gives
+the pull request link. With the `publish` scope that `claim` needs, an unclaimed agent hands its work over with its
+handoff link. Without `publish`, it gives the pull
+request link. With `write` but not
 `worktree:merge`, the agent keeps the draft until the user says the work is finished or asks for review, gives the user the
 pull request link, and leaves merging and discarding to the user. A read-only connection gets no finish rule, and a person's
 `whoami` carries no `notice`. The descriptions of `pr_ready`, `pr_merge` and `execute` point to that `notice`, and to the
@@ -362,12 +361,12 @@ and the matching owner/slug candidates when available.
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `whoami` | None | `{ origin, subject: { id, name }, owner?, budget?, notice? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED`. `owner` is the person who claimed the agent. `notice` is the agent notice of [Authentication](#authentication): the guest or owner facts to tell the user and, with `worktree:merge`, how the agent finishes a pull request. A person gets neither |
+| `whoami` | None | `{ origin, subject: { id, name }, owner?, budget?, notice? }`. For an agent, `budget` reads Workspace and gives `used` and `limit` of `openWorktrees` (its open pull requests, at most 10) and `merges` (those it started in the last 24 hours, at most 50). Past either, `pr_create`, a fork's first write or `pr_merge` gets `AGENT_QUOTA_EXCEEDED`. `owner` is the person who claimed the agent. `notice` is the agent notice of [Authentication](#authentication): the handoff or owner facts to tell the user and, with `worktree:merge`, how the agent finishes a pull request. A person gets neither |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
 | `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Repository fields include `proposals`, `acceptAfterHours` and `capabilities`, what the caller may do there, such as `manageMembers` and `propose`, when the server reports all of them. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL. A fork address shows the fork's upstream |
 | `fork_create` | Required `repo` (a Team repository whose `capabilities.propose` is true), `name` | Fork `{ id, name, fullName, owner, upstream, state, worktree, createdAt }`. `upstream` is the repository with its `url`, `worktree` the open pull request with its `url` or null. Creating the same fork again returns it. Its owner and members may fork. Anyone else may fork a public repository whose `proposals` setting admits them, writes only their own proposals and holds at most 3 open ones there. A caller it does not admit gets `FORBIDDEN` with a message naming the setting, and an unclaimed agent past its 3 forks `AGENT_QUOTA_EXCEEDED` |
-| `fork_list` | None | `{ forks: [...] }`, the caller's own forks |
-| `fork_view` | Required `fork` (`<owner>/<name>` or fork ID) | Fork. Another user's fork is `NOT_FOUND` |
+| `fork_list` | None | `{ forks: [...] }`: the caller's own forks, and those of agents the caller owns |
+| `fork_view` | Required `fork` (`<owner>/<name>` or fork ID) | Fork. Another user's fork is `NOT_FOUND`, unless that user is an agent the caller owns. Only the fork's own owner writes through it |
 | `fork_delete` | Required `fork` | `{ fork, worktree }`. Deletes only the fork. Its open pull request, `worktree`, stays an ordinary pull request of the upstream |
 | `issue_list` | Required `repo`; optional `state` (default `open`), `labels`, `assignee`, `author`, `search`, `limit` (default 30) | `{ issues: [...] }` |
 | `issue_view` | Required `repo`, `number` (`12`, `#12` or Issue URL); optional `comments` | Issue with `pullRequests`, the linked pull requests you may see, plus `timeline` when `comments` is true |
@@ -387,8 +386,8 @@ and the matching owner/slug candidates when available.
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo` (a repository or a fork address); optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }`. A fork lists its upstream without the files its pull request removes and with the files it creates; a created file's `url` opens it in the pull request |
 | `space_find` | Required `repo` (a repository or a fork address), `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
-| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt?, access? }`. `access` says who can open the link and, while Link Sharing is off, the next step the caller can take; the wording follows the caller, not the owner, so a person reading the file of an agent they claimed gets a person's step. The text content repeats these lines. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. A person's token session can read but not write: for a Personal Space file the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error asks the user to share in the browser and gives the file `url`. A link of another origin is `workspace-origin-mismatch`. A file in a Team Space has no Link Sharing, in the browser either: the tool error is `workspace-argument-invalid`, names the repository, and says how to let a person open the file. An unclaimed agent is told to make a claim link with `claim` and give it to the user, because claiming lets that person open its repositories; a claimed agent is pointed to `repo_member_write` or to making the repository public with `repo_edit`, and a person, whose token session cannot make it public, to `repo_member_write` or to asking the user to make it public in the repository settings, whose link the message gives. For an unclaimed agent the result also has `claimHint`, one sentence telling the agent to make a claim link with `claim` and give it to the user so they can keep the file. `share` never makes a claim code, so calling it again never ends a claim link the agent already gave |
-| `claim` | None. Listed only for an unclaimed agent | `{ claimUrl, expiresAt }`: the `<identity origin>/claim/<code>` page where a person signs in and claims the agent. The code works once, for 10 minutes. Scope `publish`, because the person who claims becomes an owner of the agent's files |
+| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt?, access? }`. `access` says who can open the link and, while Link Sharing is off, the next step the caller can take; the wording follows the caller, not the owner, so a person reading the file of an agent they claimed gets a person's step. The text content repeats these lines. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. Turning the link on, or raising it to `editor`, needs a person in a browser: the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`, and the tool error carries the confirm link to give the user (see [Confirm links](#confirm-links)). An unclaimed agent does not list `share`: the server answers its Link Sharing writes with `AGENT_NOT_ALLOWED`, and it shows its work with `claim`. A link of another origin is `workspace-origin-mismatch`. A file in a Team Space has no Link Sharing, in the browser either: the tool error is `workspace-argument-invalid`, names the repository, and points to `repo_member_write` and `repo_edit`. `expiresAt` appears while the owner is an unclaimed agent: the date that agent, and any link it turned on earlier, stops working unless the agent is used before then |
+| `claim` | None. Listed only for an unclaimed agent | `{ claimUrl, expiresAt }`: the agent's handoff link, `<identity origin>/claim/<code>`. Whoever opens it sees everything the agent owns, read-only and live, without signing in, private repositories included, and a person signs in there to take the agent. The link works for 7 days, or until a person takes the agent; the agent gives the same link again and calls `claim` again only when the link is lost or has expired. An agent keeps at most 10 working links. Scope `publish`, because the link shows the agent's files and the person who takes the agent becomes their owner |
 | `unit_list` | Required `worktree` (Worktree ID or fork address) | `{ units: [...] }`, each with the pull request page `url`. A clean fork lists none |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space` (a fork address names its upstream), `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `from` (a file link or Node ID of a file the caller can open; not with a fork address), `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit. With `from` the Unit is a copy of that file with its content and images, `type` must be its type, and the merged file records it as its source. An unreadable `from` is `workspace-not-found` |
@@ -478,10 +477,10 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `public`, `proposals` (`members`, the default, `accountable` or `anyone`) | Repository with `url`. Takes effect immediately. A person's token session cannot create a public repository: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error says to create it private and ask the user to make it public in the browser. An agent owns the repository it creates. An unclaimed agent cannot create a public one (`AGENT_NOT_ALLOWED`, with a message saying that a person's claim lifts this and lets that person open every Space the agent owns) and owns at most 3 (`AGENT_QUOTA_EXCEEDED`). `proposals` says who besides members may fork and propose while the repository is public: `accountable` admits any person or claimed agent who can read it, `anyone` also unclaimed agents |
-| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `proposals` (`members`, `accountable` or `anyone`), `acceptAfterHours` (1 to 720, or `null` for off), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references. `visibility` `public` is refused to a person's token session (`INTERACTIVE_SESSION_REQUIRED`), so the user makes the repository public in the browser, and the tool error gives the repository settings `url`. It is refused to an unclaimed agent too (`AGENT_NOT_ALLOWED`), and the message says that a person's claim lifts this and lets that person open every Space the agent owns. The owner or an admin may change `proposals` and `acceptAfterHours`, the hours after which a submitted Issue nobody sent back is accepted by deadline, and turning it on or lowering it accepts every submitted Issue already past the new deadline within a minute; moving back to `members`, or making the repository private, freezes non-members' drafts, and their ready pull requests stay for review |
+| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `proposals` (`members`, the default, `accountable` or `anyone`) | Repository with `url`. Takes effect immediately. The repository is private, and `repo_edit` makes it public. An agent owns the repository it creates. An unclaimed agent owns at most 3 (`AGENT_QUOTA_EXCEEDED`). `proposals` says who besides members may fork and propose while the repository is public: `accountable` admits any person or claimed agent who can read it, `anyone` also unclaimed agents |
+| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `proposals` (`members`, `accountable` or `anyone`), `acceptAfterHours` (1 to 720, or `null` for off), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references. `visibility` `public` needs a person in a browser: the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`, and the tool error carries the confirm link to give the user (see [Confirm links](#confirm-links)). An unclaimed agent gets `AGENT_NOT_ALLOWED` instead. The owner or an admin may change `proposals` and `acceptAfterHours`, the hours after which a submitted Issue nobody sent back is accepted by deadline, and turning it on or lowering it accepts every submitted Issue already past the new deadline within a minute; moving back to `members`, or making the repository private, freezes non-members' drafts, and their ready pull requests stay for review |
 | `repo_member_list` | Required `repo` (a Team repository) | `{ owner, members }`. `owner` and each member's `user` and `grantedBy` are `{ id, username, displayName }`; a member also has `role` (`admin`, `editor`, `viewer`), `createdAt` and `updatedAt` |
-| `repo_member_write` | Required `repo`, `action` (`add`, `edit`, `remove`), `user` (a username or user ID); `role` for add and edit | The member, or `{ removed }` with the username. Takes effect immediately. `add` finds the user through user search, which finds a claimed agent by its username and never an unclaimed or stopped one; adding someone who is already a member changes their role. `edit` and `remove` take a current member, so a stopped agent can still be removed, and a member can remove themselves. Without `capabilities.manageMembers` the server answers `FORBIDDEN`. An agent can be an admin only of a repository an agent owns, and an unclaimed agent can neither add members nor be one: both return `AGENT_NOT_ALLOWED` with a sentence saying so |
+| `repo_member_write` | Required `repo`, `action` (`add`, `edit`, `remove`), `user` (a username or user ID); `role` for add and edit | The member, or `{ removed }` with the username. Takes effect immediately. `add` finds the user through user search, which finds a claimed agent by its username and never an unclaimed or stopped one; adding someone who is already a member changes their role. `edit` and `remove` take a current member, so a stopped agent can still be removed, and a member can remove themselves. Without `capabilities.manageMembers` the server answers `FORBIDDEN`. Adding a member or raising a role needs a person in a browser: the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`, and the tool error carries the confirm link to give the user (see [Confirm links](#confirm-links)). An unclaimed agent gets `AGENT_NOT_ALLOWED` instead. An agent can be an admin only of a repository an agent owns, and an unclaimed agent cannot be a member: both return `AGENT_NOT_ALLOWED` with a sentence saying so |
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
@@ -490,6 +489,20 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
 | `resources_export` | Required `handles` (`<registryId>/<resourceId>`); optional `cursor` | `{ resources: [{ handle, svg }], failed: [{ handle, code, message }] }`. The SVG text itself, written nowhere. A page may carry `truncated` and `cursor` |
+
+### Confirm links
+
+Only a person signed in to Workspace in a browser lets more people see data. Three tools can ask for that: `repo_edit`
+with `visibility` `public`, `repo_member_write` adding a member or raising a role, and `share` turning the link on or
+raising it to `editor`. For any connection, a person's included, the server changes nothing and answers
+`403 INTERACTIVE_SESSION_REQUIRED` with the path of a confirm page. The tool error message ends with a sentence
+telling the caller to give the user that link, and `detail.url` carries it as an absolute URL on the identity origin.
+A `url` that resolves to another origin is dropped. The person opens the link, sees the change and its consequence,
+and confirms or gives up. A call that keeps or lowers the stored access, such as making a repository private, removing
+a member or turning a link off, runs as before.
+
+An unclaimed agent has no person to confirm for it. Every such call returns `AGENT_NOT_ALLOWED` with a message
+telling it to give the user its handoff link from `claim`.
 
 ## SVG resource catalog
 
@@ -603,6 +616,8 @@ Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `for
 `pr_merge`, `pr_discard` and `pr_revert`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `fork_delete`, `repo_edit`, `repo_member_write`, `label_write`, `space_node`, `pr_merge`, `pr_discard` and `pr_revert`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
+People choose between two tiers, on the connect page and in the personal access token dialog: read only grants `read`, and read and write grants all four scopes.
+The four scopes stay internal, used by the exchange, the tool checks and Web Agents' per-call approvals. Personal access tokens created with a narrower list keep it.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
 `workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in

@@ -46,7 +46,7 @@ import type {
 } from "@univerjs-pro/collaboration-worktree-service";
 import { Router, type RequestHandler } from "express";
 import { assertCeiling, type AccessResolver, type ResourceContentAccess, type UnitType } from "../../modules/access/index.js";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
+import type { IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule, WorktreeUnit } from "../../modules/worktrees/index.js";
 import {
   WORKTREE_CHANGE_FEED_PATH,
@@ -385,7 +385,7 @@ export function createCollaborationGateway(options: {
     }
     context.userID = session
       ? session.user.id
-      : ANONYMOUS_USER_ID;
+      : (await identity.getReader(cookieHeader(context))).userId;
     if (session) {
       context.customData.sessionId = session.sessionId;
       context.customData.sessionExpiresAt = session.expiresAt;

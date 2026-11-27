@@ -32,7 +32,7 @@ describe("spaces and Nodes", () => {
     const personalSpace = listed.spaces[0];
     if (!personalSpace) throw new Error("Personal space is missing");
 
-    const teamSpace = await application.spaces.createTeamSpace(alice, {
+    const teamSpace = await application.spaces.createTeamSpace(interactivePrincipal(alice), {
       name: "Product",
     });
     expect((await application.spaces.list(alice)).spaces).toHaveLength(2);

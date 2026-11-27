@@ -126,11 +126,11 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-trashed.json")
 $V mcp --as trashed mpt-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mpt-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mpt-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mpt-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
-$V cli mpt-member repo member add "$A" --role editor -R "$R" --json
+$V person mpt-member repo member add "$A" --role editor -R "$R" --json
 $V cli mpt-issue issue create -R "$R" -t "Fill in North and Summary" -b "Put the North total in North and a title in Summary." -a "$A" --json number
 N=$(jq -r .number "$EVIDENCE/mpt-issue.out")
 $V mcp --as trashed mpt-pr pr_create "$(jq -nc --arg r "$R" --argjson n "$N" '{repo:$r,title:"Fill in North and Summary",issue:$n,visibility:"space"}')"

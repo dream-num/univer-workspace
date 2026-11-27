@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "./principal.js";
 /** Disposable real HTTP/OT server for the repository PR browser checks.
  * Run from apps/workspace: node --import tsx test/fixtures/pull-requests-server.ts
  * Then start dev:web (5173). Never opens the normal .data databases. */
@@ -28,7 +29,7 @@ const issued = await application.identity.registerWithPassword({
   password,
 });
 const userId = issued.view.user.id;
-const space = await application.spaces.createTeamSpace(userId, { name: "quarterly-planning" });
+const space = await application.spaces.createTeamSpace(interactivePrincipal(userId), { name: "quarterly-planning" });
 const tasks: Record<string, string> = {};
 for (const [key, name, summary, state] of [
   [

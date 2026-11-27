@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSqliteTestApplication,
@@ -79,14 +80,14 @@ describe("Trash Batches", () => {
     const app = await createTestApplication();
     const owner = await register(app, "trash-space-owner");
     const admin = await register(app, "trash-space-admin");
-    const space = await app.spaces.createTeamSpace(owner.id, { name: "Trash permissions" });
-    await app.permissions.upsertTeamMember(owner.id, space.id, admin.id, { role: "admin" });
+    const space = await app.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Trash permissions" });
+    await app.permissions.upsertTeamMember(interactivePrincipal(owner.id), space.id, admin.id, { role: "admin" });
     const active = await createResource(app, owner.id, space.id, null, "Active sheet");
     const trashed = await createResource(app, owner.id, space.id, null, "Trashed sheet");
     const batch = await app.trash.trashNode(admin.id, trashed.node.id);
     expect((await app.trash.list(admin.id, space.id, {})).items[0]?.id).toBe(batch.id);
 
-    await app.permissions.upsertTeamMember(owner.id, space.id, admin.id, { role: "viewer" });
+    await app.permissions.upsertTeamMember(interactivePrincipal(owner.id), space.id, admin.id, { role: "viewer" });
     const repository = app.repositories.trash;
     await expect(repository.trashNode({
       batchId: "stale-admin", nodeId: active.node.id, createdBy: admin.id, createdAt: Date.now(),

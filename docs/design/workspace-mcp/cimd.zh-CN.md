@@ -31,7 +31,7 @@ type ClientSource =
 interface CimdClient {                                // 抓取并校验后的文档，只存内存
   clientId: CimdClientId;                             // 品牌类型，等于文档里的 client_id
   clientName: string | null;
-  host: string;                                       // 同意页展示用
+  host: string;                                       // 连接页展示用
   redirectUris: readonly string[];
   grantTypes: readonly ("authorization_code" | "refresh_token")[];
   expiresAt: number;                                  // 缓存到期时间
@@ -88,21 +88,20 @@ query 在草案里是 SHOULD NOT，这里直接拒绝，少一类边界情况；
 
 ### 3.6 流程变更
 
-`GET /api/auth/authorize` 与 `GET /api/auth/authorize/consent`：
+`GET /api/auth/authorize`：
 
-1. 解析 `ClientSource`。`cimd` 时先检查是否登录。未登录直接重定向到登录页，不抓取。默认开启的密码注册让任何人都能拿到 session，所以这一步不是访问控制，只是让每次抓取都能归属到一个用户，供 3.3 的每用户并发上限使用。
-   访客 agent 上线后有一个例外：未登录的人在登录页选择 **Continue as a guest agent** 时，`POST /api/auth/guest` 在创建 agent 之前就抓取文档，用来校验授权请求并取得 agent 的名字。这次抓取按来源 IP 归属，同样受每个来源 1 个的并发上限约束（`createGuestAuthorizationCheck`）。
-   第二个例外：访客 agent 开启、`redirect_uri` 是 loopback `http` 时，未登录的 `GET /api/auth/authorize` 不跳登录页，按来源 IP 做同样的匿名抓取，然后直接给客户端一个访客 agent 的授权码（`authorizeGuest`）。
-2. 已登录时抓取或命中缓存，得到 `CimdClient`，之后与 DCR 客户端走同一条 `parseMcpAuthorizationRequest`。
-3. 抓取或校验失败时显示错误页（400，可重试的网络错误为 503），不重定向回客户端（草案 6.1，此时 `redirect_uri` 未经验证）。
+1. 解析 `ClientSource`。`cimd` 时，已登录的人的抓取归属到这个用户，供 3.3 的每用户并发上限使用。没有人登录时，开启访客 agent 的部署按来源 IP 匿名抓取，用来在连接页上显示核验过的名字（[agent 身份与访问重设计](../agent-identity-and-access.zh-CN.md) 第 5.2 节）。匿名抓取受每个来源 1 个的并发上限和每小时 10 次的限制，被拒时重定向到登录页。关闭访客 agent 时，未登录直接重定向到登录页，不抓取。
+   连接页上的 **Try without signing in** 提交到 `POST /api/auth/authorize/guest`，签发访客 agent 的授权码之前再按来源 IP 解析一次（`authorizeGuest`），文档这时通常已在缓存里。
+2. 抓取或命中缓存，得到 `CimdClient`，之后与 DCR 客户端走同一条 `parseMcpAuthorizationRequest`。
+3. 抓取或校验失败时显示错误页（400，可重试的网络错误为 503），不重定向回客户端（草案 6.1，此时 `redirect_uri` 未经验证）。没有人登录时，错误页不说明原因。
 
-`POST /api/auth/authorize/consent`：使用同意页保存的请求，不重新抓取。
+`POST /api/auth/authorize/consent`：使用连接页保存的请求，不重新抓取。
 
 `POST /api/auth/token` 与 `POST /api/auth/revoke`：`cimd` 客户端只做语法校验，不抓取。refresh 不重新抓取文档：refresh 不涉及重定向，文档变化只影响下一次授权。草案建议定期重新抓取并在 `client_id` 不再匹配时吊销 refresh token，这里推迟，见第 7 节。
 
 对 MCP 客户端（DCR 和 CIMD）的每一个授权响应增加 `iss` 参数，包括成功、错误重定向和拒绝（RFC 9207，草案第 7 节要求）。授权服务器元数据增加 `authorization_response_iss_parameter_supported: true`。成功回调与静态客户端共用同一个构造函数，只在 MCP 请求上加 `iss`，静态客户端的回调不变。
 
-### 3.7 同意页
+### 3.7 连接页
 
 CIMD 客户端显示文档里的名称和 `client_id` 的主机名，例如 `Claude Code (claude.ai)`（草案 10.6、10.9）。没有名称时只显示主机名。
 DCR 客户端的显示不变。

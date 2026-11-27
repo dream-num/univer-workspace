@@ -93,6 +93,18 @@ describe("personal access tokens", () => {
 
 });
 
+describe("a person's CLI login", () => {
+  it("cannot create tokens, and can still list them", async () => {
+    const origin = await start();
+    await register(origin, "alice");
+    const signedIn = await post(origin, "/api/auth/cli/password/login", undefined, { username: "alice", password: "correct horse battery staple" });
+    const cli = signedIn.headers.get("set-cookie")!.split(";", 1)[0]!;
+    const refused = await post(origin, "/api/auth/tokens", cli, { name: "escalate" });
+    expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: { code: "INTERACTIVE_SESSION_REQUIRED" } } });
+    expect(await (await fetch(`${origin}/api/auth/tokens`, { headers: { cookie: cli } })).json()).toEqual({ tokens: [] });
+  });
+});
+
 describe("token-issued sessions", () => {
   it("cannot create tokens, approve CLI logins, authorize OAuth clients or link identities", async () => {
     const origin = await start();
@@ -102,7 +114,7 @@ describe("token-issued sessions", () => {
     const downstream = `workspace_session=${access_token}`;
     const forbidden = async (response: Response) => {
       expect(response.status).toBe(403);
-      expect(((await response.json()) as { error: { code: string } }).error.code).toBe("FORBIDDEN");
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe("INTERACTIVE_SESSION_REQUIRED");
     };
 
     await forbidden(await post(origin, "/api/auth/tokens", downstream, { name: "escalate" }));
@@ -133,13 +145,12 @@ describe("token-issued sessions", () => {
       code_challenge: "c".repeat(43),
       scope: "identity",
     });
-    await forbidden(await fetch(`${origin}/api/auth/authorize/consent?${consentQuery}`, { headers: { cookie: downstream } }));
-    expect((await fetch(`${origin}/api/auth/authorize/consent?${consentQuery}`, { headers: { cookie: alice.cookie } })).status).toBe(200);
+    expect((await fetch(`${origin}/api/auth/authorize?${consentQuery}`, { headers: { cookie: alice.cookie } })).status).toBe(200);
     const consentPost = (cookie: string) =>
       fetch(`${origin}/api/auth/authorize/consent`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-        body: new URLSearchParams({ consent_token: "any", decision: "allow" }),
+        body: new URLSearchParams({ consent_token: "any" }),
         redirect: "manual",
       });
     await forbidden(await consentPost(downstream));
@@ -185,7 +196,7 @@ describe("token-issued sessions", () => {
     const newPassword = "another correct horse staple";
     const denied = await change(`workspace_session=${access_token}`, "wrong password entirely", newPassword);
     expect(denied.status).toBe(403);
-    expect(((await denied.json()) as { error: { code: string } }).error.code).toBe("FORBIDDEN");
+    expect(((await denied.json()) as { error: { code: string } }).error.code).toBe("INTERACTIVE_SESSION_REQUIRED");
     expect((await change(`workspace_session=${access_token}`, oldPassword, newPassword)).status).toBe(403);
     expect((await change(alice.cookie, oldPassword, newPassword)).status).toBe(204);
   });

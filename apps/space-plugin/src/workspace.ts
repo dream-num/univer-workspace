@@ -18,8 +18,19 @@ export class SpaceError extends Error {
   constructor(
     public status: number,
     message: string,
+    public url?: string,
   ) {
     super(message);
+  }
+}
+
+function browserLink(raw: unknown, origin: string): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  try {
+    const url = new URL(raw, origin);
+    return url.origin === origin ? url.href : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -229,6 +240,7 @@ export class WorkspaceConnection {
           body?.error?.message ??
             body?.message ??
             `Workspace returned HTTP ${response.status}.`,
+          browserLink(body?.error?.url, this.endpoint),
         );
       }
       return response;

@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 
@@ -7,7 +7,8 @@ const GATEWAY_ID = "univer-workspace-mcp-gateway";
 const GATEWAY_SECRET = "test-gateway-secret-at-least-32-characters";
 const RESOURCE = "https://mcp.example.test/mcp";
 const USERNAME = /^[\p{L}\p{N}._-]{1,64}$/u;
-const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000;
+const THIRTY_DAYS = 30 * DAY;
 
 interface Agent {
   readonly id: string;
@@ -18,6 +19,7 @@ const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
@@ -124,7 +126,8 @@ describe("POST /api/agents", () => {
 });
 
 describe("POST /api/auth/guest", () => {
-  it("creates an agent and signs the browser in as it", async () => {
+  it("creates an agent and signs a CLI in as it, with a session that renews while in use", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
     const { origin } = await start();
     const response = await post(origin, "/api/auth/guest", {});
     expect(response.status).toBe(201);
@@ -135,11 +138,18 @@ describe("POST /api/auth/guest", () => {
     const setCookie = response.headers.get("set-cookie")!;
     expect(setCookie).toMatch(/^workspace_session=[^;]+;.*HttpOnly/u);
 
-    const session = await fetch(`${origin}/api/session`, { headers: { cookie: setCookie.split(";", 1)[0]! } });
-    expect(await session.json()).toMatchObject({ authenticated: true, user: body.agent });
+    const cookie = setCookie.split(";", 1)[0]!;
+    const session = async () => (await (await fetch(`${origin}/api/session`, { headers: { cookie } })).json()) as { authenticated: boolean };
+    expect(await session()).toMatchObject({ authenticated: true, user: body.agent });
+    vi.setSystemTime(Date.now() + 0.75 * DAY);
+    expect(await session()).toMatchObject({ authenticated: true });
+    vi.setSystemTime(Date.now() + 0.5 * DAY);
+    expect(await session(), "used past its first day, it lives on").toMatchObject({ authenticated: true });
   });
+});
 
-  it("names the guest after the registered OAuth client it continues, cleaned, bounded and told apart by a suffix", async () => {
+describe("POST /api/auth/authorize/guest, the connect page's try button", () => {
+  it("names the guest after the registered OAuth client, cleaned, bounded and told apart by a suffix", async () => {
     const { origin } = await start({
       agentCreateLimitPerHour: 100,
       mcpOAuth: { issuer: "https://space.example.test", resources: [RESOURCE], maxRegisteredClients: 100 },
@@ -152,17 +162,29 @@ describe("POST /api/auth/guest", () => {
       expect(response.status).toBe(201);
       return ((await response.json()) as { client_id: string }).client_id;
     };
-    const guest = async (clientId: string, label?: string) => {
+    const guest = async (clientId: string) => {
       const oauthAuthorization = new URLSearchParams({
         response_type: "code", client_id: clientId, redirect_uri: "http://127.0.0.1:9/callback", resource: RESOURCE,
         code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256",
       }).toString();
-      const response = await post(origin, "/api/auth/guest", { oauthAuthorization, ...(label === undefined ? {} : { label }) });
-      expect(response.status).toBe(201);
-      const cookie = response.headers.get("set-cookie")!.split(";", 1)[0]!;
-      return ((await (await fetch(`${origin}/api/session`, { headers: { cookie } })).json()) as {
-        user: { username: string; displayName: string };
-      }).user;
+      const response = await fetch(`${origin}/api/auth/authorize/guest`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ oauthAuthorization }),
+        redirect: "manual",
+      });
+      expect(response.status).toBe(303);
+      const code = new URL(response.headers.get("location")!).searchParams.get("code")!;
+      const issued = await fetch(`${origin}/api/auth/token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code", client_id: clientId, code, redirect_uri: "http://127.0.0.1:9/callback",
+          code_verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk", resource: RESOURCE,
+        }),
+      });
+      const { access_token: accessToken } = (await issued.json()) as { access_token: string };
+      return ((await (await exchange(origin, accessToken, RESOURCE)).json()) as { user: { username: string; displayName: string } }).user;
     };
 
     const claudeCode = await register("Claude Code");
@@ -178,7 +200,6 @@ describe("POST /api/auth/guest", () => {
     const surrogate = await guest(await register("Claude\uD800Code"));
     expect(surrogate.displayName).toBe(`ClaudeCode · ${surrogate.username.slice(-4)}`);
 
-    expect(await guest(claudeCode, "Budget bot")).toMatchObject({ displayName: "Budget bot" });
     for (const clientId of [await register(), await register("\u202E\u2066\n"), await register("\u3164\u2800")]) {
       const unnamed = await guest(clientId);
       expect(unnamed.username).toMatch(/^agent-[a-z0-9]{4}$/u);
@@ -298,7 +319,7 @@ function post(origin: string, path: string, body: unknown, headers: Record<strin
   });
 }
 
-function exchange(origin: string, subjectToken: string): Promise<Response> {
+function exchange(origin: string, subjectToken: string, resource?: string): Promise<Response> {
   return fetch(`${origin}/api/auth/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -308,6 +329,7 @@ function exchange(origin: string, subjectToken: string): Promise<Response> {
       client_id: GATEWAY_ID,
       client_secret: GATEWAY_SECRET,
       subject_token: subjectToken,
+      ...(resource === undefined ? {} : { resource }),
     }),
   });
 }

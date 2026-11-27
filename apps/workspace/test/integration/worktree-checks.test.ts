@@ -41,9 +41,9 @@ it("records check results on the ready content, counts only those of someone who
     username, displayName: username, password: "correct horse battery staple",
   })).view.user.id;
   const [owner, viewer, editor] = [await register("owner"), await register("viewer"), await register("editor")];
-  const { id: team } = await application.spaces.createTeamSpace(owner, { name: "Sales" });
-  await application.permissions.upsertTeamMember(owner, team, viewer, { role: "viewer" });
-  await application.permissions.upsertTeamMember(owner, team, editor, { role: "editor" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Sales" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, viewer, { role: "viewer" });
+  await application.permissions.upsertTeamMember(interactivePrincipal(owner), team, editor, { role: "editor" });
   const folder = await application.nodes.create(owner, { spaceId: team, parentNodeId: null, name: ".agents" });
   const bytes = Buffer.from(CHECKS_MD);
   const { body: upload } = await application.blobs.createUpload(interactivePrincipal(owner), randomUUID(), {

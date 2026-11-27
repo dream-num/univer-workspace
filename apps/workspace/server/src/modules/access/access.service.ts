@@ -1,4 +1,4 @@
-import { ANONYMOUS_USER_ID, principalCategory, type AgentBudget, type PrincipalCategory } from "../identity/index.js";
+import { isUserlessReader, principalCategory, type AgentBudget, type PrincipalCategory } from "../identity/index.js";
 import { agentBudget, assertCeiling, landsByChecks } from "./ceilings.js";
 import type {
   AccessRepository,
@@ -71,7 +71,7 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     },
     async resolveOwnedResources(userId, resourceIds) {
       const resources = new Map<string, ResourceAccess>();
-      if (userId === ANONYMOUS_USER_ID) return resources;
+      if (isUserlessReader(userId)) return resources;
       // The repository checks ownership for every candidate.
       for (const row of await repository.resolveOwnedResources(userId, resourceIds)) {
         const resource = resolveStoredResourceAccess(row, resolveStoredNodeAccess(userId, row));
@@ -137,7 +137,7 @@ export function resolveStoredNodeAccess(userId: string, row: ResolvedNodeRow | n
   const { regularRole, role } = resolvedRoles(userId, row);
   if (!role) return null;
   const navigationRootNodeId =
-    role === "owner" || row.space_type === "team" || Boolean(row.public_read)
+    role === "owner" || row.space_type === "team" || readerRole(row) !== null
       ? null
       : row.navigation_root_id;
   return {
@@ -222,10 +222,10 @@ export function requesterCategory(
 
 export function resolveStoredSpaceAccess(userId: string, row: StoredSpaceAccess): SpaceAccess | null {
   const assignedRole = row.owned ? "owner" : row.memberRole;
-  const member = userId !== ANONYMOUS_USER_ID && assignedRole !== null;
+  const member = !isUserlessReader(userId) && assignedRole !== null;
   const role = highestRole(
-    userId === ANONYMOUS_USER_ID ? null : assignedRole,
-    row.publicRead ? "viewer" : null,
+    isUserlessReader(userId) ? null : assignedRole,
+    readerRole({ public_read: row.publicRead, previewed: row.previewed }),
   );
   if (!role) return null;
   return {
@@ -286,6 +286,10 @@ export function resourceCapabilities(
   };
 }
 
+function readerRole(row: { readonly public_read: unknown; readonly previewed: unknown }): "viewer" | null {
+  return row.public_read || row.previewed ? "viewer" : null;
+}
+
 function linkSharingNodeCapabilities(): NodeCapabilities {
   return {
     browseChildren: true,
@@ -339,8 +343,8 @@ function resolvedRoles(userId: string, row: NodeAuthorizationRow) {
         ? row.member_role
         : row.grant_role;
   const regularRole = highestRole(
-    userId === ANONYMOUS_USER_ID ? null : assignedRole,
-    row.public_read ? "viewer" : null,
+    isUserlessReader(userId) ? null : assignedRole,
+    readerRole(row),
   );
   const requester = requesterCategory(row);
   // The anonymous reader and an unclaimed agent cost nothing to create, so a link never lets them edit.

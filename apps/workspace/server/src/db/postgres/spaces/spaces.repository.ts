@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import { resolveStoredSpaceAccess, type ExposureGuard } from "../../../modules/access/index.js";
 import { spaceNotFound, spaceUpdateForbidden } from "../../../modules/spaces/spaces.errors.js";
 import type {
   CreateTeamSpaceInput, SpaceListEntry, SpaceListScope, SpaceSettingsPatch, SpacesRepository,
@@ -68,13 +68,14 @@ export class PostgresSpacesRepository implements SpacesRepository {
   }
 
   async updateSettings(
-    userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number,
+    userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number, guard: ExposureGuard<"public">,
   ): Promise<SpaceListEntry | null> {
     try {
       return await withPostgresTransaction(this.pool, async (client) => {
         const before = await findSpaceView(client, userId, { spaceId });
         if (!before) throw spaceNotFound();
         if (!resolveStoredSpaceAccess(userId, before)?.capabilities.renameSpace) throw spaceUpdateForbidden();
+        guard(before.publicRead ? "public" : null);
         if (settings.slug !== undefined && (await client.query(
           `SELECT 1 FROM forks WHERE owner_user_id = $1 AND lower(name COLLATE "C") = lower($2::text COLLATE "C")`,
           [before.ownerUserId, settings.slug],

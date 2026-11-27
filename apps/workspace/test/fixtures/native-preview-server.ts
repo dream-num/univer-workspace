@@ -55,7 +55,7 @@ const upload = await application.blobs.createUpload(interactivePrincipal(userId)
   name: "Connected workspace.univer.html", originalFilename: "Connected workspace.univer.html", byteSize: bytes.length, declaredMediaType: "text/html" });
 await application.blobs.upload(userId, upload.body.upload.id, String(bytes.length), Readable.from([bytes]));
 const result = await application.blobs.complete(interactivePrincipal(userId), upload.body.upload.id);
-await application.permissions.updateNodeLinkSharing(userId, result.body.node!.id, { enabled: true, role: "viewer" });
+await application.permissions.updateNodeLinkSharing(interactivePrincipal(userId), result.body.node!.id, { enabled: true, role: "viewer" });
 const info = { sheetId, origin: "http://127.0.0.1:3091", nodeId: result.body.node?.id, units,
   cookieName: application.identity.cookieName, cookieValue: issued.cookieValue, username: "preview-owner", password };
 writeFileSync(join(directory, "session.json"), JSON.stringify(info), { mode: 0o600 });

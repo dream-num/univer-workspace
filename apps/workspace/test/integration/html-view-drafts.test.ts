@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -193,8 +194,8 @@ describe("HTML View draft HTTP API", () => {
     const hidden = (await c.application.worktrees.create(other.view.user.id, crypto.randomUUID(), { kind: "user", name: "Private", summary: null })).body;
     expect((await c.send("", { ...body, sourceWorktreeId: hidden.id }, crypto.randomUUID())).status).toBe(404);
     expect((await c.send("", { ...body, sourceWorktreeId: "missing" }, crypto.randomUUID())).status).toBe(404);
-    const team = await c.application.spaces.createTeamSpace(other.view.user.id, { name: "Summary only" });
-    await c.application.permissions.upsertTeamMember(other.view.user.id, team.id, c.userId, { role: "admin" });
+    const team = await c.application.spaces.createTeamSpace(interactivePrincipal(other.view.user.id), { name: "Summary only" });
+    await c.application.permissions.upsertTeamMember(interactivePrincipal(other.view.user.id), team.id, c.userId, { role: "admin" });
     const restricted = (await c.application.worktrees.create(other.view.user.id, crypto.randomUUID(), { kind: "team", teamSpaceId: team.id, name: "Summary", visibility: "private", summary: null })).body;
     expect((await c.application.worktrees.get(c.userId, restricted.id)).worktree.capabilities.review).toBe(false);
     expect((await c.send("", { ...body, sourceWorktreeId: restricted.id }, crypto.randomUUID())).status).toBe(404);

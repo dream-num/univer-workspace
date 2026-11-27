@@ -43,7 +43,7 @@ function CliLoginPage() {
     );
   }
 
-  if (!session.data?.authenticated) {
+  if (!session.data?.authenticated || session.data.user.kind !== "human") {
     const returnTo = `/cli-login${
       initialUserCode ? `?userCode=${encodeURIComponent(initialUserCode)}` : ""
     }`;

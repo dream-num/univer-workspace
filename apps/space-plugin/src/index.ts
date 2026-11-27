@@ -322,7 +322,7 @@ export function apply(ctx: Context) {
             error instanceof SpaceError
               ? error.message
               : 'Space request failed or was canceled.',
-          details: {},
+          details: error instanceof SpaceError && error.url ? { url: error.url } : {},
         },
       };
     }

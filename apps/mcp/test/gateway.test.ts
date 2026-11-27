@@ -677,7 +677,7 @@ describe("gateway over real HTTP and the MCP client", () => {
           (tool) => tool.name,
         );
       const agentAdmin = adminNames;
-      const agentCore = claimed ? coreNames : coreNames.flatMap((name) => (name === "share" ? [name, "claim"] : [name]));
+      const agentCore = claimed ? coreNames : coreNames.map((name) => (name === "share" ? "claim" : name));
       expect(await names("")).toEqual([...agentCore, ...agentCoreNames]);
       expect(await names("?toolsets=core")).toEqual([...agentCore, ...agentCoreNames]);
       expect(await names("?toolsets=files")).toEqual(filesNames);
@@ -697,19 +697,19 @@ describe("gateway over real HTTP and the MCP client", () => {
   it("records the principal kind and category on every usage event and the shared file on a share event", async () => {
     await (await connect()).callTool({ name: "whoami", arguments: {} });
     principal = { kind: "agent", claimed: false };
+    await (await connect()).callTool({ name: "whoami", arguments: {} });
+    principal = { kind: "agent", claimed: true };
     const shared = await (await connect()).callTool({
       name: "share",
       arguments: { node: `${identityOrigin}/nodes/node-1`, link: "viewer" },
     });
     expect(shared.isError).not.toBe(true);
-    principal = { kind: "agent", claimed: true };
-    await (await connect()).callTool({ name: "whoami", arguments: {} });
     expect(
       events().map(({ tool, principal_kind, principal_category, node_id }) => ({ tool, principal_kind, principal_category, node_id })),
     ).toEqual([
       { tool: "whoami", principal_kind: "human", principal_category: "human", node_id: undefined },
-      { tool: "share", principal_kind: "agent", principal_category: "agent_unclaimed", node_id: "node-1" },
-      { tool: "whoami", principal_kind: "agent", principal_category: "agent_claimed", node_id: undefined },
+      { tool: "whoami", principal_kind: "agent", principal_category: "agent_unclaimed", node_id: undefined },
+      { tool: "share", principal_kind: "agent", principal_category: "agent_claimed", node_id: "node-1" },
     ]);
   });
 
@@ -730,7 +730,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"5a9e4b6ff1e3b772bc8356bfe85ed0a14eca71797bcf21c2e1cb253c907f7bb4"`);
+    expect(digest).toMatchInlineSnapshot(`"3a6be969ae331dbc2cb6cd679bce960641a4d7d4b0c288b862acac078b954ce2"`);
   });
 
   it("says in pr_view's own output schema what to do with each freshness label, for clients that drop server instructions", async () => {
@@ -744,16 +744,17 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(schema).not.toContain("server instructions");
   });
 
-  it("says in repo_edit and repo_create to make a repository public only when the user asks", async () => {
-    const tools = (await (await connect({ pin: "2026-07-28" }, "?toolsets=admin")).listTools()).tools;
-    const tool = (name: string) => tools.find((candidate) => candidate.name === name);
-    expect(tool("repo_edit")?.description).toContain(
-      "Make a repository public only when the user asks for that. Anyone with the link can then read everything in it.",
-    );
-    expect(JSON.stringify(tool("repo_create")?.inputSchema)).toContain("Let anyone with the link read it. Set it only when the user asks for that.");
+  it("says in each tool that can let more people see data that the user confirms it, and creates repositories private", async () => {
+    const tools = (await (await connect({ pin: "2026-07-28" }, "?toolsets=all")).listTools()).tools;
+    const description = (name: string) => tools.find((candidate) => candidate.name === name)?.description;
+    expect(description("repo_edit")).toContain("Making it public needs the user to confirm it in the browser: the refusal says what to give them.");
+    expect(description("repo_member_write")).toContain("Adding a member or raising a role needs the user to confirm it in the browser: the refusal says what to give them.");
+    expect(description("share")).toContain("Turning the link on or raising it to editor needs the user to confirm it in the browser: the refusal says what to give them.");
+    expect(description("repo_create")).toContain("Create a private Team Space repository; repo_edit makes it public.");
+    expect(JSON.stringify(tools)).not.toContain("only when the user asks for that");
   });
 
-  it("tells an agent to merge and share, and a person or a claimed agent to merge unless asked to hand over", async () => {
+  it("tells an unclaimed agent to merge and hand its work over with claim, and a person or a claimed agent to merge unless asked to hand over", async () => {
     const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
     const review = "Give the user the pull request link so they can review it.";
     const leave = "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
@@ -778,13 +779,11 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(agent).toContain(
       "Once the result is verified, mark the pull request ready with pr_ready, then merge it with pr_merge.",
     );
-    const share =
-      "If the merged file is in your Personal Space, call share with node set to its nodeId and link set to viewer, then give the returned url to the user. Link Sharing does not apply in a Team repository, so there give the user the pull request link.";
-    expect(agent).toContain(share);
-    const limits = "An unclaimed agent identity cannot make a repository public";
-    expect(agent).toContain(limits);
-    expect(human).not.toContain(limits);
-    for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
+    const handoff =
+      "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
+    expect(agent).toContain(handoff);
+    expect(human).not.toContain(handoff);
+    for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when", "call share", "Then give the user the pull request link.", "cannot make a repository public"]) {
       expect(agent).not.toContain(sentence);
     }
     // Without pr_merge in the list, an agent gets the same hand-off as a person without the grant.
@@ -798,10 +797,10 @@ describe("gateway over real HTTP and the MCP client", () => {
       "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person",
     );
     expect(claimed).toContain(
-      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) If the merged file is in your Personal Space, call share",
+      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Then give the user the pull request link.",
     );
-    expect(claimed).toContain(share);
-    expect(claimed).toContain("A file link from someone else gives an agent identity read access only.");
+    expect(claimed, "its owner opens its work by link, and a link for anyone needs the owner to confirm").not.toContain("call share");
+    expect(claimed).not.toContain("read access only");
     const checks = "In a repository that requires checks, report every declared check with pr_check, then merge. If pr_merge refuses one for changing .agents/, give the user its link to merge.";
     expect([human, agent, claimed].every((text) => text.includes(checks))).toBe(true);
     expect(filesOnly).not.toContain(checks);
@@ -814,7 +813,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       "PDF, Markdown, Typst, SVG work, and the tools blob_download, blob_get, blob_replace need ?toolsets=files";
     expect(agent).toContain(agentFilesHint);
     expect(claimed).toContain(agentFilesHint);
-    for (const sentence of [limits, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
+    for (const sentence of [handoff, "nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(claimed).not.toContain(sentence);
     }
   });

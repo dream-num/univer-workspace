@@ -23,7 +23,7 @@ mo1_cleanup() {
   if [[ "$service_configured" == 1 ]]; then
     (cd "$oauth_dir" && opencode service stop) >> "$oauth_dir/journey.out" 2>&1 || result=1
   fi
-  for file in auth.out run.jsonl journey.out consent.snapshot.txt callback.txt authorize.txt; do
+  for file in auth.out run.jsonl journey.out connect.snapshot.txt callback.txt authorize.txt; do
     if [[ -f "$oauth_dir/$file" ]]; then
       mo1_redact "$oauth_dir/$file" > "$EVIDENCE/mcp-oauth-$file" || result=1
     fi
@@ -86,19 +86,15 @@ agent-browser click 'form button[type=submit]'
 agent-browser wait --url '**/home'
 agent-browser open "$authorize_url"
 agent-browser wait --text 'Connect an AI assistant'
-agent-browser snapshot -i -c > "$oauth_dir/consent.snapshot.txt"
-for scope in read write publish worktree:merge; do
-  grep -E "checkbox.*$scope" "$oauth_dir/consent.snapshot.txt"
-done
-grep -E 'button.*Deny' "$oauth_dir/consent.snapshot.txt"
-grep -E 'checkbox.*worktree:merge.*checked=true' "$oauth_dir/consent.snapshot.txt"
-agent-browser find role checkbox click --name 'worktree:merge'
-agent-browser snapshot -i -c > "$oauth_dir/consent.snapshot.txt"
-if grep -E 'checkbox.*worktree:merge.*checked=true' "$oauth_dir/consent.snapshot.txt"; then exit 1; fi
-# MO1 proves opencode acting as the run user, so it leaves the preselected new agent for Yourself.
-agent-browser click 'input[name=connect_as][value=self]'
-agent-browser screenshot "$EVIDENCE/mcp-oauth-consent.png"
-agent-browser find role button click --name 'Allow' --exact
+agent-browser snapshot -i -c > "$oauth_dir/connect.snapshot.txt"
+grep -E 'checkbox.*Let it change content.*checked=true' "$oauth_dir/connect.snapshot.txt"
+grep -E 'button.*Connect as myself' "$oauth_dir/connect.snapshot.txt"
+grep -E 'button.*Deny' "$oauth_dir/connect.snapshot.txt"
+agent-browser uncheck 'input[name=access]'
+agent-browser snapshot -i -c > "$oauth_dir/connect.snapshot.txt"
+if grep -E 'checkbox.*Let it change content.*checked=true' "$oauth_dir/connect.snapshot.txt"; then exit 1; fi
+agent-browser screenshot "$EVIDENCE/mcp-oauth-connect.png"
+agent-browser click 'button[name=connect_as][value=self]'
 agent-browser wait --url 'http://127.0.0.1:*/callback?*'
 callback_url=$(agent-browser get url)
 node - "$callback_url" "$authorize_url" <<'JS'
@@ -107,7 +103,7 @@ const callback = new URL(process.argv[2]), authorize = new URL(process.argv[3]);
 const redirect = new URL(authorize.searchParams.get('redirect_uri'));
 assert.equal(callback.origin + callback.pathname, redirect.origin + redirect.pathname);
 assert.ok(callback.searchParams.get('code'), 'callback contains an authorization code');
-assert.deepEqual(callback.searchParams.get('scope')?.split(' ').sort(), ['publish', 'read', 'write']);
+assert.equal(callback.searchParams.get('scope'), 'read');
 JS
 printf '%s\n' "$callback_url" > "$oauth_dir/callback.txt"
 for ((i=0; i<60; i++)); do

@@ -352,7 +352,8 @@ Identity 模块在 `identity.router.ts` 暴露 PAT 管理路由，在 `oauth-aut
 增加 RFC 8693 `token-exchange` 分支。后者对静态机密 Client（`tokenExchange: true`）验证密钥，在一个事务内调用
 `verifySubjectToken` 与 `issueSession(user, "agent", { ttlMs, issuedFor })`，`ttlMs` 取 10 分钟、Token 剩余有效期与部署 Session 时长的最小值，错误体使用 OAuth 的 `{ error }` 形式。
 创建 PAT、批准 CLI 登录、OAuth `authorize` 与 consent、外部身份 link 的发起与回调都经由 `identity.requireInteractiveSession`，
-拒绝 token exchange 换出的 Session（403）。
+只接受人在 Browser 里登录的 Session（`personInBrowser`），agent、CLI 登录和 token exchange 换出的 Session 都得到 403
+`INTERACTIVE_SESSION_REQUIRED`。
 
 V16 的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via` 是可空来源列，
 仅允许 `browser` 或 `agent`，`NULL` 表示未知。迁移不回填已有行，不新增索引。

@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -119,12 +120,12 @@ describe("Universer Exchange protocol", () => {
     });
     const deckResource = deck.body.node.resource!;
     if (deckResource.kind !== "univer") throw new Error("Expected Univer Resource");
-    await application.permissions.upsertNodeGrant(owner.userId, deck.body.node.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner.userId), deck.body.node.id, viewer.userId, { role: "viewer" });
     const start = () => startTask(origin, viewer.cookie, `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`, {
       unitID: deckResource.unitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX,
     });
     expect(await waitForTask(origin, viewer.cookie, await start())).toMatchObject({ status: "failed" });
-    await application.permissions.upsertNodeGrant(owner.userId, carrier.body.node.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner.userId), carrier.body.node.id, viewer.userId, { role: "viewer" });
     const result = await waitForTask(origin, viewer.cookie, await start());
     expect(result, JSON.stringify(result)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
     const file = await downloadArtifact(origin, viewer.cookie, result.export!.fileID);
@@ -200,7 +201,7 @@ describe("Universer Exchange protocol", () => {
     );
 
     await application.permissions.upsertNodeGrant(
-      owner.userId,
+      interactivePrincipal(owner.userId),
       access!.node.id,
       viewer.userId,
       { role: "viewer" }
@@ -658,8 +659,8 @@ describe("Universer Exchange protocol", () => {
     const linkedUnitId = (linkedDeck.body.node.resource as { readonly unitId: string }).unitId;
 
     // Exports that take files embed the online version by default; the others cannot ask for it.
-    await application.permissions.upsertNodeGrant(owner.userId, hostNode.id, viewer.userId, { role: "viewer" });
-    await application.permissions.upsertNodeGrant(owner.userId, linkedDeck.body.node.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner.userId), hostNode.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner.userId), linkedDeck.body.node.id, viewer.userId, { role: "viewer" });
     const exportPath = `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`;
     const byDefault = { unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX };
     await expectTaskStart(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SHEET}/export`, {

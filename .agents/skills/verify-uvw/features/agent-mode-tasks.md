@@ -42,7 +42,8 @@ O=verify-$VERIFY_UVW_RUN
 ### MP11. Reviewable pull requests
 
 MP11 and MP12 share one setup. A3 owns a
-repository R with a Budget Sheet on Trunk, makes B3 a Viewer, and assigns B3 an Issue. The run user owns
+repository R with a Budget Sheet on Trunk and asks to make B3 a Viewer. The call returns a confirm link, and the run
+user, who claimed A3, adds B3 in the browser session. A3 assigns B3 an Issue. The run user owns
 `private-x`, which neither agent can see, with a ready pull request shared with its members:
 
 ```bash
@@ -52,7 +53,7 @@ $V mcp --as a3 mp12-claim-a3 claim '{}'
 $V mcp --as b3 mp12-claim-b3 claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as the run user, click `Claim agent`, and replace the codes as
+Open each `claimUrl` in the run browser, signed in as the run user, click `Take it`, and replace the codes as
 [MH1](agent-handoff.md#mh1-unclaimed-agent) says.
 
 ```bash
@@ -71,7 +72,8 @@ CODE='const ws = univerAPI.getActiveWorkbook().getActiveSheet(); ws.getRange("A1
 $V mcp --as a3 mp12-a3-exec execute "$(jq -nc --arg w "$W1" --arg u "$U" --arg c "$CODE" '{worktree:$w,unit:$u,code:$c}')"
 $V mcp --as a3 mp12-a3-ready pr_ready "{\"repo\":\"$R\",\"number\":\"$N1\"}"
 $V mcp --as a3 mp12-a3-merge pr_merge "{\"repo\":\"$R\",\"number\":\"$N1\"}"
-$V mcp --as a3 mp12-a3-member repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$B3U\",\"role\":\"viewer\"}"
+$V mcp --as a3 mp12-a3-member repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$B3U\",\"role\":\"viewer\"}"   # exits 1: INTERACTIVE_SESSION_REQUIRED with a confirm link
+$V person mp12-o-member repo member add "$B3U" --role viewer -R "$R" --json role
 $V mcp --as a3 mp12-a3-issue issue_create "$(jq -nc --arg r "$R" --arg a "$B3U" --arg n "$NODE" '{repo:$r,title:"Raise the Marketing budget to 4000",body:"In the Budget sheet, change the Marketing budget from 2500 to 4000 and check that Total follows. Propose the change as a pull request for review.",assignees:[$a],nodes:[$n]}')"
 ```
 
@@ -121,7 +123,7 @@ Pass when B3's events show `search` before its first write and no `pr_merge`, it
 `mp12-trunk-before` has Marketing `2500`. A3's events show `search`, then `pr_view` and reads, then `pr_merge`.
 `mp12-trunk-after` has Marketing `4000` and Total `19000` one revision later, the activity's `pull-merged` actor is
 A3 and the pull request's author is B3, and no event or transcript result holds `AGENT_NOT_ALLOWED` or
-`INTERACTIVE_SESSION_REQUIRED`. After the claims nobody acts, and nobody relays task content. If the model fails for
+`INTERACTIVE_SESSION_REQUIRED`. After the claims and the run user's confirmation of B3's membership nobody acts, and nobody relays task content. If the model fails for
 a model reason, rerun with `--model console-deepseek/deepseek-flash#max` under an `-attempt2` label and report both.
 
 ### MP13. A fork's pull request serves an Issue
@@ -138,11 +140,11 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-linker.json")
 $V mcp --as linker mpl-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mpl-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mpl-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
-$V cli mpl-member repo member add "$A" --role viewer -R "$O/issue-link" --json
+$V person mpl-member repo member add "$A" --role viewer -R "$O/issue-link" --json
 $V cli mpl-issue issue create -R "$O/issue-link" -t "Fix the totals" -a "$A" --json number
 N=$(jq -r .number "$EVIDENCE/mpl-issue.out")
 $V mcp --as linker mpl-fork fork_create "{\"repo\":\"$O/issue-link\",\"name\":\"totals\"}"
@@ -185,12 +187,12 @@ A=$(jq -r .agent.username "$EVIDENCE/principal-acceptor.json")
 $V mcp --as acceptor mia-claim claim '{}'
 ```
 
-Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Claim agent`. Replace the code in
+Open the `claimUrl` from `mia-claim.out` in the run browser, signed in as O, and click `Take it`. Replace the code in
 `mia-claim.*` as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then:
 
 ```bash
 R="$O/issue-accept"
-$V cli mia-member repo member add "$A" --role viewer -R "$R" --json
+$V person mia-member repo member add "$A" --role viewer -R "$R" --json
 $V cli mia-issue issue create -R "$R" -t "Add the West region" -a "$A" --json number
 N=$(jq -r .number "$EVIDENCE/mia-issue.out")
 $V mcp --as acceptor mia-fork fork_create "{\"repo\":\"$R\",\"name\":\"west\"}"

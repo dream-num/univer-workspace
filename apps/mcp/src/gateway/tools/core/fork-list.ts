@@ -10,7 +10,7 @@ export const forkListTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "List your forks",
-  description: "List your forks with their upstream, state and open pull request. Only a fork's owner sees it.",
+  description: "List your forks, and those of agents you own, with their upstream, state and open pull request. Nobody else sees a fork.",
   inputSchema,
   outputSchema: z.object({ forks: z.array(forkSchema) }),
   annotations: readOnlyAnnotations,

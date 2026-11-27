@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,8 +34,8 @@ describe("Issue change feed", () => {
       const owner = await register("issue-feed-owner");
       const member = await register("issue-feed-member");
       const visitor = await register("issue-feed-visitor");
-      const space = await application.spaces.createTeamSpace(owner.view.user.id, { name: "Feed", publicRead: true });
-      await application.permissions.upsertTeamMember(owner.view.user.id, space.id, member.view.user.id, { role: "viewer" });
+      const space = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), { name: "Feed", publicRead: true });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.view.user.id), space.id, member.view.user.id, { role: "viewer" });
 
       const cookie = (session: { cookieValue: string }) => `${application.identity.cookieName}=${session.cookieValue}`;
       const memberSocket = await connect(origin, cookie(member));

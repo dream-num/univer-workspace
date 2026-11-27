@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import type { WorktreeData } from "@univerjs-pro/collaboration-worktree-service";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +49,7 @@ async function setup() {
     return { user: issued.view.user, cookie: `workspace_session=${issued.cookieValue}` };
   };
   const owner = await register("activity-owner");
-  const team = await application.spaces.createTeamSpace(owner.user.id, { name: "Activity" });
+  const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.user.id), { name: "Activity" });
   const activity = async (spaceId = team.id, cookie = owner.cookie): Promise<RepositoryActivity> => {
     const response = await request(`/spaces/${spaceId}/activity?timeZone=Asia%2FShanghai`, cookie);
     expect(response.status).toBe(200);
@@ -124,8 +125,8 @@ describe("GET Space activity", () => {
     const { application, register, owner, team, activity } = await setup();
     const member = await register("activity-member");
     const reader = await register("activity-reader");
-    await application.permissions.upsertTeamMember(owner.user.id, team.id, member.user.id, { role: "editor" });
-    await application.spaces.update(owner.user.id, team.id, { publicRead: true });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.user.id), team.id, member.user.id, { role: "editor" });
+    await application.spaces.update(interactivePrincipal(owner.user.id), team.id, { publicRead: true });
     await createPull(application, owner.user.id, team.id, "private");
     const shared = await createPull(application, owner.user.id, team.id);
     const result = await activity(team.id, member.cookie);

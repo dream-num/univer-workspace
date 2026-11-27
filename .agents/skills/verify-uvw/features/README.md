@@ -15,6 +15,10 @@ as the recipe.
   files. No Team Spaces, PRs or Issues exist. In MCP mode, `doctor` adds an `Executor doctor`
   pull request and a `Doctor` Sheet there.
 - Never drive an instance this run did not start.
+- Only a person signed in to the browser lets more people see data: adding a member, raising a role, making a
+  repository public, turning Link Sharing on. `$V cli` is a uvw login, so the server answers those commands with a
+  confirm link. A recipe's setup runs them as `$V person <label> <uvw args...>`, which is uvw with the run user's
+  browser session.
 - Drive and record proof as the Drive and Evidence sections of [the skill](../SKILL.md#drive) say.
 
 ## Feature entry contract
@@ -105,10 +109,9 @@ them, and lists what no journey covers yet.
   browser. MI15 turns on an acceptance deadline and has the server accept a submitted Issue by deadline, attributed to
   no one, with a reopen restarting the clock.
 - [Agent Mode: judge and undo an agent's task](./agent-mode-acceptance.md): MI13 judges four merged pull requests, one
-  of which deletes a file, in the Issue's acceptance panel and shows the assignee's Personal Space sharing to its
-  claimer and not to a member who may not accept. MI14 shows each linked pull request's check results there as they
-  stood at merge, counting or not, and says on an open pull request when the repository declares none. MI17 shows
-  that sharing to an acceptor who did not claim the agent by name only. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every pull
+  of which deletes a file, in the Issue's acceptance panel, where the assignee's refused request to share lists
+  nothing. MI14 shows each linked pull request's check results there as they
+  stood at merge, counting or not, and says on an open pull request when the repository declares none. MI17 has an agent another person claimed ask to share, and the panel lists nothing for the owner or the claimer. MI16 reverts an Issue's merged pull requests from its acceptance panel, keeps every pull
   request's files in the panel with the file the revert moved to Trash noted and its checks as they stood at merge,
   leaves a file someone edited after the merge blocked until a person overwrites it, and has an agent revert with
   `pr_revert`.
@@ -126,7 +129,8 @@ them, and lists what no journey covers yet.
   and counts a merge in `whoami`. CE1 shows who may join a repository: a claimed agent as a Viewer and not an admin, an
   unclaimed agent not at all and hidden from user search until claimed, and a stopped agent hidden. CE2 drives an
   unclaimed agent to 3 Team Spaces, 3 forks and 20 files and frees each with a claim, `fork_delete` or Trash. CE3 stops
-  a non-member at 3 open proposals in a public Team Space until it discards one.
+  a non-member at 3 open proposals in a public Team Space until it discards one. CE4 has a claimed agent ask to add a
+  member, get a confirm link, and its claimer confirm it in the browser, after the server refuses a Viewer who tries.
 - [Agent Mode: forks](./agent-mode-forks.md): FK1-FK8 have a claimed Viewer agent fork a repository that copies
   nothing, read Trunk through it, open one pull request with its first writes, also two at once, reopen a ready one to
   write again, delete a fork and lose its membership; FK8 drives `uvw fork create`, `list`, `view` and `delete`.
@@ -166,13 +170,13 @@ them, and lists what no journey covers yet.
 - [MCP executor and renderer isolation](./mcp-security.md): stage G sandbox baseline, MG1-MG11
   checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
   configuration and renderer separation, each reported `contained` or `exposed`.
-- [Link sharing](./link-sharing.md): LS1-LS4 cover `uvw share`, the browser Share dialog, and what an
-  anonymous visitor sees with the link set to `viewer` or `off`. LS5-LS7 cover Remix, link preview tags
+- [Link sharing](./link-sharing.md): LS1-LS4 cover `uvw share`, its confirm link and confirm page, the browser Share
+  dialog, and what an anonymous visitor sees with the link set to `viewer` or `off`. LS5-LS7 cover Remix, link preview tags
   and public Spaces.
 - [HTML View](./html-view.md): HV1-HV7 cover publishing with uvw, the `Pages` tab, owner writes to the source
   Sheet, live Sheet updates, read-only visitors, trial mode and `Save my version`.
-- [Agent handoff and claim](./agent-handoff.md): AH1-AH13 cover `Hand to my agent`, guest agents over
-  uvw and MCP, including one with no page for a local MCP client, claim links and the claim page, `My agents`, the claimer's pull request decisions, and the consent page's own agents, new or continued. MH1-MH5
+- [Agent handoff and claim](./agent-handoff.md): AH1-AH14 cover `Hand to my agent`, guest agents over
+  uvw and MCP, including the connect page's `Try without signing in`, handoff links, the handoff page and its signed-out preview, `My agents`, the claimer's pull request decisions, and the connect page's own agents, new or continued. MH1-MH5
   cover agent principals over MCP: tool lists before and after a claim, public-Space refusals and copies.
 
 ## Helper scripts

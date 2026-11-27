@@ -32,8 +32,8 @@ describe("handToAgentPrompt", () => {
       "`unit_create`",
       "the link as `from`",
       "`pr_merge`",
-      "give me the claim link",
-      "Tell me to open the claim link first: the copy is mine to edit once I claim it there. Until then, its link may open read-only or not at all.",
+      "give me the handoff link",
+      "Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only or not at all.",
       `give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned`,
       "tell me to use the Command line (uvw) option of Hand to my agent",
     ].map((step) => prompt.indexOf(step));
@@ -47,7 +47,7 @@ describe("handToAgentPrompt", () => {
     expect(order.every((at, index) => at > 0 && (index === 0 || at > order[index - 1]!))).toBe(true);
     expect(prompt).toContain("You do not need `read` for this.");
     expect(prompt).toContain("If you have no `pr_merge` or it is refused, give me the pull request link to merge.");
-    const links = ["give me the claim link", "Tell me to open the claim link first", `give me the copy's link too: ${origin}/nodes/<nodeId>`]
+    const links = ["give me the handoff link", "Tell me to open the handoff link first", `give me the copy's link too: ${origin}/nodes/<nodeId>`]
       .map((step) => prompt.indexOf(step));
     expect(links.every((at, index) => at > 0 && (index === 0 || at > links[index - 1]!))).toBe(true);
     expect(commands(prompt)).toEqual([]);
@@ -79,7 +79,7 @@ uvw pr ready <id> --json
 uvw pr merge <id> --json
 uvw claim
 
-<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link. Tell me to open the claim link first: the copy is mine to edit once I claim it there. Until then, its link may open read-only or not at all.
+<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the handoff link that uvw claim prints. Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only or not at all.
 Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the nodeId that unit create returns. I open it to edit the copy in the browser.
 
 With MCP, you can instead connect to ${origin}/mcp and call \`pr_create\`, \`unit_create\` with the link as \`from\`, \`pr_ready\`, \`pr_merge\` and \`claim\`. If \`unit_create\` has no \`from\`, use the CLI.`);
@@ -134,7 +134,7 @@ describe("HandToAgentDialog", () => {
     await open();
     expect(control("MCP (recommended)").getAttribute("aria-pressed")).toBe("true");
     expect(control("Command line (uvw)").getAttribute("aria-pressed")).toBe("false");
-    expect(document.body.textContent).toContain("Continue as a guest agent");
+    expect(document.body.textContent).toContain("Try without signing in");
 
     await act(async () => control("Copy MCP server URL").click());
     expect(mocks.writeText).toHaveBeenLastCalledWith(`${window.location.origin}/mcp`);
@@ -145,10 +145,10 @@ describe("HandToAgentDialog", () => {
     expect(mocks.toast.success).toHaveBeenLastCalledWith("Prompt copied. Paste it into your agent.");
   });
 
-  it("offers the guest agent sign-in only to a reader who is not signed in", async () => {
+  it("offers the trial without signing in only to a reader who is not signed in", async () => {
     await open(true);
     expect(control("MCP (recommended)").getAttribute("aria-pressed")).toBe("true");
-    expect(document.body.textContent).not.toContain("Continue as a guest agent");
+    expect(document.body.textContent).not.toContain("Try without signing in");
   });
 
   it("copies the CLI prompt once the reader chooses the command line", async () => {

@@ -80,6 +80,19 @@ export function pullRequestUrl(value: unknown, origin: string): string | null {
   return ["https:", "http:"].includes(url.protocol) && url.origin === origin && /^\/spaces\/[^/]+\/pulls\/[1-9]\d*$/.test(url.pathname) ? url.href : null;
 }
 
+const refusalSchema = z.object({ isError: z.literal(true), content: z.tuple([z.object({ text: z.string() })], z.unknown()) });
+const confirmLinkSchema = z.object({ detail: z.object({ url: z.url() }) });
+export function confirmUrl(output: unknown, origin: string): string | null {
+  const refusal = refusalSchema.safeParse(output);
+  if (!refusal.success) return null;
+  try {
+    const url = new URL(confirmLinkSchema.parse(JSON.parse(refusal.data.content[0].text)).detail.url);
+    return url.origin === origin && url.pathname.startsWith("/confirm/") ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export function newestSessions(sessions: AgentSession[], spaceId?: string) {
   return sessions.filter((session) => !spaceId || session.scope.kind === "repository" && session.scope.spaceId === spaceId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

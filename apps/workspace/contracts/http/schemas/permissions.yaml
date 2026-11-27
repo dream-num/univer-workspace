@@ -144,7 +144,7 @@ NodeLinkSharing:
       format: date-time
       description: |
         When the link stops working because its owner, an unclaimed agent, expires. The date moves
-        30 days out while the agent stays active or the shared page is read. Null when the owner
+        30 days out while the agent stays active or someone opens its handoff page. Null when the owner
         does not expire.
     createdBy:
       oneOf:

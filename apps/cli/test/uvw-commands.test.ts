@@ -210,8 +210,10 @@ describe("uvw repository and Issue commands", () => {
     expect(JSON.parse(await run(command, ["list", "--type", "team", "--json", "fullName"]))).toEqual([
       { fullName: "alice/docs" },
     ]);
-    await run(command, ["create", "docs", "--name", "Docs", "--description", "d", "--public"]);
-    expect(create).toHaveBeenCalledWith({ name: "Docs", publicRead: true, slug: "docs" });
+    await run(command, ["create", "docs", "--name", "Docs", "--description", "d"]);
+    expect(create).toHaveBeenCalledWith({ name: "Docs", slug: "docs" });
+    await expect(run(command, ["create", "docs", "--public"]), "a repository is made public with repo edit").rejects.toMatchObject({ exitCode: 1 });
+    expect(create).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith("space-1", { description: "d" });
     await run(command, ["rename", "new", "-R", "alice/docs"]);
     expect(lookup).toHaveBeenCalledWith("alice", "docs");
@@ -234,8 +236,8 @@ describe("uvw repository and Issue commands", () => {
     } as unknown as WorkspaceSpaceFeature;
     const command = createRepoCommand(spaces, repoContext);
 
-    await run(command, ["create", "docs", "--public", "--proposals", "accountable"]);
-    expect(create).toHaveBeenCalledWith({ name: "docs", publicRead: true, proposals: "accountable", slug: "docs" });
+    await run(command, ["create", "docs", "--proposals", "accountable"]);
+    expect(create).toHaveBeenCalledWith({ name: "docs", proposals: "accountable", slug: "docs" });
     expect(JSON.parse(await run(command, ["edit", "alice/docs", "--proposals", "anyone", "--json", "proposals"])))
       .toEqual({ proposals: "accountable" });
     expect(update).toHaveBeenCalledWith("space-1", { proposals: "anyone" });
@@ -1266,17 +1268,16 @@ describe("uvw share", () => {
   const expiresAt = "2026-12-14T00:00:00.000Z";
 
   const claimUrl = `${ORIGIN}/claim/c0de`;
-  const claimHint = "To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.";
-  const privateAccess = (file: string) =>
-    `Only this agent can open the link until a person claims it. To let anyone with the link read it, run \`uvw share ${file} --link viewer\`.`;
+  const privateAccess = "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).";
+  const human = { kind: "human", username: "ana" };
 
   const agent = { id: "a1", name: "budget-bot-x7k2", kind: "agent", claimed: false } as const;
   const person = { id: "u1", name: "ana" };
 
   function share(updateLinkSharing?: () => Promise<never>, sharedBy: Record<string, unknown> = owner, caller: WorkspaceSubject = agent) {
-    const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner: sharedBy, role });
+    const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt: sharedBy["claimed"] === false ? expiresAt : null, owner: sharedBy, role });
     const spaces = {
-      createAgentClaimCode: vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 600 })),
+      createAgentClaimCode: vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 604_800 })),
       get: vi.fn(async () => ({ id: "s1", name: "Personal", type: "personal" })),
       getLinkSharing: vi.fn(async () => sharing(false, "viewer")),
       getNode: vi.fn(async (nodeId: string) => ({ name: "Budget", nodeId })),
@@ -1289,16 +1290,15 @@ describe("uvw share", () => {
     return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN, whoami), spaces, whoami };
   }
 
-  it("reads the Link Sharing of a file link or Node ID without changing it or making a claim code", async () => {
+  it("reads the Link Sharing of a file link or Node ID without changing it or making a claim code, and points an unclaimed agent to its handoff link", async () => {
     const { command, spaces } = share();
     const text = await run(command, [url]);
     expect(text.trimEnd()).toBe([
       `Budget  ${url}`,
-      `Link Sharing: off. ${privateAccess(url)}`,
-      claimHint,
+      `Link Sharing: off. ${privateAccess}`,
     ].join("\n"));
     expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
-      access: privateAccess("node-1"), claimHint, expiresAt, link: "off", name: "Budget", owner, url,
+      access: privateAccess, expiresAt, link: "off", name: "Budget", owner, url,
     });
     expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
     expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
@@ -1310,13 +1310,12 @@ describe("uvw share", () => {
     ["viewer", { enabled: true, role: "viewer" }],
     ["editor", { enabled: true, role: "editor" }],
   ] as const)("sets --link %s and reports it in text and JSON", async (link, written) => {
-    const { command, spaces } = share();
+    const { command, spaces } = share(undefined, human, person);
     const text = await run(command, [url, "--link", link]);
     expect(text).toContain(`Link Sharing: ${link}`);
-    expect(text.includes(expiresAt)).toBe(link !== "off");
     expect(text.includes("--link viewer")).toBe(link === "off");
     expect(JSON.parse(await run(command, [url, "--link", link, "--json"]))).toEqual({
-      access: expect.any(String), claimHint, expiresAt, link, name: "Budget", owner, url,
+      access: expect.any(String), link, name: "Budget", owner: human, url,
     });
     expect(JSON.parse(await run(command, [url, "--link", link, "--json", "url,link"]))).toEqual({ link, url });
     expect(spaces.updateLinkSharing).toHaveBeenCalledWith("node-1", written);
@@ -1324,7 +1323,7 @@ describe("uvw share", () => {
   });
 
   it.each([
-    ["their own file", { kind: "human", username: "ana" }],
+    ["their own file", human],
     ["a file of an agent they claimed", { ...owner, claimed: true }],
   ])("tells a person reading %s to turn on Link Sharing only when the user asks", async (_file, sharedBy) => {
     const { command } = share(undefined, sharedBy, person);
@@ -1346,28 +1345,42 @@ describe("uvw share", () => {
     expect(whoami).not.toHaveBeenCalled();
   });
 
-  it("prints a claim link that lasts ten minutes with uvw claim", async () => {
-    const createAgentClaimCode = vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 600 }));
+  it("prints a handoff link that lasts seven days with uvw claim", async () => {
+    const createAgentClaimCode = vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 604_800 }));
     const command = createClaimCommand({ createAgentClaimCode } as unknown as WorkspaceSpaceFeature, async () => ORIGIN);
     const text = await run(command, []);
-    expect(text).toContain(`Claim link: ${claimUrl}`);
-    expect(text).toContain("within 10 minutes");
+    expect(text).toContain(`Handoff link: ${claimUrl}`);
+    expect(text).toContain("without signing in");
+    expect(text).toContain("for 7 days");
     const before = Date.now();
     const json = JSON.parse(await run(command, ["--json"])) as { claimUrl: string; expiresAt: string };
     expect(json.claimUrl).toBe(claimUrl);
-    expect(Date.parse(json.expiresAt) - before).toBeGreaterThanOrEqual(600_000);
+    expect(Date.parse(json.expiresAt) - before).toBeGreaterThanOrEqual(604_800_000);
     expect(JSON.parse(await run(command, ["--json", "claimUrl"]))).toEqual({ claimUrl });
   });
 
-  it("tells a person's delegated session to share in the browser", async () => {
+  it("exits 1 with the server's refusal when an unclaimed agent turns the link on", async () => {
+    const refusal = "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user.";
     const { command } = share(async () => {
-      throw workspaceError("INTERACTIVE_SESSION_REQUIRED", "An interactive sign-in is required.", { status: 403 });
+      throw workspaceError("AGENT_NOT_ALLOWED", refusal, { status: 403 });
+    });
+    await expect(run(command, [url, "--link", "viewer"])).rejects.toMatchObject({ exitCode: 1, message: expect.stringContaining(`AGENT_NOT_ALLOWED: ${refusal}`) });
+  });
+
+  it("prints the confirm link for the user when the server refuses to turn the link on", async () => {
+    const confirm = `${ORIGIN}/confirm/link-sharing?node=node-1&role=viewer`;
+    const { command } = share(async () => {
+      throw workspaceError(
+        "INTERACTIVE_SESSION_REQUIRED",
+        `A person confirms it. Give the user this link so they can confirm it in the browser: ${confirm}`,
+        { status: 403, url: confirm },
+      );
     });
     const error = await run(command, [url, "--link", "viewer"]).catch((caught: unknown) => caught);
-    expect(error).toMatchObject({
-      exitCode: 1,
-      message: expect.stringMatching(new RegExp(`INTERACTIVE_SESSION_REQUIRED: .*browser: ${url}`, "u")),
-    });
+    expect(error).toMatchObject({ exitCode: 1 });
+    const { message } = error as Error;
+    expect(message).toContain(`INTERACTIVE_SESSION_REQUIRED: A person confirms it. Give the user this link so they can confirm it in the browser: ${confirm}`);
+    expect(message).toContain(`"url": "${confirm}"`);
   });
 });
 

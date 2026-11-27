@@ -19,6 +19,8 @@ const http = vi.hoisted(() => {
   return { fetch, Request: globalThis.Request };
 });
 
+vi.mock("../../web/src/features/nodes/node-icon", () => ({ NodeIcon: () => null }));
+
 const CODE = "claim-code-1";
 const methods = { githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false, passwordAuthEnabled: true, emailAuthEnabled: false, guestAuthEnabled: true };
 const people = {
@@ -26,6 +28,14 @@ const people = {
   human: { id: "human-1", username: "olivia", displayName: "Olivia", avatarUrl: null, kind: "human" },
 };
 const agentSummary = { id: "agent-1", username: "claude-code-7f3k", displayName: "Claude Code · 7f3k", files: 1, spaceId: "space-1", stopped: false };
+const handoff = {
+  claimed: false, agent: agentSummary, expiresAt: "2026-12-03T00:00:00.000Z",
+  spaces: [{ id: "space-1", type: "personal", name: "Claude Code 的个人空间", files: 1 }, { id: "space-2", type: "team", name: "Research", files: 0 }],
+};
+const files: Record<string, unknown[]> = {
+  "space-1": [{ id: "node-1", name: "Budget", resource: { kind: "univer", unitType: "sheet" } }, { id: "node-2", name: "Report.univer.html", resource: { kind: "blob", mediaType: "text/html" } }],
+  "space-2": [],
+};
 let signedIn: keyof typeof people | null;
 const requests: string[] = [];
 const assign = vi.fn();
@@ -53,18 +63,13 @@ beforeEach(() => {
     if (request.method === "GET" && url.pathname === "/api/session") return Response.json(session());
     if (request.method === "GET" && url.pathname === "/api/agents/claim") {
       expect(url.searchParams.get("code")).toBe(CODE);
-      return signedIn === "human"
-        ? Response.json({ claimed: false, agent: agentSummary })
-        : Response.json({ error: { code: "FORBIDDEN", message: "An agent cannot claim or manage agents. Sign in with your own account." } }, { status: 403 });
+      return Response.json(handoff);
     }
+    const spaceId = /^\/api\/spaces\/([^/]+)\/nodes$/u.exec(url.pathname)?.[1];
+    if (request.method === "GET" && spaceId) return Response.json({ nodes: files[spaceId] });
     if (request.method === "POST" && url.pathname === "/api/auth/logout") {
       signedIn = null;
       return new Response(null, { status: 204 });
-    }
-    if (request.method === "POST" && url.pathname === "/api/auth/password/login") {
-      expect(await request.json()).toEqual({ username: "olivia", password: "correct horse battery staple" });
-      signedIn = "human";
-      return Response.json(session());
     }
     if (request.method === "POST" && url.pathname === "/api/agents/claim") {
       expect(await request.json()).toEqual({ code: CODE });
@@ -83,9 +88,9 @@ async function open() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const parent = createRootRouteWithContext<{ queryClient: QueryClient }>()();
   Object.assign(Route.options, { getParentRoute: () => parent, path: "/claim/$code" });
-  const space = createRoute({ getParentRoute: () => parent, path: "/spaces/$spaceId", component: () => "Agent space" });
+  const pages = ["/spaces/$spaceId", "/nodes/$nodeId", "/login"].map((path) => createRoute({ getParentRoute: () => parent, path, component: () => path }));
   const router = createRouter({
-    routeTree: parent.addChildren([Route, space]), context: { queryClient },
+    routeTree: parent.addChildren([Route, ...pages]), context: { queryClient },
     history: createMemoryHistory({ initialEntries: [`/claim/${CODE}`] }),
   });
   await act(async () => {
@@ -106,47 +111,75 @@ function button(name: string) {
 async function click(name: string) {
   await act(async () => button(name)!.click());
 }
-async function fill(id: string, value: string) {
-  const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+function links() {
+  return Object.fromEntries([...container.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")]));
 }
 
-it("lets a browser signed in as an agent sign out, sign in as a person on the same claim link, and claim", async () => {
+it("shows a visitor who is not signed in the agent's Spaces and files, with one way to take it", async () => {
+  signedIn = null;
+  await open();
+  await waitFor(() => expect(links()).toHaveProperty("Budget"));
+  expect(container.textContent).toContain("Work from Claude Code · 7f3k");
+  expect(links()).toEqual({
+    "Personal space": "/spaces/space-1", "Budget": "/nodes/node-1", "Report.univer.html": "/nodes/node-2?view=immersive", "Research": "/spaces/space-2",
+    "Sign in and take it": `/login?returnTo=%2Fclaim%2F${CODE}`,
+  });
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+});
+
+it("lets a browser signed in as an agent sign out and read on the same handoff link", async () => {
   signedIn = "agent";
   const router = await open();
-  await waitFor(() => expect(container.textContent).toContain("An agent cannot claim an agent."));
-  expect(button("Sign out and continue")).toBeDefined();
+  await waitFor(() => expect(container.textContent).toContain("An agent cannot take an agent."));
+  expect(links()).toEqual({});
+  expect(button("Take it")).toBeUndefined();
 
   await click("Sign out and continue");
-  await waitFor(() => expect(container.textContent).toContain("Sign in to claim this agent"));
+  await waitFor(() => expect(links()).toHaveProperty("Sign in and take it"));
   expect(requests).toContain("POST /api/auth/logout");
   expect(router.state.location.pathname).toBe(`/claim/${CODE}`);
+});
 
-  await fill("auth-username", "olivia");
-  await fill("auth-password", "correct horse battery staple");
-  await act(async () => container.querySelector<HTMLFormElement>("form")!.requestSubmit());
-  await waitFor(() => expect(assign).toHaveBeenCalledWith(`/claim/${CODE}`));
-
-  await act(async () => root.unmount());
-  root = createRoot(container);
-  const reopened = await open();
-  await waitFor(() => expect(button("Claim agent")).toBeDefined());
+it("gives a signed-in person the summary without its files, and the agent in one click", async () => {
+  signedIn = "human";
+  const router = await open();
+  await waitFor(() => expect(button("Take it")).toBeDefined());
   expect(container.textContent).toContain("The agent will belong to “Olivia”.");
-  await click("Claim agent");
-  await waitFor(() => expect(reopened.state.location.pathname).toBe("/spaces/space-1"));
+  expect(container.textContent).toContain("Research");
+  expect(links()).toEqual({});
+  expect(requests).not.toContain("GET /api/spaces/space-1/nodes");
+  await click("Take it");
+  await waitFor(() => expect(router.state.location.pathname).toBe("/spaces/space-1"));
   expect(requests).toContain("POST /api/agents/claim");
 });
 
-it("offers only the way home when the claim link itself is the problem", async () => {
+it("tells a session the server refuses to take the agent to sign out", async () => {
   signedIn = "human";
+  await open();
+  await waitFor(() => expect(button("Take it")).toBeDefined());
+  http.fetch.mockImplementationOnce(async () =>
+    Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "This action needs a person signed in to Workspace in a browser." } }, { status: 403 }));
+  await click("Take it");
+  await waitFor(() => expect(button("Sign out and continue")).toBeDefined());
+  expect(container.textContent).toContain("An agent cannot take an agent.");
+});
+
+it("offers sign-in when the agent has an owner, and only the way home when the link itself is the problem", async () => {
+  signedIn = null;
   http.fetch.mockImplementationOnce(async () => Response.json(session()));
   http.fetch.mockImplementationOnce(async () =>
-    Response.json({ error: { code: "AGENT_CLAIM_EXPIRED", message: "The claim code expired." } }, { status: 410 }));
+    Response.json({ error: { code: "AGENT_ALREADY_CLAIMED", message: "This agent already has an owner." } }, { status: 409 }));
   await open();
-  await waitFor(() => expect(container.textContent).toContain("This claim link has expired."));
+  await waitFor(() => expect(container.textContent).toContain("If you took it, sign in to open its files."));
+  expect(links()).toEqual({ "Sign in": `/login?returnTo=%2Fclaim%2F${CODE}` });
+  await act(async () => root.unmount());
+  root = createRoot(container);
+
+  http.fetch.mockImplementationOnce(async () => Response.json(session()));
+  http.fetch.mockImplementationOnce(async () =>
+    Response.json({ error: { code: "AGENT_CLAIM_EXPIRED", message: "This handoff link has expired." } }, { status: 410 }));
+  await open();
+  await waitFor(() => expect(container.textContent).toContain("This handoff link has expired."));
   expect(button("Back to home")).toBeDefined();
-  expect(button("Sign out and continue")).toBeUndefined();
+  expect(links()).toEqual({});
 });

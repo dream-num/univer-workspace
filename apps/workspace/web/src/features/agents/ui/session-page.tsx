@@ -6,7 +6,7 @@ import { IssueMarkdown } from "../../issues/issue-markdown";
 import type { AgentPageHost } from "./host";
 import { useDebugMode } from "../../../shared/debug-mode";
 import { Alert } from "../../../shared/ui/alert";
-import { Button } from "../../../shared/ui/button";
+import { Button, buttonVariants } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
 import { agentSessionIdSchema, isSystemReminder, messageReferences, messageSkills, messageSkillInvocation, sessionTitle, splitReferenceText } from "../agent.types";
 import type { AgentMode, AgentSession } from "../agent.types";
@@ -26,7 +26,7 @@ import { htmlViewStylesResult } from "../../html-views/style-result";
 import { replacedDraftIds } from "../replaced-drafts";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
-import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { argumentSummary, cacheHitRate, confirmUrl, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { renderCheckSchema } from "../../html-views/render-check";
 
 type DraftFeedback = { readonly disabled: boolean; readonly send: (message: string) => void; readonly fill: (text: string) => void };
@@ -322,6 +322,8 @@ function StepRow({ part, session, replaced, feedback }: {
   const skillDraftId = part.type !== "reasoning" && part.state === "output-available" ? skillDraftResultId(toolName(part), part.output) : null;
   const draftId = parsedDraft?.success && !parsedDraft.data.isError ? parsedDraft.data.structuredContent.draft.id : null;
   const styles = part.type !== "reasoning" && part.state === "output-available" ? htmlViewStylesResult(toolName(part), part.output) : null;
+  const confirm = part.type !== "reasoning" && part.state === "output-available" && typeof window !== "undefined"
+    ? confirmUrl(part.output, window.location.origin) : null;
   return <div className="agent-step" data-status={state}>
     <button type="button" className="agent-step-row" aria-expanded={open} onClick={() => setOpen(!open)}>
       <Icon className={running ? "agent-step-icon animate-spin" : "agent-step-icon"} role="img" aria-label={status} />
@@ -330,6 +332,7 @@ function StepRow({ part, session, replaced, feedback }: {
       {state === "approval" || state === "rejected" ? <span>{status}</span> : null}
       {part.type !== "reasoning" ? <span className="agent-step-duration">{timing ? durationLabel(timing.startedAt, timing.endedAt ?? (running ? new Date().toISOString() : null)) : "—"}</span> : null}
     </button>
+    {confirm && <a className={buttonVariants({ variant: "secondary", size: "sm" })} href={confirm} target="_blank" rel="noopener noreferrer">{m.confirmInBrowser}</a>}
     {skillDraftId && <SkillDraftCard draftId={skillDraftId} />}
     {styles && <HtmlViewStyleGallery catalog={styles} onFill={feedback?.fill} disabled={feedback?.disabled ?? true} />}
     {draftId && <HtmlViewDraftReview key={draftId} draftId={draftId} presentation="card" replaced={replaced.has(draftId)}

@@ -1,6 +1,7 @@
 export { useSetNodeGrant, useRemoveNodeGrant, useSetLinkSharing, useSetMemberRole, useRemoveMember } from "./permissions.commands";
 export {
   nodeGrantsQueryOptions,
+  nodeLinkSharingQueryOptions,
   teamMembersQueryOptions,
   userSearchQueryOptions,
 } from "./permissions.queries";

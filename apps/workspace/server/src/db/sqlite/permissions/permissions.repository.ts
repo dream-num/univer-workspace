@@ -1,6 +1,7 @@
 import { ownsSpaceSql, type SqliteAccessRepository } from "../access/access.repository.js";
 import { conflict, forbidden, notFound, requireManageMembers, requireShare, requireTeam } from "../../../modules/permissions/permissions.policy.js";
 import type { SqliteDatabase } from "../connection.js";
+import type { ExposureGuard } from "../../../modules/access/index.js";
 import type { GrantRole, PublicUser, TeamRole } from "../../../modules/permissions/permissions.types.js";
 import type {
   MembershipRow,
@@ -88,14 +89,14 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     readonly role: TeamRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): Promise<MembershipRow> {
+  }, guard: ExposureGuard<TeamRole>): Promise<MembershipRow> {
     return this._database.transaction(() => {
       const team = requireManageMembers(this.access.readSpaceAccess(input.grantedBy, input.spaceId));
       if (team.ownerUserId === input.userId) throw conflict("The space owner cannot be a member.");
       this.requireUser(input.userId);
-      if (team.role === "admin" && (input.role === "admin" || this.readMembers(input.spaceId, input.userId)[0]?.role === "admin")) {
-        throw forbidden();
-      }
+      const before = this.readMembers(input.spaceId, input.userId)[0]?.role ?? null;
+      if (team.role === "admin" && (input.role === "admin" || before === "admin")) throw forbidden();
+      guard(before);
       this._database.connection
         .prepare(
           `INSERT INTO space_members
@@ -178,11 +179,12 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     readonly role: GrantRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): Promise<GrantRow> {
+  }, guard: ExposureGuard<GrantRole>): Promise<GrantRow> {
     return this._database.transaction(() => {
       requireShare(this.access.readNodeAccess(input.grantedBy, input.nodeId));
       if (input.userId === input.grantedBy) throw conflict("The space owner already has access.");
       this.requireUser(input.userId);
+      guard(this.readGrants(input.nodeId, input.userId)[0]?.role ?? null);
       this._database.connection
         .prepare(
           `INSERT INTO node_grants
@@ -305,10 +307,12 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }> {
+  }, guard: ExposureGuard<GrantRole>): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }> {
     return this._database.transaction(() => {
       requireShare(this.access.readNodeAccess(input.actorUserId, input.nodeId));
-      const wasEnabled = this.readLinkSharing(input.nodeId)?.enabled === 1;
+      const before = this.readLinkSharing(input.nodeId);
+      const wasEnabled = before?.enabled === 1;
+      guard(wasEnabled ? before.role : null);
       const result = this._database.connection
         .prepare(
           `INSERT INTO node_link_sharing

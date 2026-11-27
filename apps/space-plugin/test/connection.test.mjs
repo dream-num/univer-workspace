@@ -172,6 +172,28 @@ test('resource creation preserves idempotency and never masks a Server permissio
   }
 });
 
+test('a refused sharing change carries the confirm page the Server names, and only on the Workspace origin', async () => {
+  const urls = ['/confirm/link-sharing?node=n1&role=viewer', 'https://elsewhere.example/confirm/public?space=s1', '//elsewhere.example/confirm', 7];
+  const server = createServer((req, res) => {
+    res.writeHead(403, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: { code: 'INTERACTIVE_SESSION_REQUIRED', message: 'A person confirms it.', url: urls.shift() } }));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const connection = new WorkspaceConnection();
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const turnOn = () => connection.sharing({ action: 'link-access', id: 'n1', enabled: true, role: 'viewer' }, new AbortController().signal);
+  try {
+    connection.configure(origin);
+    await assert.rejects(turnOn(), (e) => e instanceof SpaceError && e.status === 403 &&
+      e.message === 'A person confirms it.' && e.url === `${origin}/confirm/link-sharing?node=n1&role=viewer`);
+    for (let refused = 0; refused < 3; refused++) await assert.rejects(turnOn(), (e) => e.status === 403 && e.url === undefined);
+  } finally {
+    await connection.dispose();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('editor transport binds Workspace identity and denies snapshot replacement or path escapes', async () => {
   const server = createServer((req, res) => {
     res.setHeader('content-type', 'application/json');

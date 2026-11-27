@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id|mode...] | verifier ['<spec>'|off] | delegate <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up [--reuse] [--for <feature> [journey-id|mode...]] | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | brief <feature> [journey-id|mode...] | verifier ['<spec>'|off] | delegate <feature> [journey-id|mode...] | journeys <feature> [journey-id|mode...] | verdict <journey-id> PASS|FAIL|DRIFT|BLOCKED [note] | run-journeys [--again] <feature> [journey-id|mode...] | metrics | uvw <args> | cli <label> <args> | person <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -242,14 +242,36 @@ mcp_doctor_processes() {
   else bad "MCP gateway port $MCP_PORT is not owned by this run's gateway, or healthz fails: down, then up"; fi
 }
 
+person_session() {
+  node --input-type=module - "$RUN" "$ORIGIN" "$USERNAME" <<'JS'
+import {cpSync,mkdirSync,readdirSync,readFileSync,writeFileSync} from 'node:fs';
+const [run,origin,username]=process.argv.slice(2);
+const path='/api/auth/password/login';
+const response=await fetch(origin+path, {method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify({username,password:readFileSync(run+'/user.pw','utf8')})});
+if (!response.ok) throw new Error(path+' returned '+response.status);
+const session=response.headers.getSetCookie().map(c=>/^workspace_session=([^;]+)/.exec(c)?.[1]).find(Boolean);
+if (!session) throw new Error(path+' returned no session cookie');
+writeFileSync(run+'/home/browser-session',session,{mode:0o600});
+for (const distribution of readdirSync(run+'/home/distributions')) {
+  const from=run+'/home/distributions/'+distribution, to=run+'/home/person/distributions/'+distribution;
+  mkdirSync(to+'/workspace-cli',{recursive:true,mode:0o700});
+  cpSync(from+'/config.json',to+'/config.json');
+  const stored=JSON.parse(readFileSync(from+'/workspace-cli/session.json','utf8'));
+  for (const entry of Object.values(stored.sessions)) entry.cookie='workspace_session='+session;
+  writeFileSync(to+'/workspace-cli/session.json',JSON.stringify(stored),{mode:0o600});
+}
+JS
+}
+
 mcp_user() {
   node --input-type=module - "$RUN" "$ORIGIN" "$USERNAME" <<'JS'
 import {readFileSync,writeFileSync} from 'node:fs';
 const [run,origin,username]=process.argv.slice(2);
-const response=await fetch(origin+'/api/auth/cli/password/login', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password:readFileSync(run+'/user.pw','utf8')})});
-if (!response.ok) throw new Error('MCP password login returned '+response.status);
+const path='/api/auth/cli/password/login';
+const response=await fetch(origin+path, {method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify({username,password:readFileSync(run+'/user.pw','utf8')})});
+if (!response.ok) throw new Error(path+' returned '+response.status);
 const session=response.headers.getSetCookie().map(c=>/^workspace_session=([^;]+)/.exec(c)?.[1]).find(Boolean);
-if (!session) throw new Error('MCP password login returned no session cookie');
+if (!session) throw new Error(path+' returned no session cookie');
 writeFileSync(run+'/home/mcp-session',session,{mode:0o600});
 JS
   [[ -s "$RUN/home/mcp-token" ]] || mcp_token >/dev/null
@@ -273,7 +295,7 @@ JS
 }
 
 mcp_token() { # [--scopes read,write,...] [--name name]
-  [[ -s "$RUN/home/mcp-session" ]] || die "no MCP session; run: verify-uvw user"
+  [[ -s "$RUN/home/browser-session" ]] || die "no browser session; run: verify-uvw user"
   node --input-type=module - "$RUN" "$ORIGIN" "$RUN_ID" "$@" <<'JS'
 import {readFileSync,writeFileSync} from 'node:fs';
 const [run,origin,runId,...args]=process.argv.slice(2);
@@ -285,7 +307,7 @@ while (args.length) {
   else if (flag==='--name') name=value;
   else throw new Error(`Unknown option ${flag}`);
 }
-const session=readFileSync(run+'/home/mcp-session','utf8').trim();
+const session=readFileSync(run+'/home/browser-session','utf8').trim();
 const response=await fetch(origin+'/api/auth/tokens', {method:'POST',headers:{'content-type':'application/json',cookie:'workspace_session='+session,origin},body:JSON.stringify({name,...(scopes?{scopes}:{})})});
 if (response.status!==201) throw new Error('PAT creation returned '+response.status);
 const {token,record}=await response.json();
@@ -735,6 +757,7 @@ cmd_user() {
   # shellcheck disable=SC1091
   source "$RUN/user.env"
   uvw_raw auth login --username "$USERNAME" --password-stdin --json <"$RUN/user.pw"
+  person_session
   if [[ "${MCP_ENABLED:-0}" == 1 ]]; then
     mcp_user
   fi
@@ -745,7 +768,6 @@ cmd_user() {
 cmd_mcp_oauth() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
-  # login --guest and --guest-card need no user: the guest agent stands in for one.
   local USERNAME=""
   # shellcheck disable=SC1091
   [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"
@@ -978,6 +1000,17 @@ cmd_metrics() { # the Workspace server's /metrics; the token goes through stdin,
 cmd_cli() {
   [[ $# -ge 2 ]] || die "usage: verify-uvw cli <label> <uvw args...>"
   load_run
+  record_uvw "$@"
+}
+
+cmd_person() {
+  [[ $# -ge 2 ]] || die "usage: verify-uvw person <label> <uvw args...>"
+  load_run
+  [[ -d "$RUN/home/person" ]] || die "no browser session; run: verify-uvw user"
+  UNIVER_HOME="$RUN/home/person" record_uvw "$@"
+}
+
+record_uvw() {
   local label="$1"; shift
   local base="$RUN/evidence/$label"
   printf 'uvw' >"$base.cmd"; printf ' %q' "$@" >>"$base.cmd"; echo >>"$base.cmd"
@@ -1045,6 +1078,7 @@ case "${1:-}" in
   metrics) shift; cmd_metrics "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;
+  person) shift; cmd_person "$@" ;;
   mcp) shift; cmd_mcp call "$@" ;;
   mcp-tools) shift; cmd_mcp tools "$@" ;;
   mcp-skills) shift; cmd_mcp skills "$@" ;;

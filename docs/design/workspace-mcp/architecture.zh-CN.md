@@ -190,7 +190,7 @@ Workspace 产品 API 与协同端点
 | `publish` | 不经 Worktree 的直接写入 | `blob_upload`、`blob_replace`、`html_view_create`、`space_node`、`repo_create`、`repo_edit` |
 | `worktree:merge` | 合并和丢弃 Worktree | `pr_merge`、`pr_discard` |
 
-同意页逐项列出 scope，默认全部勾选，用户可以取消。PAT 默认授予全部 scope（D9）。
+同意页和 PAT 对话框只让人选只读或读写两档，四个 scope 留作内部使用，见 [agent-identity-and-access.zh-CN.md](../agent-identity-and-access.zh-CN.md)。PAT 默认授予全部 scope（D9）。
 现有的 `identity` 和 `session` scope 保留给现有客户端，语义不变。
 
 ### 4.4 Workspace Server 需要的改动（阶段 F）

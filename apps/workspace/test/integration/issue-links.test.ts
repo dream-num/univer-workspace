@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import type { WorktreeData } from "@univerjs-pro/collaboration-worktree-service";
 import { afterEach, describe, expect, it } from "vitest";
@@ -123,11 +124,11 @@ async function setup() {
     username, displayName: username, password: "correct horse battery staple",
   })).view.user.id;
   const [owner, editor, viewer] = [await register("owner"), await register("editor"), await register("viewer")];
-  const { id: team } = await application.spaces.createTeamSpace(owner, { name: "Team" });
-  const { id: other } = await application.spaces.createTeamSpace(owner, { name: "Other" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Team" });
+  const { id: other } = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Other" });
   for (const space of [team, other]) {
-    await application.permissions.upsertTeamMember(owner, space, editor, { role: "editor" });
-    await application.permissions.upsertTeamMember(owner, space, viewer, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner), space, editor, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner), space, viewer, { role: "viewer" });
   }
   return { application, owner, editor, viewer, team, other };
 }

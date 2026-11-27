@@ -13,12 +13,12 @@ journey covers yet.
 | [Judge and undo an agent's task](../features/agent-mode-acceptance.md) | MI13, MI14, MI17, MI16 | mcp |
 | [Declared checks and the landing guard](../features/agent-mode-checks.md) | MP15, MP17, MP18 | mcp |
 | [Files that move to Trash around a pull request](../features/agent-mode-trash.md) | MP16, MP19 | mcp |
-| [An agent's limits](../features/agent-mode-limits.md) | MP14, CE1, CE2, CE3 | mcp |
+| [An agent's limits](../features/agent-mode-limits.md) | MP14, CE1, CE2, CE3, CE4 | mcp |
 | [Forks](../features/agent-mode-forks.md) | FK1-FK8 | mcp |
 | [Repositories an agent owns](../features/agent-mode-ownership.md) | AO1, AO2, AO3 | mcp |
 | [Trunk write guards](../features/agent-mode-trunk-guards.md) | TG1-TG4 | default |
 | [Pull requests (Worktrees)](../features/pull-requests.md) | PR4-PR10 and PR14, then PR11-PR13 | mcp, then default |
-| [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8, then HO9, HO12, HO13 and MH1-MH5, then HO10 and HO11 | default, then mcp, then mcp-same-origin |
+| [Agent handoff and claim](../features/agent-handoff.md) | HO1-HO8 and HO14, then HO9, HO12, HO13 and MH1-MH5, then HO10 and HO11 | default, then mcp, then mcp-same-origin |
 | [HTML View drafts over MCP](../features/mcp-html-view.md) | MHV5-MHV16 | mcp |
 | [Files and Office exchange over MCP](../features/mcp-blobs-office.md) | MF10, MF11 | mcp |
 | [MCP sign-in with personal access tokens](../features/mcp-auth.md) | MA7 | mcp |
@@ -44,9 +44,9 @@ Run several features at once only with an id and ports of their own each ([Paral
 
 | Spec | Journeys |
 | --- | --- |
-| R1 An agent creates, edits, merges and shares in its own Space | HO2, MH3, MH5, MP14, MI13, MI17. MH4: an unclaimed agent cannot make it public |
+| R1 An agent creates, edits, merges and shares in its own Space | HO2, MH3, MH5, MP14. MI13, MI17, MH4, CE4: sharing, publishing and adding a member return a confirm link for a person. MH4: an unclaimed agent gets no link |
 | R2 An agent creates a repository and owns it | MH1 (the tools), MP11, MP18 |
-| R2a The owning agent manages members and merges others' proposals | MP11 and MP12 (adds a Viewer, merges its pull request), MP18 (adds an Editor, sets `landing`), AO1 (adds an admin, edits labels, reopens and discards another agent's pull request) |
+| R2a The owning agent manages members and merges others' proposals | MP11 and MP12 (asks for a Viewer, merges its pull request), MP18 (asks for an Editor, sets `landing`), AO1 (asks for an admin, edits labels, reopens and discards another agent's pull request). Its claimer confirms each member |
 | R2b A claimed agent as a member | Viewer: MI12, MP11, MP15, MHV11. Editor: MI13, MP15, MP18, MHV10. Admin of an agent's repository: AO1. Not admin of a person's: CE1 |
 | R2c An unclaimed agent holds repositories but joins none | CE1, CE2 |
 | R2d The claimer owns what the agent holds | HO6 and MH3 in the agent's Personal Space, AO2 in its Team Spaces, AO3 when the agent stops. Expiry is not covered |
@@ -112,7 +112,7 @@ Each journey above scripts its agents, except MP12 and MHV15, which run a real m
 | A3.6 A stopped agent's repositories are suspended | AO3 |
 | A3.7 An unclaimed agent's Team Spaces stop at the limit | CE2 |
 | A3.8 An unclaimed agent's files stop at 20 across its Spaces | CE2 |
-| A3.9 An unclaimed agent cannot make a Space public | MH4, CE2 (a new Team Space). Expiry is not covered |
+| A3.9 An unclaimed agent cannot make a Space public | MH4, CE2 (a Team Space it owns). Expiry is not covered |
 | A4.2 Browsing through a fork lists the whole repository | FK1 |
 | A4.3 A file someone changed on Trunk reads changed through the fork | FK2 |
 | A4.4 The first write adds one Unit with the Trunk revision of that moment | FK3 |

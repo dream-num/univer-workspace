@@ -300,53 +300,110 @@ export interface paths {
          * Start OAuth authorization for a configured, registered or CIMD client.
          * @description Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
          *     registered `redirect_uri`, a 32 to 256 character base64url `state`, and
-         *     a `scope` from the client's configured scopes (default `identity`).
+         *     a `scope` from the client's configured scopes (default `identity`). A
+         *     static client needs a person signed in in a browser, so a browser
+         *     without one goes to the sign-in page. A client with `requiresConsent`,
+         *     such as the Workspace Agent or the Space plugin, gets a consent page
+         *     with Allow and Deny; any other static client gets its code at once.
          *
          *     When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
          *     (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
          *     clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
-         *     disables it. CIMD metadata is fetched only after interactive sign-in,
-         *     when a browser continues as a guest agent (POST /api/auth/guest), or for
-         *     a guest agent with no page as described below; invalid
-         *     documents return 400 and temporary fetch failures return 503 here, never a
-         *     client redirect. CIMD names are displayed with their URL hostname. They must send
-         *     `response_type=code`, `code_challenge_method=S256` and a `resource`
-         *     equal to one of `MCP_RESOURCE_URLS`, optionally followed by a query such as
-         *     `?toolsets=all`; the grant is bound to the listed URL. `scope` is a subset of `read`,
-         *     `write`, `publish` and `worktree:merge` (default all four) and `state`
-         *     is optional, 1 to 1024 printable ASCII characters. A loopback
-         *     `redirect_uri` matches a registered one with any port (RFC 8252); every
-         *     other URI matches exactly. A signed-in user always sees a consent page that
-         *     lists the requested scopes, each of which can be unchecked; the code
-         *     carries only the checked scopes. A signed-in person also chooses whether
-         *     the client connects as a new agent that they own or as themselves.
+         *     disables it. They must send `response_type=code`, `code_challenge_method=S256`
+         *     and a `resource` equal to one of `MCP_RESOURCE_URLS`, optionally followed by
+         *     a query such as `?toolsets=all`; the grant is bound to the listed URL. `scope`
+         *     is a subset of `read`, `write`, `publish` and `worktree:merge` (default all
+         *     four) and `state` is optional, 1 to 1024 printable ASCII characters. A
+         *     loopback `redirect_uri` matches a registered one with any port (RFC 8252);
+         *     every other URI matches exactly.
          *
-         *     A browser with no session gets no page when guest agents are enabled and
-         *     the MCP client's `redirect_uri` is loopback `http` (`127.0.0.1`, `[::1]`
-         *     or `localhost`, any port). The response redirects to the client with a
-         *     code for a new guest agent, named after the client, that carries every
-         *     requested scope, and sets no cookie. The agent is created when the code
-         *     is redeemed, under the per-source limit POST /api/auth/guest uses, so a
-         *     code nobody redeems creates nothing. A source at that limit gets 429
-         *     before anything is fetched, and a CIMD document is fetched and refused
-         *     as POST /api/auth/guest fetches and refuses it, answering here in JSON.
-         *     While 10,000 codes wait unredeemed, such a guest gets
-         *     `temporarily_unavailable` and no code; a code a signed-in user approves
-         *     is never refused this way. A source that got 20 such codes in the last
-         *     minute, redeemed or not, gets the same answer, with an
-         *     `error_description` that says too many sign-ins came from this address.
-         *     With any other `redirect_uri` the browser goes to the sign-in page,
-         *     which offers that guest path. An unknown client or unregistered
-         *     `redirect_uri` is answered here with 400; once both are verified, other
-         *     errors redirect to the client with RFC 6749 `error` (`invalid_request`,
-         *     `invalid_scope`, `invalid_target`, `unsupported_response_type`,
-         *     `temporarily_unavailable` or `access_denied`), `error_description` and
-         *     `state`. Every MCP success, error
-         *     and deny callback includes `iss` (RFC 9207); static callbacks are unchanged.
+         *     An MCP client always gets the connect page, in one of two states. A
+         *     session whose User is an agent counts as no session, and the page leaves
+         *     its cookie as it is.
+         *
+         *     - A person signed in in a browser connects with one button: as the agent
+         *       they own that was made for a client of this name, otherwise as a new
+         *       agent they own. Other buttons connect as another of up to five agents
+         *       the person owns and has not stopped, most recently active first, or as
+         *       the person (`self`), or deny. When the per-source agent creation limit
+         *       refuses this browser's address, the page offers no new agent and says
+         *       why. When the request includes `write`, a "Let it change content"
+         *       switch is on by default; on grants `read write publish worktree:merge`
+         *       and off grants `read`. A request without `write` gets no switch and
+         *       can only read. The form posts to POST /api/auth/authorize/consent with
+         *       a single-use consent token bound to the person for five minutes.
+         *     - With no person signed in, the page offers "Sign in to connect", which
+         *       returns to this URL after sign-in, and a deny link to the client's
+         *       callback with `access_denied`. When guest agents are enabled it also
+         *       offers "Try without signing in", a form post to POST
+         *       /api/auth/authorize/guest, shown disabled with the reason to a source
+         *       at the agent creation limit. This state issues no code and writes no
+         *       session.
+         *
+         *     A CIMD client's metadata document is fetched before the page: for the
+         *     signed-in person, or anonymously under the limits POST
+         *     /api/auth/authorize/guest describes when nobody is signed in and guest
+         *     agents are enabled. A refused anonymous fetch goes to the sign-in page,
+         *     and so does a signed-out CIMD request while guest agents are off, which
+         *     fetches nothing. CIMD names are displayed with their URL hostname. An
+         *     invalid document returns 400 and a temporary fetch failure 503, as an
+         *     HTML page and never a client redirect; a signed-out browser is not told
+         *     the cause. An unknown client or unregistered `redirect_uri` is answered
+         *     here with 400; once both are verified, other errors redirect to the
+         *     client with RFC 6749 `error` (`invalid_request`, `invalid_scope`,
+         *     `invalid_target` or `unsupported_response_type`), `error_description`
+         *     and `state`. Every MCP success, error and deny callback includes `iss`
+         *     (RFC 9207); static callbacks are unchanged. Every page has
+         *     Cache-Control: no-store, X-Frame-Options: DENY and a CSP whose
+         *     `form-action` names only Workspace and the client's callback.
          */
         get: operations["oauthAuthorize"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/authorize/guest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try an MCP client as a new guest agent, without signing in.
+         * @description The target of the connect page's "Try without signing in" form. Takes
+         *     the query string of a `/api/auth/authorize` request from a dynamically
+         *     registered or Client ID Metadata Document client and answers 303 to the
+         *     client's `redirect_uri`. With a valid request the callback carries a
+         *     code for a new guest agent. The code carries `read write publish
+         *     worktree:merge` when the request includes `write`, and `read` otherwise.
+         *     Redeeming it at POST /api/auth/token creates the agent under the
+         *     per-source creation limit, named after the client, as in `Claude Code ·
+         *     7f3k`. The server reads the name from the registration or the metadata
+         *     document, cleans it as `PasswordRegistration.displayName` describes,
+         *     keeps only the local part of an email address, cuts it to 40 characters
+         *     between whole graphemes, and appends ` · ` and the username's
+         *     four-character suffix. A code nobody redeems creates nothing. A request
+         *     authorize would refuse with a redirect gets that OAuth error redirect
+         *     instead. The callback gets `temporarily_unavailable` and no code when
+         *     the source got 20 such codes in the last minute, redeemed or not, or
+         *     while 10,000 codes wait unredeemed. A source at the creation limit is
+         *     refused before anything is fetched. A Client ID Metadata Document is
+         *     fetched now: guests may start 8 of the 32 metadata fetches the server
+         *     runs at once, one in flight per source, and each source may start 10
+         *     per hour, failed ones included. A cached document or a fetch already in
+         *     flight costs nothing. The endpoint reads no session and sets no cookie.
+         *     An error that cannot go to the client is an HTML page that names its
+         *     code and links back to the connect page. All responses have
+         *     Cache-Control: no-store.
+         */
+        post: operations["authorizeAsGuestAgent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -360,40 +417,29 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Show the interactive OAuth consent form.
-         * @description Uses the same client, redirect, PKCE and resource validation as authorize.
-         *     CIMD metadata is resolved only after interactive sign-in. The form saves the
-         *     verified request with a single-use consent token bound to the signed-in user
-         *     for five minutes. CIMD clients show their name and metadata URL hostname.
-         *     For a signed-in person, an MCP client's form offers `connect_as`: up to
-         *     five agents the person owns and has not stopped, most recently active
-         *     first, a new agent that the person owns, or the person (`self`). It
-         *     preselects the most recently active of those agents that was created for
-         *     a client of this name, otherwise the new agent. When the per-source agent
-         *     creation limit refuses this browser's address, the new agent is disabled
-         *     with that reason, and `self` is preselected unless an agent is. A
-         *     signed-in agent connects only as itself.
-         */
-        get: operations["getOAuthConsent"];
+        get?: never;
         put?: never;
         /**
-         * Allow or deny a saved authorization request.
-         * @description Consumes the form's saved request without fetching CIMD metadata again.
-         *     Only checked MCP scopes are granted; at least one must be selected to allow.
-         *     An MCP allow also needs `connect_as`. `self` makes the code act for the
-         *     signed-in User. `new_agent`, only for a person, makes it act for a new
-         *     agent that the person owns: redeeming the code creates the agent under the
-         *     per-source agent creation limit, named after the client, and claims it
-         *     for the person, so it is in the state of a guest agent that person claimed.
-         *     A code nobody redeems creates no agent. Any other value is the id of an
-         *     agent the person owns and has not stopped, and makes the code act for that
-         *     agent; it creates nothing and counts toward no limit. The token endpoint
-         *     checks again that the person still owns the agent and has not stopped it.
-         *     An id that is not such an agent gets the same 400, whether or not a User
-         *     has it. A 400, 403 or 429 keeps the consent token valid, so the person can
-         *     go back and choose again.
-         *     Both successful and denied MCP callbacks include `iss`; static callbacks do not.
+         * Connect or deny a saved authorization request.
+         * @description The form of the connect page and of a static client's consent page.
+         *     Consumes the saved request without fetching CIMD metadata again.
+         *     `decision=deny` refuses; without it the request is allowed. For an MCP
+         *     client, `access=read_write` grants `read write publish worktree:merge`
+         *     when the saved request includes `write`; otherwise, or without
+         *     `access`, the code carries `read`. An MCP allow also needs
+         *     `connect_as`. `self` makes the code act for the signed-in person.
+         *     `new_agent` makes it act for a new agent that the person owns:
+         *     redeeming the code creates the agent under the per-source agent
+         *     creation limit, named after the client, owned by the person from the
+         *     same write, with no expiry. A code nobody redeems creates no agent. Any
+         *     other value is the id of an agent the person owns and has not stopped,
+         *     and makes the code act for that agent; it creates nothing and counts
+         *     toward no limit. The token endpoint checks again that the person still
+         *     owns the agent and has not stopped it. An id that is not such an agent
+         *     gets the same 400, whether or not a User has it. A 400, 403 or 429
+         *     keeps the consent token valid, so the person can go back and choose
+         *     again. Both successful and denied MCP callbacks include `iss`; static
+         *     callbacks do not.
          */
         post: operations["submitOAuthConsent"];
         delete?: never;
@@ -561,8 +607,9 @@ export interface paths {
         put?: never;
         /**
          * Create a personal access token.
-         * @description The plaintext token is returned only in this response. A session that
-         *     was itself issued by token exchange cannot create tokens.
+         * @description The plaintext token is returned only in this response. Needs a person
+         *     signed in to Workspace in a browser; an agent, a CLI login or a session
+         *     issued by token exchange gets 403.
          */
         post: operations["createPersonalAccessToken"];
         delete?: never;
@@ -582,8 +629,8 @@ export interface paths {
         put?: never;
         /**
          * Issue a one-hour MCP access token for the browser Agents module.
-         * @description Requires an interactive login session. Sessions issued by token exchange
-         *     are rejected with 403. Accepts only [read], [read, write], or [read, publish],
+         * @description Requires a person signed in to Workspace in a browser; any other
+         *     session gets 403. Accepts only [read], [read, write], or [read, publish],
          *     in either order, without duplicates. Never grants worktree:merge. The browser
          *     requests [read, publish] only for one explicitly approved tool call.
          *     The token is bound to /mcp at PUBLIC_ORIGIN, resolved against MCP_RESOURCE_URLS,
@@ -642,12 +689,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a link that lets a human claim the current agent.
+         * Create the handoff link of the current agent.
          * @description Needs the login session of an unclaimed agent, from any credential. The
-         *     code lasts ten minutes and claims the agent once. The product database
-         *     holds its hash, so any server replica accepts it and a restart keeps it.
-         *     An agent holds at most ten live codes, and an eleventh replaces its
-         *     oldest. All responses have Cache-Control: no-store.
+         *     code lasts seven days. Until a person takes the agent, anyone who opens
+         *     the link reads the agent's Spaces without signing in. One person takes
+         *     the agent with it. The product database holds its hash, so any server
+         *     replica accepts it and a restart keeps it. An agent holds at most ten
+         *     live codes, and an eleventh replaces its oldest. All responses have
+         *     Cache-Control: no-store.
          */
         post: operations["createAgentClaimCode"];
         delete?: never;
@@ -664,11 +713,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Show the agent a claim code names, before the current human claims it.
-         * @description Needs a human's browser login session, like POST, and fails the same way
-         *     for a code that cannot claim. All responses have Cache-Control: no-store.
+         * Show the agent a claim code names and let this browser read its Spaces.
+         * @description Needs no login session. While the agent has no owner, the response sets
+         *     the `workspace_handoff` cookie to the code, for as long as the code
+         *     lasts. A request that carries the cookie and no login session reads
+         *     every Space the agent owns as a viewer, through the same routes an
+         *     anonymous reader uses, and can write nothing. The server checks the code
+         *     and the agent on every request, so the reading stops when a person takes
+         *     the agent, when the agent is banned, and when the code expires. A browser
+         *     holds one such cookie, and the last link opened wins. A login session
+         *     takes precedence over the cookie. Opening the page also moves an
+         *     unclaimed agent's expiry out, at most once a day. Every answer but this
+         *     `200` for an unowned agent clears the cookie. A human's browser login
+         *     session that already owns the agent gets `claimed: true`. Every other
+         *     login session counts as signed out. All responses have Cache-Control:
+         *     no-store.
          */
-        get: operations["inspectAgentClaim"];
+        get: operations["openAgentHandoff"];
         put?: never;
         /**
          * Make the current human the owner of the agent a claim code names.
@@ -677,7 +738,9 @@ export interface paths {
          *     claim time and stops expiring. The owner holds the owner role in the
          *     agent's Personal Space; the agent gains no access to the owner's
          *     content. Claiming again as the same owner returns the agent unchanged.
-         *     All responses have Cache-Control: no-store.
+         *     A successful claim clears the `workspace_handoff` cookie, and from then
+         *     on the code lets nobody read without signing in. All responses have
+         *     Cache-Control: no-store.
          */
         post: operations["claimAgent"];
         delete?: never;
@@ -719,19 +782,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create an agent User and sign the browser in as it.
+         * Create an agent User and sign a CLI in as it.
          * @description Needs no credentials. Creates the same agent User as POST /api/agents
-         *     under the same per-source limit, but sets a browser login session cookie
-         *     and returns no token. A request that already carries a valid login
-         *     session is refused with 409, so it cannot replace a signed-in session.
-         *     A source at its limit is refused with 429 before anything is fetched.
-         *     With `oauthAuthorization`, the authorization is checked first, as
-         *     authorize checks it: a Client ID Metadata Document client's metadata is
-         *     fetched now, and authorize reuses it. Guests may start 8 of the 32
-         *     metadata fetches the server runs at once, one in flight per source, and
-         *     each source may start 10 per hour, failed ones included. A cached
-         *     document or a fetch already in flight costs nothing.
-         *     A request authorize would refuse answers 400 or 503 and creates nothing.
+         *     under the same per-source limit, but sets a login session cookie and
+         *     returns no token. The session has the `agent` write source of a CLI
+         *     login: it renews while in use, and it can never act for a person. A
+         *     request that already carries a valid login session is refused with
+         *     409, so it cannot replace a signed-in session.
          *     All responses have Cache-Control: no-store.
          */
         post: operations["continueAsGuestAgent"];
@@ -1319,7 +1376,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a Team Space owned by the current User. */
+        /**
+         * Create a Team Space owned by the current User.
+         * @description `publicRead: true` lets more people see data, so only a person signed in to Workspace in a browser
+         *     may send it. Any other session gets `403 INTERACTIVE_SESSION_REQUIRED` without `url`, because no
+         *     Space exists to confirm yet, and an unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Create the Space
+         *     private, then update it.
+         */
         post: operations["createTeamSpace"];
         delete?: never;
         options?: never;
@@ -1364,7 +1427,14 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Space settings. */
+        /**
+         * Update Space settings.
+         * @description `publicRead: true` on a private Space lets more people see data, so only a person signed in to
+         *     Workspace in a browser may send it. Any other session gets `403 INTERACTIVE_SESSION_REQUIRED` with
+         *     `url` set to `/confirm/public?space=<spaceId>`, and the Space does not change. An unclaimed agent
+         *     gets `403 AGENT_NOT_ALLOWED`. Every session may set `publicRead: false`, or repeat `true` on a
+         *     Space that is already public.
+         */
         patch: operations["updateSpace"];
         trace?: never;
     };
@@ -1431,7 +1501,8 @@ export interface paths {
         };
         /**
          * List the current User's forks by name.
-         * @description Only a fork's owner sees it.
+         * @description Lists the caller's forks and the forks of every agent the caller owns. Nobody else sees a fork.
+         *     `owner` names whose fork each one is.
          */
         get: operations["listForks"];
         put?: never;
@@ -1461,8 +1532,9 @@ export interface paths {
         };
         /**
          * Resolve `<owner>/<name>` to one of the current User's forks.
-         * @description `owner` is a username and `name` a fork name, both case-insensitive. Another User's fork and a
-         *     missing fork both return 404. `GET /api/spaces/lookup` never resolves a fork address.
+         * @description `owner` is a username and `name` a fork name, both case-insensitive. The caller reaches its own forks
+         *     and those of an agent it owns. Any other fork and a missing fork both return 404.
+         *     `GET /api/spaces/lookup` never resolves a fork address.
          */
         get: operations["lookupFork"];
         put?: never;
@@ -1484,7 +1556,8 @@ export interface paths {
         };
         /**
          * Read one of the current User's forks.
-         * @description Another User's fork returns 404. The fork stays readable after the owner loses the upstream, with `upstream` null.
+         * @description The caller reads its own forks and those of an agent it owns. Any other fork returns 404. The fork
+         *     stays readable after the caller loses the upstream, with `upstream` null.
          */
         get: operations["getFork"];
         put?: never;
@@ -1492,7 +1565,8 @@ export interface paths {
         /**
          * Delete one of the current User's forks.
          * @description Deletes the fork row only. The upstream does not change, and every Worktree the fork had keeps its
-         *     history and becomes an ordinary Team Worktree of the upstream. Another User's fork returns 404.
+         *     history and becomes an ordinary Team Worktree of the upstream. The caller deletes its own forks and
+         *     those of an agent it owns. Any other fork returns 404.
          */
         delete: operations["deleteFork"];
         options?: never;
@@ -1521,7 +1595,8 @@ export interface paths {
          *     open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
          *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
          *     finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
-         *     Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. An owner
+         *     Worktree. Only the fork's owner writes through it. Another User's fork, the fork of an agent the caller
+         *     owns included, and a fork whose upstream its owner can no longer read, return `404`. An owner
          *     who may no longer propose in the upstream gets `403 FORBIDDEN`, and so does one who is not a Space Member
          *     and already holds 3 open proposals there. Opening the Worktree counts against an agent's 10 open Worktrees
          *     (`403 AGENT_QUOTA_EXCEEDED`), as `POST /api/worktrees` does. The Unit's content is then written through the
@@ -1551,8 +1626,8 @@ export interface paths {
          *     fork it opens that Worktree as `POST /api/forks/{forkId}/units` does, with no Unit, and returns `201`.
          *     The Collaboration SDK readies and merges a Worktree with no Unit, so a proposal of pages alone is a pull
          *     request like any other. When the open Worktree is not a draft, the request returns
-         *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, and a fork whose upstream its owner
-         *     can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`,
+         *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, the fork of an agent the caller owns
+         *     included, and a fork whose upstream its owner can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`,
          *     and an agent already at 10 open Worktrees `403 AGENT_QUOTA_EXCEEDED`.
          */
         post: operations["openForkWorktree"];
@@ -2168,7 +2243,15 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Add a Team Member or change their Role. */
+        /**
+         * Add a Team Member or change their Role.
+         * @description Adding a member or raising a member's Role lets more people see data, so only a person signed in
+         *     to Workspace in a browser may do it. Any other session that may manage members gets
+         *     `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+         *     `/confirm/member?space=<spaceId>&user=<userId>&role=<role>`, and the Membership does not change.
+         *     An unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Every session that may manage members may lower
+         *     a Role or repeat the stored one. A caller without that capability gets `403 FORBIDDEN` and no `url`.
+         */
         put: operations["upsertTeamMember"];
         post?: never;
         /** Remove a Team Member or leave the Team Space. */
@@ -2208,7 +2291,15 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Create or change a Direct Share. */
+        /**
+         * Create or change a Direct Share.
+         * @description Sharing a Node with a User or raising that User's Role lets more people see data, so only a person
+         *     signed in to Workspace in a browser may do it. Any other session that may share the Node gets
+         *     `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+         *     `/confirm/grant?node=<nodeId>&user=<userId>&role=<role>`, and the Grant does not change. An
+         *     unclaimed agent gets `403 AGENT_NOT_ALLOWED`. Every session that may share the Node may lower a
+         *     Role or repeat the stored one. A caller without that capability gets `403 FORBIDDEN` and no `url`.
+         */
         put: operations["upsertNodeGrant"];
         post?: never;
         /** Remove one direct Grant. */
@@ -2229,7 +2320,16 @@ export interface paths {
         };
         /** Get Link Sharing settings for a Personal Space Node. */
         get: operations["getNodeLinkSharing"];
-        /** Enable, disable, or change Link Sharing for a Personal Space Node. */
+        /**
+         * Enable, disable, or change Link Sharing for a Personal Space Node.
+         * @description Turning Link Sharing on, or changing its role from `viewer` to `editor`, lets more people see
+         *     data, so only a person signed in to Workspace in a browser may do it. Any other session that may
+         *     share the Node gets `403 INTERACTIVE_SESSION_REQUIRED` with `url` set to
+         *     `/confirm/link-sharing?node=<nodeId>&role=<role>`, and the settings do not change. An unclaimed
+         *     agent gets `403 AGENT_NOT_ALLOWED`. Every
+         *     session that may share the Node may turn Link Sharing off or change `editor` to `viewer`. A
+         *     caller without that capability gets `403 FORBIDDEN` and no `url`.
+         */
         put: operations["updateNodeLinkSharing"];
         post?: never;
         delete?: never;
@@ -2841,6 +2941,8 @@ export interface components {
             message: string;
             /** @description Input field related to the error, when applicable. */
             field?: string;
+            /** @description A path on the Workspace origin of the browser page where a person finishes this action. A refused write that would let more people see data carries the path of its confirm page. */
+            url?: string;
         };
         ErrorResponse: {
             error: components["schemas"]["Error"];
@@ -2982,7 +3084,7 @@ export interface components {
             /**
              * Format: date-time
              * @description When the link stops working because its owner, an unclaimed agent, expires. The date moves
-             *     30 days out while the agent stays active or the shared page is read. Null when the owner
+             *     30 days out while the agent stays active or someone opens its handoff page. Null when the owner
              *     does not expire.
              */
             expiresAt: string | null;
@@ -3355,7 +3457,7 @@ export interface components {
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
             emailAuthEnabled: boolean;
-            /** @description Whether POST /api/auth/guest can create agents. False when AGENT_CREATE_LIMIT_PER_HOUR is 0. */
+            /** @description Whether guest agents are on, for POST /api/auth/guest and POST /api/auth/authorize/guest. False when AGENT_CREATE_LIMIT_PER_HOUR is 0. */
             guestAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
@@ -3408,8 +3510,15 @@ export interface components {
             executorAccess?: true;
             budget?: components["schemas"]["AgentBudget"];
         };
-        /** @enum {string} */
-        McpScope: "read" | "write" | "publish" | "worktree:merge";
+        GuestAuthorizationCreate: {
+            /** @description The query string of the `/api/auth/authorize` request the connect page shows, without the leading `?`. */
+            oauthAuthorization: string;
+        };
+        /**
+         * @description What a person lets a connection do. `read` grants the `read` scope, and `read_write` grants `read write publish worktree:merge`.
+         * @enum {string}
+         */
+        AccessTier: "read" | "read_write";
         TokenExchangeRequest: {
             /** @enum {string} */
             grant_type: "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -3471,6 +3580,8 @@ export interface components {
             /** @description Present for MCP token errors, including unknown or missing clients. */
             error_description?: string;
         };
+        /** @enum {string} */
+        McpScope: "read" | "write" | "publish" | "worktree:merge";
         AuthorizationServerMetadata: {
             /**
              * @description Every MCP authorization callback includes the issuer; static clients retain their original callbacks.
@@ -3595,7 +3706,7 @@ export interface components {
             spaceId: string;
             /** @description Files in the agent's Personal Space outside Trash. */
             files: number;
-            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, a reader opened one of its shared pages. Recorded at most once a day. */
+            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, someone opened its handoff page. Recorded at most once a day. */
             lastActiveAt: number;
             /** @description The agent can no longer sign in. Its owner stopped it, or an operator banned it. */
             stopped: boolean;
@@ -3628,18 +3739,33 @@ export interface components {
         };
         AgentClaimCode: {
             code: string;
-            /** @description The claim page as a path on this Workspace origin. */
+            /** @description The handoff page as a path on this Workspace origin. */
             claimUrl: string;
             /**
              * @description Seconds until the code stops working.
              * @constant
              */
-            expiresIn: 600;
+            expiresIn: 604800;
         };
-        AgentClaimPreview: {
+        AgentSpace: {
+            id: string;
+            /** @enum {string} */
+            type: "personal" | "team";
+            name: string;
+            /** @description Files in the Space outside Trash. */
+            files: number;
+        };
+        AgentHandoff: {
             agent: components["schemas"]["AgentSummary"];
             /** @description The current human already owns the agent. */
             claimed: boolean;
+            /**
+             * Format: date-time
+             * @description When the code stops working.
+             */
+            expiresAt: string;
+            /** @description Every Space the agent owns, its Personal Space first. */
+            spaces: components["schemas"]["AgentSpace"][];
         };
         AgentClaim: {
             code: string;
@@ -3650,25 +3776,9 @@ export interface components {
         GuestAgentCreate: {
             /**
              * @description Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
-             *     address keeps only its local part. Blank, omitted or no visible character means `agent`, or the OAuth
-             *     client's name.
+             *     address keeps only its local part. Blank, omitted or no visible character means `agent`.
              */
             label?: string;
-            /**
-             * @description The query string of the OAuth authorization the guest continues, as
-             *     sent to `/api/auth/authorize`. The server checks it as authorize does
-             *     before it creates anything, so a request that authorize would refuse
-             *     creates no agent and does not count toward the creation limit. When
-             *     `label` is blank or omitted and the request names a dynamically
-             *     registered or Client ID Metadata Document client with a name, the
-             *     agent is named after that client: the server reads the name from the
-             *     registration or the metadata document, cleans it as
-             *     `PasswordRegistration.displayName` describes, keeps only the local
-             *     part of an email address, cuts it to 40 characters between whole
-             *     graphemes, and appends ` · ` and the username's four-character
-             *     suffix to the display name.
-             */
-            oauthAuthorization?: string;
         };
         GuestAgentCreated: {
             agent: components["schemas"]["AgentIdentity"];
@@ -4856,43 +4966,6 @@ export interface components {
         };
     };
     responses: {
-        /** @description Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error. */
-        302: {
-            headers: {
-                Location: string;
-                [name: string]: unknown;
-            };
-            content?: never;
-        };
-        /** @description Unknown client, invalid redirect or invalid CIMD document. No client redirect. */
-        400: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-                "text/html": string;
-            };
-        };
-        /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
-        403: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. For a guest agent with no page, JSON OAUTH_CLIENT_UNAVAILABLE, or CLIENT_METADATA_BUSY with Retry-After. */
-        503: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "text/html": string;
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
         /** @description Invalid request. */
         BadRequest: {
             headers: {
@@ -4914,16 +4987,26 @@ export interface components {
         /**
          * @description The current User cannot perform this action. The code is `FORBIDDEN` when its role is
          *     insufficient, and when a proposer who is not a Space Member would hold more than 3 open
-         *     proposals in one Team Space. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
-         *     unclaimed agent makes a Space public or adds a Team Space member, or the User added as a Team
+         *     proposals in one Team Space. Three codes name a rule that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+         *     unclaimed agent would let more people see data, or the User added as a Team
          *     Space member is an unclaimed agent, or an agent given admin of a Team Space a human owns, or an agent
          *     that does not own a Team Space whose `landing` is `checks` writes its Trunk directly or changes `landing`),
          *     `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would own more than 3 Team Spaces or more than 3 forks,
          *     keep more than 20 files across its Spaces, pending pull-request files included, or store one file
          *     above 10 MiB, and any agent would have more than 10 open Worktrees or start more than 50 merges in
          *     24 hours) and
-         *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
-         *     or updates a Space with `publicRead: true`).
+         *     `INTERACTIVE_SESSION_REQUIRED` (an action taken for a person, such as creating an access token,
+         *     approving a CLI login, authorizing an OAuth client, claiming an agent or publishing a draft,
+         *     comes from a session that is not a person signed in to Workspace in a browser: an agent, a CLI
+         *     login or a session issued by token exchange; or such a session would let more people see data).
+         *
+         *     A write lets more people see data when it makes a Space public, adds a Team Space member or
+         *     raises a member's role, shares a Node with a User or raises that User's role, or turns on Link
+         *     Sharing or raises its role. Only a person signed in to Workspace in a browser does that. For any
+         *     other session the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED` with `url`,
+         *     the path of the page where a person confirms the same write. An unclaimed agent has no person to
+         *     confirm for it and gets `AGENT_NOT_ALLOWED` without `url`. A write that keeps or lowers the
+         *     stored level passes for every session.
          */
         Forbidden: {
             headers: {
@@ -4978,7 +5061,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description AGENT_CLAIM_INVALID. The code is unknown, expired over ten minutes ago, predates a server restart, or names a banned agent. */
+        /** @description AGENT_CLAIM_INVALID. The code is unknown, expired over seven days ago, or names a banned agent. */
         AgentClaimInvalid: {
             headers: {
                 [name: string]: unknown;
@@ -4987,7 +5070,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description AGENT_CLAIM_EXPIRED. The code is more than ten minutes old. */
+        /** @description AGENT_CLAIM_EXPIRED. The code is more than seven days old. */
         AgentClaimExpired: {
             headers: {
                 [name: string]: unknown;
@@ -5010,19 +5093,6 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Static configured ID, DCR client ID, or HTTPS CIMD URL (at most 2000 characters, non-root path, no credentials, query, fragment or dot segments). CIMD identity is compared verbatim. */
-        0: string;
-        1: string;
-        /** @description Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients. */
-        2: string;
-        3: string;
-        4: string;
-        /** @description Required for MCP clients. */
-        5: "code";
-        /** @description Required for MCP clients. */
-        6: "S256";
-        /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly after removing a query string such as `?toolsets=all`. */
-        7: string;
         Cursor: string;
         Limit: string;
         IdempotencyKey: string;
@@ -5576,7 +5646,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error. */
+            /** @description The connect page for an MCP client, signed in or signed out, or the consent page of a static client with `requiresConsent`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Redirect to Workspace sign-in, to a static client's redirect_uri with a one-time code, or to an MCP client's redirect_uri with an OAuth error. */
             302: {
                 headers: {
                     Location: string;
@@ -5594,7 +5673,7 @@ export interface operations {
                     "text/html": string;
                 };
             };
-            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            /** @description INTERACTIVE_SESSION_REQUIRED. A person's CLI login or a session issued by token exchange is refused. A session whose User is an agent gets the signed-out page instead. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5603,52 +5682,46 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description AGENT_CREATE_RATE_LIMITED, for a guest agent with no page. This source created too many agents or started too many metadata fetches in the last hour. No client redirect. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later. For a guest agent with no page, JSON OAUTH_CLIENT_UNAVAILABLE, or CLIENT_METADATA_BUSY with Retry-After. */
+            /** @description A CIMD fetch failed temporarily, or a signed-in person's fetch found capacity busy, with no usable cached document. No client redirect; retry later. */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/html": string;
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    getOAuthConsent: {
+    authorizeAsGuestAgent: {
         parameters: {
-            query: {
-                /** @description Static configured ID, DCR client ID, or HTTPS CIMD URL (at most 2000 characters, non-root path, no credentials, query, fragment or dot segments). CIMD identity is compared verbatim. */
-                client_id: components["parameters"]["0"];
-                redirect_uri: components["parameters"]["1"];
-                /** @description Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients. */
-                state?: components["parameters"]["2"];
-                code_challenge: components["parameters"]["3"];
-                scope?: components["parameters"]["4"];
-                /** @description Required for MCP clients. */
-                response_type?: components["parameters"]["5"];
-                /** @description Required for MCP clients. */
-                code_challenge_method?: components["parameters"]["6"];
-                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly after removing a query string such as `?toolsets=all`. */
-                resource?: components["parameters"]["7"];
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["GuestAuthorizationCreate"];
+            };
+        };
         responses: {
-            /** @description The consent form, with individually selectable MCP scopes. */
-            200: {
+            /** @description To the client's redirect_uri with a code, or with an RFC 6749 `error`, `error_description`, `state` and `iss`. */
+            303: {
+                headers: {
+                    Location: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description INVALID_INPUT. The body is not a form with `oauthAuthorization`, or it names a configured
+             *     client, such as the Workspace Agent, that needs a person signed in. OAUTH_CLIENT_UNAVAILABLE,
+             *     INVALID_REDIRECT_URI or INVALID_INPUT for an unknown client, an unregistered redirect, an
+             *     invalid `state` or an invalid metadata document. No client redirect.
+             */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5656,10 +5729,30 @@ export interface operations {
                     "text/html": string;
                 };
             };
-            302: components["responses"]["302"];
-            400: components["responses"]["400"];
-            403: components["responses"]["403"];
-            503: components["responses"]["503"];
+            /** @description AGENT_CREATE_RATE_LIMITED. Guest agents are turned off, too many agents were created from this source IP in the last hour, or the source started 10 metadata fetches in the last hour. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /**
+             * @description OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now.
+             *     CLIENT_METADATA_BUSY, with Retry-After. Every metadata fetch guests may start is in
+             *     use, or this source has another one in flight. Nothing was fetched. Retry after the delay.
+             */
+            503: {
+                headers: {
+                    /** @description Seconds to wait, sent only with CLIENT_METADATA_BUSY. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
         };
     };
     submitOAuthConsent: {
@@ -5673,10 +5766,13 @@ export interface operations {
             content: {
                 "application/x-www-form-urlencoded": {
                     consent_token: string;
-                    /** @enum {string} */
-                    decision: "allow" | "deny";
-                    scope?: components["schemas"]["McpScope"][];
-                    /** @description `new_agent`, `self`, or the id of an agent the signed-in person owns. Required to allow an MCP client. Ignored for static clients and on deny. */
+                    /**
+                     * @description `deny` refuses. The connect page sends it only from its Deny button; the static consent page sends `allow` or `deny`.
+                     * @enum {string}
+                     */
+                    decision?: "allow" | "deny";
+                    access?: components["schemas"]["AccessTier"];
+                    /** @description `new_agent`, `self`, or the id of an agent the signed-in person owns, sent by the button the person clicks. Required to allow an MCP client. Ignored for static clients and on deny. */
                     connect_as?: string;
                 };
             };
@@ -5692,7 +5788,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description The session was issued by token exchange and this action requires an interactive sign-in, or a signed-in agent chose `new_agent`. */
+            /** @description INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5701,7 +5797,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description AGENT_CREATE_RATE_LIMITED. `new_agent` was chosen while this browser's address may create no agent. The message names the way out, choosing Yourself or an agent the person already owns, or trying again later. */
+            /** @description AGENT_CREATE_RATE_LIMITED. `new_agent` was submitted while this browser's address may create no agent. The message names the way out, connecting as the person or as an agent the person already owns, or trying again later. */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6068,7 +6164,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The claim code and the page that uses it. */
+            /** @description The claim code and the handoff page that uses it. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -6099,7 +6195,7 @@ export interface operations {
             };
         };
     };
-    inspectAgentClaim: {
+    openAgentHandoff: {
         parameters: {
             query: {
                 code: string;
@@ -6110,17 +6206,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The agent, and whether the current human already owns it. */
+            /** @description The agent, its Spaces, and whether the current human already owns it. */
             200: {
                 headers: {
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentClaimPreview"];
+                    "application/json": components["schemas"]["AgentHandoff"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["AgentClaimInvalid"];
             409: components["responses"]["AgentAlreadyClaimed"];
             410: components["responses"]["AgentClaimExpired"];
@@ -6219,24 +6314,9 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, the source started 10 metadata fetches in the last hour, or creation is disabled. */
+            /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or guest agents are turned off. */
             429: {
                 headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /**
-             * @description OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now.
-             *     CLIENT_METADATA_BUSY, with Retry-After. Every metadata fetch guests may start is in
-             *     use, or this source has another one in flight. Nothing was fetched. Retry after the delay.
-             */
-            503: {
-                headers: {
-                    /** @description Seconds to wait, sent only with CLIENT_METADATA_BUSY. */
-                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6581,7 +6661,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            /** @description INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6687,7 +6767,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
-            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            /** @description INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6792,7 +6872,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
-            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            /** @description INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6941,7 +7021,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
-            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            /** @description INTERACTIVE_SESSION_REQUIRED. This action needs a person signed in to Workspace in a browser. An agent, a CLI login or a session issued by token exchange is refused. */
             403: {
                 headers: {
                     [name: string]: unknown;

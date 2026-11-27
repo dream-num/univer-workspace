@@ -24,21 +24,21 @@ describe("Blob Resources", () => {
     const { application } = await createTestApplication();
     const owner = await register(application, "blob-target-owner");
     const editor = await register(application, "blob-target-editor");
-    const space = await application.spaces.createTeamSpace(owner, { name: "Documents" });
+    const space = await application.spaces.createTeamSpace(interactivePrincipal(owner), { name: "Documents" });
     const folder = await application.nodes.create(owner, { name: "Uploads", spaceId: space.id, parentNodeId: null });
     const actor = interactivePrincipal(editor);
     const intent = { name: "plain.bin", originalFilename: "plain.bin", byteSize: 4, spaceId: space.id, parentNodeId: folder.id };
     const repo = application.repositories.blobs;
-    await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner), space.id, editor, { role: "editor" });
     const reserve = repo.reserve.bind(repo);
     vi.spyOn(repo, "reserve").mockImplementationOnce(async (input) => {
-      await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "viewer" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner), space.id, editor, { role: "viewer" });
       return reserve(input);
     });
     const key = "reserve-blob-target-changed";
     await expect(application.blobs.createUpload(actor, key, intent)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(count(application, "blob_upload_sessions")).toBe(0);
-    await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner), space.id, editor, { role: "editor" });
     const { body } = await application.blobs.createUpload(actor, key, intent);
     await application.blobs.upload(editor, body.upload.id, "4", Readable.from([Buffer.from("data")]));
     const complete = repo.complete.bind(repo);
@@ -161,7 +161,7 @@ describe("Blob Resources", () => {
       )
     ).rejects.toMatchObject<ApplicationError>({ code: "NOT_FOUND" });
     await application.permissions.upsertNodeGrant(
-      userId,
+      interactivePrincipal(userId),
       reserved.body.upload.nodeId,
       viewerId,
       { role: "viewer" }
@@ -585,7 +585,7 @@ describe("Blob content replacement", () => {
         Readable.from(["nope"]),
       ),
     ).rejects.toMatchObject({ status: 404 });
-    await application.permissions.upsertNodeGrant(user, blob.nodeId, outsider, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(user), blob.nodeId, outsider, { role: "viewer" });
     await expect(
       application.blobs.replace(
         interactivePrincipal(outsider),
@@ -666,7 +666,7 @@ describe("Blob content replacement", () => {
       "replace-revoke-create-0001",
     );
     await application.blobs.complete(interactivePrincipal(owner), blob.uploadId);
-    await application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "editor" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner), blob.nodeId, editor, { role: "editor" });
     const etag = await contentEtag(application, editor, blob.resourceId);
     let release!: () => void;
     let started!: () => void;
@@ -692,7 +692,7 @@ describe("Blob content replacement", () => {
       ),
     );
     await entered;
-    await application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(interactivePrincipal(owner), blob.nodeId, editor, { role: "viewer" });
     release();
     await expect(pending).rejects.toMatchObject({ status: 403 });
     expect(await contentEtag(application, owner, blob.resourceId)).toBe(etag);

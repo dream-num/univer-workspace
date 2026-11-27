@@ -2,7 +2,7 @@
 
 [中文](agent-sign-in.zh-CN.md)
 
-You type one address into Claude Code, `https://space.univer.ai/mcp`, click **Allow** once in the browser, and the agent can work in Workspace, by default as a new agent that you own and, if you choose, as you. This page explains what happens in between.
+You type one address into Claude Code, `https://space.univer.ai/mcp`, click one button in the browser, and the agent can work in Workspace, by default as an agent that you own and, if you choose, as you. This page explains what happens in between.
 
 The flow is OAuth 2.1 plus a few newer pieces that the MCP authorization spec brings in: resource metadata discovery, Client ID Metadata Documents (CIMD), and token exchange. Ordinary website sign-in rarely uses them, so this page assumes you are seeing them for the first time. Each section says what problem a piece solves, then shows the real request in Workspace.
 
@@ -29,7 +29,7 @@ Each OAuth term maps to one Workspace component:
 | Resource owner | You | Sign in in the browser and choose what to grant |
 | Client | An MCP client such as Claude Code, Claude, or VS Code | Starts authorization and calls tools with the token |
 | Resource server | The MCP gateway, `https://space.univer.ai/mcp` | Accepts the token and runs tool calls |
-| Authorization server | Workspace Server, `https://space.univer.ai` | Runs sign-in and the consent page, issues and revokes tokens |
+| Authorization server | Workspace Server, `https://space.univer.ai` | Runs sign-in and the connect page, issues and revokes tokens |
 
 The gateway and Workspace Server are separate services. The gateway has no database. It reads and writes files through Workspace's HTTP API. The section on the second token exchange depends on this.
 
@@ -51,11 +51,11 @@ sequenceDiagram
     C->>W: GET /.well-known/oauth-authorization-server
     W-->>C: Endpoints, CIMD and PKCE support
     C->>U: Opens /api/auth/authorize in the browser
-    U->>W: Signs in (signed out, the client gets a guest agent instead, see step 3)
     W->>D: GET the client_id URL
     D-->>W: client_name, redirect_uris
-    W-->>U: Consent page with permissions to check
-    U->>W: Allow
+    W-->>U: Connect page
+    U->>W: Signs in and comes back (or tries without signing in, see step 3)
+    U->>W: Connect
     W-->>C: Redirect to the localhost callback with code, state, iss
     C->>W: POST /api/auth/token (code + code_verifier)
     W-->>C: Access token (1 hour) and refresh token (30 days)
@@ -140,9 +140,9 @@ When Workspace gets a `client_id` like this, it fetches the document, checks tha
 
 ### Why it beats DCR
 
-With DCR, the client names itself. Any program can register a client called "Claude Code", so the name on the consent page proves nothing. Every install on every machine registers a new client. The table only grows, and Workspace can only cap its size with `MCP_MAX_REGISTERED_CLIENTS`.
+With DCR, the client names itself. Any program can register a client called "Claude Code", so the name on the connect page proves nothing. Every install on every machine registers a new client. The table only grows, and Workspace can only cap its size with `MCP_MAX_REGISTERED_CLIENTS`.
 
-CIMD ties the identity to a domain. Only whoever controls `claude.ai` can publish a document at that address. So the consent page can show **Claude Code (claude.ai)**, and the host in parentheses comes from the URL itself, not from anything the client claims. Workspace also stores nothing for it.
+CIMD ties the identity to a domain. Only whoever controls `claude.ai` can publish a document at that address. So the connect page can show **Claude Code (claude.ai)**, and the host in parentheses comes from the URL itself, not from anything the client claims. Workspace also stores nothing for it.
 
 Keep one limit in mind. CIMD proves who published the document, not which program is running on your computer. Claude Code's callback is `localhost`, so any program on your machine can start a sign-in with that `client_id`. Approve only a connection you just started yourself.
 
@@ -152,7 +152,7 @@ Workspace has to send a request to a URL that a stranger chose. Without limits, 
 
 It also means Workspace Server needs outbound internet access. A private deployment without it sets `MCP_CIMD_ENABLED=0`. The authorization server metadata then stops advertising CIMD, and clients fall back to DCR.
 
-## Step 3: Sign in and approve in the browser
+## Step 3: Connect in the browser
 
 The client opens the authorization endpoint in your browser. Each parameter has a job:
 
@@ -173,37 +173,41 @@ https://space.univer.ai/api/auth/authorize
 - `state` comes from the client and returns unchanged on the callback. It stops someone from slipping an authorization you never started into your client.
 - `code_challenge` is half of PKCE, explained in the next step.
 
-If you are not signed in and the client listens on your computer, as Claude Code does, you see no page at all. The next paragraph explains. Otherwise Workspace sends you to its sign-in page first. Depending on the deployment, you can sign in with a password, GitHub, Discord, or Google. If you choose GitHub, that is a separate OAuth flow in which Workspace is the client. It ends when you return to Workspace and has nothing to do with the agent's token.
+Workspace answers with a connect page. It names the client and lists what the client cannot fake: the server, the address the browser returns to, and the Client ID. The rest of the page depends on whether you are signed in to Workspace in that browser. A browser where only an agent is signed in counts as signed out, and the page leaves that agent's cookie alone.
 
-A browser with no Workspace session can give the client a guest agent instead of a person. A guest agent is a new agent account named after the client (the CIMD document's `client_name`, or the name a DCR client registered), such as "Claude Code · g3wq". It can read nobody's private files. When the `redirect_uri` is a loopback `http` address (`127.0.0.1`, `[::1]` or `localhost`), Workspace shows no page. It sends the browser straight back to the callback with a code for a new guest agent that carries every permission the client asked for, and the browser stays signed out. Nobody's data is granted, and the code goes only to a program on that computer, so there is nothing to approve. Workspace creates the agent only when the client trades the code for tokens, so a code the client never uses leaves nothing behind. By default each address creates at most 5 agents an hour (`AGENT_CREATE_LIMIT_PER_HOUR`), and past that the browser shows `AGENT_CREATE_RATE_LIMITED`. While 10,000 such codes wait to be traded, or once one address got 20 of them within a minute, the client gets `temporarily_unavailable` instead of a code, and you try again a minute later. The guest agent does not stay silent about what it is: its server instructions and its `whoami` result say that Workspace created it because the browser had no Workspace session, that you can reconnect after you sign in to connect under your own account, and that otherwise you can keep the agent by claiming it. To get an agent you own, or to connect as yourself, sign in to Workspace in that browser before you connect. With any other `redirect_uri`, such as an `https` one, the sign-in page offers **Continue as a guest agent**, and the guest then approves the consent page like a signed-in user. A deployment that turns guest agents off always shows the sign-in page. The [agent handoff showcase](agent-handoff-showcase.md#start-an-agent-without-an-account) covers what a guest agent can do and how a person claims it.
+### Signed out
 
-After sign-in comes the consent page:
+The page offers **Sign in to connect**. Depending on the deployment, you can sign in with a password, GitHub, Discord, or Google, and then you come back to the same page. If you choose GitHub, that is a separate OAuth flow in which Workspace is the client. It ends when you return to Workspace and has nothing to do with the agent's token. **Deny** sends the client `access_denied`.
 
-![The consent page of a local Workspace. Claude Code (claude.ai) asks to use Workspace. The page lists the Server, Returns to, and Client ID, offers A new agent that you own, selected and marked Recommended, or Yourself, then four permissions](images/agent-sign-in/consent.png)
+For a CIMD client, Workspace fetches the document before anyone signs in, so even this page shows a name it checked. The fetch counts toward the same per-address limits as a guest's: 10 an hour, and one at a time. When Workspace refuses the fetch, the browser goes to the sign-in page instead. An error page here does not say what was wrong with the document.
 
-The screenshot comes from a local Workspace, so the server and the callback are on `127.0.0.1`. The Client ID is Claude Code's real CIMD URL, and Workspace read the name and host from that document.
+Unless the deployment turned guest agents off, the page also offers **Try without signing in**. It gives the client a guest agent instead of a person. A guest agent is a new agent account named after the client (the CIMD document's `client_name`, or the name a DCR client registered), such as "Claude Code · g3wq". It has an empty Personal Space and can read nobody's private files. The button sends the browser straight back to the callback with a code, and the browser stays signed out. The code carries `read write publish worktree:merge` when the client asked for `write`, and only `read` otherwise. Workspace creates the agent only when the client trades the code for tokens, so a code the client never uses leaves nothing behind. By default each address creates at most 5 agents an hour (`AGENT_CREATE_LIMIT_PER_HOUR`). At that limit the button is disabled and the page says why. While 10,000 such codes wait to be traded, or once one address got 20 of them within a minute, the client gets `temporarily_unavailable` instead of a code, and you try again a minute later. With guest agents off, a CIMD client goes straight to the sign-in page.
 
-The page asks whom the client connects as. **A new agent that you own** is selected. Workspace creates that agent when the client trades the code for tokens, names it after the client, such as "Claude Code · d8ik", and you have already claimed it: it has its own empty Personal Space, opens your files only when you share them with it, and appears under **My agents**. Its files never expire and its share pages carry no **Unverified agent** mark. **Yourself** connects the client as you, with everything you can open. The same limit of 5 agents an hour applies to the new agent. When this address reached it, the page disables the choice, says why, and leaves **Yourself** selected. An agent signed in to the browser, such as a guest agent, sees no choice and connects as itself.
+The guest agent knows what it is: its server instructions and its `whoami` result tell it that it is a temporary agent, and that when it is done it gives you a handoff link from `claim`. You open the link to see its work without signing in, and sign in there to take the agent and keep its files. The [agent handoff showcase](agent-handoff-showcase.md#start-an-agent-without-an-account) covers what a guest agent can do and how a person takes it.
 
-The page also lists up to five agents you already own and have not stopped, most recently active first. When one of them was made for a client of the same name, the page selects it instead, so connecting a client again, after you removed it or its sign-in expired, continues the same agent with its files rather than creating another. Choosing an agent you own creates nothing and does not count toward the limit. Each agent option says that the agent works in its own space and sees your files only when you share them. The agent's server instructions and its `whoami` result name you as its owner, so when it cannot find a file of yours, it can tell you why.
+### Signed in
 
-The four permissions are the scopes. You can uncheck any of them, as long as one stays checked:
+![The signed-in connect page. Claude Code (claude.ai) wants to work in Univer Workspace. The page lists the Server, Returns to, and Client ID, says the client will work as a new agent of yours, shows the Let it change content switch turned on with four lines about what the agent can do, a Connect as a new agent button, one more agent of yours, Connect as myself, and Deny](images/agent-sign-in/connect-page.png)
 
-| Scope | Lets the agent |
-| --- | --- |
-| `read` | View spaces, files, issues, and worktrees |
-| `write` | Edit inside worktrees, and write issues and labels |
-| `publish` | Change files and spaces directly, without a worktree |
-| `worktree:merge` | Merge and discard worktrees |
+The screenshot shows the page that Workspace renders, filled with sample data, so the server and the callback are on `127.0.0.1`. The Client ID is Claude Code's real CIMD URL.
 
-With only `read` and `write`, every change the agent makes stays in a pull request for you to review and merge in the browser.
+The main button connects the client as an agent that you own. When you own an agent made for a client of the same name, the button continues that agent. Connecting a client again, after you removed it or its sign-in expired, therefore keeps the same agent and its files rather than creating another. Otherwise the button reads **Connect as a new agent**. Workspace creates that agent when the client trades the code for tokens and names it after the client, such as "Claude Code · d8ik". It is yours from the start: it has its own empty Personal Space, opens your files only when you share them with it, and appears under **My agents**. Its files never expire and its share pages carry no **Unverified agent** mark. The limit of 5 agents an hour applies to it as well. When this address reached it, the page offers no new agent and says why.
+
+Under the main button, the page lists up to five agents you own and have not stopped, most recently active first, without repeating the one on the main button. Clicking one connects the client as that agent, which creates nothing and does not count toward the limit. **Connect as myself** connects the client as you, with everything you can open. **Deny** sends the client `access_denied`. The server instructions and the `whoami` result of an agent you own name you as its owner, so when it cannot find a file of yours, it can tell you why.
+
+When the client asks for `write`, the page shows a **Let it change content** switch, turned on. The lines under it say what the agent can do with the switch on or off. A client that does not ask for `write` gets no switch. The code carries the scopes of the choice:
+
+| Choice | Scopes | Lets the agent |
+| --- | --- | --- |
+| Switch off, or no switch | `read` | View spaces, files, issues, and worktrees |
+| Switch on | `read write publish worktree:merge` | Also edit inside worktrees, write issues and labels, change files and spaces directly, and merge and discard worktrees |
 
 ## Step 4: Trade the authorization code for tokens
 
-When you click **Allow**, the browser goes back to the client's callback:
+When you click a connect button, or **Try without signing in**, the browser goes back to the client's callback:
 
 ```text
-http://localhost:<port>/callback?code=<authorization code>&state=<returned unchanged>&iss=https://space.univer.ai&scope=<the permissions you checked>
+http://localhost:<port>/callback?code=<authorization code>&state=<returned unchanged>&iss=https://space.univer.ai&scope=<the granted scopes>
 ```
 
 The client checks `state` and `iss`, then calls the token endpoint:
@@ -285,9 +289,9 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 
 | Entry point | How it gets a credential | Fits |
 | --- | --- | --- |
-| Personal access token (PAT) | Create one under **Access tokens** in the Workspace account menu, then configure `Authorization: Bearer uvw_pat_…` | MCP clients that cannot run OAuth |
+| Personal access token (PAT) | Create one under **Access tokens** in the Workspace account menu and choose **Read and write** (the default, all four scopes) or **Read only** (`read`), then configure `Authorization: Bearer uvw_pat_…` | MCP clients that cannot run OAuth |
 | `uvw auth login` | The CLI prints a URL and a code. You match the code in the browser and approve, then run `uvw auth login --complete` | Agents that run terminal commands |
-| `uvw auth guest` | The CLI creates a guest agent with no account | Making a file first and handing it to a person to claim |
+| `uvw auth guest` | The CLI creates a guest agent with no account | Making a file first and handing it to a person to take |
 | Workspace Agent | The pre-registered client `univer-workspace-harness`, through the authorization code flow | A self-hosted Workspace Agent service |
 
 `uvw auth login` looks like the OAuth device code flow, but it is Workspace's own API and issues no OAuth token. The CLI gets a separate Workspace session. See [Login](../apps/cli/README.md#login) in the CLI guide.
@@ -297,11 +301,11 @@ The OAuth flow above is the default for MCP clients. Other entry points take the
 | Symptom | Where it stops | What to do |
 | --- | --- | --- |
 | The client keeps asking you to sign in | After step 4, the client's saved token expired or broke | Sign out of the server in the client and sign in again, for example `claude mcp logout univer-workspace` |
-| After sign-in, the browser shows an `invalid_client` or `temporarily_unavailable` error page | Step 2, Workspace could not fetch the CIMD document, or the document failed its checks | On a private deployment, make sure Workspace Server can reach the internet, or set `MCP_CIMD_ENABLED=0` |
+| The browser shows an `invalid_client` or `temporarily_unavailable` error page | Step 2, Workspace could not fetch the CIMD document, or the document failed its checks | On a private deployment, make sure Workspace Server can reach the internet, or set `MCP_CIMD_ENABLED=0` |
 | On a self-hosted server behind a fake-IP proxy, CIMD always fails | Step 2, public names resolve into `198.18.0.0/15` and are refused as private addresses | Set `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` |
-| Connected, but some tools are missing | A scope was unchecked in step 3, or the URL's `?toolsets=` leaves the tools out | Sign in again and check the scope, or fix `?toolsets=` |
-| The client connected as an agent you own, not as you | Step 3, the consent page selects an agent you own, new or continued, unless you choose **Yourself** | Sign out of the server in the client, connect again, and choose **Yourself** |
-| The client connected as a new guest agent, not as you | Step 3, the browser had no Workspace session and the client listens on your computer | Claim the agent with the link it gives you, or sign out of the server in the client, sign in to Workspace in that browser, and connect again |
+| Connected, but some tools are missing | **Let it change content** was off in step 3, or the URL's `?toolsets=` leaves the tools out | Sign out of the server in the client, connect again with the switch on, or fix `?toolsets=` |
+| The client connected as an agent you own, not as you | Step 3, the main button connects as an agent you own, new or continued | Sign out of the server in the client, connect again, and click **Connect as myself** |
+| The client connected as a new guest agent, not as you | Step 3, **Try without signing in** was clicked on the signed-out page | Open the handoff link the agent gives you and take the agent there, or sign out of the server in the client, connect again, and click **Sign in to connect** |
 | Claude Code no longer opens sign-in after you configured an `Authorization` header | Claude Code skips OAuth when it sees the header | Use one or the other, not both |
 
 ## Terms and sources

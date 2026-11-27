@@ -69,7 +69,8 @@ export class ApplicationError extends Error {
     readonly status: number,
     message: string,
     readonly field?: string,
-    readonly retryAfterSeconds?: number
+    readonly retryAfterSeconds?: number,
+    readonly url?: string
   ) {
     super(message);
     this.name = "ApplicationError";
@@ -106,6 +107,7 @@ export const errorHandler: ErrorRequestHandler = (
         code: error.code,
         message: error.message,
         ...(error.field === undefined ? {} : { field: error.field }),
+        ...(error.url === undefined ? {} : { url: error.url }),
       },
     });
     return;

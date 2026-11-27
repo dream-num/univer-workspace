@@ -95,7 +95,8 @@ export function createForksModule(options: {
 
   async function draftWorktree(userId: string, forkId: string, key: string, createdVia: WriteSource | null) {
     const fork = await options.repository.findOwned(userId, { forkId });
-    if (!fork || !(await options.access.resolveSpace(userId, fork.upstreamSpaceId))) throw notFound();
+    // Writes stay with the fork's owner, so its Worktree keeps one author.
+    if (!fork || fork.ownerUserId !== userId || !(await options.access.resolveSpace(userId, fork.upstreamSpaceId))) throw notFound();
     const worktreeId = fork.openWorktreeId ?? await openForkWorktree(userId, fork, key, createdVia);
     const { worktree } = await options.worktrees.get(userId, worktreeId);
     if (worktree.state !== "draft") {

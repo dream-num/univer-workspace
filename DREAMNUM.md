@@ -68,7 +68,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It lists `pr_merge` with `core`, and for an agent User also `repo_create`, `repo_edit`, the repository member tools, `space_node` and `blob_upload`. When the connection holds the
   `worktree:merge` scope, it tells the caller to merge its own verified work, and a person or a claimed agent to hand the
   pull request over instead when asked to or when a person must decide; without that scope it leaves merging to the user.
-  An agent shares its merged Personal Space work, and an unclaimed agent also gets `claim`, which its `share` result points to. It runs
+  An unclaimed agent gets `claim` in place of `share` and shows its work with one handoff link. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G. Its executor runs resident or, from the same image, on Alibaba Cloud Function Compute
   with HeaderField session affinity; the gateway finds the form through capability discovery.
@@ -149,6 +149,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
   An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent and the human who claimed it.
+  An unclaimed agent's handoff link admits a signed-out visitor as a viewer of everything that agent owns, private Spaces
+  included, for 7 days or until a person takes the agent; the visitor's browser holds the link's code in a cookie, and no
+  User or Login Session is created.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;
@@ -224,7 +227,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   startup migration that backfills nothing. OAuth authorization codes, consent tokens, agent claim codes and CLI
   browser authorizations live there, so any replica redeems a code another issued. A row stores the SHA-256 hash of
   the code and never the code, the User it acts for, its expiry, and for an OAuth code the authorization request,
-  which names the consenting person when the code acts for an agent that person owns; a request that creates an agent, for a zero-click guest or for a new agent the consenting person owns, includes the
+  which names the consenting person when the code acts for an agent that person owns; a request that creates an agent, for a guest from the connect page's trial or for a new agent the consenting person owns, includes the
   source IP its creation limit counts. An expired row stays until a later code of the same kind deletes it.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, per-source rate limit events, sign-in code hashes, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during

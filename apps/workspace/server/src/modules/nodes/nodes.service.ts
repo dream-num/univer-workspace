@@ -7,7 +7,7 @@ import type {
   SpaceAccess,
 } from "../access/index.js";
 import { resourceCapabilities } from "../access/access.service.js";
-import { ANONYMOUS_USER_ID, createSourceRateLimiter, type Principal, type SourceRateStore } from "../identity/index.js";
+import { createSourceRateLimiter, isUserlessReader, type Principal, type SourceRateStore } from "../identity/index.js";
 import { nodeNotFound as notFound } from "./nodes.errors.js";
 import type {
   NodesRepository,
@@ -182,7 +182,7 @@ export function createNodesModule(options: {
       await options.repository.createReport({
         id,
         nodeId,
-        reporterUserId: userId === ANONYMOUS_USER_ID ? null : userId,
+        reporterUserId: isUserlessReader(userId) ? null : userId,
         reason,
         createdAt: now(),
       });

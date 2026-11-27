@@ -264,7 +264,7 @@ Keep its generated password under `home`, which `down` removes.
 
 ```bash
 seed "$REPO" as8-public 'AS8 public repository instructions.' > "$EVIDENCE/as8-seed.json"
-$V cli as8-public-repo repo edit "$REPO" --visibility public --json
+$V person as8-public-repo repo edit "$REPO" --visibility public --json
 node --input-type=module - "$ORIGIN" "$EVIDENCE" "$RUN" <<'JS'
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';

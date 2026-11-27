@@ -117,12 +117,12 @@ describe("Blob Resource HTTP API", () => {
     expect(Buffer.from(await download.arrayBuffer())).toEqual(content);
 
     expect((await fetch(contentUrl)).status).toBe(404);
-    await application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: true, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(userId), reservation.upload.nodeId, { enabled: true, role: "editor" });
     const anonymousContent = await fetch(contentUrl);
     expect(anonymousContent.headers.get("cache-control")).toBe("private, no-store");
     expect(Buffer.from(await anonymousContent.arrayBuffer())).toEqual(content);
     expect((await fetch(contentUrl, { method: "PUT", body: "denied" })).status).toBe(401);
-    await application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: false, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(userId), reservation.upload.nodeId, { enabled: false, role: "editor" });
     expect((await fetch(contentUrl, { headers: { "if-none-match": etag! } })).status).toBe(404);
     expect(
       (

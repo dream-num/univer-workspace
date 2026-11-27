@@ -1,5 +1,5 @@
 import type { IUser } from "@univerjs/protocol";
-import { ANONYMOUS_USER_ID } from "../../modules/identity/index.js";
+import { ANONYMOUS_USER_ID } from "../../modules/identity/anonymous-user.js";
 
 export function protocolUser(user: {
   readonly id: string;

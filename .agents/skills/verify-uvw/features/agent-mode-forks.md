@@ -11,7 +11,8 @@ a fork changes nothing upstream, and its pull requests stay there.
 
 - FK1 has a claimed Viewer agent fork a private repository. The fork is `clean`, listed and viewed by address and by
   ID, created again with the same name as the same fork, and lists every folder and file of the upstream with the
-  same Node, Resource and Unit IDs, while the upstream and the agent's repositories gain nothing.
+  same Node, Resource and Unit IDs, while the upstream and the agent's repositories gain nothing. The person who owns
+  the agent lists and finds the fork as their own and cannot write through it.
 - FK2 reads a file through the fork after the owner changed it on Trunk. The read returns Trunk's new revision and
   opens no pull request.
 - FK3 writes a file through the fork. The write opens one private draft pull request by the agent, which holds that
@@ -36,7 +37,8 @@ a fork changes nothing upstream, and its pull requests stay there.
 An MCP client calls `fork_create`, `fork_list`, `fork_view` and `fork_delete`, and passes the fork address as `repo`
 to `space_browse` and as `worktree` to `read`, `execute` and `unit_list`. It readies and reopens the fork's pull
 request with `pr_ready`, using `worktree.number` from `fork_view`. A person runs `uvw fork create|list|view|delete`,
-manages members with `uvw repo member add|remove`, and changes visibility with `uvw repo edit`.
+manages members with `uvw repo member add|remove`, and changes visibility with `uvw repo edit`. Adding a member and
+making a repository public need the person's browser session, so the setup runs them as `$V person`.
 
 ## Driving it with agent-browser and uvw
 
@@ -85,8 +87,8 @@ SOUTH=$(jq -r .unit.unitId "$EVIDENCE/fk-seed-South.out"); EAST=$(jq -r .unit.un
 $V cli fk-o-before space browse "$S" --recursive --json
 ```
 
-O claims a new agent A with the request the claim page sends, `POST /api/agents/claim` on O's browser session
-([HO4](agent-handoff.md#ho4-claim-ah6) drives the page), and adds A as a Viewer. The claim link is used at once and
+O takes a new agent A with the request the handoff page sends, `POST /api/agents/claim` on O's browser session
+([HO4](agent-handoff.md#ho4-preview-and-take-ah6-ah14) drives the page), and adds A as a Viewer. The handoff link is used at once and
 kept out of the log:
 
 ```bash
@@ -98,7 +100,7 @@ $V mcp --as forker fk-claim claim '{}' > /dev/null
 jq -nc --arg c "$(jq -r .claimUrl "$EVIDENCE/fk-claim.out" | sed 's#.*/claim/##')" '{code:$c}' \
   | curl --fail-with-body -sS -b "$RUN/home/fk-o.cookies" -o "$EVIDENCE/fk-claimed.json" -H 'content-type: application/json' -H "Origin: $ORIGIN" -d @- "$ORIGIN/api/agents/claim"
 perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "$EVIDENCE"/fk-claim.*
-$V cli fk-member repo member add "$A" --role viewer -R "$S" --json
+$V person fk-member repo member add "$A" --role viewer -R "$S" --json
 $V mcp --as forker fk-role repo_view "{\"repo\":\"$S\"}"
 jq -e '.accessRole == "viewer" and .capabilities.propose and .publicRead == false' "$EVIDENCE/fk-role.out"
 ```
@@ -133,11 +135,26 @@ $V mcp --as forker fk-repos repo_list '{}'
 jq -e --arg a "$A" --arg s "$S" '[.repos[].fullName] | sort == ([$a + "/personal", $s] | sort)' "$EVIDENCE/fk-repos.out"
 ```
 
+O owns A, so A's fork is also O's: O lists it and finds it by address, and cannot write through it.
+
+```bash
+ofork(){ curl -sS -b "$RUN/home/fk-o.cookies" -H "Origin: $ORIGIN" "$@"; }
+ofork --fail-with-body "$ORIGIN/api/forks" > "$EVIDENCE/fk-o-forks.json"
+jq -e --arg f "$F" '[.forks[].fullName] | index($f) != null' "$EVIDENCE/fk-o-forks.json"
+ofork --fail-with-body "$ORIGIN/api/forks/lookup?owner=$A&name=base" > "$EVIDENCE/fk-o-lookup.json"
+jq -e --arg id "$FID" '.id == $id and .state == "clean"' "$EVIDENCE/fk-o-lookup.json"
+ofork -o "$EVIDENCE/fk-o-write.json" -w '%{http_code}\n' -X POST -H "Idempotency-Key: fk-o-write-$VERIFY_UVW_RUN-0001-abcdef" "$ORIGIN/api/forks/$FID/worktree" > "$EVIDENCE/fk-o-write.status"
+grep -qx 404 "$EVIDENCE/fk-o-write.status"
+$V mcp --as forker fk-view-after fork_view "{\"fork\":\"$F\"}"
+jq -e '.state == "clean" and .worktree == null' "$EVIDENCE/fk-view-after.out"
+```
+
 Pass when A is a Viewer who may propose in the private S, the fork is `<A>/base`, `clean`, with no pull request and
 S as its upstream, the second `fork_create` and both views return that fork, and `fork_list` lists it alone. North
 reads `10` from Trunk through the fork. The fork's listing equals S's, Node for Node with the same Resource and Unit
 IDs, and holds `archive`, `East`, `North` and `South`. O's listing of S is byte for byte the same after the fork,
-and A's repositories are only its Personal Space and S.
+and A's repositories are only its Personal Space and S. O's own fork list holds `<A>/base`, O finds it by address,
+and O's write through it answers `404` and opens no pull request.
 
 ### FK2. A fork reads what Trunk holds now, and a read opens nothing
 
@@ -347,7 +364,7 @@ O then makes S public with `proposals` `members`, which lets anyone read it and 
 through the fork again and writes:
 
 ```bash
-$V cli fk-public repo edit "$S" --visibility public --proposals members --json
+$V person fk-public repo edit "$S" --visibility public --proposals members --json
 $V mcp --as forker fk-public-view fork_view "{\"fork\":\"$F2\"}"
 jq -e --arg s "$S" '.upstream.fullName == $s and .upstream.affiliation == "none" and .upstream.capabilities.propose == false and .worktree.capabilities.addUnit == false' "$EVIDENCE/fk-public-view.out"
 $V mcp --as forker fk-public-browse space_browse "{\"repo\":\"$F2\",\"recursive\":true}"

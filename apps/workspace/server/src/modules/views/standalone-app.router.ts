@@ -3,7 +3,7 @@ import { Router } from "express";
 import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
 import type { AccessResolver } from "../access/index.js";
 import type { BlobsModule } from "../blobs/index.js";
-import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
+import type { IdentityModule } from "../identity/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
 
 // A top-level uploaded document must never inherit the Workspace session origin.
@@ -37,10 +37,9 @@ export function createStandaloneAppRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
-    const session = await options.identity.getSession(request.headers.cookie);
-    const userId = session.authenticated ? session.user.id : ANONYMOUS_USER_ID;
+    const { kind, userId } = await options.identity.getReader(request.headers.cookie);
     const node = await options.access.resolveNode(userId, request.params.nodeId);
-    if (!node && !session.authenticated) {
+    if (!node && kind !== "user") {
       response.setHeader("Content-Security-Policy", `default-src 'none'; script-src 'sha256-${loginScriptHash}'; base-uri 'none'; frame-ancestors 'none'`);
       response.type("html").send(`<!doctype html><title>Sign in to Workspace</title><script>${loginScript}</script><noscript>Please sign in to Workspace, then reopen this App.</noscript>`);
       return;

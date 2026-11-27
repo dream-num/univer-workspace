@@ -108,7 +108,7 @@ describe("Team Space members", () => {
     const { requests, spaces } = workspace({ caller: "agent_unclaimed" });
     await expect(spaces.addMember("space-r", "agent-b", "viewer")).rejects.toMatchObject({
       code: "AGENT_NOT_ALLOWED",
-      message: "An unclaimed agent cannot add Team Space members. A person must claim it first.",
+      message: "An unclaimed agent cannot add Team Space members. Give the user your handoff link from claim (uvw claim in the CLI). Once they take you, try again.",
     });
     expect(requests.filter((request) => !request.startsWith("GET"))).toEqual([]);
   });

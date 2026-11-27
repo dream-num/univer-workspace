@@ -20,13 +20,13 @@ it("rolls back all settings and the timestamp if the update fails", async () => 
     CREATE TRIGGER fail_description AFTER UPDATE OF description ON spaces
     BEGIN SELECT RAISE(FAIL, 'description failed'); END
   `);
-  await expect(spaces.updateSettings("owner", "team", { name: "New", description: "New", slug: "new", publicRead: true }, 2))
+  await expect(spaces.updateSettings("owner", "team", { name: "New", description: "New", slug: "new", publicRead: true }, 2, () => {}))
     .rejects.toThrow("description failed");
   const row = database.connection.prepare("SELECT name, description, slug, public_read, updated_at FROM spaces WHERE id = 'team'").get();
   expect(row).toEqual({ name: "Team", description: "", slug: "team", public_read: 0, updated_at: 1 });
 
   // A patch which omits the description must not fire UPDATE OF description.
-  expect(await spaces.updateSettings("owner", "team", { name: "New" }, 3)).toMatchObject({ name: "New", slug: "team" });
+  expect(await spaces.updateSettings("owner", "team", { name: "New" }, 3, () => {})).toMatchObject({ name: "New", slug: "team" });
 });
 
 it("rechecks the actor's current access before writing settings", async () => {
@@ -36,8 +36,8 @@ it("rechecks the actor's current access before writing settings", async () => {
   `);
   expect(await spaces.getView("reader", "team")).toMatchObject({ memberRole: "admin" });
   database.connection.exec("UPDATE space_members SET role = 'viewer' WHERE user_id = 'reader'");
-  await expect(spaces.updateSettings("reader", "team", { name: "Denied" }, 2)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(spaces.updateSettings("reader", "team", { name: "Denied" }, 2, () => {})).rejects.toMatchObject({ code: "FORBIDDEN" });
   database.connection.exec("DELETE FROM space_members WHERE user_id = 'reader'");
-  await expect(spaces.updateSettings("reader", "team", { name: "Denied" }, 3)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(spaces.updateSettings("reader", "team", { name: "Denied" }, 3, () => {})).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(await spaces.getView("owner", "team")).toMatchObject({ name: "Team" });
 });

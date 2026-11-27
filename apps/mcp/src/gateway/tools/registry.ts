@@ -48,7 +48,7 @@ import { browseTool } from "./core/browse.js";
 import { spaceBrowseTool } from "./core/space-browse.js";
 import { spaceFindTool } from "./core/space-find.js";
 import { shareTool } from "./core/share.js";
-import { claimTool, unclaimedAgentShareTool } from "./core/claim.js";
+import { claimTool } from "./core/claim.js";
 import { unitListTool } from "./core/unit-list.js";
 import { unitAddTool } from "./core/unit-add.js";
 import { unitCreateTool } from "./core/unit-create.js";
@@ -103,7 +103,6 @@ export const tools: readonly ToolDefinition[] = [
   spaceBrowseTool,
   spaceFindTool,
   shareTool,
-  unclaimedAgentShareTool,
   claimTool,
   unitListTool,
   unitAddTool,

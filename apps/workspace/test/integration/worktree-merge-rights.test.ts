@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { UniverType } from "@univerjs/protocol";
@@ -19,13 +20,13 @@ describe("who takes a pull request to trunk", () => {
     const [owner, admin, author, editor, viewer, outsider, claimer, teamClaimer] = await Promise.all(
       ["owner", "admin", "author", "editor", "viewer", "outsider", "claimer", "team-claimer"].map((name) => person(origin, name)),
     );
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
     for (const [member, role] of [[admin, "admin"], [author, "editor"], [editor, "editor"], [viewer, "viewer"], [teamClaimer, "editor"]] as const) {
-      await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, member.id, { role });
     }
     const teamAgent = await guestAgent(origin);
     await claim(origin, teamAgent, teamClaimer);
-    await application.permissions.upsertTeamMember(owner.id, team.id, teamAgent.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, teamAgent.id, { role: "editor" });
     const userAgent = await guestAgent(origin);
     await claim(origin, userAgent, claimer);
 
@@ -110,10 +111,10 @@ describe("who takes a pull request to trunk", () => {
   it("names the agent's owner when refusing, tells an owner without edit access why, and lists the pull request to that owner", async () => {
     const { origin, application } = await start();
     const [owner, claimer] = await Promise.all(["owner", "claimer"].map((name) => person(origin, name)));
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
     const agent = await guestAgent(origin);
     await claim(origin, agent, claimer);
-    await application.permissions.upsertTeamMember(owner.id, team.id, agent.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, agent.id, { role: "editor" });
     const pull = await createPull(origin, agent, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
     await transition(origin, pull, "ready", agent);
 
@@ -132,11 +133,11 @@ describe("who takes a pull request to trunk", () => {
   it("names the person who claimed an agent author to whoever can see the pull request, and to nobody else", async () => {
     const { origin, application } = await start();
     const [owner, member, claimer, outsider] = await Promise.all(["owner", "member", "claimer", "outsider"].map((name) => person(origin, name)));
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, member.id, { role: "editor" });
     const agent = await guestAgent(origin);
     await claim(origin, agent, claimer);
-    await application.permissions.upsertTeamMember(owner.id, team.id, agent.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, agent.id, { role: "editor" });
     const unclaimed = await guestAgent(origin);
     const agentPull = await createPull(origin, agent, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
     const personPull = await createPull(origin, member, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
@@ -177,15 +178,15 @@ describe("the ready pull requests waiting for a member", () => {
     const [budgetOwner, salesOwner, author, reviewer, viewer] = await Promise.all(
       ["budget-owner", "sales-owner", "author", "reviewer", "viewer"].map((name) => person(origin, name)),
     );
-    const budget = await application.spaces.createTeamSpace(budgetOwner.id, { name: "Budget" });
-    const sales = await application.spaces.createTeamSpace(salesOwner.id, { name: "Sales" });
-    const hidden = await application.spaces.createTeamSpace(salesOwner.id, { name: "Hidden" });
+    const budget = await application.spaces.createTeamSpace(interactivePrincipal(budgetOwner.id), { name: "Budget" });
+    const sales = await application.spaces.createTeamSpace(interactivePrincipal(salesOwner.id), { name: "Sales" });
+    const hidden = await application.spaces.createTeamSpace(interactivePrincipal(salesOwner.id), { name: "Hidden" });
     for (const [space, owner] of [[budget, budgetOwner], [sales, salesOwner]] as const) {
       for (const [member, role] of [[author, "editor"], [reviewer, "editor"], [viewer, "viewer"]] as const) {
-        await application.permissions.upsertTeamMember(owner.id, space.id, member.id, { role });
+        await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), space.id, member.id, { role });
       }
     }
-    await application.permissions.upsertTeamMember(salesOwner.id, hidden.id, author.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(salesOwner.id), hidden.id, author.id, { role: "editor" });
     const pull = async (actor: Actor, spaceId: string, visibility: "private" | "space", ready: boolean) => {
       const id = await createPull(origin, actor, { kind: "team", teamSpaceId: spaceId, visibility }, spaceId);
       if (ready) await transition(origin, id, "ready", actor);
@@ -225,12 +226,12 @@ describe("finishing a merge that a Team Admin started on a pull request they may
       const stopped = stoppedBackend();
       const { origin, application, repositories } = await start(stopped.backend);
       const [owner, admin, author, claimer] = await Promise.all(["owner", "admin", "author", "claimer"].map((name) => person(origin, name)));
-      const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-      await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
-      await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
-      await application.permissions.upsertTeamMember(owner.id, team.id, claimer.id, { role: "editor" });
+      const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, admin.id, { role: "admin" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, author.id, { role: "editor" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, claimer.id, { role: "editor" });
       const agent = await guestAgent(origin);
-      await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
+      await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() }, () => {});
       await claim(origin, agent, claimer);
       const startedByAdmin = async (creator: Actor) => {
         const id = await createPull(origin, creator, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
@@ -275,9 +276,9 @@ describe("finishing a merge that a Team Admin started on a pull request they may
   it("does not let the Admin begin a merge that never reached the collaboration service", async () => {
     const { origin, application, repositories } = await start(stoppedBackend().backend);
     const [owner, admin, author] = await Promise.all(["owner", "admin", "author"].map((name) => person(origin, name)));
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, author.id, { role: "editor" });
     const pull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
     await transition(origin, pull, "ready", author);
     const operationId = randomUUID();
@@ -294,9 +295,9 @@ describe("finishing a merge that a Team Admin started on a pull request they may
   it("keeps whoever merged as the merger when an earlier Operation arrives after the merge", async () => {
     const { origin, application, repositories } = await start(stoppedBackend().backend);
     const [owner, admin, author, claimer] = await Promise.all(["owner", "admin", "author", "claimer"].map((name) => person(origin, name)));
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, author.id, { role: "editor" });
     const agent = await guestAgent(origin);
     await claim(origin, agent, claimer);
     const earlier = async (pull: string, actor: Actor, state: "pending" | "failed") => {
@@ -331,8 +332,8 @@ describe("finishing a merge that a Team Admin started on a pull request they may
   it("records the merger whose Operation stopped after the merge applied, when they send it again", async () => {
     const { origin, application, repositories } = await start(stoppedBackend().backend);
     const [owner, author] = await Promise.all(["owner", "author"].map((name) => person(origin, name)));
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-    await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, author.id, { role: "editor" });
     const pull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
     await transition(origin, pull, "ready", author);
     const operationId = randomUUID();
@@ -352,14 +353,14 @@ describe("finishing a merge that a Team Admin started on a pull request they may
       const stopped = stoppedBackend();
       const { origin, application, repositories } = await start(stopped.backend);
       const [owner, author] = await Promise.all(["owner", "author"].map((name) => person(origin, name)));
-      const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
-      await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
+      const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Budget" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, author.id, { role: "editor" });
       const pull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
       await transition(origin, pull, "ready", author);
       const own = randomUUID();
       await repositories.worktrees.reserveOperation({ id: own, kind: "merge_worktree", actorUserId: author.id, payload: { worktreeId: pull }, createdAt: Date.now() });
       if (stage !== "ready") stopped.stop(pull, stage);
-      await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "viewer" });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, author.id, { role: "viewer" });
 
       for (const key of [own, randomUUID()]) {
         expect(await mergeAs(origin, pull, author, key)).toEqual({
@@ -544,8 +545,8 @@ describe("a proposal from a member who can only read the Team Space", () => {
     const reports = await folder(s.id, "Reports");
     const trashed = await folder(s.id, "Old");
     expect((await post(origin, owner, `/api/nodes/${trashed}/trash`)).status).toBe(201);
-    const elsewhere = await application.spaces.createTeamSpace(owner.id, { name: "Elsewhere" });
-    await application.permissions.upsertTeamMember(owner.id, elsewhere.id, viewer.id, { role: "viewer" });
+    const elsewhere = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Elsewhere" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), elsewhere.id, viewer.id, { role: "viewer" });
     const foreign = await folder(elsewhere.id, "Foreign");
     const pull = await openPull(origin, viewer, s.id, "private");
     const propose = async (parentNodeId: string) =>
@@ -637,10 +638,10 @@ describe("what each member can do with a Team pull request", () => {
     const { origin, application } = await start();
     const s = await budgetSpace(origin, application);
     const claimer = await person(origin, "claimer");
-    await application.permissions.upsertTeamMember(s.owner.id, s.id, claimer.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(s.owner.id), s.id, claimer.id, { role: "editor" });
     const author = await guestAgent(origin);
     await claim(origin, author, claimer);
-    await application.permissions.upsertTeamMember(s.owner.id, s.id, author.id, { role });
+    await application.permissions.upsertTeamMember(interactivePrincipal(s.owner.id), s.id, author.id, { role });
     const other = await trunkSheet(origin, s.owner, s.id, "Other");
     const allowed = async (response: Promise<Response>) => (await response).ok;
     const flags = async (pull: string, actor: Actor): Promise<Record<string, boolean>> => {
@@ -699,7 +700,7 @@ describe("a private pull request its author merged alone", () => {
     const [claimer, author, reader] = await Promise.all(["claimer", "author", "reader"].map((name) => person(origin, name)));
     const agent = await guestAgent(origin);
     await claim(origin, agent, claimer);
-    for (const editor of [agent, author]) await application.permissions.upsertTeamMember(s.owner.id, s.id, editor.id, { role: "editor" });
+    for (const editor of [agent, author]) await application.permissions.upsertTeamMember(interactivePrincipal(s.owner.id), s.id, editor.id, { role: "editor" });
     const seen = async (actor: Actor, pull: string) => {
       const response = await send(origin, "GET", `/api/worktrees/${pull}`, undefined, actor.cookie);
       if (response.status !== 200) return response.status;
@@ -770,7 +771,7 @@ describe("a private pull request its author merged alone", () => {
       viewer: member,
       outsider: { reads: hidden, lists: [], activity: 404 },
     });
-    await application.spaces.update(s.owner.id, s.id, { publicRead: true });
+    await application.spaces.update(interactivePrincipal(s.owner.id), s.id, { publicRead: true });
     expect(await view(reader), "a public reader who is not a member").toEqual({ reads: hidden, lists: [], activity: [] });
 
     expect((await post(origin, s.owner, `/api/nodes/${forecast.nodeId}/trash`)).status).toBe(201);
@@ -849,7 +850,7 @@ describe("publishing a pull request's pages when it merges", () => {
     const { owner, editor, viewer } = s;
     const agent = await guestAgent(origin);
     await claim(origin, agent, owner);
-    await application.permissions.upsertTeamMember(owner.id, s.id, agent.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), s.id, agent.id, { role: "editor" });
     const pull = await openPull(origin, viewer, s.id, "private");
     const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
     const sheet = await sheetIn(origin, viewer, pull, budget.unitId);
@@ -1292,9 +1293,9 @@ async function budgetSpace(origin: string, application: ProductTestApplication) 
   const [owner, admin, editor, viewer, outsider] = await Promise.all(
     ["owner", "admin", "editor", "viewer", "outsider"].map((name) => person(origin, name)),
   );
-  const team = await application.spaces.createTeamSpace(owner!.id, { name: "Budget" });
+  const team = await application.spaces.createTeamSpace(interactivePrincipal(owner!.id), { name: "Budget" });
   for (const [member, role] of [[admin, "admin"], [editor, "editor"], [viewer, "viewer"]] as const) {
-    await application.permissions.upsertTeamMember(owner!.id, team.id, member!.id, { role });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner!.id), team.id, member!.id, { role });
   }
   return {
     id: team.id, owner: owner!, admin: admin!, editor: editor!, viewer: viewer!, outsider: outsider!,

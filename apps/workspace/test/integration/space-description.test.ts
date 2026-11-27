@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -40,7 +41,7 @@ it("stores a trimmed Space description, validates it, and restricts edits to Spa
       displayName: "Reader",
       password: "correct horse battery staple",
     });
-    const team = await application.spaces.createTeamSpace(owner.view.user.id, {
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), {
       name: "Repository",
       publicRead: true,
     });

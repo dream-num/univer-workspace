@@ -35,11 +35,6 @@ export function validLoginReturnTo(value: unknown) {
   }
 }
 
-export function isOAuthAuthorizeReturnTo(value: unknown) {
-  const path = validLoginReturnTo(value)?.split(/[?#]/u, 1)[0];
-  return path === "/api/auth/authorize" || path?.startsWith("/api/auth/authorize/") === true;
-}
-
 export async function requireAuthenticatedSession(
   queryClient: QueryClient,
   returnTo?: string

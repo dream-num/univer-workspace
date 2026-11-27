@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { EmailMessage } from "../../server/src/integrations/email/index.js";
 import { logger } from "../../server/src/logging/logger.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
 const METRICS_TOKEN = "loop-metrics-test-token";
@@ -33,16 +34,17 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     fetch(`${origin}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
   expect((await post("/api/agents", {})).status).toBe(201);
-  const guest = await post("/api/auth/guest", {});
-  const cookie = guest.headers.get("set-cookie")!.split(";")[0]!;
-  const agentId = ((await guest.json()) as { agent: { id: string } }).agent.id;
-  const personal = (await application!.spaces.list(agentId)).spaces[0]!;
-  const node = await application!.nodes.create(agentId, { spaceId: personal.id, parentNodeId: null, name: "Budget" });
-  const share = async (enabled: boolean, role = "viewer") => {
+  expect((await post("/api/auth/guest", {})).status).toBe(201);
+  const sharer = await post("/api/auth/password/register", { username: "sharer", displayName: "sharer", password: "correct horse battery staple" });
+  const cookie = sharer.headers.get("set-cookie")!.split(";")[0]!;
+  const sharerId = ((await sharer.json()) as { user: { id: string } }).user.id;
+  const personal = (await application!.spaces.list(sharerId)).spaces[0]!;
+  const node = await application!.nodes.create(sharerId, { spaceId: personal.id, parentNodeId: null, name: "Budget" });
+  const share = async (enabled: boolean) => {
     const response = await fetch(`${origin}/api/nodes/${node.id}/link-sharing`, {
       method: "PUT",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ enabled, role }),
+      body: JSON.stringify({ enabled, role: "viewer" }),
     });
     expect(response.status).toBe(200);
   };
@@ -52,16 +54,15 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   let arrived = 0;
   let release!: () => void;
   const bothArrived = new Promise<void>((resolve) => (release = resolve));
-  vi.spyOn(repository, "upsertLinkSharing").mockImplementation(async (input) => {
+  vi.spyOn(repository, "upsertLinkSharing").mockImplementation(async (input, guard) => {
     if (++arrived === 2) release();
     await bothArrived;
-    return await upsert(input);
+    return await upsert(input, guard);
   });
   await Promise.all([share(true), share(true)]);
   vi.mocked(repository.upsertLinkSharing).mockRestore();
   await share(false);
   await share(true);
-  await share(true, "editor");
   const page = await fetch(`${origin}/nodes/${node.id}`, { headers: { "user-agent": "Slackbot-LinkExpanding 1.0" } });
   // A browser reload; without an explicit Cache-Control, fetch adds no-cache and the server never answers 304.
   const revalidated = await fetch(`${origin}/nodes/${node.id}`, {
@@ -77,12 +78,11 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     return ((await response.json()) as { user: { id: string } }).user.id;
   };
   const reader = await register("reader", `/nodes/${node.id}?view=immersive`);
-  await register("consenting", "/api/auth/authorize/consent?client_id=cli");
+  await register("consenting", "/api/auth/authorize?client_id=cli&scope=read");
   await register("direct");
-  const claimPage = `${origin}/claim/c0de-in-path`;
-  const claimer = await post("/api/auth/password/register", { username: "claimer", displayName: "claimer", password: "correct horse battery staple" }, { referer: claimPage });
-  expect(claimer.status).toBe(201);
-  for (const [username, referer] of [["sharepage", `${origin}/nodes/${node.id}`], ["dotdot", `${origin}/claim/../nodes/${node.id}`]]) {
+  const claimPage = `${origin}/login?returnTo=${encodeURIComponent("/claim/c0de-in-path")}`;
+  await register("claimer", "/claim/c0de-in-path");
+  for (const [username, referer] of [["sharepage", `${origin}/nodes/${node.id}`], ["handoffpage", `${origin}/claim/c0de-in-path`]]) {
     expect((await post("/api/auth/password/register", { username, displayName: username, password: "correct horse battery staple" }, { referer })).status).toBe(201);
   }
   const emailSignup = async (email: string, referer?: string) => {
@@ -106,11 +106,16 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   await oauthSignup("/api/auth/authorize?client_id=cli");
   await oauthSignup("/claim/c0de-in-path");
 
+  const own = await application!.nodes.create(reader, { spaceId: (await application!.spaces.list(reader)).spaces[0]!.id, parentNodeId: null, name: "Plan" });
+  for (const role of ["viewer", "editor"] as const) {
+    await application!.permissions.updateNodeLinkSharing(interactivePrincipal(reader), own.id, { enabled: true, role });
+  }
+
   // Share pages are counted beside the response, so wait for the counts to land.
   const after = await vi.waitFor(async () => {
     const metrics = await scrape();
     const views = (session: string) => {
-      const series = `workspace_share_page_views_total{session="${session}",owner_category="agent_unclaimed"}`;
+      const series = `workspace_share_page_views_total{session="${session}",owner_category="human"}`;
       return value(metrics, series) - value(before, series);
     };
     expect({ signedOut: views("signed_out"), signedIn: views("signed_in") }).toEqual({ signedOut: 2, signedIn: 1 });
@@ -120,9 +125,10 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   expect({
     agentsFromApi: added('workspace_guest_agents_created_total{entry="api_agents"}'),
     agentsFromGuestCard: added('workspace_guest_agents_created_total{entry="auth_guest"}'),
-    sharingOn: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="agent_unclaimed"}'),
-    sharingOnByRoleChange: added('workspace_link_sharing_changes_total{state="on",role="editor",owner_category="agent_unclaimed"}'),
-    sharingOff: added('workspace_link_sharing_changes_total{state="off",role="viewer",owner_category="agent_unclaimed"}'),
+    sharingOn: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="human"}'),
+    sharingOnByAgent: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="agent_unclaimed"}'),
+    sharingOnByRoleChange: added('workspace_link_sharing_changes_total{state="on",role="editor",owner_category="human"}'),
+    sharingOff: added('workspace_link_sharing_changes_total{state="off",role="viewer",owner_category="human"}'),
     signupsFromShareLink: added('workspace_signups_total{method="password",source="share_link"}'),
     signupsFromConsent: added('workspace_signups_total{method="password",source="oauth_consent"}'),
     signupsDirect: added('workspace_signups_total{method="password",source="direct"}'),
@@ -136,12 +142,13 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   }).toEqual({
     agentsFromApi: 1,
     agentsFromGuestCard: 1,
-    sharingOn: 2,
+    sharingOn: 3,
+    sharingOnByAgent: 0,
     sharingOnByRoleChange: 0,
     sharingOff: 1,
     signupsFromShareLink: 1,
     signupsFromConsent: 1,
-    signupsDirect: 3,
+    signupsDirect: 4,
     signupsFromClaimLink: 1,
     emailFromShareLink: 1,
     emailDirect: 1,
@@ -150,7 +157,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     oauthFromConsent: 1,
     oauthFromClaimLink: 1,
   });
-  for (const identifying of [node.id, agentId, reader, "Slackbot", "c0de-in-path"]) expect(after).not.toContain(identifying);
+  for (const identifying of [node.id, sharerId, reader, "Slackbot", "c0de-in-path"]) expect(after).not.toContain(identifying);
 
   const logged = events.mock.calls.map(([line]) => line as Record<string, unknown>)
     .filter((line) => typeof line.event === "string" && line.event.startsWith("workspace."));
@@ -161,7 +168,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     event: "workspace.signup", source: "share_link", user_id: reader, node_id: node.id,
   }));
   expect(logged).toContainEqual(expect.objectContaining({
-    event: "workspace.link_sharing", state: "off", node_id: node.id, user_id: agentId,
+    event: "workspace.link_sharing", state: "off", node_id: node.id, user_id: sharerId,
   }));
   expect(logged.filter((line) => line.event === "workspace.guest_agent")).toHaveLength(2);
   const claimSignups = logged.filter((line) => line.event === "workspace.signup" && line.source === "claim_link");
@@ -170,10 +177,11 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   expect(JSON.stringify(logged)).not.toContain("c0de-in-path");
 });
 
-it("counts a ceiling denial by action, code and the category of the principal it stopped", async () => {
+it("counts a ceiling denial and a refused widening by what was asked, the code and the category of the principal it stopped", async () => {
   const origin = await start();
   const guest = await fetch(`${origin}/api/auth/guest`, { method: "POST" });
   const cookie = guest.headers.get("set-cookie")!.split(";")[0]!;
+  expect((await fetch(`${origin}/api/users/search?query=someone`, { headers: { cookie } })).status).toBe(403);
   const refused = await fetch(`${origin}/api/team-spaces`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
@@ -183,9 +191,13 @@ it("counts a ceiling denial by action, code and the category of the principal it
 
   const metrics = await (await fetch(`${origin}/metrics`, { headers: { authorization: `Bearer ${METRICS_TOKEN}` } })).text();
   const denials = (category: string) =>
-    value(metrics, `workspace_ceiling_denials_total{action="updateSpace",code="AGENT_NOT_ALLOWED",principal_category="${category}"}`);
+    value(metrics, `workspace_ceiling_denials_total{action="searchUsers",code="AGENT_NOT_ALLOWED",principal_category="${category}"}`);
   expect({ unclaimed: denials("agent_unclaimed"), human: denials("human") }).toEqual({ unclaimed: 1, human: 0 });
   expect(value(metrics, `workspace_ceiling_denials_total{action="createTeamSpace",code="AGENT_QUOTA_EXCEEDED",principal_category="agent_unclaimed"}`)).toBe(0);
+  const refusals = (code: string, category: string) =>
+    value(metrics, `workspace_exposure_refusals_total{change="create-public",code="${code}",principal_category="${category}"}`);
+  expect({ unclaimed: refusals("AGENT_NOT_ALLOWED", "agent_unclaimed"), claimed: refusals("INTERACTIVE_SESSION_REQUIRED", "agent_claimed") })
+    .toEqual({ unclaimed: 1, claimed: 0 });
 });
 
 function value(metrics: string, series: string): number {

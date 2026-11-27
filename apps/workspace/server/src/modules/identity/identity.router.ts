@@ -4,6 +4,7 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
 import type { AgentClaims } from "./agent-claims.js";
+import { HANDOFF_COOKIE } from "./handoff.js";
 import type { IdentityModule } from "./identity.service.js";
 import type { AgentBudget } from "./identity.types.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
@@ -18,7 +19,6 @@ export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
   readonly agentClaims: AgentClaims;
   readonly accessTokens: AccessTokenService;
-  readonly checkGuestAuthorization: (query: string, sourceIp: string | undefined) => Promise<string | null>;
   readonly mcpOAuth: McpOAuthConfig | null;
   readonly secureCookies: boolean;
   readonly discordBotApiKey?: string;
@@ -130,12 +130,30 @@ export function createIdentityRouter(options: {
 
   router.get("/agents/claim", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    response.json(await options.agentClaims.inspect(request.headers.cookie, request.query.code));
+    const { code } = request.query;
+    const { view, previewMs } = await options.agentClaims.handoff(request.headers.cookie, code).catch((error: unknown) => {
+      response.clearCookie(HANDOFF_COOKIE, { path: "/" });
+      throw error;
+    });
+    if (previewMs === null) {
+      response.clearCookie(HANDOFF_COOKIE, { path: "/" });
+    } else {
+      response.cookie(HANDOFF_COOKIE, String(code), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: options.secureCookies,
+        maxAge: previewMs,
+        path: "/",
+      });
+    }
+    response.json(view);
   });
 
   router.post("/agents/claim", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    response.json(await options.agentClaims.claim(request.headers.cookie, request.body?.code));
+    const claimed = await options.agentClaims.claim(request.headers.cookie, request.body?.code);
+    response.clearCookie(HANDOFF_COOKIE, { path: "/" });
+    response.json(claimed);
   });
 
   router.post("/agents/:agentId/stop", async (request, response) => {
@@ -154,23 +172,11 @@ export function createIdentityRouter(options: {
         "Sign out before continuing as a guest agent."
       );
     }
-    const label = agentLabel(request.body?.label);
-    const authorization: unknown = request.body?.oauthAuthorization;
-    if (authorization !== undefined && typeof authorization !== "string") {
-      throw new ApplicationError("INVALID_INPUT", 400, "oauthAuthorization must be a string.", "oauthAuthorization");
-    }
-    // Checking a metadata-document client fetches it, so first refuse a source that could not create a guest.
     if (!session.guestAuthEnabled) {
       throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
     }
-    await identity.assertAgentCreationAllowed(request.ip);
-    const { user } = await identity.createAgent({
-      label,
-      // The name comes from the client the server resolved, never from the request.
-      clientName: authorization === undefined ? null : await options.checkGuestAuthorization(authorization, request.ip),
-      originIp: request.ip,
-    });
-    const issued = await identity.issueSession(user, "browser");
+    const { user } = await identity.createAgent({ label: agentLabel(request.body?.label), originIp: request.ip });
+    const issued = await identity.issueSession(user, "agent");
     setSessionCookie(response, identity, issued.cookieValue, options);
     recordLoopEvent("workspace.guest_agent", { entry: "auth_guest" }, { user_id: user.id });
     response.status(201).json({ agent: { id: user.id, username: user.username } });
@@ -532,12 +538,9 @@ function logOAuthFailure(
   console.error(`[identity] ${provider} OAuth callback failed`, error);
 }
 
-// The browser signs up from /login?returnTo=…, or on the claim page, which has its own sign-in form,
-// and a same-origin request's Referer keeps that query or that page.
+// The browser signs up from /login?returnTo=…, and a same-origin request's Referer keeps that query.
 function loginReturnTo(request: Request): string | undefined {
-  const referer = URL.parse(request.get("referer") ?? "");
-  const claimPage = referer?.pathname.startsWith("/claim/") ? referer.pathname : undefined;
-  return referer?.searchParams.get("returnTo") ?? claimPage;
+  return URL.parse(request.get("referer") ?? "")?.searchParams.get("returnTo") ?? undefined;
 }
 
 function emailSourceLimited(message: string): ApplicationError {

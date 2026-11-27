@@ -1,11 +1,12 @@
 import type { PostgresDatabase } from "../connection.js";
-import type { AuthenticationMethods, ExternalIdentityProvider, User } from "../../../modules/identity/identity.types.js";
+import type { AgentSpace, AuthenticationMethods, ExternalIdentityProvider, User } from "../../../modules/identity/identity.types.js";
 import { personalSpaceName } from "../../../modules/identity/display-name.js";
 import type { WriteSource } from "../../../modules/identity/write-source.js";
 import type {
   StoredPrincipal,
   StoredSession,
   StoredCredential,
+  NewAgentAccount,
   NewPasswordUser,
   NewEmailUser,
   StoredEmailLoginCode,
@@ -62,6 +63,18 @@ export class PostgresIdentityRepository implements IdentityRepository {
       )
       .all("userId" in filter ? filter.userId : filter.ownerUserId) as unknown as readonly AgentRow[];
     return rows.map(toStoredAgent);
+  }
+
+  async listAgentSpaces(agentUserId: string): Promise<readonly AgentSpace[]> {
+    return await this._database
+      .prepare(
+        `SELECT spaces.id, spaces.type, spaces.name,
+           (SELECT COUNT(*) FROM nodes JOIN resources ON resources.node_id = nodes.id
+            WHERE nodes.space_id = spaces.id AND nodes.trash_batch_id IS NULL)::integer AS files
+         FROM spaces WHERE spaces.owner_user_id = ?
+         ORDER BY spaces.type, spaces.created_at, spaces.id COLLATE "C"`
+      )
+      .all(agentUserId) as unknown as readonly AgentSpace[];
   }
 
   async claimAgent(agentUserId: string, ownerUserId: string, at: number): Promise<boolean> {
@@ -242,7 +255,7 @@ export class PostgresIdentityRepository implements IdentityRepository {
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly originLabel: string;
     readonly createdAt: number;
-    readonly expiresAt: number;
+    readonly account: NewAgentAccount;
   }): Promise<void> {
     await this._database.transaction(async (database) => {
       await database
@@ -272,18 +285,21 @@ export class PostgresIdentityRepository implements IdentityRepository {
           input.createdAt,
           input.createdAt
         );
+      const { account } = input;
       await database
         .prepare(
           `INSERT INTO agents
-            (user_id, origin_label, created_at, last_active_at, expires_at)
-           VALUES (?, ?, ?, ?, ?)`
+            (user_id, owner_user_id, claimed_at, origin_label, created_at, last_active_at, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.user.id,
+          account.kind === "owned" ? account.ownerUserId : null,
+          account.kind === "owned" ? input.createdAt : null,
           input.originLabel,
           input.createdAt,
           input.createdAt,
-          input.expiresAt
+          account.kind === "temporary" ? account.expiresAt : null
         );
     });
   }
@@ -402,13 +418,11 @@ export class PostgresIdentityRepository implements IdentityRepository {
   }
 
   /**
-   * Records activity of the agent that is `userId`, or of the unclaimed agent that owns the Space of
-   * `nodeId`, and pushes out an unclaimed agent's expiry. It reads first, so an agent already seen
-   * since `staleBefore` costs no write. An agent that has already expired is always pushed out, so
-   * its next use brings it back.
+   * Reads first, so an agent already seen since `staleBefore` costs no write. An agent that has
+   * already expired is always pushed out, so its next use brings it back.
    */
   async touchAgent(
-    target: { readonly userId: string } | { readonly nodeId: string },
+    target: { readonly userId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
@@ -752,6 +766,11 @@ export class PostgresIdentityRepository implements IdentityRepository {
     return toSignInCode(await this._database.prepare(by ? signInCodeSql.findByUserCode : signInCodeSql.find).get(kind, hash));
   }
 
+  async findPreviewGrant(codeHash: string, now: number): Promise<string | null> {
+    const row = await this._database.prepare(signInCodeSql.findPreviewGrant).get(codeHash, now) as { readonly user_id: string } | undefined;
+    return row?.user_id ?? null;
+  }
+
   async deleteSignInCode(kind: SignInCodeKind, codeHash: string): Promise<boolean> {
     return (await this._database.prepare(signInCodeSql.delete).run(kind, codeHash)).changes > 0;
   }
@@ -881,15 +900,9 @@ export async function touchAgent(
   const stale = await db
     .prepare(
       `SELECT user_id FROM agents
-       WHERE (last_active_at <= ? OR expires_at <= ?)
-         AND ${
-           "userId" in target
-             ? "user_id = ?"
-             : `owner_user_id IS NULL AND user_id = (SELECT spaces.owner_user_id FROM nodes
-                 JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
-         }`
+       WHERE (last_active_at <= ? OR expires_at <= ?) AND user_id = ?`
     )
-    .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
+    .get(staleBefore, at, target.userId) as
     | { readonly user_id: string }
     | undefined;
   if (!stale) return;

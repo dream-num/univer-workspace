@@ -53,16 +53,17 @@ describe("changing the password", () => {
     expect(await authenticated(origin, bob)).toBe(true);
   });
 
-  it("keeps the CLI session that changes the password and ends the others", async () => {
+  it("refuses a CLI session, and keeps the password and every session", async () => {
     const origin = await start();
     await signIn(origin, "/api/auth/password/register", "alice", { displayName: "alice" });
     const changing = await signIn(origin, "/api/auth/cli/password/login", "alice");
     const other = await signIn(origin, "/api/auth/cli/password/login", "alice");
 
-    expect(await changePassword(origin, changing, PASSWORD, NEW_PASSWORD)).toBe(204);
+    expect(await changePassword(origin, changing, PASSWORD, NEW_PASSWORD)).toBe(403);
 
     expect(await authenticated(origin, changing)).toBe(true);
-    expect(await authenticated(origin, other)).toBe(false);
+    expect(await authenticated(origin, other)).toBe(true);
+    expect(await changePassword(origin, await signIn(origin, "/api/auth/password/login", "alice"), PASSWORD, NEW_PASSWORD)).toBe(204);
   });
 });
 

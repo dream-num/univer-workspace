@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { UniverType } from "@univerjs/protocol";
@@ -21,8 +22,8 @@ describe("the Issue acceptance panel's data", () => {
     const { application, register, team, owner } = await setup();
     const editor = await register("editor");
     const viewer = await register("viewer");
-    await application.permissions.upsertTeamMember(owner.id, team, editor.id, { role: "editor" });
-    await application.permissions.upsertTeamMember(owner.id, team, viewer.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, editor.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, viewer.id, { role: "viewer" });
     const sheet = await application.resources.create(owner.id, randomUUID(), {
       kind: "univer", spaceId: team, parentNodeId: null, name: "Totals", unitType: "sheet",
     });
@@ -55,8 +56,8 @@ describe("the Issue acceptance panel's data", () => {
     const { application, register, team, owner } = await setup();
     const admin = await register("admin");
     const viewer = await register("viewer");
-    await application.permissions.upsertTeamMember(owner.id, team, admin.id, { role: "admin" });
-    await application.permissions.upsertTeamMember(owner.id, team, viewer.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, viewer.id, { role: "viewer" });
     const sheet = await application.resources.create(owner.id, randomUUID(), {
       kind: "univer", spaceId: team, parentNodeId: null, name: "Archive", unitType: "sheet",
     });
@@ -97,7 +98,7 @@ describe("the Issue acceptance panel's data", () => {
   it("answers 403 to a comparison of a removed file its reader can no longer open", async () => {
     const { application, register, team, owner } = await setup();
     const admin = await register("admin");
-    await application.permissions.upsertTeamMember(owner.id, team, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, admin.id, { role: "admin" });
     const sheet = await application.resources.create(owner.id, randomUUID(), {
       kind: "univer", spaceId: team, parentNodeId: null, name: "Sales", unitType: "sheet",
     });
@@ -171,7 +172,7 @@ describe("the Issue acceptance panel's data", () => {
   it("tells a reader who cannot see a file's name nothing about whether it is live, in Trash or deleted", async () => {
     const { application, register, team, owner } = await setup();
     const author = await register("author");
-    await application.permissions.upsertTeamMember(owner.id, team, author.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, author.id, { role: "admin" });
     const old = await application.resources.create(owner.id, randomUUID(), {
       kind: "univer", spaceId: team, parentNodeId: null, name: "Old", unitType: "sheet",
     });
@@ -234,7 +235,7 @@ describe("the Issue acceptance panel's data", () => {
 
     await application.trash.trashNode(owner.id, old.body.node.id);
     await application.trash.removePermanently(owner.id, addedBatch.id);
-    await application.spaces.update(owner.id, team, { publicRead: true });
+    await application.spaces.update(interactivePrincipal(owner.id), team, { publicRead: true });
     expect(await observe(author), "Old is in Trash, Added is deleted, and the Space reads publicly").toEqual(unseen);
     expect((await observe(owner)).units.map(({ name, fileState }) => [name, fileState])).toEqual([["Old", "inTrash"], ["Added", "deleted"]]);
   }, 60_000);
@@ -245,19 +246,19 @@ describe("the Issue acceptance panel's data", () => {
     const [early, later, byOwner, regranted] = [
       await register("early"), await register("later"), await register("by-owner"), await register("regranted"),
     ];
-    await application.permissions.upsertTeamMember(owner.id, team, assignee.id, { role: "admin" });
-    await application.permissions.upsertTeamMember(assignee.id, team, early.id, { role: "viewer" });
-    await application.permissions.upsertTeamMember(assignee.id, team, regranted.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, assignee.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(assignee.id), team, early.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(assignee.id), team, regranted.id, { role: "viewer" });
     await nextMillisecond();
     const issue = await application.issues.create(owner.id, team, { title: "Invite the reviewers", assigneeUserIds: [assignee.id] });
     await nextMillisecond();
-    await application.permissions.upsertTeamMember(assignee.id, team, later.id, { role: "editor" });
-    await application.permissions.upsertTeamMember(owner.id, team, byOwner.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(assignee.id), team, later.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, byOwner.id, { role: "viewer" });
     await nextMillisecond();
-    await application.permissions.upsertTeamMember(assignee.id, team, regranted.id, { role: "editor" });
-    await application.permissions.upsertTeamMember(assignee.id, team, byOwner.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(assignee.id), team, regranted.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(assignee.id), team, byOwner.id, { role: "editor" });
     await nextMillisecond();
-    await application.permissions.upsertTeamMember(owner.id, team, byOwner.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, byOwner.id, { role: "viewer" });
 
     const changes = await application.issues.accessChanges(owner.id, team, issue.number);
     expect(changes.members.map((row) => [row.user.id, row.role, row.grantedBy.id])).toEqual([
@@ -266,7 +267,7 @@ describe("the Issue acceptance panel's data", () => {
     ]);
     expect(changes).toMatchObject({ publicRead: false, membersTruncated: false, personalSharing: { items: [], truncated: false } });
 
-    await application.spaces.update(owner.id, team, { publicRead: true });
+    await application.spaces.update(interactivePrincipal(owner.id), team, { publicRead: true });
     expect((await application.issues.accessChanges(owner.id, team, issue.number)).publicRead).toBe(true);
     await application.issues.update(owner.id, team, issue.number, { assigneeUserIds: [] });
     expect((await application.issues.accessChanges(owner.id, team, issue.number)).members).toEqual([]);
@@ -277,11 +278,11 @@ describe("the Issue acceptance panel's data", () => {
     const claimer = await register("claimer");
     const viewer = await register("viewer");
     const grantee = await register("grantee");
-    await application.permissions.upsertTeamMember(owner.id, team, claimer.id, { role: "viewer" });
-    await application.permissions.upsertTeamMember(owner.id, team, viewer.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, claimer.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, viewer.id, { role: "viewer" });
     const { user: agent } = await application.identity.createAgent({ label: "worker", originIp: "203.0.113.9" });
     await application.repositories.identity.claimAgent(agent.id, claimer.id, Date.now());
-    await application.permissions.upsertTeamMember(owner.id, team, agent.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, agent.id, { role: "editor" });
     const personal = (await application.spaces.list(agent.id)).spaces.find((space) => space.type === "personal")!.id;
     const sheet = async (name: string) => {
       const created = await application.resources.create(agent.id, randomUUID(), {
@@ -291,12 +292,15 @@ describe("the Issue acceptance panel's data", () => {
       return { id: created.body.node.id, resourceId: created.body.node.resource!.id };
     };
     const [before, shared, granted] = [await sheet("Before"), await sheet("Shared"), await sheet("Granted")];
-    await application.permissions.updateNodeLinkSharing(agent.id, before.id, { enabled: true, role: "viewer" });
+    const { permissions } = application.repositories;
+    const link = (nodeId: string) =>
+      permissions.upsertLinkSharing({ nodeId, enabled: true, role: "viewer", actorUserId: agent.id, now: Date.now() }, () => {});
+    await link(before.id);
     await nextMillisecond();
     const issue = await application.issues.create(owner.id, team, { title: "Publish totals", assigneeUserIds: [agent.id] });
     await nextMillisecond();
-    await application.permissions.updateNodeLinkSharing(agent.id, shared.id, { enabled: true, role: "viewer" });
-    await application.permissions.upsertNodeGrant(agent.id, granted.id, grantee.id, { role: "editor" });
+    await link(shared.id);
+    await permissions.upsertGrant({ nodeId: granted.id, userId: grantee.id, role: "editor", grantedBy: agent.id, now: Date.now() }, () => {});
 
     const actor = expect.objectContaining({ id: agent.id });
     const user = expect.objectContaining({ id: grantee.id });
@@ -444,7 +448,7 @@ async function openTask() {
   const { application, register, team, owner } = await setup();
   const [author, editor, viewer] = [await register("author"), await register("editor"), await register("viewer")];
   for (const [member, role] of [[author, "editor"], [editor, "editor"], [viewer, "viewer"]] as const) {
-    await application.permissions.upsertTeamMember(owner.id, team, member.id, { role });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, member.id, { role });
   }
   const issue = await application.issues.create(owner.id, team, { title: "Update the report", assigneeUserIds: [author.id] });
   const { id: pull } = (await application.worktrees.create(author.id, randomUUID(), {
@@ -488,7 +492,7 @@ async function mergedTask() {
   const { application, register, team, owner } = await setup();
   const [admin, editor, viewer] = [await register("admin"), await register("editor"), await register("viewer")];
   for (const [member, role] of [[admin, "admin"], [editor, "editor"], [viewer, "viewer"]] as const) {
-    await application.permissions.upsertTeamMember(owner.id, team, member.id, { role });
+    await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team, member.id, { role });
   }
   const sheet = await application.resources.create(owner.id, randomUUID(), {
     kind: "univer", spaceId: team, parentNodeId: null, name: "Totals", unitType: "sheet",
@@ -527,6 +531,6 @@ async function setup() {
     return { id: issued.view.user.id, name: username, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
   };
   const owner = await register("owner");
-  const { id: team } = await application.spaces.createTeamSpace(owner.id, { name: "Team" });
+  const { id: team } = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Team" });
   return { application, register, owner, team };
 }

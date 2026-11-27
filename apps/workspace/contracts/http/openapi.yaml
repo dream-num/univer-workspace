@@ -74,6 +74,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1session
   /api/auth/authorize:
     $ref: ./paths/auth.yaml#/~1api~1auth~1authorize
+  /api/auth/authorize/guest:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1authorize~1guest
   /api/auth/authorize/consent:
     $ref: ./paths/auth.yaml#/~1api~1auth~1authorize~1consent
   /api/auth/token:

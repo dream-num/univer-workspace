@@ -138,7 +138,7 @@ diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-repo-edit.out") <(jq -S 'del(.starCount,
 jq -e '.name == "MCP Admin 2" and .description == "Edited" and .publicRead == false' "$EVIDENCE/mcp-repo-edit.out"
 $V mcp --toolsets all mcp-repo-publish repo_edit "{\"repo\":\"$O/mcp-admin\",\"visibility\":\"public\"}"
 test $? -eq 1
-jq -e '.code == "INTERACTIVE_SESSION_REQUIRED"' "$EVIDENCE/mcp-repo-publish.out"
+jq -e --arg url "$ORIGIN/confirm/public?space=$A" '.code == "INTERACTIVE_SESSION_REQUIRED" and .detail.url == $url and (.message | endswith($url))' "$EVIDENCE/mcp-repo-publish.out"
 $V cli mcp-repo-publish-cli repo view "$O/mcp-admin" --json
 jq -e '.publicRead == false' "$EVIDENCE/mcp-repo-publish-cli.out"
 $V mcp --toolsets all mcp-repo-edit-bad repo_edit "{\"repo\":\"$O/mcp-admin\"}"
@@ -158,7 +158,7 @@ jq -e --arg repo "$A" '.tool == "repo_edit" and .repo == $repo and .outcome == "
 Pass when every expected-success command exits 0 and each diff is empty; the repository
 created without `name` takes its slug as name through both tools; the over-long description
 and the empty edit fail in MCP and CLI with the same code; making the repository public over
-MCP fails with `INTERACTIVE_SESSION_REQUIRED` and leaves it private; the old slug no longer
+MCP fails with `INTERACTIVE_SESSION_REQUIRED`, carries the confirm link in its message and `detail.url`, and leaves it private; the old slug no longer
 resolves; events carry the new Space ID.
 
 ### MS5. Labels

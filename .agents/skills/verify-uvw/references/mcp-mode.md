@@ -53,7 +53,9 @@ and replaces logs, so save what you need from the logs first. Run `user` again a
 
 ## Credentials
 
-`$V user` also creates an MCP session, a fresh opencode directory and a personal access token (PAT). The
+`$V user` also signs the run user in for the gateway and creates a fresh opencode directory and a personal access token (PAT).
+`home/mcp-session` is a CLI login, which `--auth dev` sends through the gateway. `home/browser-session` is a
+browser sign-in, which minting a PAT and the connect page need; it never goes to the gateway. The
 gateway exchanges the PAT with Workspace (confidential client `univer-workspace-mcp-gateway`, whose
 secret `up` writes to `home/mcp-oauth-secret`) for a short-lived session and its scopes. In MCP mode
 `$V env` adds `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR` and `MCP_OPENCODE_MODEL` to the
@@ -71,7 +73,7 @@ $V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | -
 $V mcp-tools|mcp-skills|mcp-resources|mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
 $V mcp-token [--scopes read,write,...] [--name name]   # a new default PAT; prints only its id
-$V mcp-oauth login <label> [--guest|--guest-card|--connect-as new_agent|self] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
+$V mcp-oauth login <label> [--guest [--agent-cookie]|--connect-as new_agent|self|<owned-agent-user-id>] [--access read|read_write] [--scope read,write,...] [--client-id <https-url>|--client-name <name>] [--token-resource omit|<url>]
 $V mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]
 $V mcp-oauth revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
@@ -93,18 +95,26 @@ gateway sends as the result text. `.result.json` keeps the wire result. A tool c
 one more assertion on that event. `executor: none` requires zero worker costs. Exit codes: 0 success, 1 tool error, 2 usage, 3 transport or protocol failure, 4 HTTP 401,
 5 a completed call with invalid evidence. Exit 5 fails the journey.
 
-`mcp-oauth` is a scripted OAuth client for MO2 and MO3. `login` registers a client, or uses the CIMD
-client named by `--client-id` with callback path `/callback`. It clears the run browser's cookies, signs
-in as the run user, approves consent with only `--scopes` checked (default all four), and keeps the token
-pair and client id in `home/mcp-oauth-*`. The page preselects the agent the run user owns that was made for a client
-of the same name, else a new agent. Without `--connect-as` the login keeps that choice; `--connect-as` picks a new
-agent (`new_agent`, which fails when the page disables it at the agent creation limit) or the run user (`self`).
+`mcp-oauth` is a scripted OAuth client for MO2 and MO3. `login` registers a client with a loopback callback, or
+uses the CIMD client named by `--client-id` with callback path `/callback`. The authorize request asks for `--scope`
+(default all four). It clears the run browser's cookies, signs in as the run user, opens the connect page, saves
+`<label>-connect.png`, clicks a connect button, and keeps the token pair and client id in `home/mcp-oauth-*`. The
+page's main button connects as the agent the run user owns that was made for a client of the same name, else as a
+new agent. Without `--connect-as` the login clicks it; `--connect-as` clicks a new agent (`new_agent`, which fails
+when the page offers none, at the agent creation limit or when an agent of this client's name exists), the run user
+(`self`), or an agent the run user owns, by its user id. The page lists only up to five owned agents that are not
+stopped, most recently active first, and the login fails when it offers no button with that value. `--access read`
+turns `Let it change content` off and `--access read_write` keeps it on; without it the login leaves the switch as
+the page shows it, on. A request without `write` has no switch, and `--access read_write` then fails.
 `--client-name` registers the client under that name instead of `verify-uvw <label>`. `<label>.json` records the
-offered `choices`, the `preselected` value and the submitted `connect_as`. A journey that needs the run user passes
-`--connect-as self`. Each login that submits `new_agent` creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
---guest` needs no `user`. Its loopback callback gets a guest agent's code with no page, and it fails unless
-the browser still has no session. `--guest-card` registers a callback that is not loopback instead, takes the
-guest agent card, saves `<label>-guest-card.png`, and leaves the run browser signed in as the guest. `refresh` rotates the pair, `reuse` replays the old refresh token, `revoke`
+offered `choices`, the `primary` button, the submitted `connect_as`, which is the agent's id when one was chosen, and
+`access` with what the page `offered`, its `default` and what was `submitted`. A journey that needs the run user passes
+`--connect-as self`. Each login that connects a new agent creates an agent. `mcp --auth oauth` then expects `auth_kind: oauth`. `login
+--guest` needs no `user`. It opens the signed-out connect page, clicks `Try without signing in`, and fails unless the
+browser reaches the callback with no session. It fails when the page sends the browser to sign in, or shows the trial
+disabled at a limit. With `--agent-cookie` the browser first gets an agent's session from `POST /api/auth/guest`,
+and must hold the same one afterwards. `<label>.json` records `page`, `trial`, `browser_user_before` and
+`browser_user_after`. Each `--guest` login creates an agent. `refresh` rotates the pair, `reuse` replays the old refresh token, `revoke`
 calls RFC 7009 revocation, `direct` sends the access token straight to Workspace, and `exchange` performs
 the gateway's token exchange and signs the session out. Each writes `<label>.json` with token shapes only.
 Never record raw codes, tokens or `state` values.

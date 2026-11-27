@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
@@ -14,23 +15,23 @@ describe("repository slugs", () => {
     const owner = await register(application, "Owner");
     const other = await register(application, "other");
 
-    const first = await application.spaces.createTeamSpace(owner.id, { name: "My Docs!" });
+    const first = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "My Docs!" });
     expect(first).toMatchObject({ slug: "my-docs", fullName: "Owner/my-docs" });
     // The same name gets a numeric suffix; a name without usable characters uses the Space ID.
-    expect((await application.spaces.createTeamSpace(owner.id, { name: "My Docs!" })).slug).toBe("my-docs-2");
-    expect((await application.spaces.createTeamSpace(owner.id, { name: "文档" })).slug).toMatch(/^repo-[0-9a-f]{8}$/);
-    expect((await application.spaces.createTeamSpace(owner.id, { name: "Personal" })).slug).toMatch(/^repo-/);
+    expect((await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "My Docs!" })).slug).toBe("my-docs-2");
+    expect((await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "文档" })).slug).toMatch(/^repo-[0-9a-f]{8}$/);
+    expect((await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Personal" })).slug).toMatch(/^repo-/);
     // Another owner may reuse the slug.
-    expect((await application.spaces.createTeamSpace(other.id, { name: "My Docs" })).slug).toBe("my-docs");
+    expect((await application.spaces.createTeamSpace(interactivePrincipal(other.id), { name: "My Docs" })).slug).toBe("my-docs");
 
-    expect((await application.spaces.createTeamSpace(owner.id, { name: "Explicit", slug: "Explicit.Repo_1" })).slug).toBe(
+    expect((await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Explicit", slug: "Explicit.Repo_1" })).slug).toBe(
       "Explicit.Repo_1",
     );
     // Case-insensitive uniqueness, reserved word, format.
-    await expect(application.spaces.createTeamSpace(owner.id, { name: "x", slug: "EXPLICIT.repo_1" }))
+    await expect(application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "x", slug: "EXPLICIT.repo_1" }))
       .rejects.toThrowError(expect.objectContaining({ code: "SPACE_SLUG_TAKEN", status: 409 }));
     for (const slug of ["Personal", "-lead", "a b", "a/b", "", "x".repeat(101), 7]) {
-      await expect(application.spaces.createTeamSpace(owner.id, { name: "x", slug })).rejects.toThrowError(
+      await expect(application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "x", slug })).rejects.toThrowError(
         expect.objectContaining({ code: "INVALID_INPUT" }),
       );
     }
@@ -45,25 +46,25 @@ describe("repository slugs", () => {
     const application = await createApplication();
     const owner = await register(application, "owner");
     const stranger = await register(application, "stranger");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Private repo" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Private repo" });
     const missing = expect.objectContaining({ code: "NOT_FOUND", status: 404 });
     await expect(application.spaces.lookup(stranger.id, "owner", team.slug)).rejects.toThrowError(missing);
     await expect(application.spaces.lookup(stranger.id, "owner", "personal")).rejects.toThrowError(missing);
     await expect(application.spaces.lookup(owner.id, "owner", "absent")).rejects.toThrowError(missing);
 
-    expect(await application.spaces.update(owner.id, team.id, { slug: "renamed" })).toMatchObject({
+    expect(await application.spaces.update(interactivePrincipal(owner.id), team.id, { slug: "renamed" })).toMatchObject({
       slug: "renamed",
       fullName: "owner/renamed",
       name: "Private repo",
     });
     await expect(application.spaces.lookup(owner.id, "owner", "private-repo")).rejects.toThrowError(missing);
     // Changing the name leaves the slug alone; a taken slug conflicts; a Personal Space has none.
-    expect((await application.spaces.update(owner.id, team.id, { name: "Other" })).slug).toBe("renamed");
-    await application.spaces.createTeamSpace(owner.id, { name: "b", slug: "taken" });
-    await expect(application.spaces.update(owner.id, team.id, { slug: "TAKEN" }))
+    expect((await application.spaces.update(interactivePrincipal(owner.id), team.id, { name: "Other" })).slug).toBe("renamed");
+    await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "b", slug: "taken" });
+    await expect(application.spaces.update(interactivePrincipal(owner.id), team.id, { slug: "TAKEN" }))
       .rejects.toThrowError(expect.objectContaining({ code: "SPACE_SLUG_TAKEN" }));
     const personal = (await application.spaces.list(owner.id)).spaces.find((space) => space.type === "personal");
-    await expect(application.spaces.update(owner.id, personal?.id ?? "", { slug: "mine" })).rejects.toThrowError(
+    await expect(application.spaces.update(interactivePrincipal(owner.id), personal?.id ?? "", { slug: "mine" })).rejects.toThrowError(
       expect.objectContaining({ code: "INVALID_INPUT" }),
     );
   });
@@ -72,7 +73,7 @@ describe("repository slugs", () => {
     const application = await createApplication();
     const owner = await register(application, "owner");
     const personal = (await application.spaces.list(owner.id)).spaces.find((space) => space.type === "personal");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "t" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "t" });
     const { connection } = application.database;
     expect(() => connection.prepare("UPDATE spaces SET slug = 'x' WHERE id = ?").run(personal?.id ?? "")).toThrow();
     expect(() => connection.prepare("UPDATE spaces SET slug = 'PERSONAL' WHERE id = ?").run(team.id)).toThrow();
@@ -83,8 +84,8 @@ describe("shared Issue and Team Worktree numbering", () => {
   it("numbers Issues and Team Worktrees from one per-Space sequence", async () => {
     const application = await createApplication();
     const owner = await register(application, "owner");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Repo" });
-    const otherTeam = await application.spaces.createTeamSpace(owner.id, { name: "Other" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Repo" });
+    const otherTeam = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Other" });
 
     const issue1 = await application.issues.create(owner.id, team.id, { title: "one" });
     const pr2 = await application.worktrees.create(owner.id, "number-pr-two-0001", {
@@ -129,7 +130,7 @@ describe("shared Issue and Team Worktree numbering", () => {
     expect((await application.worktrees.getByNumber(alice.id, alicePersonalId, "2")).worktree.id)
       .toBe(a2.body.id);
     // Even a public Personal Space cannot address another creator's User Worktrees.
-    await application.spaces.update(alice.id, alicePersonalId, { publicRead: true });
+    await application.spaces.update(interactivePrincipal(alice.id), alicePersonalId, { publicRead: true });
     expect((await application.spaces.get(bob.id, alicePersonalId)).id).toBe(alicePersonalId);
     await expect(application.worktrees.getByNumber(bob.id, alicePersonalId, "1")).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -146,9 +147,9 @@ describe("shared Issue and Team Worktree numbering", () => {
     const admin = await register(application, "admin");
     const viewer = await register(application, "viewer");
     const stranger = await register(application, "stranger");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Private repo" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Private repo" });
     for (const [user, role] of [[creator, "editor"], [admin, "admin"], [viewer, "viewer"]] as const) {
-      await application.permissions.upsertTeamMember(owner.id, team.id, user.id, { role });
+      await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), team.id, user.id, { role });
     }
     const created = await application.worktrees.create(creator.id, "numbered-private-team-0001", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "Private changes", summary: null,
@@ -226,7 +227,7 @@ describe("shared Issue and Team Worktree numbering", () => {
   it("keeps old Worktrees unnumbered and filters lists by state before paging", async () => {
     const application = await createApplication();
     const owner = await register(application, "owner");
-    const team = await application.spaces.createTeamSpace(owner.id, { name: "Repo" });
+    const team = await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Repo" });
     const ids: string[] = [];
     for (let index = 0; index < 4; index += 1) {
       const created = await application.worktrees.create(owner.id, `state-pr-${index}-0000000001`, {

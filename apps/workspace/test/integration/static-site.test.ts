@@ -41,7 +41,7 @@ it("previews only Nodes readable through anonymous public-repository and inherit
   const userId = issued.view.user.id;
   const personal = (await workspace.spaces.list(userId)).spaces[0];
   if (!personal) throw new Error("Personal space is missing");
-  const repository = await workspace.spaces.createTeamSpace(userId, { name: "Public repository", publicRead: true });
+  const repository = await workspace.spaces.createTeamSpace(interactivePrincipal(userId), { name: "Public repository", publicRead: true });
   const content = Buffer.from("<!doctype html><title>HTML content is not the metadata source</title>");
   const upload = (await workspace.blobs.createUpload(interactivePrincipal(userId), crypto.randomUUID(), {
     spaceId: repository.id, parentNodeId: null, name: "Sales.univer.html",
@@ -73,23 +73,23 @@ it("previews only Nodes readable through anonymous public-repository and inherit
   expect(publicHtml).toContain(`content="https://workspace.example/nodes/${upload.nodeId}?view=immersive"`);
   expect(await (await page(child.id, { cookie: `${workspace.identity.cookieName}=${issued.cookieValue}` })).text()).toBe(indexHtml);
 
-  await workspace.permissions.updateNodeLinkSharing(userId, parent.id, { enabled: true, role: "editor" });
+  await workspace.permissions.updateNodeLinkSharing(interactivePrincipal(userId), parent.id, { enabled: true, role: "editor" });
   expect((await api(child.id)).status).toBe(200);
   const sharedResponse = await page(child.id, { "Accept-Language": "zh-CN,zh;q=0.9" });
   expect(await sharedResponse.text()).toContain('content="分享自 Univer Workspace"');
   expect(sharedResponse.headers.get("vary")).toBe("Accept-Language");
-  await workspace.permissions.updateNodeLinkSharing(userId, parent.id, { enabled: false, role: "editor" });
+  await workspace.permissions.updateNodeLinkSharing(interactivePrincipal(userId), parent.id, { enabled: false, role: "editor" });
   expect((await api(child.id)).status).toBe(404);
   expect(await (await page(child.id)).text()).toBe(indexHtml);
 
   await workspace.nodes.update(interactivePrincipal(userId), upload.nodeId, { name: '<Sales & "growth">.univer.html' });
   expect(await (await page(upload.nodeId)).text()).toContain("<title>&lt;Sales &amp; &quot;growth&quot;&gt; · Univer Workspace</title>");
-  await workspace.spaces.update(userId, repository.id, { publicRead: false });
+  await workspace.spaces.update(interactivePrincipal(userId), repository.id, { publicRead: false });
   const revoked = await page(upload.nodeId, { "If-None-Match": publicResponse.headers.get("etag") ?? "" });
   expect(revoked.status).toBe(200);
   expect(await revoked.text()).toBe(indexHtml);
   expect((await api(upload.nodeId)).status).toBe(404);
-  await workspace.spaces.update(userId, repository.id, { publicRead: true });
+  await workspace.spaces.update(interactivePrincipal(userId), repository.id, { publicRead: true });
   await workspace.trash.trashNode(userId, upload.nodeId);
   for (const id of [upload.nodeId, "missing"]) {
     expect((await api(id)).status).toBe(404);

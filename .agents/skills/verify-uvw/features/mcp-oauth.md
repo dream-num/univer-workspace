@@ -1,22 +1,23 @@
 # MCP sign-in with OAuth
 
 An MCP client that knows only the MCP URL signs in through the browser. It discovers the authorization server,
-registers or presents a Client ID Metadata Document, and the person consents to scopes they can narrow. Tokens
+registers or presents a Client ID Metadata Document, and the person connects it on one connect page, with a switch
+that narrows the grant to `read`. Tokens
 are bound to the gateway, refresh and revoke as a client expects, and replays and unsafe metadata URLs are refused.
 
 ## Sub-features
 
-- MO1 signs opencode in through browser OAuth with one MCP URL and checks scoped consent and OAuth usage events.
-- MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation, refresh-token replay, and token requests that omit `resource`.
-- MO3 uses real Claude Code and VS Code CIMD documents, checks SSRF refusals and anonymous no-fetch behavior, then disables CIMD.
-- MO4 registers Cursor's exact callbacks and completes consent and token redemption on its `cursor://` callback.
+- MO1 signs opencode in through browser OAuth with one MCP URL, turns `Let it change content` off, and checks the `read` grant and OAuth usage events.
+- MO2 drives OAuth from a script: a `read` connection, scope refusal, no direct Workspace use, refresh, revocation, refresh-token replay, and token requests that omit `resource`.
+- MO3 uses real Claude Code and VS Code CIMD documents, checks SSRF refusals and the single anonymous fetch of the signed-out connect page, then disables CIMD.
+- MO4 registers Cursor's exact callbacks and completes the connect form and token redemption on its `cursor://` callback.
 
 ## How to get to it (user POV)
 
 Add `$MCP_URL` to an MCP client such as opencode, Claude Code, VS Code or Cursor with no credentials. The client
-opens the Workspace consent page in the browser, where a signed-in person connects it as an agent they own,
-new or continued (preselected), or as themselves; after `Allow` it calls the gateway with its own tokens. Every
-journey here proves the person, so each chooses `Yourself` explicitly. The default is covered by
+opens the Workspace connect page in the browser. Its main button connects the client as an agent the signed-in
+person owns, new or continued, and `Connect as myself` connects it as the person; then the client calls the gateway
+with its own tokens. Every journey here proves the person, so each clicks `Connect as myself`. The default is covered by
 [HO12](agent-handoff.md#ho12-a-signed-in-persons-default-a-new-agent-they-own-ah12) and
 [HO13](agent-handoff.md#ho13-reconnecting-a-client-continues-the-agent-you-own-ah13) in agent handoff.
 
@@ -52,61 +53,51 @@ it with shell tracing or record raw authorize or callback URLs.
 ```
 
 Pass when the unauthenticated POST returns the metadata challenge, both discovery documents
-match this run, opencode prints an authorize URL after client discovery or registration, and the consent page
-shows all four scopes. The script chooses `Yourself`. The consent screenshot must show `worktree:merge` unchecked. The
-callback grants exactly `read write publish`, auth prints `Connected to ws`, and the run exits
+match this run, opencode prints an authorize URL after client discovery or registration, and the connect page
+shows `Let it change content` on, `Connect as myself` and `Deny`. The script turns the switch off and clicks
+`Connect as myself`; `mcp-oauth-connect.png` must show the switch off and the two read-only lines. The
+callback grants exactly `read`, auth prints `Connected to ws`, and the run exits
 0 with both completed tools. Exactly two matching usage events identify this user and the
 OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 `mcp-oauth-*` evidence. The script stops only the isolated service and auth process, then
 removes its temporary project and credentials even if an assertion fails.
 
-### MO2. Scripted OAuth: scope withheld, refresh and revocation
+### MO2. Scripted OAuth: a read connection, refresh and revocation
 
 Run: helper.
 
 Run with a full-scope default PAT, which `user` creates and each journey in
 [PAT sign-in](mcp-auth.md) restores. MO1 proves a real client; this drives the same endpoints from `verify-uvw mcp-oauth`, so it needs no model and can
 replay refresh and revocation. `login` registers a client (RFC 7591), opens the authorize URL with
-PKCE and `resource=$MCP_URL` in the run's browser, unchecks every scope not in `--scopes`, approves,
-catches the callback on a loopback port and redeems the code. Tokens stay in `home/` (mode 0600);
-`<label>.json` keeps only shapes such as `<uvw_at_… 87 chars>`, and `<label>-consent.png` shows the
-consent page. `mcp --auth oauth` calls the gateway with the current access token.
+PKCE and `resource=$MCP_URL` in the run's browser, sets `Let it change content` as `--access` says, clicks the
+button `--connect-as` names, catches the callback on a loopback port and redeems the code. Tokens stay in `home/`
+(mode 0600); `<label>.json` keeps only shapes such as `<uvw_at_… 87 chars>`, and `<label>-connect.png` shows the
+connect page. `mcp --auth oauth` calls the gateway with the current access token.
 
 ```bash
-$V mcp-oauth login mcp-oauth2-login --connect-as self --scopes read,write,publish
-jq -e '.preselected == "new_agent" and .connect_as == "self" and ([.offered[]] | all) and .submitted["worktree:merge"] == false and .callback_scope == "read write publish"
+$V mcp-oauth login mcp-oauth2-login --connect-as self --access read
+jq -e '.primary == "new_agent" and .connect_as == "self" and .access == {offered: "toggle", default: "read_write", submitted: "read"} and .callback_scope == "read"
   and .token.status == 200 and .token.cache_control == "no-store" and .token.body.token_type == "Bearer" and .token.body.expires_in == 3600
-  and .token.body.scope == "read write publish" and (.token.body.access_token | startswith("<uvw_at_")) and (.token.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth2-login.json"
+  and .token.body.scope == "read" and (.token.body.access_token | startswith("<uvw_at_")) and (.token.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth2-login.json"
 CLIENT=$(jq -r '.client_id' "$EVIDENCE/mcp-oauth2-login.json")
 $V mcp --auth oauth mcp-oauth2-whoami whoami
 $V mcp-oauth direct mcp-oauth2-direct
 $V mcp-oauth exchange mcp-oauth2-exchange oauth
-jq -e --arg client "$CLIENT" '.status == 200 and .body.scope == "read write publish" and .body.subject.kind == "oauth" and .body.subject.client_id == $client
+jq -e --arg client "$CLIENT" '.status == 200 and .body.scope == "read" and .body.subject.kind == "oauth" and .body.subject.client_id == $client
   and .body.expires_in > 0 and .body.expires_in <= 600 and .body.access_token == "[REDACTED]"' "$EVIDENCE/mcp-oauth2-exchange.json"
 
-$V mcp --auth oauth --toolsets all mcp-oauth2-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"OAuth merge scope\"}"
-NO=$(jq -r '.number' "$EVIDENCE/mcp-oauth2-pr.out")
-WO=$(jq -r '.id' "$EVIDENCE/mcp-oauth2-pr.out")
-$V mcp --auth oauth --toolsets all mcp-oauth2-unit unit_create "{\"worktree\":\"$WO\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"OAuth Scope\",\"idempotency_key\":\"mcp-oauth2-unit-$VERIFY_UVW_RUN\"}"
-$V mcp --auth oauth --toolsets all mcp-oauth2-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
-$V mcp --auth oauth --toolsets all mcp-oauth2-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
+$V mcp --auth oauth mcp-oauth2-list repo_list
+$V mcp --auth oauth mcp-oauth2-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"OAuth read scope\"}"
 test $? -eq 1
-jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-merge.out"
-jq -e --arg client "$CLIENT" '.auth_kind == "oauth" and .client_id == $client and .outcome == "tool_error" and .error_code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-merge.event.json"
-$V mcp --auth oauth --toolsets all mcp-oauth2-discard pr_discard "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
-test $? -eq 1
-jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-discard.out"
-$V cli mcp-oauth2-pr-cli pr view "$NO" -R "$O/verify-team" --json
-jq -e '.state == "ready"' "$EVIDENCE/mcp-oauth2-pr-cli.out"
-$V mcp --toolsets all mcp-oauth2-merge-pat pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
-jq -e '.state == "merged"' "$EVIDENCE/mcp-oauth2-merge-pat.out"
+jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-pr.out"
+jq -e --arg client "$CLIENT" '.auth_kind == "oauth" and .client_id == $client and .outcome == "tool_error" and .error_code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-pr.event.json"
 ```
 
 Then refresh, use the new token, and revoke it the way a client does (RFC 7009).
 
 ```bash
 $V mcp-oauth refresh mcp-oauth2-refresh
-jq -e '.status == 200 and .cache_control == "no-store" and .body.expires_in == 3600 and .body.scope == "read write publish"
+jq -e '.status == 200 and .cache_control == "no-store" and .body.expires_in == 3600 and .body.scope == "read"
   and (.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth2-refresh.json"
 $V mcp --auth oauth mcp-oauth2-after-refresh repo_list
 $V mcp-oauth revoke mcp-oauth2-revoke
@@ -169,13 +160,13 @@ test $? -eq 1
 jq -e '.token.status == 400 and .token.body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth4-login-other.json"
 ```
 
-Pass when the consent page preselected a new agent, the login chose the run user, the page offered four checked scopes, and the token grants exactly
-`read write publish` with `expires_in: 3600`, a `uvw_rt_` refresh token and `no-store`; the access
-token works through the gateway (`auth_kind: oauth`, this client) but not against Workspace directly
-(`direct`: both Bearer and cookie read as signed out); the exchange keeps the narrowed scopes and a
-session of at most 600 seconds. With that token `pr_create`, `unit_create` and `pr_ready` succeed,
-while `pr_merge` and `pr_discard` exit 1 with `workspace-scope-required`, the pull request stays
-`ready`, and the full-scope PAT then merges it. Refresh returns a new pair with the same scopes,
+Pass when the connect page's main button was a new agent, the login chose the run user, the page offered the
+content switch on and the login turned it off, and the token grants exactly `read` with `expires_in: 3600`, a
+`uvw_rt_` refresh token and `no-store`; the access token works through the gateway (`auth_kind: oauth`, this client)
+but not against Workspace directly (`direct`: both Bearer and cookie read as signed out); the exchange keeps `read`
+and a session of at most 600 seconds. With that token `repo_list` succeeds, while `pr_create` exits 1 with
+`workspace-scope-required`. The login of MO2's replay block, with the switch left on, grants all four scopes.
+Refresh returns a new pair with the same scopes,
 and the new access token works. After revocation the first Workspace-backed call exits 4 with a
 `resource_metadata` challenge, the following `whoami` exits 4, and the refresh token gets
 `invalid_grant`. `mcp-oauth2-revoked-whoami.exit-observed` and `mcp-oauth2-revoked-api.exit-observed`
@@ -217,23 +208,24 @@ if $V mcp --auth oauth mcp-cimd-revoked repo_list; then false; else test $? -eq 
 jq -e '.status == 401' "$EVIDENCE/mcp-cimd-revoked.out"
 ```
 
-Pass when `mcp-cimd-login-consent.png` shows `Claude Code (claude.ai)`, callback code/state/issuer
+Pass when `mcp-cimd-login-connect.png` shows `Claude Code (claude.ai)`, callback code/state/issuer
 checks pass, tokens are issued, `whoami` records the URL client ID, refresh and the subsequent
 Workspace-backed call succeed, and the Workspace-backed call after revocation returns 401.
 Tokens, codes and state stay out of evidence.
 
-3. Open VS Code's consent page using its real metadata, whose extra `device_code` grant
+3. Open VS Code's connect page using its real metadata, whose extra `device_code` grant
 must not prevent authorization.
 
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" vscode
 ```
 
-Pass when `mcp-cimd-vscode.json` records 200 and the consent text includes `vscode.dev`,
-with `mcp-cimd-vscode.png` showing the consent page.
+Pass when `mcp-cimd-vscode.json` records 200 and the page text includes `vscode.dev`,
+with `mcp-cimd-vscode.png` showing the connect page.
 
-4. Refuse private addresses, malformed identity and mismatched metadata; prove that an anonymous
-authorize request with a callback that is not loopback, and an anonymous consent request, never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
+4. Refuse private addresses, malformed identity and mismatched metadata; prove that an anonymous authorize request
+fetches a document at most once and answers with the signed-out connect page, and that the old consent hop is gone.
+The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
 when it resolves to 127.0.0.1, adds a query to Claude's URL, and upper-cases the host in Claude's URL. The server fetches
 the same real document for `https://CLAUDE.ai/…`, but its `client_id` is the lower-case URL, so the
 error page must name the `client_id` mismatch.
@@ -246,10 +238,11 @@ node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" reje
 ```
 
 Pass when every `mcp-cimd-reject-*.json` records 400 with no Location and the corresponding
-screenshot shows the in-place error. An anonymous authorize with a callback that is not loopback, and an
-anonymous consent request with a loopback one, both return the login redirect; `mcp-cimd-anonymous.json` shows
-equal before/after fetch counts. An anonymous authorize with a loopback callback is the zero-click guest path of
-[HO10](agent-handoff.md#ho10-a-loopback-mcp-client-from-a-signed-out-browser-ah11), which fetches. The public-only
+screenshot shows the in-place error. In `mcp-cimd-anonymous.json`, an anonymous authorize for Claude Code answers
+200 with the signed-out connect page, no consent token and a CSP whose `form-action` names the callback, after at
+most one fetch; an anonymous authorize for a document that does not exist answers 400 or 503 in place after exactly
+one fetch, with a message that does not say what failed; and `GET /api/auth/authorize/consent` answers 404. The
+trial that follows the signed-out page is [HO10](agent-handoff.md#ho10-an-mcp-client-from-a-signed-out-browser-takes-the-trial-ah11). The public-only
 `mcp-cimd-fetch-events.json` preserves the fetch attempts and outcomes from the server log.
 
 5. Disable CIMD, then restore the default before MO1, MO2 and MO4. `--reuse` only accepts
@@ -281,13 +274,13 @@ Run: helper.
 Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
 next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only
 from a fixed allowlist (currently `cursor`), so this registers Cursor's exact list, then drives
-consent with the `cursor://` callback as the run user. A browser cannot follow a `cursor://` redirect,
-so `curl` sends the run's `workspace_session` from `home/mcp-session` and evidence keeps only
+the connect form with the `cursor://` callback as the run user. A browser cannot follow a `cursor://` redirect,
+so `curl` sends the run's browser `workspace_session` from `home/browser-session` and evidence keeps only
 statuses and redacted `Location` shapes. Run after `user` with MCP enabled.
 
 ```bash
 CURSOR_CB='cursor://anysphere.cursor-mcp/oauth/callback'
-COOKIE="workspace_session=$(cat "$RUN/home/mcp-session")"
+COOKIE="workspace_session=$(cat "$RUN/home/browser-session")"
 curl -sS -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
   -d "{\"client_name\":\"Cursor\",\"redirect_uris\":[\"$CURSOR_CB\",\"https://www.cursor.com/agents/mcp/oauth/callback\",\"http://localhost:8787/callback\"]}" \
   -w '\n%{http_code}\n' > "$EVIDENCE/mcp-cursor-register.txt"
@@ -302,7 +295,7 @@ VERIFIER=$(openssl rand -hex 32)
 CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
 STATE=$(openssl rand -hex 24)
 cursor_consent() {
-  curl -sS -D "$RUN/home/cursor-consent.headers" -o "$RUN/home/cursor-consent.html" -H "cookie: $COOKIE" -G "$ORIGIN/api/auth/authorize/consent" \
+  curl -sS -D "$RUN/home/cursor-consent.headers" -o "$RUN/home/cursor-consent.html" -H "cookie: $COOKIE" -G "$ORIGIN/api/auth/authorize" \
     --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode response_type=code \
     --data-urlencode "code_challenge=$CHALLENGE" --data-urlencode code_challenge_method=S256 --data-urlencode "state=$STATE" \
     --data-urlencode "resource=$MCP_URL"
@@ -310,19 +303,20 @@ cursor_consent() {
 }
 cursor_decide() {
   curl -sS -o /dev/null -D - -H "cookie: $COOKIE" -H "origin: $ORIGIN" -X POST "$ORIGIN/api/auth/authorize/consent" \
-    --data-urlencode "consent_token=$1" --data-urlencode "decision=$2" "${@:3}" | tr -d '\r' | sed 's/^Location:/location:/'
+    --data-urlencode "consent_token=$1" "${@:2}" | tr -d '\r' | sed 's/^Location:/location:/'
 }
 TOKEN=$(cursor_consent)
 head -n1 "$RUN/home/cursor-consent.headers" | grep -q ' 200'
 grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" | grep -q "form-action 'self' cursor:;"
 grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" > "$EVIDENCE/mcp-cursor-consent-csp.txt"
-cursor_decide "$TOKEN" deny > "$RUN/home/cursor-deny.headers"
+cursor_decide "$TOKEN" --data-urlencode decision=deny > "$RUN/home/cursor-deny.headers"
 grep -i '^location:' "$RUN/home/cursor-deny.headers" | sed "s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-deny-location.txt"
 ISS_ENCODED=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$ORIGIN")
 grep -qx "location: $CURSOR_CB?error=access_denied&iss=$ISS_ENCODED&state=<state>" "$EVIDENCE/mcp-cursor-deny-location.txt"
 
 TOKEN=$(cursor_consent)
-cursor_decide "$TOKEN" allow --data-urlencode connect_as=self --data-urlencode scope=read --data-urlencode scope=write --data-urlencode scope=publish --data-urlencode scope=worktree:merge \
+# The connect page sends its switch and the clicked button, and no decision.
+cursor_decide "$TOKEN" --data-urlencode access=read_write --data-urlencode connect_as=self \
   > "$RUN/home/cursor-approve.headers"
 CODE=$(sed -n 's/^location: .*[?&]code=\([^&]*\).*/\1/p' "$RUN/home/cursor-approve.headers")
 grep -i '^location:' "$RUN/home/cursor-approve.headers" | sed "s/$CODE/<code>/; s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-approve-location.txt"
@@ -332,16 +326,16 @@ curl -sS -X POST "$ORIGIN/api/auth/token" -H 'content-type: application/x-www-fo
   --data-urlencode grant_type=authorization_code --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "code=$CODE" \
   --data-urlencode "code_verifier=$VERIFIER" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode "resource=$MCP_URL" \
   | jq '{token_type, expires_in, scope, access: (.access_token | .[0:7]), refresh: (.refresh_token | .[0:7])}' > "$EVIDENCE/mcp-cursor-token.json"
-jq -e '.token_type == "Bearer" and .expires_in == 3600 and .access == "uvw_at_" and .refresh == "uvw_rt_"' "$EVIDENCE/mcp-cursor-token.json"
+jq -e '.token_type == "Bearer" and .expires_in == 3600 and .scope == "read write publish worktree:merge" and .access == "uvw_at_" and .refresh == "uvw_rt_"' "$EVIDENCE/mcp-cursor-token.json"
 rm -f "$RUN"/home/cursor-*
 ```
 
 Pass when Cursor's
-three callbacks register with 201 in order and `myapp://callback` gets 400; the consent page for
+three callbacks register with 201 in order and `myapp://callback` gets 400; the connect page for
 the `cursor://` callback returns 200 with `form-action 'self' cursor:` in its CSP; denying redirects to
 `cursor://anysphere.cursor-mcp/oauth/callback?error=access_denied&iss=…&state=…`; approving redirects there
 with a `code` and `iss`, and redeeming that code with the `cursor://` callback returns a one-hour `uvw_at_`
-access token and a `uvw_rt_` refresh token.
+access token for all four scopes and a `uvw_rt_` refresh token.
 
 ## Gotchas
 

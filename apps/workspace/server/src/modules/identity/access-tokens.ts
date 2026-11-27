@@ -6,6 +6,21 @@ import { hashSessionSecret } from "./session-token.js";
 export const MCP_SCOPES = ["read", "write", "publish", "worktree:merge"] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 
+export type AccessTier = "read" | "read_write";
+
+export const ACCESS_TIER_SCOPES: Readonly<Record<AccessTier, readonly McpScope[]>> = {
+  read: ["read"],
+  read_write: MCP_SCOPES,
+};
+
+export function requestTier(requested: readonly McpScope[]): AccessTier {
+  return requested.includes("write") ? "read_write" : "read";
+}
+
+export function chosenTier(requested: readonly McpScope[], submitted: unknown): AccessTier {
+  return submitted === "read_write" ? requestTier(requested) : "read";
+}
+
 export const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000;
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const REFRESH_REUSE_GRACE_MS = 60 * 1000;

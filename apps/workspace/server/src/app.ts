@@ -66,7 +66,6 @@ import {
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
   createGoogleOAuthProvider,
-  createGuestAuthorizationCheck,
   createMcpClientRegistrationHandler,
   createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
@@ -466,9 +465,13 @@ export function createWorkspaceApplication(
     "/api",
     createIdentityRouter({
       identity,
-      agentClaims: createAgentClaims({ identity, repository: identityRepository, onAgentStopped: sessionSockets.closeUser }),
+      agentClaims: createAgentClaims({
+        identity,
+        repository: identityRepository,
+        onAgentClaimed: () => invalidateRealtimeNodeAccess(),
+        onAgentStopped: sessionSockets.closeUser,
+      }),
       accessTokens,
-      checkGuestAuthorization: createGuestAuthorizationCheck({ accessTokens, oauthClients, mcpOAuth: mcpOAuth ?? null, resolveClientMetadata }),
       mcpOAuth: mcpOAuth ?? null,
       secureCookies: config.secureCookies,
       ...(config.discordBotApiKey

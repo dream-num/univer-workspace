@@ -5,7 +5,7 @@ import { pinoHttp } from "pino-http";
 import type { Request, RequestHandler } from "express";
 import { logger } from "../logging/logger.js";
 
-// Claim codes are secrets, and the claim page carries one in its path. The
+// Claim codes are secrets, and the handoff page carries one in its path. The
 // router also reaches it through doubled slashes and percent escapes. Decoding
 // one escape at a time cannot throw on a malformed sequence.
 function isClaimPath(path: string): boolean {

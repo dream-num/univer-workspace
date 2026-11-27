@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ANONYMOUS_USER_ID } from "../identity/index.js";
+import { isUserlessReader } from "../identity/index.js";
 import {
   UnitStoreError,
   type UnitStore,
@@ -209,7 +209,7 @@ export function createResourcesModule(options: {
             "Blob content is not currently available."
           );
         }
-        if (userId !== ANONYMOUS_USER_ID) {
+        if (!isUserlessReader(userId)) {
           await options.repository.recordRecent(userId, resourceId, now());
         }
         return {
@@ -229,7 +229,7 @@ export function createResourcesModule(options: {
           },
         };
       }
-      if (userId !== ANONYMOUS_USER_ID) {
+      if (!isUserlessReader(userId)) {
         await options.repository.recordRecent(userId, resourceId, now());
       }
       return {

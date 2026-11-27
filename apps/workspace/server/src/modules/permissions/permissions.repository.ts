@@ -1,3 +1,4 @@
+import type { ExposureGuard } from "../access/index.js";
 import type { GrantRole, PublicUser, TeamRole } from "./permissions.types.js";
 
 export interface MembershipRow {
@@ -67,7 +68,10 @@ export interface NodeOwnerRow {
   readonly expires_at: number | null;
 }
 
-/** Mutations recheck access and capture their result in the same transaction. */
+/**
+ * Mutations recheck access and capture their result in the same transaction. A write that can widen
+ * access calls its guard after the capability checks.
+ */
 export interface PermissionsRepository {
   findUser(userId: string): Promise<PublicUser | null>;
   searchUsers(query: string, excludedUserId: string): Promise<PublicUser[]>;
@@ -78,7 +82,7 @@ export interface PermissionsRepository {
     readonly role: TeamRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): Promise<MembershipRow>;
+  }, guard: ExposureGuard<TeamRole>): Promise<MembershipRow>;
   removeMember(actorUserId: string, spaceId: string, userId: string): Promise<void>;
   listGrants(nodeId: string): Promise<GrantRow[]>;
   upsertGrant(input: {
@@ -87,7 +91,7 @@ export interface PermissionsRepository {
     readonly role: GrantRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): Promise<GrantRow>;
+  }, guard: ExposureGuard<GrantRole>): Promise<GrantRow>;
   removeGrant(actorUserId: string, nodeId: string, userId: string): Promise<GrantRole | null>;
   findLinkSharing(nodeId: string): Promise<LinkSharingRow | null>;
   /**
@@ -107,5 +111,5 @@ export interface PermissionsRepository {
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }>;
+  }, guard: ExposureGuard<GrantRole>): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }>;
 }

@@ -23,9 +23,10 @@ check passed, and refuses that agent's direct writes to Trunk. People are not ga
 
 An MCP client connected to `$MCP_URL` calls `pr_check`, `pr_view` and `pr_merge`, and a person reads the checks
 in the `Checks` section of the pull request page. A person turns on `Require checks before an agent merges` in the
-repository's settings. MP17 also calls `space_node`, `claim`, `fork_create` and `fork_view` as an agent, and drives
-`uvw repo edit --landing`, `uvw pr merge` and `uvw blob replace`, the last two as that agent. MP18 calls `space_node`,
-`file_upload_create`, `blob_upload`, `repo_edit` and `repo_member_write` as an agent on the default connection.
+repository's settings. MP17 also calls `whoami`, `space_node`, `fork_create` and `fork_view` as an agent, and drives
+`uvw repo edit --landing` as a person and `uvw auth guest`, `uvw claim`, `uvw pr merge` and `uvw blob replace` as that
+agent. MP18 calls `space_node`, `file_upload_create`, `blob_upload`, `repo_edit` and `repo_member_write` as an agent
+on the default connection.
 
 ## Driving it with agent-browser and uvw
 
@@ -64,15 +65,15 @@ $V mcp --as checker-a mpc-claim-a claim '{}'
 $V mcp --as checker-b mpc-claim-b claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. Replace the codes as
+Open each `claimUrl` in the run browser, signed in as O, and click `Take it`. Replace the codes as
 [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Register a
 person E with `POST $ORIGIN/api/auth/password/register` and keep the password outside `$EVIDENCE`. Then:
 
 ```bash
 A=$(jq -r .agent.username "$EVIDENCE/principal-checker-a.json"); B=$(jq -r .agent.username "$EVIDENCE/principal-checker-b.json")
-$V cli mpc-member-a repo member add "$A" --role viewer -R "$R" --json
-$V cli mpc-member-b repo member add "$B" --role editor -R "$R" --json
-$V cli mpc-member-e repo member add <E> --role viewer -R "$R" --json
+$V person mpc-member-a repo member add "$A" --role viewer -R "$R" --json
+$V person mpc-member-b repo member add "$B" --role editor -R "$R" --json
+$V person mpc-member-e repo member add <E> --role viewer -R "$R" --json
 $V mcp --as checker-a mpc-a-pr pr_create "{\"repo\":\"$R\",\"title\":\"Raise North\"}"
 W=$(jq -r .id "$EVIDENCE/mpc-a-pr.out"); N=$(jq -r .number "$EVIDENCE/mpc-a-pr.out")
 $V mcp --as checker-a mpc-a-add unit_add "{\"worktree\":\"$W\",\"resource\":\"$RES\"}"
@@ -165,29 +166,40 @@ Then:
 ```bash
 $V cli mpl-repo-view repo view "$R" --json landing
 jq -e '.landing == "checks"' "$EVIDENCE/mpl-repo-view.out"
-$V mcp-oauth login mpl-guest --guest-card
-$V mcp --auth oauth mpl-g-repos repo_list '{}'
-G=$(jq -r '.repos[0].fullName | split("/")[0]' "$EVIDENCE/mpl-g-repos.out")
-$V mcp --auth oauth mpl-g-claim claim '{}'
-```
-
-The run browser is now signed in as G. In a second session (`AGENT_BROWSER_SESSION=verify-uvw-$VERIFY_UVW_RUN-o`),
-sign in as O, open the `claimUrl` from `mpl-g-claim.out` and click `Claim agent`. Replace the code in `mpl-g-claim.*`
-as [MH1](agent-handoff.md#mh1-unclaimed-agent) says.
-Sign a second uvw home in as G with the Browser-approved login of
-[MA8](mcp-auth.md#ma8-existing-sign-in-clients), approved in the run browser:
-
-```bash
-$V cli mpl-member-g repo member add "$G" --role editor -R "$R" --json
 GH=$RUN/home/g-cli; mkdir -m 700 -p "$GH"
 gu() { UNIVER_HOME=$GH node apps/cli/dist/main.js "$@"; }
 gu config set workspace.origin "$ORIGIN"
-(umask 077 && gu auth login > "$RUN/home/g-cli-login.private" 2>&1)
-agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/g-cli-login.private" | head -n1)" > /dev/null
-agent-browser wait --text 'Confirm and authorize CLI'
-agent-browser find role button click --name 'Confirm and authorize CLI'
-agent-browser wait --text 'CLI authorized'
-gu auth login --complete --json | jq -e '.status == "authenticated"'
+gu auth guest --json > "$EVIDENCE/mpl-g-guest.out"
+G=$(jq -r .agent.username "$EVIDENCE/mpl-g-guest.out"); G_ID=$(jq -r .agent.id "$EVIDENCE/mpl-g-guest.out")
+(umask 077 && gu claim --json > "$RUN/home/g-claim.private")
+```
+
+The handoff link stays in `$RUN/home`, out of the evidence and the run log. In the run browser, still signed in as O,
+O claims G:
+
+```bash
+agent-browser open "$(jq -r .claimUrl "$RUN/home/g-claim.private")" > /dev/null
+agent-browser find role button click --name 'Take it'
+agent-browser wait --url '**/spaces/*'
+```
+
+O connects an MCP client as G, its own agent, so every `$V mcp --auth oauth` call below acts as G:
+
+```bash
+$V mcp-oauth login mpl-g --connect-as "$G_ID"
+$V mcp --auth oauth mpl-g-whoami whoami '{}'
+jq -e --arg id "$G_ID" --arg o "$O" '.subject.id == $id and .owner.username == $o' "$EVIDENCE/mpl-g-whoami.out"
+$V person mpl-member-g repo member add "$G" --role editor -R "$R" --json
+```
+
+No sign-in gives an agent a browser session, so the run browser borrows G's uvw session cookie to show G's view.
+The cookie goes from the session file straight into the browser and is never printed:
+
+```bash
+agent-browser cookies clear
+agent-browser cookies set workspace_session "$(jq -r '.sessions[].cookie | sub("^workspace_session="; "")' "$GH/distributions/univer-workspace-cli/workspace-cli/session.json")" --url "$ORIGIN" --http-only > /dev/null
+agent-browser open "$ORIGIN/api/session" > /dev/null
+agent-browser get text body | jq -e --arg g "$G" '.user.username == $g and .user.kind == "agent"'
 ```
 
 G proposes a change and tries to merge it with no results:
@@ -305,7 +317,8 @@ results, leaving Trunk with every row.
 ### MP18. An agent declares checks in its own repository on the default connection
 
 A claimed agent A creates a repository R, declares two checks in `.agents/checks.md` and turns on `landing` `checks`,
-all on the default connection. A adds a claimed agent B as an Editor. B's merge without results is refused with
+all on the default connection. A asks to add a claimed agent B as an Editor, which returns a confirm link, and O, who
+claimed A, adds B in the browser session. B's merge without results is refused with
 `CHECKS_REQUIRED` naming both checks, and succeeds once B reports both. B's `space_node` and `blob_upload` on R's
 Trunk are refused with `AGENT_NOT_ALLOWED`. No call below passes `--toolsets`.
 
@@ -316,8 +329,8 @@ $V mcp --as decl-a mpd-claim-a claim '{}'
 $V mcp --as decl-b mpd-claim-b claim '{}'
 ```
 
-Open each `claimUrl` in the run browser, signed in as O, and click `Claim agent`. After MP17 the run browser is signed
-in as G: run `agent-browser close` first, then sign it in as O with the block under **Browser** in
+Open each `claimUrl` in the run browser, signed in as O, and click `Take it`. After MP17 the run browser holds
+G's session: run `agent-browser close` first, then sign it in as O with the block under **Browser** in
 [the skill](../SKILL.md#drive). Replace the codes as [MH1](agent-handoff.md#mh1-unclaimed-agent) says. Then A sets up R:
 
 ```bash
@@ -337,6 +350,9 @@ jq -e '.upload.name == "checks.md" and .upload.availability == "ready"' "$EVIDEN
 $V mcp --as decl-a mpd-landing repo_edit "{\"repo\":\"$R\",\"landing\":\"checks\"}"
 jq -e '.landing == "checks"' "$EVIDENCE/mpd-landing.out"
 $V mcp --as decl-a mpd-member repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$B\",\"role\":\"editor\"}"
+test $? -eq 1
+jq -e '.code == "INTERACTIVE_SESSION_REQUIRED" and (.detail.url | endswith("&role=editor"))' "$EVIDENCE/mpd-member.out"
+$V person mpd-member-confirmed repo member add "$B" --role editor -R "$R" --json role
 ```
 
 B proposes a Sheet and tries to merge it with no results, then reports both checks and merges:
@@ -376,7 +392,8 @@ jq -s -e 'map(.code) == ["AGENT_NOT_ALLOWED", "AGENT_NOT_ALLOWED"]' "$EVIDENCE/m
 ```
 
 Pass when A's default tool list has `space_node`, `blob_upload` and `file_upload_create` and its instructions say how to
-declare checks; A creates `.agents` and a ready `checks.md` and sets `landing` to `checks` with no `toolsets`; B's first
+declare checks; A creates `.agents` and a ready `checks.md` and sets `landing` to `checks` with no `toolsets`; A's
+`repo_member_write` exits 1 with a confirm link and O's browser session adds B; B's first
 `pr_merge` exits 1 with `CHECKS_REQUIRED` naming both checks as missing; after B reports both, `pr_view` lists them
 declared and `passed`, the merge succeeds and Trunk reads Region, Total, North, 40; and B's `space_node` and
 `blob_upload` on R exit 1 with `AGENT_NOT_ALLOWED`.

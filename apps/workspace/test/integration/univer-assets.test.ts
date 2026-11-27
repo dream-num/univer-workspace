@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { createServer, type Server } from "node:http";
 import {
   existsSync,
@@ -94,7 +95,7 @@ describe("Univer embedded assets", () => {
     );
 
     await application.permissions.upsertNodeGrant(
-      owner.userId,
+      interactivePrincipal(owner.userId),
       created.nodeId,
       viewer.userId,
       { role: "viewer" }
@@ -127,12 +128,12 @@ describe("Univer embedded assets", () => {
       ).status
     ).toBe(404);
 
-    await application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: true, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner.userId), created.nodeId, { enabled: true, role: "editor" });
     expect((await fetch(signUrl)).status).toBe(200);
     const anonymousContent = await fetch(contentUrl);
     expect(anonymousContent.status).toBe(200);
     expect(Buffer.from(await anonymousContent.arrayBuffer())).toEqual(PIXEL_PNG);
-    await application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: false, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(owner.userId), created.nodeId, { enabled: false, role: "editor" });
     expect((await fetch(signUrl)).status).toBe(404);
     expect((await fetch(contentUrl)).status).toBe(404);
 

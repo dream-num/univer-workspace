@@ -44,6 +44,7 @@ function openSqlite(): Fixture {
 
 const postgresUrl = process.env.WORKSPACE_TEST_POSTGRES_URL;
 const ids = (rows: readonly { id: string }[]) => rows.map((row) => row.id);
+const pass = () => {};
 
 const backends = [
   { name: "SQLite", open: openSqlite },
@@ -114,27 +115,36 @@ for (const { name, open } of backends) {
     it("patches only supplied settings, preserves conflicting writes and rechecks membership", async () => {
       const { spaces } = db;
       await Promise.all([
-        spaces.updateSettings("alice", "joined", { name: "Renamed" }, 2),
-        spaces.updateSettings("alice", "joined", { description: "About" }, 2),
-        spaces.updateSettings("alice", "joined", { proposals: "accountable" }, 2),
+        spaces.updateSettings("alice", "joined", { name: "Renamed" }, 2, pass),
+        spaces.updateSettings("alice", "joined", { description: "About" }, 2, pass),
+        spaces.updateSettings("alice", "joined", { proposals: "accountable" }, 2, pass),
       ]);
       expect(await spaces.getView("alice", "joined")).toMatchObject({ name: "Renamed", description: "About", publicRead: false, proposals: "accountable" });
       const racing = await Promise.all(["own-a", "own-b"].map((id) =>
-        spaces.updateSettings("alice", id, { name: "Winner", slug: "claim" }, 3)));
+        spaces.updateSettings("alice", id, { name: "Winner", slug: "claim" }, 3, pass)));
       expect(racing.filter(Boolean)).toHaveLength(1);
       const loser = racing[0] ? "own-b" : "own-a";
       expect(await spaces.getView("alice", loser)).toMatchObject(
         loser === "own-a" ? { name: "aLPHA", slug: "First" } : { name: "Alpha", slug: "Second" },
       );
+      const seen: (string | null)[] = [];
+      const refuse = (before: "public" | null) => { seen.push(before); throw new Error("refused"); };
+      await expect(spaces.updateSettings("alice", "joined", { publicRead: true }, 4, refuse)).rejects.toThrow("refused");
+      expect(await spaces.getView("alice", "joined"), "a refused write changes nothing").toMatchObject({ publicRead: false, name: "Renamed" });
+      await spaces.updateSettings("alice", "joined", { publicRead: true }, 4, pass);
+      await expect(spaces.updateSettings("alice", "joined", { name: "Again" }, 4, refuse)).rejects.toThrow("refused");
+      expect(seen, "the guard gets the level stored in the write's transaction").toEqual([null, "public"]);
+      await spaces.updateSettings("alice", "joined", { publicRead: false }, 4, pass);
       await db.exec("UPDATE space_members SET role = 'viewer' WHERE space_id = 'joined' AND user_id = 'alice'");
-      await expect(spaces.updateSettings("alice", "joined", { publicRead: true }, 4)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(spaces.updateSettings("alice", "joined", { publicRead: true }, 4, refuse), "no capability, so no guard").rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(seen).toHaveLength(2);
       await db.exec("DELETE FROM space_members WHERE space_id = 'joined' AND user_id = 'alice'");
-      await expect(spaces.updateSettings("alice", "joined", { name: "Hidden" }, 5)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(spaces.updateSettings("alice", "joined", { name: "Hidden" }, 5, pass)).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
 
     it("filters suspended agent spaces and restores existing stars and pins on reactivation", async () => {
       const { spaces, pins } = db;
-      await spaces.updateSettings("bot", "bot-home", { publicRead: true }, 1);
+      await spaces.updateSettings("bot", "bot-home", { publicRead: true }, 1, pass);
       expect(await spaces.findViewByFullName("alice", "böt", "personal")).toMatchObject({ id: "bot-home" });
       expect(await spaces.findViewByFullName("alice", "BÖT", "personal")).toBeNull();
       await spaces.setStar("alice", "bot-home", true, 1);

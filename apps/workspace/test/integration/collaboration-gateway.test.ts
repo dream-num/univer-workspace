@@ -106,12 +106,12 @@ describe("collaboration gateway", () => {
       expect((await fetch(`${origin}/api/nodes/${node.id}`)).status).toBe(404);
       expect((await fetch(snapshotUrl)).status).toBe(403);
       if (policy !== "space") {
-        await application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+        await application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), shared.id, {
           enabled: true,
           role: "editor",
         });
       } else {
-        await application.spaces.update(ownerId, space.id, { publicRead: true });
+        await application.spaces.update(interactivePrincipal(ownerId), space.id, { publicRead: true });
       }
 
       const metadata = await fetch(`${origin}/api/nodes/${node.id}`);
@@ -216,12 +216,12 @@ describe("collaboration gateway", () => {
       }
 
       if (policy === "link") {
-        await application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+        await application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), shared.id, {
           enabled: false,
           role: "editor",
         });
       } else if (policy === "space") {
-        await application.spaces.update(ownerId, space.id, { publicRead: false });
+        await application.spaces.update(interactivePrincipal(ownerId), space.id, { publicRead: false });
       } else if (policy === "move") {
         await application.nodes.update(interactivePrincipal(ownerId), node.id, { parentNodeId: parent.id });
       } else if (policy === "trash") {
@@ -291,7 +291,7 @@ describe("collaboration gateway", () => {
         throw new Error("Created Resource is not a Univer Resource");
       }
       await application.permissions.updateNodeLinkSharing(
-        owner.view.user.id,
+        interactivePrincipal(owner.view.user.id),
         created.body.node.id,
         { enabled: true, role: "editor" }
       );
@@ -567,7 +567,7 @@ describe("collaboration gateway", () => {
       displayName: "History Viewer",
       password: "correct horse battery staple",
     });
-    await application.permissions.updateNodeLinkSharing(ownerId, first.nodeId, {
+    await application.permissions.updateNodeLinkSharing(interactivePrincipal(ownerId), first.nodeId, {
       enabled: true,
       role: "viewer",
     });
@@ -1766,7 +1766,7 @@ describe("content permission integration", () => {
     const viewer = await account("protection-viewer");
     const outsider = await account("protection-outsider");
     const space = team
-      ? await application.spaces.createTeamSpace(owner.id, { name: "Protected" })
+      ? await application.spaces.createTeamSpace(interactivePrincipal(owner.id), { name: "Protected" })
       : (await application.spaces.list(owner.id)).spaces[0]!;
     const created = await application.resources.create(
       owner.id,
@@ -1785,8 +1785,8 @@ describe("content permission integration", () => {
     const node = created.body.node;
     const unitId = created.body.node.resource.unitId;
     for (const [member, role] of [[editor, "editor"], [viewer, "viewer"]] as const) {
-      if (team) await application.permissions.upsertTeamMember(owner.id, space.id, member.id, { role });
-      else await application.permissions.upsertNodeGrant(owner.id, node.id, member.id, { role });
+      if (team) await application.permissions.upsertTeamMember(interactivePrincipal(owner.id), space.id, member.id, { role });
+      else await application.permissions.upsertNodeGrant(interactivePrincipal(owner.id), node.id, member.id, { role });
     }
     async function authz(cookie: string, path: string, body?: unknown, method = "POST") {
       return fetch(`${origin}/universer-api/authz${path}`, {
@@ -1822,7 +1822,7 @@ describe("content permission integration", () => {
       objectType: 3, selectRangeObject: { unitID: f.unitId, name: "Original" },
     });
     const setEditorRole = (role: "editor" | "viewer") =>
-      f.application.permissions.upsertNodeGrant(f.owner.id, f.node.id, f.editor.id, { role });
+      f.application.permissions.upsertNodeGrant(interactivePrincipal(f.owner.id), f.node.id, f.editor.id, { role });
 
     const insert = repository.create.bind(repository);
     let deniedId = "";
@@ -2143,7 +2143,7 @@ describe("content permission integration", () => {
 
   it("holds an unclaimed agent to Viewer on an Editor link, like the anonymous reader", async () => {
     const f = await fixture();
-    await f.application.permissions.updateNodeLinkSharing(f.owner.id, f.node.id, { enabled: true, role: "editor" });
+    await f.application.permissions.updateNodeLinkSharing(interactivePrincipal(f.owner.id), f.node.id, { enabled: true, role: "editor" });
     const edit = { cellValue: { 0: { 0: { v: "link edit" } } } };
     const agent = await sheetSubmit(f, (await agentSession(f)).cookie);
     expect(await agent.submit(1, "sheet.mutation.set-range-values", edit)).toBe("permission_rej");
@@ -2165,7 +2165,9 @@ describe("content permission integration", () => {
     if (created.status === 202 || created.body.node.resource?.kind !== "univer")
       throw new Error("Missing Unit");
     const unitId = created.body.node.resource.unitId;
-    await f.application.permissions.updateNodeLinkSharing(agent.id, created.body.node.id, { enabled: true, role: "viewer" });
+    // An unclaimed agent can no longer turn Link Sharing on, so the repository writes a link opened before that rule.
+    await f.application.repositories.permissions.upsertLinkSharing(
+      { nodeId: created.body.node.id, enabled: true, role: "viewer", actorUserId: agent.id, now: Date.now() }, () => {});
     const snapshot = () =>
       fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${unitId}/rev/0`, {
         headers: { cookie: f.outsider.cookie },
@@ -2186,6 +2188,52 @@ describe("content permission integration", () => {
       await joinUnit(f.origin, f.outsider.cookie, unitId);
       expect(await snapshot()).toBe(ErrorCode.OK);
     }
+  });
+
+  it("lets a handoff preview join a temporary agent's Unit read-only, and closes it when a person takes the agent", async () => {
+    const f = await fixture();
+    const agent = await agentSession(f);
+    const agentSpace = (await f.application.spaces.list(agent.id)).spaces[0]!;
+    const created = await f.application.resources.create(agent.id, "handoff-preview-unit-0001", {
+      kind: "univer",
+      spaceId: agentSpace.id,
+      parentNodeId: null,
+      name: "Agent sheet",
+      unitType: "sheet",
+    });
+    if (created.status === 202 || created.body.node.resource?.kind !== "univer")
+      throw new Error("Missing Unit");
+    const unitId = created.body.node.resource.unitId;
+    const { code } = (await (await fetch(`${f.origin}/api/agents/claim-codes`, { method: "POST", headers: { cookie: agent.cookie } })).json()) as { code: string };
+    const preview = `workspace_handoff=${code}`;
+    expect((await requestJoin(f.origin, "", unitId)).joined.code).not.toBe(CmdRspCode.OK);
+
+    const joined = await joinUnit(f.origin, preview, unitId);
+    expect(joined.members).toHaveLength(1);
+    const allowed = await fetch(`${f.origin}/universer-api/authz/-/object/-/batch_allowed`, {
+      method: "POST",
+      headers: { cookie: preview, "content-type": "application/json" },
+      body: JSON.stringify({ requests: [{ unitID: unitId, actions: [UnitAction.View, UnitAction.Edit] }] }),
+    });
+    await expect(allowed.json()).resolves.toMatchObject({
+      objectActions: [{ actions: [{ action: UnitAction.View, allowed: true }, { action: UnitAction.Edit, allowed: false }] }],
+    });
+    for (const [path, method] of [
+      [`/universer-api/comb/${f.protocolType}/unit/${unitId}/new_changes`, "POST"],
+      [`/universer-api/comment/unit/${unitId}/add`, "POST"],
+      ["/universer-api/worktrees/unknown", "GET"],
+    ] as const) {
+      expect((await fetch(`${f.origin}${path}`, { method, headers: { cookie: preview } })).status, `${method} ${path}`).toBe(401);
+    }
+
+    const claimed = await fetch(`${f.origin}/api/agents/claim`, {
+      method: "POST",
+      headers: { cookie: f.outsider.cookie, "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    expect(claimed.status).toBe(200);
+    await expect.poll(() => joined.socket.readyState).toBe(WebSocket.CLOSED);
+    expect((await requestJoin(f.origin, preview, unitId)).joined.code).not.toBe(CmdRspCode.OK);
   });
 
   async function agentSession(f: Awaited<ReturnType<typeof fixture>>) {
@@ -2381,7 +2429,7 @@ describe("content permission integration", () => {
         .run(f.owner.id, user.id);
       const issued = await f.application.identity.issueSession(user, "agent");
       const agent = { id: user.id, cookie: `${f.application.identity.cookieName}=${issued.cookieValue}` };
-      await f.application.permissions.upsertTeamMember(f.owner.id, f.space.id, agent.id, { role: "editor" });
+      await f.application.permissions.upsertTeamMember(interactivePrincipal(f.owner.id), f.space.id, agent.id, { role: "editor" });
       const folder = await f.application.nodes.create(f.owner.id, { spaceId: f.space.id, parentNodeId: null, name: ".agents" });
       const bytes = Buffer.from("## smoke\nOpen the sheet.\n");
       const owner = interactivePrincipal(f.owner.id);
@@ -2390,7 +2438,7 @@ describe("content permission integration", () => {
       });
       await f.application.blobs.upload(f.owner.id, body.upload.id, String(bytes.length), Readable.from([bytes]));
       await f.application.blobs.complete(owner, body.upload.id);
-      await f.application.spaces.update(f.owner.id, f.space.id, { landing: "checks" });
+      await f.application.spaces.update(interactivePrincipal(f.owner.id), f.space.id, { landing: "checks" });
       const head = () => {
         const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
         try {
@@ -3159,11 +3207,11 @@ it('closes existing collaboration sockets when Team membership is removed', asyn
     displayName: 'Revoke Member',
     password: 'correct horse battery staple',
   });
-  const space = await application.spaces.createTeamSpace(owner.view.user.id, {
+  const space = await application.spaces.createTeamSpace(interactivePrincipal(owner.view.user.id), {
     name: 'Revoke access',
   });
   await application.permissions.upsertTeamMember(
-    owner.view.user.id,
+    interactivePrincipal(owner.view.user.id),
     space.id,
     member.view.user.id,
     { role: 'editor' },

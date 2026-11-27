@@ -79,7 +79,10 @@ describe("MCP core Skill tool bindings", () => {
   });
 
   it("keeps claim and irreversible discard rules in tool descriptions and defers readiness and merging", () => {
-    expect(tools.find(({ name }) => name === "claim")!.description).toContain("For an unclaimed agent only");
+    const claim = tools.find(({ name }) => name === "claim")!;
+    expect(claim.principals).toEqual(["agent_unclaimed"]);
+    expect(claim.description).toContain("They open it to see everything you own without signing in");
+    expect(claim.description).toContain("The link works for 7 days, or until a person takes you.");
     const ready = tools.find(({ name }) => name === "pr_ready")!.description;
     expect(ready).toContain("With undo true, move a ready pull request back to draft before an explicitly requested write");
     expect(ready, "a client that never shows server instructions still finds the rule in whoami").toContain(
@@ -101,12 +104,10 @@ describe("MCP core Skill tool bindings", () => {
     }
   });
 
-  it("keeps page sharing guidance in the creator and leaves visibility to the user", async () => {
+  it("keeps page access guidance in the creator and says nothing there about making a repository public", async () => {
     const content = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
-    expect(content).toContain(
-      "A person's connection cannot make a repository public: give the user its `url` to do so in browser settings, which publishes everything in it. An unclaimed agent cannot either: give the user a claim link from `claim`.",
-    );
-    expect(content).not.toContain("`repo_edit` to make a repository public");
+    expect(content).toContain("Page access does not grant source access. Never change sharing without permission.");
+    expect(content).not.toContain("make a repository public");
   });
 
   it("binds every fork tool and keeps the fork's cross-file reference limit", async () => {

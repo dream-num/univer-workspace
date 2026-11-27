@@ -15,6 +15,8 @@ export {
 export type { AccessResolver } from "./access.service.js";
 export { AGENT_MERGE_WINDOW_MS, agentBudget, assertCeiling, assertCreateFilesCeiling, landsByChecks } from "./ceilings.js";
 export type { BudgetUse } from "./ceilings.js";
+export { exposureGuard } from "./exposure.js";
+export type { ExposureChange, ExposureGuard } from "./exposure.js";
 export type {
   AccessRole,
   BlobAvailability,

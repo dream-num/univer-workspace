@@ -1,4 +1,4 @@
-import type { SpaceLanding, StoredSpaceAccess } from "../access/index.js";
+import type { ExposureGuard, SpaceLanding, StoredSpaceAccess } from "../access/index.js";
 import type { SpaceProposals, SpaceStar } from "./spaces.types.js";
 
 export interface SpaceListEntry extends StoredSpaceAccess {
@@ -45,5 +45,7 @@ export interface SpacesRepository {
    */
   createTeamSpace(input: CreateTeamSpaceInput): Promise<SpaceListEntry | null>;
   /** Writes only the supplied fields. Returns null on a slug conflict. */
-  updateSettings(userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number): Promise<SpaceListEntry | null>;
+  updateSettings(
+    userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number, guard: ExposureGuard<"public">,
+  ): Promise<SpaceListEntry | null>;
 }

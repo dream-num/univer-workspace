@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import type { CreateForkResult, ForksRepository, StoredFork } from "../../../modules/forks/index.js";
-import { assertForkQuota } from "../access/access.repository.js";
+import { assertForkQuota, ownsSpaceSql } from "../access/access.repository.js";
 import { withPostgresTransaction } from "../transaction.js";
 
 const forkColumns = `
@@ -14,11 +14,13 @@ type ForkRow = Omit<StoredFork, "createdAt"> & { readonly createdAt: string };
 
 const stored = (row: ForkRow): StoredFork => ({ ...row, createdAt: Number(row.createdAt) });
 
-async function findFork(db: Pool | PoolClient, ownerUserId: string, key: ForkKey): Promise<StoredFork | null> {
+const reachable = ownsSpaceSql("forks.owner_user_id", "$1");
+
+async function findFork(db: Pool | PoolClient, actorUserId: string, key: ForkKey): Promise<StoredFork | null> {
   const [where, values] = "forkId" in key
     ? ["forks.id = $2", [key.forkId]]
     : [`lower(users.username COLLATE "C") = lower($2::text COLLATE "C") AND lower(forks.name COLLATE "C") = lower($3::text COLLATE "C")`, [key.username, key.name]];
-  const { rows: [row] } = await db.query<ForkRow>(`SELECT ${forkColumns} WHERE forks.owner_user_id = $1 AND ${where}`, [ownerUserId, ...values]);
+  const { rows: [row] } = await db.query<ForkRow>(`SELECT ${forkColumns} WHERE ${reachable} AND ${where}`, [actorUserId, ...values]);
   return row ? stored(row) : null;
 }
 
@@ -44,19 +46,19 @@ export class PostgresForksRepository implements ForksRepository {
     });
   }
 
-  async listOwned(ownerUserId: string): Promise<StoredFork[]> {
+  async listOwned(actorUserId: string): Promise<StoredFork[]> {
     const { rows } = await this.pool.query<ForkRow>(
-      `SELECT ${forkColumns} WHERE forks.owner_user_id = $1 ORDER BY lower(forks.name COLLATE "C"), forks.id`, [ownerUserId]);
+      `SELECT ${forkColumns} WHERE ${reachable} ORDER BY lower(forks.name COLLATE "C"), forks.id`, [actorUserId]);
     return rows.map(stored);
   }
 
-  findOwned(ownerUserId: string, key: ForkKey): Promise<StoredFork | null> {
-    return findFork(this.pool, ownerUserId, key);
+  findOwned(actorUserId: string, key: ForkKey): Promise<StoredFork | null> {
+    return findFork(this.pool, actorUserId, key);
   }
 
-  deleteOwned(ownerUserId: string, forkId: string): Promise<StoredFork | null> {
+  deleteOwned(actorUserId: string, forkId: string): Promise<StoredFork | null> {
     return withPostgresTransaction(this.pool, async (client) => {
-      const fork = await findFork(client, ownerUserId, { forkId });
+      const fork = await findFork(client, actorUserId, { forkId });
       if (fork) await client.query("DELETE FROM forks WHERE id = $1", [forkId]);
       return fork;
     });

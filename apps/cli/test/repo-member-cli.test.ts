@@ -10,13 +10,14 @@ const user = (id: string, username: string) => ({ id, username, displayName: use
 const agentA = user("u-a", "agent-a");
 const agentB = user("u-b", "agent-b");
 const CEILING =
-  "An unclaimed agent cannot add or be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.";
+  "An unclaimed agent cannot be a Team Space member, and an agent can be an admin only of a Team Space an agent owns.";
+const CONFIRM = "/confirm/member?space=space-r&user=u-b&role=editor";
 
 function workspace(caller: "agent_claimed" | "agent_unclaimed" | "human" = "agent_claimed") {
   const members = new Map<string, unknown>();
   const writes: string[] = [];
-  const error = (status: number, code: string, message: string) =>
-    Response.json({ error: { code, message } }, { status });
+  const error = (status: number, code: string, message: string, url?: string) =>
+    Response.json({ error: { code, message, ...(url === undefined ? {} : { url }) } }, { status });
   const fetcher: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
@@ -35,6 +36,7 @@ function workspace(caller: "agent_claimed" | "agent_unclaimed" | "human" = "agen
     if (userId !== undefined && request.method === "PUT") {
       const { role } = (await request.json()) as { role: string };
       if (role === "admin" && caller === "human") return error(403, "AGENT_NOT_ALLOWED", CEILING);
+      if (role === "editor" && caller === "human") return error(403, "INTERACTIVE_SESSION_REQUIRED", "A person confirms it.", CONFIRM);
       const member = { user: agentB, role, grantedBy: agentA, createdAt: "2026-11-23T00:00:00.000Z", updatedAt: "2026-11-23T00:00:00.000Z" };
       members.set(userId, member);
       return Response.json(member);
@@ -70,8 +72,10 @@ describe("uvw repo member", () => {
   });
 
   it.each([
-    ["agent_unclaimed", ["add", "agent-b", "--role", "viewer"], "AGENT_NOT_ALLOWED: An unclaimed agent cannot add Team Space members. A person must claim it first."],
+    ["agent_unclaimed", ["add", "agent-b", "--role", "viewer"], "AGENT_NOT_ALLOWED: An unclaimed agent cannot add Team Space members. Give the user your handoff link from claim (uvw claim in the CLI). Once they take you, try again."],
     ["human", ["add", "agent-b", "--role", "admin"], `AGENT_NOT_ALLOWED: ${CEILING}`],
+    ["human", ["add", "agent-b", "--role", "editor"],
+      `INTERACTIVE_SESSION_REQUIRED: A person confirms it. Give the user this link so they can confirm it in the browser: ${ORIGIN}${CONFIRM}`],
     ["agent_claimed", ["add", "agent-gone", "--role", "viewer"], "workspace-not-found: No user named or identified by \"agent-gone\" can join."],
     ["agent_claimed", ["edit", "agent-b", "--role", "viewer"], "workspace-not-found: \"agent-b\" is not a member of this repository."],
     ["agent_claimed", ["add", "agent-b", "--role", "owner"], "workspace-argument-invalid"],

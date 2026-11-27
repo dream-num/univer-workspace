@@ -189,10 +189,8 @@ describe("OAuth authorization", () => {
     const registration = await fetch(`${origin}/api/auth/password/register`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "consent-user", displayName: "Consent User", password: "correct horse battery staple" }) });
     const cookie = registration.headers.get("set-cookie")?.split(";", 1)[0];
     const query = new URLSearchParams({ client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, state: STATE, code_challenge: CODE_CHALLENGE, scope: "identity session" });
-    const authorize = await fetch(`${origin}/api/auth/authorize?${query}`, { headers: { cookie: cookie! }, redirect: "manual" });
-    expect(authorize.status).toBe(302);
-    const consent = await fetch(new URL(authorize.headers.get("location")!, origin), { headers: { cookie: cookie! } });
-    expect(consent.status).toBe(200);
+    const consent = await fetch(`${origin}/api/auth/authorize?${query}`, { headers: { cookie: cookie! }, redirect: "manual" });
+    expect(consent.status, "authorize shows the consent page itself").toBe(200);
     expect(consent.headers.get("content-security-policy")).toContain(
       "form-action 'self' http://127.0.0.1:3101",
     );
@@ -201,13 +199,13 @@ describe("OAuth authorization", () => {
     expect(consentHtml).toContain("<style>");
     const consentToken = consentHtml.match(/name="consent_token" value="([^"]+)"/)?.[1];
     expect(consentToken).toEqual(expect.any(String));
-    const approved = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
+    const approved = await fetch(`${origin}/api/auth/authorize/consent`, { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
     expect(approved.status).toBe(303);
     const callback = new URL(approved.headers.get("location")!);
     const token = await fetch(`${origin}/api/auth/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", code: callback.searchParams.get("code"), client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, code_verifier: CODE_VERIFIER }) });
     expect(token.status).toBe(200);
     expect((await token.json()).access_token).toEqual(expect.any(String));
-    const replayConsent = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
+    const replayConsent = await fetch(`${origin}/api/auth/authorize/consent`, { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
     expect(replayConsent.status).toBe(400);
     expect(await replayConsent.json()).toEqual({
       error: {

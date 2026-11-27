@@ -193,8 +193,10 @@ describe("access rules for agents", () => {
     const reader = await register(origin, "reader");
     const agent = await createAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Agent sheet");
-    expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie)).status).toBe(200);
-    expect((await put(origin, `/api/nodes/${nodeId}/grants/${reader.id}`, { role: "editor" }, agent.cookie)).status).toBe(200);
+    await expectRefused(put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie), "AGENT_NOT_ALLOWED");
+    await expectRefused(put(origin, `/api/nodes/${nodeId}/grants/${reader.id}`, { role: "editor" }, agent.cookie), "AGENT_NOT_ALLOWED");
+    await linkOpenedEarlier(application, agent.id, nodeId);
+    await application.repositories.permissions.upsertGrant({ nodeId, userId: reader.id, role: "editor", grantedBy: agent.id, now: Date.now() }, () => {});
     const sharedWithReader = async () =>
       ((await (await fetch(`${origin}/api/shared-with-me`, { headers: { cookie: reader.cookie } })).json()) as { items: unknown[] }).items.length;
     const suspend = (column: "expires_at" | "banned_at", value: number | null) =>
@@ -217,7 +219,7 @@ describe("access rules for agents", () => {
 });
 
 describe("ceilings", () => {
-  it("keeps an unclaimed agent from making a Space public, and lets it once a human claims it", async () => {
+  it("keeps an unclaimed agent from making a Space public, and gives a claimed one a confirm link its claimer can act on", async () => {
     const { origin, application } = await start();
     const human = await register(origin, "owner");
     const agent = await createAgent(origin);
@@ -230,7 +232,11 @@ describe("ceilings", () => {
       spaces: [{ type: "personal", name: "Renamed", publicRead: false }],
     });
     claim(application, agent.id, human.id);
-    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie })).status).toBe(200);
+    const asked = await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie });
+    expect({ status: asked.status, body: await asked.json() }).toMatchObject({ status: 403, body: { error: {
+      code: "INTERACTIVE_SESSION_REQUIRED", url: `/confirm/public?space=${personal}`,
+    } } });
+    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: human.cookie })).status).toBe(200);
 
     const other = await register(origin, "member");
     expect((await put(origin, `/api/team-spaces/${team.id}/members/${other.id}`, { role: "viewer" }, human.cookie)).status).toBe(200);
@@ -291,7 +297,7 @@ describe("ceilings", () => {
     const refused = await createFileRequest(origin, agent.cookie, "File 21");
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_QUOTA_EXCEEDED",
-      message: "An unclaimed agent can keep at most 20 files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, or give a person a claim link so they can claim you, which lifts this limit.",
+      message: "An unclaimed agent can keep at most 20 files across its Spaces, new files in its open pull requests included. Move files you no longer need to Trash, or give a person a handoff link so they can take you, which lifts this limit.",
     } } });
     // The 20th creation, replayed with its Idempotency-Key, is the same file and not a 21st.
     expect((await createFileRequest(origin, agent.cookie, "File 20", key)).status).toBe(200);
@@ -383,14 +389,14 @@ describe("ceilings", () => {
     const refused = await reserveBlob(origin, agent.cookie, 10 * 1024 * 1024 + 1);
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_QUOTA_EXCEEDED",
-      message: "An unclaimed agent can store files of at most 10485760 bytes. Store a smaller file, or give a person a claim link so they can claim you, which lifts this limit.",
+      message: "An unclaimed agent can store files of at most 10485760 bytes. Store a smaller file, or give a person a handoff link so they can take you, which lifts this limit.",
     } } });
 
     await expectRefused(exchangeUpload(origin, agent.cookie, 10 * 1024 * 1024 + 1), "AGENT_QUOTA_EXCEEDED");
     expect((await exchangeUpload(origin, agent.cookie, 5)).status).toBe(201);
   });
 
-  it("requires an interactive session for a human to write Link Sharing, and lets an agent's token session share its own file", async () => {
+  it("requires an interactive session for a human to write Link Sharing, and refuses an unclaimed agent its own file", async () => {
     const { origin } = await start();
     const human = await register(origin, "owner");
     const nodeId = await createFile(origin, human.cookie, "Private sheet");
@@ -406,10 +412,8 @@ describe("ceilings", () => {
 
     const agent = await createAgent(origin);
     const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
-    const shared = await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, settings, agent.cookie);
-    expect(shared.status).toBe(200);
-    expect(await shared.json()).toMatchObject({ enabled: true, role: "viewer" });
-    // The ceiling grants nothing: the human's file is readable through its link, not shareable.
+    await expectRefused(put(origin, `/api/nodes/${agentNodeId}/link-sharing`, settings, agent.cookie), "AGENT_NOT_ALLOWED");
+    expect((await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, { ...settings, enabled: false }, agent.cookie)).status).toBe(200);
     expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "editor" }, agent.cookie)).status).toBe(403);
   });
 
@@ -538,7 +542,7 @@ describe("GET /api/users/search", () => {
     const response = await fetch(`${origin}/api/users/search?query=alice`, { headers: { cookie: agent.cookie } });
     expect({ status: response.status, body: await response.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_NOT_ALLOWED",
-      message: "An unclaimed agent cannot search Users. Leave other Users out, or give a person a claim link so they can claim you, which lifts this limit.",
+      message: "An unclaimed agent cannot search Users. Leave other Users out, or give a person a handoff link so they can take you, which lifts this limit.",
     } } });
   });
 });
@@ -548,7 +552,6 @@ describe("Link Sharing settings", () => {
     const { origin, application } = await start();
     const human = await register(origin, "owner");
     const agent = await createAgent(origin);
-    const settings = { enabled: true, role: "viewer" };
     const linkSharing = async (cookie: string, nodeId: string) =>
       (await (await fetch(`${origin}/api/nodes/${nodeId}/link-sharing`, { headers: { cookie } })).json()) as { owner: unknown; expiresAt: string | null };
 
@@ -557,11 +560,12 @@ describe("Link Sharing settings", () => {
     expect((await linkSharing(human.cookie, humanNodeId)).owner).not.toHaveProperty("claimed");
 
     const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
-    const written = (await (await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, settings, agent.cookie)).json()) as { owner: unknown; expiresAt: string };
-    const expiresAt = agentLifecycle(application, agent.id).get().expires_at!;
-    expect(written.owner).toEqual({ username: agent.username, kind: "agent", claimed: false });
-    expect(written.expiresAt).toBe(new Date(expiresAt).toISOString());
-    expect(await linkSharing(agent.cookie, agentNodeId)).toMatchObject({ enabled: true, owner: written.owner, expiresAt: written.expiresAt });
+    await linkOpenedEarlier(application, agent.id, agentNodeId);
+    expect(await linkSharing(agent.cookie, agentNodeId)).toMatchObject({
+      enabled: true,
+      owner: { username: agent.username, kind: "agent", claimed: false },
+      expiresAt: new Date(agentLifecycle(application, agent.id).get().expires_at!).toISOString(),
+    });
 
     claim(application, agent.id, human.id);
     expect(await linkSharing(agent.cookie, agentNodeId)).toMatchObject({
@@ -581,7 +585,7 @@ describe("GET /api/nodes/:nodeId", () => {
       ((await (await fetch(`${origin}/api/nodes/${nodeId}`, { headers: cookie ? { cookie } : {} })).json()) as { owner: unknown }).owner;
 
     const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
-    await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie);
+    await linkOpenedEarlier(application, agent.id, agentNodeId);
     const unclaimed = { displayName: "agent", kind: "agent", claimed: false };
     for (const cookie of [undefined, reader.cookie, agent.cookie]) expect(await author(agentNodeId, cookie)).toEqual(unclaimed);
     claim(application, agent.id, human.id);
@@ -712,7 +716,7 @@ describe("agent expiry", () => {
     const pages = await startPages(application);
     const agent = await createAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Budget");
-    await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie);
+    await linkOpenedEarlier(application, agent.id, nodeId);
     const lifecycle = agentLifecycle(application, agent.id);
     const page = async () => (await fetch(`${pages}/nodes/${nodeId}`)).text();
     expect(await page()).toContain("<title>Budget · Univer Workspace</title>");
@@ -728,31 +732,26 @@ describe("agent expiry", () => {
     expect(await page()).toContain("<title>Budget · Univer Workspace</title>");
   });
 
-  it("moves the expiry out when a reader opens the agent's shared page, at most once a day", async () => {
+  it("leaves the expiry alone when a reader opens a page the agent shared before it lost that right", async () => {
     const { origin, application } = await start();
     const pages = await startPages(application);
     const agent = await createAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Budget");
-    await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie);
-    const privateNodeId = await createFile(origin, agent.cookie, "Private");
+    await linkOpenedEarlier(application, agent.id, nodeId);
     const lifecycle = agentLifecycle(application, agent.id);
 
     lifecycle.set({ last_active_at: Date.now() - 25 * HOUR, expires_at: Date.now() + DAY });
     const stale = lifecycle.get();
-    await fetch(`${pages}/nodes/${privateNodeId}`);
+    expect(await (await fetch(`${pages}/nodes/${nodeId}`)).text()).toContain("<title>Budget · Univer Workspace</title>");
+    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
     expect(lifecycle.get()).toEqual(stale);
-
-    const before = Date.now();
-    await fetch(`${pages}/nodes/${nodeId}`);
-    expect(lifecycle.get().last_active_at).toBeGreaterThanOrEqual(before);
-    expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
-
-    lifecycle.set({ last_active_at: Date.now() - 23 * HOUR, expires_at: Date.now() + DAY });
-    const fresh = lifecycle.get();
-    await fetch(`${pages}/nodes/${nodeId}`);
-    expect(lifecycle.get()).toEqual(fresh);
   });
 });
+
+/** Link Sharing an unclaimed agent turned on while it still could. No session can turn it on now, so the repository writes it. */
+async function linkOpenedEarlier(application: SqliteTestApplication, agentId: string, nodeId: string): Promise<void> {
+  await application.repositories.permissions.upsertLinkSharing({ nodeId, enabled: true, role: "viewer", actorUserId: agentId, now: Date.now() }, () => {});
+}
 
 function agentLifecycle(application: SqliteTestApplication, agentId: string) {
   type Lifecycle = { last_active_at: number; expires_at: number | null };

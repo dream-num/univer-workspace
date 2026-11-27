@@ -105,7 +105,7 @@ for (const { name, storage } of backends) {
       return { a: await start(), b: await start(), rows, count };
     }
 
-    it("redeems on one replica the consent and the authorization code another issued, for a person and for a zero-click guest", async () => {
+    it("redeems on one replica the consent and the authorization code another issued, for a person and for a guest who tried without signing in", async () => {
       await using resources = new AsyncDisposableStack();
       const { a, b, count } = await replicas(resources);
       const client = await registerClient(a);
@@ -119,7 +119,7 @@ for (const { name, storage } of backends) {
       expect(await principalOf(b, await accessTokenOf(personTokens))).toMatchObject({ status: 200, body: { scope: "read", user: { kind: "human", username: "olivia" } } });
       expect((await decide(a, consentToken, cookie)).status, "a consent token is used once, whichever replica gets it").toBe(400);
 
-      const guestCode = await authorize(a, { client_id: client });
+      const guestCode = await tryWithoutSignIn(a, { client_id: client });
       expect(await count("agents")).toBe(0);
       const guestTokens = await redeem(b, client, guestCode);
       expect(guestTokens.status).toBe(200);
@@ -145,7 +145,7 @@ for (const { name, storage } of backends) {
       const cookie = await registerPerson(a, "olivia");
 
       const page = await consentPageFrom(a, client, cookie);
-      expect(page, "the consent page preselects a new agent").toMatch(/name="connect_as" value="new_agent" checked/u);
+      expect(page, "the connect page offers a new agent first").toContain('class="primary" name="connect_as" value="new_agent"');
       const allowed = await decide(b, consentTokenOf(page), cookie, "new_agent");
       expect(allowed.status).toBe(303);
       expect(await count("agents"), "an unredeemed code creates no agent").toBe(0);
@@ -168,6 +168,8 @@ for (const { name, storage } of backends) {
         FROM agents a JOIN spaces s ON s.owner_user_id = a.user_id WHERE a.user_id = '${id}'`);
       expect(await state(owned)).toEqual(await state(guest.id));
       expect(await state(owned)).toEqual([expect.objectContaining({ space_type: "personal", expires_at: null, banned_at: null })]);
+      expect(await rows(`SELECT CASE WHEN claimed_at = created_at THEN 'yes' ELSE 'no' END AS born_owned FROM agents WHERE user_id = '${owned}'`), "the agent row is written owned in one write")
+        .toEqual([{ born_owned: "yes" }]);
       const listed = (await (await send(a, "GET", "/api/agents", undefined, cookie)).json()) as { agents: { id: string; stopped: boolean }[] };
       expect(listed.agents.map((agent) => agent.id).sort()).toEqual([owned, guest.id].sort());
     });
@@ -184,17 +186,17 @@ for (const { name, storage } of backends) {
       const agent = await newAgent(olivia);
 
       const page = await consentPageFrom(b, opencode, olivia);
-      expect(page, "the same client preselects the agent made for it").toContain(`name="connect_as" value="${agent}" checked`);
-      expect(page).toContain('name="connect_as" value="new_agent">');
+      expect(page, "the same client offers first the agent made for it").toContain(`class="primary" name="connect_as" value="${agent}"`);
+      expect(page).not.toContain('value="new_agent"');
       const claude = await registerClient(a, "claude");
       const other = await consentPageFrom(a, claude, olivia);
-      expect(other, "another client lists the agent and preselects a new one").toContain(`name="connect_as" value="${agent}">`);
-      expect(other).toContain('name="connect_as" value="new_agent" checked');
+      expect(other, "another client lists the agent and offers a new one first").toContain(`name="connect_as" value="${agent}"><strong>`);
+      expect(other).toContain('class="primary" name="connect_as" value="new_agent"');
       for (let i = 0; i < 5; i += 1) {
         expect((await redeem(a, claude, await decide(b, await consentTokenFrom(a, claude, olivia), olivia, "new_agent"))).status).toBe(200);
       }
       const crowded = await consentPageFrom(b, opencode, olivia);
-      expect(crowded, "five newer agents leave the one made for this client listed and selected").toContain(`name="connect_as" value="${agent}" checked`);
+      expect(crowded, "five newer agents leave the one made for this client first").toContain(`class="primary" name="connect_as" value="${agent}"`);
       expect(crowded.match(/name="connect_as" value="(?!new_agent"|self")/gu)).toHaveLength(5);
 
       const agents = await count("agents");
@@ -232,7 +234,7 @@ for (const { name, storage } of backends) {
       await using resources = new AsyncDisposableStack();
       const { a, b, count } = await replicas(resources);
       const client = await registerClient(a);
-      const code = await authorize(a, { client_id: client });
+      const code = await tryWithoutSignIn(a, { client_id: client });
       const accessToken = await accessTokenOf(await redeem(a, client, code));
       expect((await principalOf(b, accessToken)).status).toBe(200);
 
@@ -247,7 +249,7 @@ for (const { name, storage } of backends) {
       const { a, b, count } = await replicas(resources);
       const client = await registerClient(a);
       for (let round = 1; round <= 5; round += 1) {
-        const code = await authorize(round % 2 ? a : b, { client_id: client });
+        const code = await tryWithoutSignIn(round % 2 ? a : b, { client_id: client });
         const responses = await Promise.all([redeem(a, client, code), redeem(b, client, code)]);
         expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
         const [won, lost] = responses[0]!.status === 200 ? responses : responses.toReversed();
@@ -261,31 +263,31 @@ for (const { name, storage } of backends) {
       await using resources = new AsyncDisposableStack();
       const { a, b } = await replicas(resources, 2);
       const client = await registerClient(a);
-      const first = await authorize(a, { client_id: client });
-      expect([codeOf(first), codeOf(await authorize(b, { client_id: client }))]).toEqual([expect.any(String), expect.any(String)]);
+      const first = await tryWithoutSignIn(a, { client_id: client });
+      expect([codeOf(first), codeOf(await tryWithoutSignIn(b, { client_id: client }))]).toEqual([expect.any(String), expect.any(String)]);
       for (const origin of [a, b]) {
-        const refused = new URL((await authorize(origin, { client_id: client })).headers.get("location")!);
+        const refused = new URL((await tryWithoutSignIn(origin, { client_id: client })).headers.get("location")!);
         expect(Object.fromEntries(refused.searchParams)).toMatchObject({ error: "temporarily_unavailable", state: STATE });
       }
       expect((await redeem(b, client, first)).status).toBe(200);
-      expect(codeOf(await authorize(a, { client_id: client }))).toEqual(expect.any(String));
+      expect(codeOf(await tryWithoutSignIn(a, { client_id: client }))).toEqual(expect.any(String));
     });
 
     it("gives one source at most 20 guest codes a minute across replicas, and leaves other sources theirs", async () => {
       await using resources = new AsyncDisposableStack();
       const { a, b } = await replicas(resources);
       const client = await registerClient(a);
-      const attempts = await Promise.all(Array.from({ length: 24 }, (_, index) => authorize(index % 2 ? a : b, { client_id: client }, "203.0.113.7")));
+      const attempts = await Promise.all(Array.from({ length: 24 }, (_, index) => tryWithoutSignIn(index % 2 ? a : b, { client_id: client }, "203.0.113.7")));
       expect(attempts.filter((attempt) => codeOf(attempt) !== null)).toHaveLength(20);
       for (const origin of [a, b]) {
-        const refused = new URL((await authorize(origin, { client_id: client }, "203.0.113.7")).headers.get("location")!);
+        const refused = new URL((await tryWithoutSignIn(origin, { client_id: client }, "203.0.113.7")).headers.get("location")!);
         expect(Object.fromEntries(refused.searchParams)).toEqual({
           error: "temporarily_unavailable",
           error_description: "Too many sign-ins came from this address. Try again shortly.",
           state: STATE,
           iss: ISSUER,
         });
-        const other = await authorize(origin, { client_id: client }, "198.51.100.9");
+        const other = await tryWithoutSignIn(origin, { client_id: client }, "198.51.100.9");
         expect((await redeem(origin === a ? b : a, client, other)).status, "another source still gets a guest").toBe(200);
       }
     });
@@ -331,7 +333,7 @@ for (const { name, storage } of backends) {
       const cookie = await registerPerson(a, "olivia");
       const agent = cookieOf(await send(a, "POST", "/api/auth/guest", {}));
       const secrets = [
-        codeOf(await authorize(a, { client_id: client }))!,
+        codeOf(await tryWithoutSignIn(a, { client_id: client }))!,
         await consentTokenFrom(a, client, cookie),
         ((await (await send(a, "POST", "/api/agents/claim-codes", undefined, agent)).json()) as { code: string }).code,
         ...Object.values((await (await send(a, "POST", "/api/auth/cli/authorizations")).json()) as { deviceCode: string; userCode: string }).filter((value) => typeof value === "string" && !value.startsWith("/")),
@@ -377,10 +379,12 @@ function authorizeQuery(fields: Record<string, string>): string {
   }).toString();
 }
 
-function authorize(origin: string, fields: Record<string, string>, forwardedFor?: string): Promise<Response> {
-  return fetch(`${origin}/api/auth/authorize?${authorizeQuery(fields)}`, {
+function tryWithoutSignIn(origin: string, fields: Record<string, string>, forwardedFor?: string): Promise<Response> {
+  return fetch(`${origin}/api/auth/authorize/guest`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", ...(forwardedFor === undefined ? {} : { "x-forwarded-for": forwardedFor }) },
+    body: new URLSearchParams({ oauthAuthorization: authorizeQuery(fields) }),
     redirect: "manual",
-    ...(forwardedFor === undefined ? {} : { headers: { "x-forwarded-for": forwardedFor } }),
   });
 }
 
@@ -389,7 +393,7 @@ function codeOf(redirected: Response): string | null {
 }
 
 async function consentPageFrom(origin: string, clientId: string, cookie: string): Promise<string> {
-  return (await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId })}`, { headers: { cookie } })).text();
+  return (await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: clientId })}`, { headers: { cookie } })).text();
 }
 
 function consentTokenOf(page: string): string {
@@ -404,7 +408,7 @@ function decide(origin: string, consentToken: string, cookie: string, connectAs 
   return fetch(`${origin}/api/auth/authorize/consent`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", cookie },
-    body: new URLSearchParams({ consent_token: consentToken, decision: "allow", scope: "read", connect_as: connectAs }),
+    body: new URLSearchParams({ consent_token: consentToken, connect_as: connectAs }),
     redirect: "manual",
   });
 }

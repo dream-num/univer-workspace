@@ -5,18 +5,20 @@ import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Alert, Button, ConfirmDialog, Dialog, Field, Input, Select } from "../../shared/ui";
 import { createAccessToken, revokeAccessToken } from "./access-tokens.commands";
 import { accessTokensQueryOptions } from "./access-tokens.queries";
-import { isAccessTokenExpired, isAccessTokenName } from "./access-tokens.rules";
+import {
+  accessTierScopes,
+  defaultAccessTier,
+  isAccessTokenExpired,
+  isAccessTokenName,
+  type AccessTier,
+} from "./access-tokens.rules";
 
-type McpScope = components["schemas"]["McpScope"];
 type TokenView = { kind: "list" } | { kind: "new" } | { kind: "created"; token: string };
 
-const scopeDescriptions = {
-  read: "accessTokenScopeRead",
-  write: "accessTokenScopeWrite",
-  publish: "accessTokenScopePublish",
-  "worktree:merge": "accessTokenScopeMerge",
-} satisfies Record<McpScope, MessageKey>;
-const allScopes = ["read", "write", "publish", "worktree:merge"] satisfies McpScope[];
+const tierLabels = {
+  read: ["accessTierRead", "accessTierReadDescription"],
+  read_write: ["accessTierReadWrite", "accessTierReadWriteDescription"],
+} satisfies Record<AccessTier, [MessageKey, MessageKey]>;
 
 // Access tokens unmount on close so the plaintext cannot reappear on reopening.
 export function AccessTokensDialog({
@@ -39,7 +41,7 @@ function AccessTokensDialogContent({
   const tokens = useQuery(accessTokensQueryOptions);
   const [view, setView] = useState<TokenView>({ kind: "list" });
   const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<McpScope[]>(allScopes);
+  const [tier, setTier] = useState<AccessTier>(defaultAccessTier);
   const [expiry, setExpiry] = useState<"never" | "30" | "90">("never");
   const [validationError, setValidationError] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
@@ -87,14 +89,10 @@ function AccessTokensDialogContent({
       setValidationError(t("accessTokenNameRequired"));
       return;
     }
-    if (scopes.length === 0) {
-      setValidationError(t("accessTokenScopeRequired"));
-      return;
-    }
     setValidationError("");
     create.mutate({
       name: name.trim(),
-      scopes,
+      scopes: accessTierScopes[tier],
       expiresAt: expiry === "never" ? null : Date.now() + Number(expiry) * 24 * 60 * 60 * 1000,
     });
   };
@@ -135,7 +133,7 @@ function AccessTokensDialogContent({
             disabled={busy}
             onClick={() => {
               setName("");
-              setScopes(allScopes);
+              setTier(defaultAccessTier);
               setExpiry("never");
               revoke.reset();
               setView({ kind: "new" });
@@ -223,23 +221,18 @@ function AccessTokensDialogContent({
           </Field>
           <fieldset className="grid gap-2" disabled={busy}>
             <legend className="mb-2 text-sm font-medium">{t("accessTokenScopes")}</legend>
-            {allScopes.map((scope) => (
-              <label key={scope} className="flex items-start gap-2 text-sm">
+            {(Object.keys(tierLabels) as AccessTier[]).map((value) => (
+              <label key={value} className="flex items-start gap-2 text-sm">
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="access-token-tier"
                   className="mt-1 accent-primary"
-                  checked={scopes.includes(scope)}
-                  onChange={(event) => {
-                    setScopes((previous) =>
-                      event.target.checked
-                        ? [...previous, scope]
-                        : previous.filter((value) => value !== scope),
-                    );
-                  }}
+                  checked={tier === value}
+                  onChange={() => setTier(value)}
                 />
                 <span>
-                  <span className="font-medium">{scope}</span>
-                  <span className="block text-muted-foreground">{t(scopeDescriptions[scope])}</span>
+                  <span className="font-medium">{t(tierLabels[value][0])}</span>
+                  <span className="block text-muted-foreground">{t(tierLabels[value][1])}</span>
                 </span>
               </label>
             ))}

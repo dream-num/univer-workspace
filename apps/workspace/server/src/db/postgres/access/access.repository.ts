@@ -1,6 +1,7 @@
 import { AGENT_MERGE_WINDOW_MS, assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
 import type { PoolClient } from "pg";
 import type { PostgresDatabase, PostgresStatement } from "../connection.js";
+import { previewedSql } from "../../preview-sql.js";
 import type {
   ResolvedNodeRow,
   StoredSpaceAccess,
@@ -39,7 +40,7 @@ export function proposesSql(space: string, userId = "$userId"): string {
 export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId",
   ${ownsSpaceSql("spaces.owner_user_id")} AS "owned",
-  spaces.public_read AS "publicRead", space_members.role AS "memberRole",
+  spaces.public_read AS "publicRead", ${previewedSql("spaces.owner_user_id")} AS "previewed", space_members.role AS "memberRole",
   ${proposesSql("spaces")} AS "proposes", spaces.landing`;
 
 export const spaceMemberJoin = `
@@ -65,6 +66,7 @@ export const visibleSpaceSql = `(
     AND (
       (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
       OR spaces.public_read
+      OR ${previewedSql("spaces.owner_user_id")}
     )
   )
 )`;
@@ -329,7 +331,7 @@ export class PostgresAccessRepository implements AccessRepository {
       .prepare(`
       SELECT ${nodeDisplayColumns()}
         space.type AS space_type, space.name AS space_name, space.landing AS space_landing,
-        1 AS requester_owns, space.public_read::integer AS public_read,
+        1 AS requester_owns, space.public_read::integer AS public_read, 0 AS previewed,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
         NULL AS navigation_root_id, NULL AS requester_kind, NULL AS requester_claimed
@@ -403,6 +405,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
              ${contentOnly ? "" : "space.name AS space_name,"}
              ${ownsSpaceSql("space.owner_user_id")}::integer AS requester_owns,
              space.public_read::integer AS public_read,
+             ${previewedSql("space.owner_user_id")}::integer AS previewed,
              member.role AS member_role,
              (
                SELECT grant_node.role
@@ -477,6 +480,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
                  AND (
                    (space.type = 'team' AND member.user_id IS NOT NULL)
                    OR space.public_read
+                   OR ${previewedSql("space.owner_user_id")}
                    OR (
                      space.type = 'personal'
                      AND (

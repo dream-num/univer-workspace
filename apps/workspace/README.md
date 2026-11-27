@@ -201,64 +201,83 @@ The product database holds a pending authorization request as hashes of its two 
 replica approves or completes it and a restart keeps it; completed CLI sessions remain normal persisted
 login sessions.
 
-`POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
+Every action taken for a person needs a person signed in to Workspace in a browser: creating a personal
+access token or a browser Agents token, approving a CLI login, the OAuth connect and consent pages, claiming and
+managing agents, linking a login method, changing a password, and publishing or rejecting HTML View and
+Skill drafts. An agent, a CLI login (the Workspace Agent's and the Space plugin's sessions included) and a
+session issued for a token get `403 INTERACTIVE_SESSION_REQUIRED`.
+
+`POST /api/auth/agent-token` lets the browser Agents module use the `workspace_session` cookie of a person signed in to the browser to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, any other session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
 
 `POST /api/agents`, `POST /api/auth/guest` and a guest authorization code create an agent User without credentials: a User of kind
 `agent` with its own Personal Space that expires 30 days later. `POST /api/agents` takes an optional
 `{ "label" }` and returns `201` with `{ agent: { id, username }, token, mcpUrl, expiresAt }`. `token` is a
 personal access token with every MCP scope, and `mcpUrl` is the first URL in `MCP_RESOURCE_URLS`, or `null`
 when none is configured. `POST /api/auth/guest` sets the `workspace_session` cookie instead and returns
-`{ agent }`. It answers `409` when the request already carries a valid session, so it cannot replace a
-signed-in session. When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth
-sign-in, it shows a card that continues as a guest agent. The card calls `POST /api/auth/guest` with the
-authorization's query string as `oauthAuthorization` and then returns to the authorization, where the guest
-approves the consent page like any signed-in user. The server first checks that authorization as authorize
-would. One that authorize would refuse, such as a request without a valid `resource`, answers `400` (or
-`503` while a client metadata document cannot be fetched), creates no agent and does not count toward the
-limit. A client metadata document is fetched at this point, before the guest exists, and authorize reuses
-it. A source already at the limit gets `429` before anything is fetched. Guests may start 8 of the 32
-metadata fetches the server runs at once, one in flight per source, so signed-in authorization keeps the
-other 24. Each source may start 10 fetches per hour, failed or slow ones included, and then gets `429`
-before anything is fetched. A cached document or a fetch already in flight costs nothing. When every
-guest fetch is in use, or this source already has another fetch in flight, the request answers
-`503 CLIENT_METADATA_BUSY` with `Retry-After` and fetches nothing. When that client named itself in its registration or its client metadata document, as Claude Code
-does, the server names the guest after it, as in `Claude Code · 7f3k`, so agents from one client stay
-distinguishable. The name follows the display-name rules: no email address, no control, invisible or
-direction-changing characters, at most 40 characters. Without a client name the guest is `agent`.
+`{ agent }`. It serves `uvw auth guest`: the session has the `agent` write source of a CLI login, so it
+renews while in use and never acts for a person. It answers `409` when the request already carries a valid
+session, so it cannot replace a signed-in session.
 
-A browser with no session that opens `/api/auth/authorize` for a DCR or CIMD client whose `redirect_uri` is
-loopback `http` (`127.0.0.1`, `[::1]` or `localhost`) skips the login page and the card while guest agents
-are enabled. Authorize answers `302` to the client's callback with `code`, `state` and `iss` and sets no
-cookie. The code carries every requested scope and stands for a guest agent named after the client, as
-above. Redeeming it at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is
-never redeemed creates nothing. The pending guest lives in the same one-minute, single-use code as any
-authorization, which the product database holds, so any server replica redeems it, and a second
-redemption on any replica creates no second agent and revokes the first grant as for any replayed code.
-While 10,000 codes wait unredeemed, authorize sends such a guest back to the callback with `error=temporarily_unavailable` and
-no code, and a code a signed-in user approves is never refused this way. One source (the bucket the creation limit uses) gets
-at most 20 such codes a minute, redeemed or not, so it can hold no more than that share of the 10,000. Past that, authorize
-sends it back the same way with an `error_description` that says too many sign-ins came from this address. Every replica
-shares both counts through the product database. The source limit, the metadata
-fetch and their refusals are the guest card's, answered as JSON from authorize. A source that reaches the
-limit between authorize and redemption gets `429 temporarily_unavailable` from the token endpoint and no
-agent. A static OAuth client, or any other `redirect_uri`, keeps the login page.
+`GET /api/auth/authorize` answers a DCR or CIMD client with a connect page in one of two states. A session
+whose User is an agent counts as no session, and the page leaves its cookie alone, so an agent's cookie never
+connects a client as that agent.
 
-A signed-in person on the consent page of a DCR or CIMD client chooses `connect_as`. `new_agent`, preselected,
-approves a code that stands for a new agent this person owns. Redeeming it creates the agent named after the
-client, under the same source limit, then claims it for the person with the claim's own conditional update, so
-it starts in the state of a guest that person claimed. `self` approves a code for the person. When the source is
-at the limit, the page disables `new_agent`, says why and selects `self`, and a submit that still sends
-`new_agent` answers `429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. A signed-in agent sees no choice
-and approves for itself.
+With no person signed in, the page offers **Sign in to connect**, which returns to the same URL, a **Deny** link
+to the client's callback with `access_denied`, and, while guest agents are enabled, **Try without signing in**.
+That button is a form post to `POST /api/auth/authorize/guest` with the authorization's query string as
+`oauthAuthorization`. The endpoint answers `303` to the client's callback with a code for a new guest agent, or
+with the OAuth error authorize would send there. It reads no session and sets no cookie, so the browser stays
+signed out. The code carries `read write publish worktree:merge` when the request names `write`, and `read`
+otherwise. An error that cannot go to the client is an HTML page that names its code and links back to the
+connect page. A static OAuth client, such as the Workspace Agent, gets `400`, because it needs a person signed
+in, and so do an unknown client and an unregistered `redirect_uri` (`503` while a client metadata document
+cannot be fetched). A source at the creation limit sees the button disabled with the reason, and a post that
+still arrives gets `429` before anything is fetched.
 
-The same page lists up to five agents the person owns and has not stopped, most recently active first. It
-preselects the most recently active one whose `origin_label` is this client's name, so a client that connects
-again continues its agent. Submitting an agent's id approves a code for that agent. It creates nothing and spends
-no creation, and the server checks at the submit and again at redemption that the person owns it and has not
-stopped it, answering an id that is not such an agent the same way whether or not a User has it. With an agent
-preselected, the limit leaves that agent selected instead of `self`.
+Redeeming the code at `POST /api/auth/token` creates the agent and issues its tokens, so a code that is never
+redeemed creates nothing. The pending guest lives in the same one-minute, single-use code as any
+authorization, which the product database holds, so any server replica redeems it, and a second redemption on
+any replica creates no second agent and revokes the first grant as for any replayed code. While 10,000 codes
+wait unredeemed, the endpoint sends the guest back to the callback with `error=temporarily_unavailable` and no
+code, and a code a signed-in person approves is never refused this way. One source (the bucket the creation
+limit uses) gets at most 20 such codes a minute, redeemed or not, so it can hold no more than that share of the
+10,000. Past that, the callback gets the same error with an `error_description` that says too many sign-ins
+came from this address. Every replica shares both counts through the product database. A source that reaches
+the limit between the trial and redemption gets `429 temporarily_unavailable` from the token endpoint and no
+agent.
 
-While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
+A CIMD client's metadata document is fetched before the page, anonymously when nobody is signed in and guest
+agents are enabled. Anonymous fetches may start 8 of the 32 metadata fetches the server runs at once, one in
+flight per source, so signed-in authorization keeps the other 24. Each source may start 10 anonymous fetches
+per hour, failed or slow ones included. A cached document or a fetch already in flight costs nothing. A refused
+anonymous fetch sends the browser to the login page, and so does a signed-out CIMD request while guest agents
+are off, which fetches nothing. The trial post resolves the client again under the same limits: a source past
+its hourly fetches gets `429`, and when every anonymous fetch is in use or this source already has another
+fetch in flight, it gets `503 CLIENT_METADATA_BUSY` with `Retry-After` and nothing is fetched. When the client
+named itself in its registration or its client metadata document, as Claude Code does, the server names the
+guest after it, as in `Claude Code · 7f3k`, so agents from one client stay distinguishable. The name follows the
+display-name rules: no email address, no control, invisible or direction-changing characters, at most 40
+characters. Without a client name the guest is `agent`.
+
+A person signed in in a browser connects with one button. It connects as the most recently active agent the
+person owns whose `origin_label` is this client's name, so a client that connects again continues its agent.
+Otherwise it connects as a new agent this person owns (`new_agent`). Redeeming that code creates the agent named
+after the client, under the same source limit, owned by the person from the same write, with no expiry. When
+the source is at the limit and no agent matches, the page offers no new agent, says why, and puts the person's
+most recently active agent on the main button. A submit that still sends `new_agent` answers
+`429 AGENT_CREATE_RATE_LIMITED` and keeps the consent token. The page also lists up to five agents the person
+owns and has not stopped, most recently active first, without repeating the one on the main button. Submitting
+an agent's id approves a code for that agent. It creates nothing and spends no creation, and the server checks
+at the submit and again at redemption that the person owns it and has not stopped it, answering an id that is
+not such an agent the same way whether or not a User has it. **Connect as myself** (`self`) approves a code for
+the person. When the request names `write`, a **Let it change content** switch (`access=read_write`) is on by
+default and grants `read write publish worktree:merge`. Off, or without `write`, the code carries `read`.
+
+A static OAuth client still needs a person signed in. A browser without one goes to the login page. A client
+with `requiresConsent`, such as the Workspace Agent or the Space plugin, then gets its consent page with Allow
+and Deny, and any other static client gets its code at once.
+
+While an agent is unclaimed, authenticating it or opening its handoff link moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 and the human who claimed it can read its Personal Space and its Team Spaces, and its links answer as not found. An expired agent can still
 authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
@@ -270,16 +289,29 @@ server, so a collaboration socket the agent already holds stays open until its s
 agent's token exchange for up to 30 seconds, so for that long a banned claimed agent's token still gets an answer from tools
 that do not call Workspace, such as `api_find`. It reads an unclaimed agent from its session on every request.
 
-A person claims an agent to keep its files. The unclaimed agent calls `POST /api/agents/claim-codes`,
-which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (`/claim/<code>` on this
-origin) to the person. The code lasts ten minutes and claims the agent once. The product database holds
-its hash, so any server replica accepts it and a restart keeps it. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
-claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
-CLI login and a token session get `403`. On that `403` the page offers Sign out and continue, because a browser
-that took the guest agent card is still signed in as the agent. A guest that got its code with no page leaves the browser signed out. It signs out and shows sign-in on the same page,
-which comes back to the claim link. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
-the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
-code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
+An unclaimed agent shows its work with one handoff link, and a person takes the agent there to keep its files.
+The agent calls `POST /api/agents/claim-codes`, which returns `201` with `{ code, claimUrl, expiresIn }`, and
+gives `claimUrl` (`/claim/<code>` on this origin) to the person. The code lasts seven days, or until a person
+takes the agent. The product database holds its hash, so any server replica accepts it and a restart keeps it.
+
+The page reads `GET /api/agents/claim?code=`, which needs no session. It returns the agent and the Spaces it
+owns, moves the agent's expiry, and stores the code in the `workspace_handoff` cookie: httpOnly, `SameSite=Lax`,
+`Secure` whenever `workspace_session` is, and gone when the code expires. A request with that cookie and no
+session reads the agent's Spaces, files and HTML Views as a viewer, with live data, and reads everything else as
+an anonymous visitor does. The server checks the code and the agent in the database on every request and every new
+realtime connection, so the preview ends on every replica once a person takes the agent, the agent is banned or the
+code expires. The replica that handles the claim also closes the Trunk collaboration connections it holds, which reconnect and
+are authorized again; a preview connection that another replica holds stays open until it drops, as after a Link
+Sharing change. Neither an expired code nor a ban closes a preview connection that is already open. A browser
+holds one preview, and opening another handoff link replaces it. A session always wins over the cookie, so a
+signed-in person sees the summary only and reads the files after taking the agent.
+
+`POST /api/agents/claim` `{ "code" }` takes the agent. It needs a person's browser session: an agent, a
+CLI login and a token session get `403 INTERACTIVE_SESSION_REQUIRED`, and the page then offers Sign out
+and continue, for a browser that holds an agent's cookie. Once an agent has an owner, its code answers
+`409 AGENT_ALREADY_CLAIMED` to anyone but that owner, signed out included. A code older than seven days answers
+`410 AGENT_CLAIM_EXPIRED`, and an unknown code or one older than fourteen days `404 AGENT_CLAIM_INVALID`. Each of
+these answers clears the cookie, and so does a claim. Claiming sets `owner_user_id` and
 `claimed_at` and clears the expiry. The claimer becomes an owner of the agent's Personal Space and
 of every Team Space the agent creates, before or after the claim, and manages them in the browser; the agent gets no access to the claimer's files. The claimer also
 decides the agent's pull requests: they can mark one ready, reopen, merge or discard it, in the browser,
@@ -301,15 +333,33 @@ restart. Grant the users who use the executor today before you switch MCP from `
 which admits nobody else.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. An agent can create a
-Team Space and owns it. An unclaimed agent cannot make a Space public, become a Team Space member or
-add one. A claimed agent can be a viewer or editor of a Team Space a human owns, and also an admin of
+Team Space and owns it. An unclaimed agent cannot become a Team Space member. A claimed agent can be a viewer or editor of a Team Space a human owns, and also an admin of
 one an agent owns (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and 3 forks, and keeps at
 most 20 files across all its Spaces, pending pull-request files included, each of at most 10 MiB
-(`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
-Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
+(`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. User search does not return unclaimed or stopped agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`). A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team
 Space (`FORBIDDEN`). Every agent, claimed or not, has at most 10 open pull requests and starts at most 50 merges in
 any 24 hours (`AGENT_QUOTA_EXCEEDED`); `GET /api/session` shows its use as `budget`. People have no such budget.
+
+Only a person signed in to Workspace in a browser lets more people see data. Four changes do that: making a
+Space public, adding a Team Space member or raising a member's role, sharing a file with a user or raising their
+role, and turning Link Sharing on or raising it to editor. The capability check runs first, so a caller without
+`manageMembers` or `share` gets `FORBIDDEN` as before. When any other session asks for such a change, the server
+changes nothing and returns `403 INTERACTIVE_SESSION_REQUIRED` with `error.url`, the path of a confirm page:
+`/confirm/public?space=`, `/confirm/member?space=&user=&role=`, `/confirm/grant?node=&user=&role=` or
+`/confirm/link-sharing?node=&role=`. Those sessions are an agent, a CLI login (the Workspace Agent's and the Space
+plugin's sessions included) and a session issued for a token. Creating a Space that is already public gets the same
+code without `url`, because no Space exists to confirm. The server compares the request with the stored state
+inside the write's own transaction. A write that keeps or lowers the stored access therefore passes for every
+session: making a Space private, removing a member or a grant, lowering a role, turning a link off, or repeating
+a role already held. An unclaimed agent has no person to confirm for it and gets `AGENT_NOT_ALLOWED`, with a
+message telling it to give the user its handoff link. That includes turning on a link for its own file. A link it
+turned on before this rule keeps working until the agent expires.
+
+The confirm page reads the Space, file and user names with the person's own session and shows no text from the
+link. It states the consequence, shows the current and the new access, and offers Confirm and Give up. Confirm
+calls the endpoint the refused session called, so the person needs the same capability. A browser that is signed
+out, or signed in as an agent, is asked to sign in as a person first.
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
 for any Node the caller can read and returns `201` with `{ id }`. Each source IP may send 10 an hour,
@@ -448,14 +498,15 @@ loop count.
 | `workspace_share_page_views_total` | A `GET` page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open, including a `304` revalidation, which is a real open. `HEAD` and in-app navigation do not count | `session` (`signed_in`, `signed_out`), `owner_category` |
 | `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`, `auth_token` for a guest authorization code redeemed at `POST /api/auth/token`) |
-| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an unclaimed agent making a Space public. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `INTERACTIVE_SESSION_REQUIRED`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
+| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an unclaimed agent creating a fourth Team Space. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `FORBIDDEN`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
+| `workspace_exposure_refusals_total` | A write refused because it would let more people see data and its session is not a person in a browser. It has no log line | `change` (`public`, `member`, `grant`, `link-sharing` or `create-public`), `code` (`INTERACTIVE_SESSION_REQUIRED`, or `AGENT_NOT_ALLOWED` for an unclaimed agent), `principal_category` (as above) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
 `source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
-claim page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
+handoff page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
 otherwise. OAuth sign-ups carry `returnTo` through the provider. Password and email sign-ups read it
-from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the claim page
-itself, which has its own sign-in form. The claim code is never logged, here or in request logs.
+from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, which is where the handoff
+page sends a visitor to sign in. The claim code is never logged, here or in request logs.
 
 Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
 these fields:
@@ -551,6 +602,8 @@ viewer access, even when a link grants editors access after sign-in. They cannot
 modify source content, write comments, upload, manage permissions, or access Worktrees.
 An unclaimed agent also gets only viewer access from a link.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
+A signed-out visitor who opened an unclaimed agent's handoff link also views everything that agent owns,
+as [CLI sign-in and Agent access](#cli-sign-in-and-agent-access) describes.
 
 A signed-out visitor sees a bar under the header on every file and folder page, and in the
 immersive view in place of the header. It names the author, the owner of the Personal Space,
@@ -574,10 +627,9 @@ reader cannot open one of those Sheets, nothing is copied. A signed-out visitor 
 to a copy: sign up, and the copy is made on return, or hand a short English prompt to their own
 agent, with the same two ways as `Hand to my agent`. Through MCP the agent copies the file into a
 pull request with `unit_create` and `from`, which needs no `read`; through `uvw` it uses
-`uvw unit create --from`. Either way it merges the pull request and gives the visitor a claim
-link that makes the copy theirs, and the copy's link. Both prompts have the agent tell
-the visitor to open the claim link first: the copy is theirs to edit once they claim it, and until then its link opens
-only if the agent shared it. An agent cannot copy a page, so for a page the dialog
+`uvw unit create --from`. Either way it merges the pull request and gives the visitor its handoff
+link. Both prompts have the agent tell the visitor to open the handoff link first: the copy shows there
+without signing in, and is theirs to edit once they sign in and take the agent. An agent cannot copy a page, so for a page the dialog
 offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only
 the sign-up return it was asked from makes it.
 
@@ -609,8 +661,7 @@ The Vite development server does not generate these previews.
 
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
-Serving the page of a file that an unclaimed agent owns moves that agent's expiry, at most
-once a day. A banned or expired agent's links answer as not found.
+A banned or expired agent's links answer as not found.
 The public link uses the existing Node URL, including immersive-view parameters.
 Each read request and Unit join checks current permissions. Link Sharing changes
 retain the existing realtime connection invalidation. Space public-read changes,
@@ -760,7 +811,8 @@ same SQLite file.
 A fork is a User's named view of a Team Space they can propose in: its owner, the human who claimed its agent
 owner, a Space Member of any role, or a reader its `proposals` setting admits. `POST /api/forks` takes `{ upstreamSpaceId, name }` and writes one `forks`
 row. It copies no Node, Resource, Unit, Blob or Collaboration data. `GET /api/forks`, `GET /api/forks/lookup?owner&name`,
-`GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve only the fork's owner. A fork's name shares the
+`GET /api/forks/{forkId}` and `DELETE /api/forks/{forkId}` serve the fork's owner and the person who owns that
+agent, so a fork follows its agent to whoever takes it. Only the fork's own owner writes through it. A fork's name shares the
 owner's namespace with Team Space slugs (`409 SPACE_SLUG_TAKEN`). `POST /api/forks/{forkId}/units` writes a Unit
 through the fork, and `POST /api/forks/{forkId}/worktree` opens or returns the fork's Worktree for a write that adds no
 Unit, such as an HTML View draft. Its first write opens the fork's one Team Worktree in the upstream, and the fork's `state` follows

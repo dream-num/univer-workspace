@@ -236,7 +236,7 @@ async function main() {
   writeFileSync(join(evidence, 'answer.txt'), answer);
   writeFileSync(join(evidence, 'trajectory.txt'), `${lines.join('\n')}\n\n=== final answer ===\n${answer}\n`);
   const meta = {
-    label, client, identity: as, auth: client === 'uvw' ? (as === 'human' ? 'uvw session of the run user' : 'uvw with the origin configured; the identity signs in itself') : oauth ? 'opencode OAuth as a new guest agent, with no page' : as === 'human' ? 'PAT of the run user' : 'PAT of the agent principal',
+    label, client, identity: as, auth: client === 'uvw' ? (as === 'human' ? 'uvw session of the run user' : 'uvw with the origin configured; the identity signs in itself') : oauth ? "opencode OAuth as a new guest agent, through the connect page's trial" : as === 'human' ? 'PAT of the run user' : 'PAT of the agent principal',
     model, ...(client === 'codex' ? { effort, codex: spawnSync('codex', ['--version'], { env, encoding: 'utf8' }).stdout.trim() } : {
       opencode: opencode(['--version']).stdout.trim(),
       model_credential: credential.file ? `opencode export of ${credential.integration}` : `shell variables ${Object.keys(credential.vars).join(', ')}`,
@@ -248,7 +248,6 @@ async function main() {
   process.exitCode = result.status === 0 ? 0 : 1;
 }
 
-/** opencode's own `mcp auth`, as a user would run it, in a signed-out browser that gets a guest agent's code with no page. */
 async function signInAsGuest({ origin, session, home, evidence, opencode, env }) {
   const browser = (...a) => {
     // Arguments carry the authorize URL with its state, so a failure names only the subcommand.
@@ -276,7 +275,12 @@ async function signInAsGuest({ origin, session, home, evidence, opencode, env })
     browser('open', `${origin}/login`);
     browser('storage', 'local', 'set', 'univer-workspace-language', 'en-US');
     browser('open', url);
-    if (browser('get', 'text', 'body').includes('AGENT_CREATE_RATE_LIMITED')) throw new Error(`authorize says this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`);
+    const limited = `this address reached an hourly limit: either ${process.env.VERIFY_UVW_AGENT_LIMIT_REASON || 'agent creation, which a higher VERIFY_UVW_AGENT_CREATE_LIMIT before up raises'}, or the server's fixed limit on client metadata checks`;
+    const trialButton = 'form[action="/api/auth/authorize/guest"] button';
+    const trial = JSON.parse(browser('eval', `document.querySelector('${trialButton}') ? 'offered' : document.querySelector('button[disabled]') ? 'unavailable' : location.pathname`));
+    if (trial !== 'offered') throw new Error(trial === 'unavailable' ? `the connect page disables the trial: ${limited}` : `authorize showed no trial at ${trial}: guest agents are off, or the anonymous metadata fetch was refused because ${limited}`);
+    browser('click', trialButton);
+    if (browser('get', 'text', 'body').includes('AGENT_CREATE_RATE_LIMITED')) throw new Error(`the trial says ${limited}`);
     browser('wait', '--url', 'http://127.0.0.1:*/callback?*');
     const callback = new URL(browser('get', 'url').trim());
     writeFileSync(join(evidence, 'oauth-callback.json'), `${JSON.stringify({ client_id: new URL(url).searchParams.get('client_id'), code_present: callback.searchParams.has('code'), iss: callback.searchParams.get('iss'), scope: callback.searchParams.get('scope'), error: callback.searchParams.get('error') }, null, 2)}\n`);

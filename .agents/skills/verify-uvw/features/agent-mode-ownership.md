@@ -13,14 +13,14 @@ nothing, and the claimer still sees them.
   as an admin and P as an Editor. B's capabilities equal P's once P is an admin too. B renames R and creates an Issue
   label, and cannot turn on required checks. A edits B's label, and reopens and discards a pull request of B's.
 - AO2 has the run user O, A's claimer, see R and a repository A created before the claim as their owner, change P's
-  role, make R public and private again, and discard a pull request of B's.
+  role, make R public and private again, and discard a pull request of B's. O also lists and deletes a fork of A's.
 - AO3 has O stop A. B and P then read nothing of R, and O still sees it.
 
 ## How to get to it (user POV)
 
 An agent calls `repo_create`, `repo_member_write`, `repo_view`, `repo_edit`, `label_write`, `label_list`, `pr_create`,
 `pr_ready`, `pr_view`, `pr_discard`, `space_browse` and `outline`. The claimer uses `uvw repo list`, `repo view`,
-`repo member`, `repo edit` and `pr discard`, and claims and stops agents through the HTTP API that the claim page and
+`repo member`, `repo edit`, `pr discard`, `fork list` and `fork delete`, and claims and stops agents through the HTTP API that the handoff page and
 `My agents` call.
 
 ## Driving it with agent-browser and uvw
@@ -32,8 +32,8 @@ call checks its usage event and credential leakage, and exit 5 fails the journey
 [MCP mode](../references/mcp-mode.md) lists the helper commands and their exit codes.
 
 The run user O signs in to the HTTP API with a cookie kept outside `$EVIDENCE`. `claim_agent <principal> <label>
-[cookie-jar]` has the agent mint a claim link with `claim`, has O, or the person whose cookie jar is given, claim it
-with `POST /api/agents/claim` as the claim page does, and replaces the used code in the evidence:
+[cookie-jar]` has the agent mint a handoff link with `claim`, has O, or the person whose cookie jar is given, take it
+with `POST /api/agents/claim` as the handoff page does, and replaces the used code in the evidence:
 
 ```bash
 O=verify-$VERIFY_UVW_RUN; OC=$RUN/home/o-cookies
@@ -52,8 +52,9 @@ claim_agent() {
 Run: helper.
 
 A person P registers. A creates a repository before O claims it, then O claims A and P claims B, as the agents list of
-each person shows. A creates R, adds B
-as an admin and P as an Editor, then makes P an admin. B's capabilities on R equal P's. B renames R and creates the
+each person shows. A creates R and asks to add B
+as an admin and P as an Editor. Each call returns a confirm link and adds nobody, and O, who claimed A, adds both in
+the browser session. A's change of P to admin returns a confirm link too, and O makes it. B's capabilities on R equal P's. B renames R and creates the
 label `triage`, and its `landing` change is refused. A renames the label, then reopens and discards B's ready pull
 request.
 
@@ -76,10 +77,21 @@ $V mcp --as ao-a ao1-repo repo_create '{"slug":"owned","name":"Owned"}'
 S=$(jq -r .id "$EVIDENCE/ao1-repo.out")
 jq -e '.accessRole == "owner"' "$EVIDENCE/ao1-repo.out"
 $V mcp --as ao-a ao1-add-b repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$B\",\"role\":\"admin\"}"
+test $? -eq 1
 $V mcp --as ao-a ao1-add-p repo_member_write "{\"repo\":\"$R\",\"action\":\"add\",\"user\":\"$P\",\"role\":\"editor\"}"
-jq -s -e 'map(.role) == ["admin", "editor"]' "$EVIDENCE/ao1-add-b.out" "$EVIDENCE/ao1-add-p.out"
+test $? -eq 1
+jq -s -e --arg link "$ORIGIN/confirm/member?space=$S&user=" 'map(.code) == ["INTERACTIVE_SESSION_REQUIRED", "INTERACTIVE_SESSION_REQUIRED"] and all(.[]; .detail.url | startswith($link)) and map(.detail.url | split("&role=") | last) == ["admin", "editor"]' \
+  "$EVIDENCE/ao1-add-b.out" "$EVIDENCE/ao1-add-p.out"
+$V mcp --as ao-a ao1-members-refused repo_member_list "{\"repo\":\"$R\"}"
+jq -e '.members == []' "$EVIDENCE/ao1-members-refused.out"
+$V person ao1-o-add-b repo member add "$B" --role admin -R "$R" --json role
+$V person ao1-o-add-p repo member add "$P" --role editor -R "$R" --json role
+jq -s -e 'map(.role) == ["admin", "editor"]' "$EVIDENCE/ao1-o-add-b.out" "$EVIDENCE/ao1-o-add-p.out"
 $V mcp --as ao-a ao1-p-admin repo_member_write "{\"repo\":\"$R\",\"action\":\"edit\",\"user\":\"$P\",\"role\":\"admin\"}"
-jq -e '.role == "admin"' "$EVIDENCE/ao1-p-admin.out"
+test $? -eq 1
+jq -e '.code == "INTERACTIVE_SESSION_REQUIRED" and (.detail.url | endswith("&role=admin"))' "$EVIDENCE/ao1-p-admin.out"
+$V person ao1-o-p-admin repo member edit "$P" --role admin -R "$R" --json role
+jq -e '.role == "admin"' "$EVIDENCE/ao1-o-p-admin.out"
 curl --fail-with-body -sS -b "$PH/cookies" "$ORIGIN/api/spaces/$S" > "$EVIDENCE/ao1-p-view.json"
 $V mcp --as ao-b ao1-b-view repo_view "{\"repo\":\"$R\"}"
 jq -s -e 'map(.accessRole) == ["admin", "admin"] and .[0].capabilities == .[1].capabilities and .[1].capabilities.manageMembers' \
@@ -104,7 +116,9 @@ $V mcp --as ao-a --toolsets core,admin ao1-a-discard pr_discard "{\"repo\":\"$R\
 jq -e '.state == "discarded"' "$EVIDENCE/ao1-a-discard.out"
 ```
 
-Pass when O's agents include A and not B, and P's are only B; A owns R; B joins as an admin and P as an Editor, then
+Pass when O's agents include A and not B, and P's are only B; A owns R; A's three `repo_member_write` calls exit 1
+with `INTERACTIVE_SESSION_REQUIRED` and a confirm link for R, and the member list stays empty after the first two;
+through O's browser session B joins as an admin and P as an Editor, then
 an admin; P's and B's capabilities on R are equal and
 include `manageMembers`; B renames R and creates `triage`, and its `landing` change exits 1 with `AGENT_NOT_ALLOWED`;
 A's edit leaves one label, `needs-triage` in orange; and A sees `reopen` and `discard` on B's ready pull request, reopens
@@ -115,8 +129,10 @@ it to a draft and discards it. A merging another agent's proposal is in [MP11 an
 Run: helper.
 
 This journey uses AO1's agents, P and repositories, so AO1 runs first. O, who claimed A, finds R and the repository A
-created before the claim among its own, as their owner with the same capabilities. O makes P a Viewer, makes R public
-and private again, and discards a pull request of B's, whose claimer is P.
+created before the claim among its own, as their owner with the same capabilities. O makes P a Viewer. O's uvw
+session is refused when it makes R public, with a confirm link, and O makes it public in the browser session and
+private again with uvw. O discards a pull request of B's, whose claimer is P. A forks R, and O lists that fork among
+its own and deletes it.
 
 ```bash
 $V cli ao2-list repo list -L 100 --json fullName,accessRole
@@ -126,16 +142,28 @@ $V cli ao2-owned repo view "$R" --json accessRole,capabilities
 jq -s -e '.[0] == .[1] and .[1].accessRole == "owner" and .[1].capabilities.manageMembers' "$EVIDENCE/ao2-before-claim.out" "$EVIDENCE/ao2-owned.out"
 $V cli ao2-member repo member edit "$P" --role viewer -R "$R" --json role
 jq -e '.role == "viewer"' "$EVIDENCE/ao2-member.out"
-$V cli ao2-public repo edit "$R" --visibility public --json publicRead
+$V cli ao2-public-cli repo edit "$R" --visibility public --json publicRead
+test $? -eq 1
+grep -qF "Give the user this link so they can confirm it in the browser: $ORIGIN/confirm/public?space=$S" "$EVIDENCE/ao2-public-cli.err"
+$V person ao2-public repo edit "$R" --visibility public --json publicRead
 $V cli ao2-private repo edit "$R" --visibility private --json publicRead
 jq -s -e 'map(.publicRead) == [true, false]' "$EVIDENCE/ao2-public.out" "$EVIDENCE/ao2-private.out"
 $V mcp --as ao-b ao2-b-pr pr_create "{\"repo\":\"$R\",\"title\":\"B's second proposal\",\"visibility\":\"space\"}"
 $V cli ao2-discard pr discard "$(jq -r .number "$EVIDENCE/ao2-b-pr.out")" -R "$R" --json state
 jq -e '.state == "discarded"' "$EVIDENCE/ao2-discard.out"
+$V mcp --as ao-a ao2-fork fork_create "{\"repo\":\"$R\",\"name\":\"mine\"}"
+$V cli ao2-forks fork list --json fullName,state
+jq -e '[.[] | select(.fullName == "'"$A/mine"'") | .state] == ["clean"]' "$EVIDENCE/ao2-forks.out"
+$V cli ao2-fork-delete fork delete "$A/mine" --json
+jq -e '.fork == "'"$A/mine"'"' "$EVIDENCE/ao2-fork-delete.out"
+$V mcp --as ao-a ao2-forks-after fork_list '{}'
+jq -e '.forks == []' "$EVIDENCE/ao2-forks-after.out"
 ```
 
 Pass when O's repository list holds both repositories as `owner`, both read back the same role and capabilities, P
-becomes a Viewer, R reads back public and then private, and O discards B's pull request.
+becomes a Viewer, O's uvw session gets the confirm link for R, R reads back public through the browser session and
+then private, O discards B's pull request, O's fork list holds A's fork `<A>/mine`, and after O deletes it A has no
+fork.
 
 ### AO3. A stopped agent's repositories are suspended
 
@@ -181,6 +209,6 @@ owner.
 - `Stop` cannot be undone, so AO3 runs last.
 - `label_write` and `pr_discard` are in the `admin` toolset, so an agent calls them with `--toolsets core,admin`.
 - The claims and the stop go through the HTTP API with a person's cookie. [Agent handoff and claim](agent-handoff.md)
-  drives the claim page and `My agents` in the browser.
+  drives the handoff page and `My agents` in the browser.
 - An unclaimed agent expires after 30 days without use, which a run cannot reach, so no journey shows that an expired
   agent's repositories are suspended.

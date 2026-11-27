@@ -28,16 +28,16 @@ export interface AgentCreation {
   readonly clientName?: string | null;
   /** Only the creation rate limit reads it; `source_rate_events` keeps its source bucket for about an hour. */
   readonly originIp: string | undefined;
+  readonly ownerUserId?: string;
 }
 
 export interface CreatedAgent {
   readonly user: User;
-  readonly expiresAt: number;
+  readonly expiresAt: number | null;
 }
 
 export interface AgentClaimCode {
   readonly code: string;
-  /** The claim page as a path on the Workspace origin. */
   readonly claimUrl: string;
   /** Seconds until the code stops working. */
   readonly expiresIn: number;
@@ -49,6 +49,20 @@ export interface AgentView extends User {
   /** Unix epoch milliseconds, recorded at most once a day. */
   readonly lastActiveAt: number;
   readonly stopped: boolean;
+}
+
+export interface AgentSpace {
+  readonly id: string;
+  readonly type: "personal" | "team";
+  readonly name: string;
+  readonly files: number;
+}
+
+export interface AgentHandoff {
+  readonly agent: AgentView;
+  readonly claimed: boolean;
+  readonly expiresAt: string;
+  readonly spaces: readonly AgentSpace[];
 }
 
 export interface AuthenticationMethods {

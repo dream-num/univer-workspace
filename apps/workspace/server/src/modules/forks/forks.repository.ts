@@ -24,8 +24,9 @@ export interface ForksRepository {
     readonly name: string;
     readonly createdAt: number;
   }): Promise<CreateForkResult>;
-  listOwned(ownerUserId: string): Promise<StoredFork[]>;
-  findOwned(ownerUserId: string, key: { readonly forkId: string } | { readonly username: string; readonly name: string }): Promise<StoredFork | null>;
-  /** Returns null when the owner has no such fork. Its open Worktree stays, with no fork. */
-  deleteOwned(ownerUserId: string, forkId: string): Promise<StoredFork | null>;
+  /** The actor's forks and those of the agents the actor owns. `findOwned` and `deleteOwned` reach the same forks. */
+  listOwned(actorUserId: string): Promise<StoredFork[]>;
+  findOwned(actorUserId: string, key: { readonly forkId: string } | { readonly username: string; readonly name: string }): Promise<StoredFork | null>;
+  /** The fork's open Worktree stays, with no fork. */
+  deleteOwned(actorUserId: string, forkId: string): Promise<StoredFork | null>;
 }
