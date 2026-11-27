@@ -99,7 +99,7 @@ describe("file links", () => {
     });
   });
 
-  it("reads Link Sharing without writing when no link is given, and points an unclaimed owner to claim without making a claim code", async () => {
+  it("reads Link Sharing without writing when no link is given, and points an unclaimed owner to its handoff link without making a claim code", async () => {
     const { spaces, calls } = clients((call) => Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
     await expect(shareNode(spaces, origin, { node: `${origin}/nodes/n1`, caller: agent, turnOn })).resolves.toEqual({
       url: `${origin}/nodes/n1`,
@@ -107,8 +107,7 @@ describe("file links", () => {
       link: "off",
       owner: { username: "budget-x7k2", kind: "agent", claimed: false },
       expiresAt: "2026-12-14T00:00:00.000Z",
-      access: "Only this agent can open the link until a person claims it. To let anyone with the link read it, run `uvw share n1 --link viewer`.",
-      claimHint: "To let the user keep this file, make a claim link with claim (uvw claim in the CLI) and give it to them.",
+      access: "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).",
     });
     expect(calls.map(({ method, path }) => [method, path])).toEqual([
       ["GET", "/api/nodes/n1"],
@@ -116,12 +115,11 @@ describe("file links", () => {
     ]);
   });
 
-  it("says until when an unclaimed agent's shared link works", async () => {
-    const { spaces } = clients((call) => Response.json(call.method === "PUT" ? sharing({ enabled: true }) : node(sheet)));
-    const shared = await shareNode(spaces, origin, { node: "n1", caller: agent, link: "viewer", turnOn });
-    expect(shared.access).toBe(
-      "Anyone with the link can read the file without signing in. The link stops working on 2026-12-14T00:00:00.000Z unless budget-x7k2 stays active.",
-    );
+  it("reports a link an unclaimed agent turned on earlier with the date it expires, in the field alone", async () => {
+    const { spaces } = clients((call) => Response.json(call.path.endsWith("/link-sharing") ? sharing({ enabled: true }) : node(sheet)));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: agent, turnOn })).resolves.toMatchObject({
+      link: "viewer", expiresAt: "2026-12-14T00:00:00.000Z", access: "Anyone with the link can read the file without signing in.",
+    });
   });
 
   it.each([
@@ -142,7 +140,7 @@ describe("file links", () => {
 
   it.each([
     ["an unclaimed agent", { username: "budget-x7k2", kind: "agent", claimed: false }, agent, turnOn,
-      "Only this agent can open the link until a person claims it. To let anyone with the link read it, run `uvw share n1 --link viewer`."],
+      "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI)."],
     ["a claimed agent", { username: "budget-x7k2", kind: "agent", claimed: true }, { ...agent, claimed: true },
       "call share with node n1 and link viewer",
       "Only people with access to the repository can open the link. To let anyone with the link read it, call share with node n1 and link viewer."],

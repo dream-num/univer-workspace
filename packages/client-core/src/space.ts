@@ -251,7 +251,7 @@ export class WorkspaceSpaceFeature {
       found = await findUser(http, user);
     } catch (error) {
       if (!(error instanceof WorkspaceApplicationError) || error.code !== "AGENT_NOT_ALLOWED") throw error;
-      throw workspaceError(error.code, "An unclaimed agent cannot add Team Space members. A person must claim it first.");
+      throw workspaceError(error.code, "An unclaimed agent cannot add Team Space members. Give the user your handoff link from claim (uvw claim in the CLI). Once they take you, try again.");
     }
     if (found === undefined) {
       throw workspaceError(
@@ -339,12 +339,12 @@ export class WorkspaceSpaceFeature {
     return parseLinkSharing(await http.json(`/api/nodes/${encodeURIComponent(nodeId)}/link-sharing`));
   }
 
-  /** Asks for the claim page of the signed-in agent, as a path on the Workspace origin. */
+  /** Asks for the handoff page of the signed-in agent, as a path on the Workspace origin. */
   public async createAgentClaimCode(): Promise<{ readonly claimUrl: string; readonly expiresIn: number }> {
     const body = await (await this.authenticatedHttp()).json("/api/agents/claim-codes", { method: "POST" });
     const { claimUrl, expiresIn } = body;
     if (typeof claimUrl !== "string" || !claimUrl.startsWith("/claim/") || typeof expiresIn !== "number")
-      throw invalidResponse("Workspace response is missing the claim link");
+      throw invalidResponse("Workspace response is missing the handoff link");
     return { claimUrl, expiresIn };
   }
 

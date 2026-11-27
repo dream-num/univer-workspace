@@ -15,12 +15,10 @@ export interface WorkspaceShare {
   readonly name: string;
   readonly link: WorkspaceShareLink;
   readonly owner: WorkspaceLinkSharing["owner"];
-  /** Set when the link stops working on that date unless its owner, an unclaimed agent, stays active. */
+  /** Set when the owner is an unclaimed agent: its links stop working when it expires, on that date. */
   readonly expiresAt?: string;
-  /** Who can open `url` now, and while `link` is off, how the caller lets anyone with the link read it. */
+  /** Who can open `url` now, and while `link` is off, how the caller shows the file to someone else. */
   readonly access: string;
-  /** Set when the owner is an unclaimed agent: how it lets a person claim it and keep its files. */
-  readonly claimHint?: string;
 }
 
 export interface WorkspaceClaimLink {
@@ -28,8 +26,7 @@ export interface WorkspaceClaimLink {
   readonly expiresAt: string;
 }
 
-const CLAIM_STEP = "make a claim link with claim (uvw claim in the CLI)";
-
+/** The handoff link of the signed-in agent: a person opens it to see the agent's work, and signs in to take the agent. */
 export async function createClaimLink(
   spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
   origin: string,
@@ -92,32 +89,31 @@ export async function shareNode(
     owner: sharing.owner,
     ...(sharing.expiresAt === null ? {} : { expiresAt: sharing.expiresAt }),
     access: describeAccess(link, sharing, resource === null, input.caller, input.turnOn),
-    ...(sharing.owner.claimed === false ? { claimHint: `To let the user keep this file, ${CLAIM_STEP} and give it to them.` } : {}),
   };
 }
 
 // The owner and the caller differ when a person reads the file of an agent they claimed.
 function describeAccess(
   link: WorkspaceShareLink,
-  { owner, expiresAt }: WorkspaceLinkSharing,
+  { owner }: WorkspaceLinkSharing,
   folder: boolean,
   caller: WorkspaceSubject,
   turnOn: string,
 ): string {
   if (link !== "off") {
     const target = folder ? "the folder and everything in it" : "the file";
-    const who = link === "viewer"
+    return link === "viewer"
       ? `Anyone with the link can read ${target} without signing in.`
       : `Anyone with the link can read ${target}, and signed-in people can edit ${folder ? "them" : "it"}. Through the link, an agent can edit only after a person claims that agent.`;
-    return expiresAt === null ? who : `${who} The link stops working on ${expiresAt} unless ${owner.username} stays active.`;
   }
-  const who = owner.claimed === false
-    ? "Only this agent can open the link until a person claims it."
-    : "Only people with access to the repository can open the link.";
+  // The server refuses an unclaimed agent Link Sharing, so the step it can take is its handoff link.
+  if (owner.claimed === false) {
+    return "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).";
+  }
   const next = caller.kind === "agent"
     ? `To let anyone with the link read it, ${turnOn}.`
     : `Only if the user asks, ${turnOn} to let anyone with the link read it.`;
-  return `${who} ${next}`;
+  return `Only people with access to the repository can open the link. ${next}`;
 }
 
 /** The share as the lines a client prints. */
@@ -125,7 +121,6 @@ export function formatShare(shared: WorkspaceShare): string {
   return [
     `${shared.name}  ${shared.url}`,
     `Link Sharing: ${shared.link}. ${shared.access}`,
-    ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
   ].join("\n");
 }
 
