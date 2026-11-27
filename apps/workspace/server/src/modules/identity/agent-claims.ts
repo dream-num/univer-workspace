@@ -3,7 +3,7 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { agentActivityWindow } from "./agent-activity.js";
 import type { IdentityRepository, StoredAgent } from "./identity.repository.js";
 import type { IdentityModule } from "./identity.service.js";
-import type { AgentClaimCode, AgentHandoff, AgentView } from "./identity.types.js";
+import type { AgentClaimCode, AgentHandoff, AgentView, Principal } from "./identity.types.js";
 import { hashSessionSecret } from "./session-token.js";
 
 const CLAIM_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -16,7 +16,8 @@ export interface AgentClaims {
   createCode(cookieHeader: string | undefined): Promise<AgentClaimCode>;
   /** Needs no session. `previewMs` is the handoff cookie's lifetime, null once the agent belongs to the caller. */
   handoff(cookieHeader: string | undefined, code: unknown): Promise<{ readonly view: AgentHandoff; readonly previewMs: number | null }>;
-  claim(cookieHeader: string | undefined, code: unknown): Promise<{ readonly agent: AgentView }>;
+  /** `keepFileLinks` keeps the links of the agent's Personal Space files open, which the claim otherwise closes. */
+  claim(cookieHeader: string | undefined, code: unknown, keepFileLinks: boolean): Promise<{ readonly agent: AgentView }>;
   list(cookieHeader: string | undefined): Promise<{ readonly agents: readonly AgentView[] }>;
   stop(cookieHeader: string | undefined, agentUserId: string): Promise<void>;
 }
@@ -24,6 +25,7 @@ export interface AgentClaims {
 export function createAgentClaims(options: {
   readonly identity: Pick<IdentityModule, "requireSession" | "requireInteractiveSession">;
   readonly repository: Pick<IdentityRepository, "findAgents" | "listAgentSpaces" | "touchAgent" | "claimAgent" | "banClaimedAgent" | "putSignInCode" | "findSignInCode">;
+  readonly keepFileLinks: (human: Principal, agentUserId: string) => Promise<void>;
   readonly onAgentClaimed: () => void;
   readonly onAgentStopped: (agentUserId: string) => void;
   readonly now?: () => number;
@@ -90,12 +92,15 @@ export function createAgentClaims(options: {
       };
     },
 
-    async claim(cookieHeader, code) {
-      const human = (await identity.requireInteractiveSession(cookieHeader)).user;
-      const { agent, claimed } = await claimable(code, human.id);
-      if (!claimed) {
-        if (!(await repository.claimAgent(agent.user.id, human.id, now()))) throw alreadyClaimed();
-        options.onAgentClaimed();
+    async claim(cookieHeader, code, keepFileLinks) {
+      const human = await identity.requireInteractiveSession(cookieHeader);
+      const { agent, claimed } = await claimable(code, human.user.id);
+      if (!claimed && !(await repository.claimAgent(agent.user.id, human.user.id, now()))) throw alreadyClaimed();
+      try {
+        // No transaction spans the claim and Link Sharing, so this also runs for an agent the person already took: a retry finishes it.
+        if (keepFileLinks) await options.keepFileLinks(human, agent.user.id);
+      } finally {
+        if (!claimed) options.onAgentClaimed();
       }
       return { agent: agentView(agent) };
     },

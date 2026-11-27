@@ -389,6 +389,38 @@ describe("a temporary agent's file links", () => {
     await repositories.identity.touchAgent({ nodeId: expiredSheet }, Date.now(), Date.now() - 24 * HOUR, Date.now() + 24 * HOUR);
     expect(await accessRole(origin, expiredSheet, undefined)).toBe("viewer");
   });
+
+  it("keep working after the claim when the person asks, as viewer Link Sharing on the Personal Space files that had no setting", async () => {
+    const origin = await start();
+    const agent = await guestAgent(origin);
+    const personal = await personalSpaceId(origin, agent.cookie);
+    const folder = await createFolder(origin, agent.cookie, "Reports", personal);
+    const sheet = await createFile(origin, agent.cookie, "Budget", personal, folder);
+    const turnedOff = await createFile(origin, agent.cookie, "Salaries", personal);
+    const linkSharing = async (nodeId: string, cookie: string, body?: unknown) => {
+      const response = await send(origin, body ? "PUT" : "GET", `/api/nodes/${nodeId}/link-sharing`, body, cookie);
+      expect(response.status).toBe(200);
+      return (await response.json()) as { enabled: boolean; role: string };
+    };
+    await linkSharing(turnedOff, agent.cookie, { enabled: false, role: "viewer" });
+    const teamSheet = await createFile(origin, agent.cookie, "Q4", await teamSpaceId(origin, agent.cookie, "Reports"));
+    const code = await claimCode(origin, agent.cookie);
+    const alice = await register(origin, "alice");
+
+    await expectError(send(origin, "POST", "/api/agents/claim", { code, keepFileLinks: true }, agent.cookie), 403, "INTERACTIVE_SESSION_REQUIRED");
+    expect((await send(origin, "POST", "/api/agents/claim", { code, keepFileLinks: true }, alice.cookie)).status).toBe(200);
+
+    expect(await accessRole(origin, sheet, undefined)).toBe("viewer");
+    expect(await linkSharing(sheet, alice.cookie)).toMatchObject({ enabled: true, role: "viewer" });
+    for (const closed of [turnedOff, teamSheet, folder]) expect(await accessRole(origin, closed, undefined)).toBeNull();
+    expect(await linkSharing(turnedOff, alice.cookie)).toMatchObject({ enabled: false });
+    expect(await linkSharing(folder, alice.cookie)).toMatchObject({ enabled: false });
+
+    await linkSharing(sheet, alice.cookie, { enabled: false, role: "viewer" });
+    const madeLater = await createFile(origin, agent.cookie, "Later", personal);
+    expect((await send(origin, "POST", "/api/agents/claim", { code, keepFileLinks: true }, alice.cookie)).status).toBe(200);
+    for (const closed of [sheet, madeLater]) expect(await accessRole(origin, closed, undefined)).toBeNull();
+  });
 });
 
 describe("the claimer deciding the agent's pull requests", () => {

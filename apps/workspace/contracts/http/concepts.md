@@ -129,7 +129,9 @@ not, gets the viewer role on a Node that holds a Resource in a Space the agent o
 Team, and never a higher one. Such a reader's navigation root is the file itself: the response
 names no parent, and folders, Space listings and the Space answer as before. This needs no Link
 Sharing and ignores it. It ends when a human takes the agent, when the agent is banned, and while
-the agent is expired.
+the agent is expired. The human who takes the agent can send `keepFileLinks: true` with the claim.
+The server then turns on viewer Link Sharing for each Personal Space file that has no Link Sharing
+setting, so those links keep working. Links to files in the agent's Team Spaces always stop.
 
 ## Capabilities
 

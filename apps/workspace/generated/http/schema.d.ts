@@ -739,8 +739,12 @@ export interface paths {
          *     agent's Personal Space; the agent gains no access to the owner's
          *     content. Claiming again as the same owner returns the agent unchanged.
          *     A successful claim clears the `workspace_handoff` cookie, and from then
-         *     on the code lets nobody read without signing in. All responses have
-         *     Cache-Control: no-store.
+         *     on the code lets nobody read without signing in. The claim also ends
+         *     the reading of the agent's files by link. With `keepFileLinks`, the
+         *     server then turns on viewer Link Sharing for the Personal Space files
+         *     that have no setting, in the same request and after the claim is
+         *     stored. If that step fails, the claim stands, and the same request
+         *     sent again finishes it. All responses have Cache-Control: no-store.
          */
         post: operations["claimAgent"];
         delete?: never;
@@ -3769,6 +3773,13 @@ export interface components {
         };
         AgentClaim: {
             code: string;
+            /**
+             * @description When true, each file in the agent's Personal Space that had no Link Sharing setting at the
+             *     claim gets Link Sharing with the viewer role, so its link keeps working for anyone who has
+             *     it. Absent or false, those links stop with the claim. Files in the agent's Team Spaces are
+             *     never included, because a Team Space has no Link Sharing.
+             */
+            keepFileLinks?: boolean;
         };
         AgentClaimed: {
             agent: components["schemas"]["AgentSummary"];

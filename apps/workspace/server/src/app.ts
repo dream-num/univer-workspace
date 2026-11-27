@@ -468,6 +468,7 @@ export function createWorkspaceApplication(
       agentClaims: createAgentClaims({
         identity,
         repository: identityRepository,
+        keepFileLinks: permissions.keepAgentFileLinks,
         onAgentClaimed: () => invalidateRealtimeNodeAccess(),
         onAgentStopped: sessionSockets.closeUser,
       }),

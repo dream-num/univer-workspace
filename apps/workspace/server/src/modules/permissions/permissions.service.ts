@@ -69,6 +69,11 @@ export interface PermissionsModule {
     nodeId: string,
     input: unknown
   ): Promise<NodeLinkSharing>;
+  /**
+   * Turns on viewer Link Sharing for the files whose links the claim of this agent closed. A file
+   * that has a Link Sharing row keeps it, so a second call finishes what the first one left.
+   */
+  keepAgentFileLinks(actor: Principal, agentUserId: string): Promise<void>;
   nodeOwnerCategory(nodeId: string): Promise<Exclude<PrincipalCategory, "anonymous">>;
   /**
    * Who may read content now, as the actors last set it, each after its own `since`: memberships
@@ -199,6 +204,16 @@ export function createPermissionsModule(options: {
         );
       }
       return sharing;
+    },
+
+    async keepAgentFileLinks(actor, agentUserId) {
+      const role = "viewer" as GrantRole;
+      for (const nodeId of await options.repository.listAgentFilesWithoutLinkSharing(agentUserId)) {
+        await options.repository.upsertLinkSharing(
+          { nodeId, enabled: true, role, actorUserId: actor.user.id, now: now() },
+          exposureGuard(actor, { kind: "link-sharing", nodeId, role }),
+        );
+      }
     },
 
     async nodeOwnerCategory(nodeId) {

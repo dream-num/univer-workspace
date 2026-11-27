@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRouteWithContext, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { LanguageProvider } from "../../web/src/shared/i18n";
 import { Route } from "../../web/src/routes/claim.$code";
 
@@ -38,6 +38,7 @@ const files: Record<string, unknown[]> = {
 };
 let signedIn: keyof typeof people | null;
 const requests: string[] = [];
+const claims: unknown[] = [];
 const assign = vi.fn();
 let container: HTMLDivElement;
 let root: Root;
@@ -55,6 +56,7 @@ beforeEach(() => {
   vi.stubGlobal("location", { ...window.location, assign });
   window.localStorage.setItem("univer-workspace-language", "en-US");
   requests.length = 0;
+  claims.length = 0;
   assign.mockClear();
   http.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -72,7 +74,7 @@ beforeEach(() => {
       return new Response(null, { status: 204 });
     }
     if (request.method === "POST" && url.pathname === "/api/agents/claim") {
-      expect(await request.json()).toEqual({ code: CODE });
+      claims.push(await request.json());
       return Response.json({ agent: agentSummary });
     }
     throw new Error(`Unexpected request ${request.method} ${url.pathname}`);
@@ -148,9 +150,26 @@ it("gives a signed-in person the summary without its files, and the agent in one
   expect(container.textContent).toContain("Research");
   expect(links()).toEqual({});
   expect(requests).not.toContain("GET /api/spaces/space-1/nodes");
+  expect(container.textContent).not.toContain("A team space has no link sharing.");
   await click("Take it");
   await waitFor(() => expect(router.state.location.pathname).toBe("/spaces/space-1"));
-  expect(requests).toContain("POST /api/agents/claim");
+  expect(claims).toEqual([{ code: CODE, keepFileLinks: true }]);
+});
+
+it("stops the file links when the person unchecks the box, and names the team spaces whose links stop either way", async () => {
+  signedIn = "human";
+  handoff.spaces[1]!.files = 2;
+  onTestFinished(() => { handoff.spaces[1]!.files = 0; });
+  const router = await open();
+  await waitFor(() => expect(button("Take it")).toBeDefined());
+  expect(container.textContent).toContain("File links in Research stop when you take it.");
+  const keep = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  expect(keep.closest("label")!.textContent).toContain("Keep its file links working for anyone who has them");
+  expect(keep.checked).toBe(true);
+  await act(async () => keep.click());
+  await click("Take it");
+  await waitFor(() => expect(router.state.location.pathname).toBe("/spaces/space-1"));
+  expect(claims).toEqual([{ code: CODE, keepFileLinks: false }]);
 });
 
 it("tells a session the server refuses to take the agent to sign out", async () => {

@@ -151,7 +151,7 @@ export function createIdentityRouter(options: {
 
   router.post("/agents/claim", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    const claimed = await options.agentClaims.claim(request.headers.cookie, request.body?.code);
+    const claimed = await options.agentClaims.claim(request.headers.cookie, request.body?.code, request.body?.keepFileLinks === true);
     response.clearCookie(HANDOFF_COOKIE, { path: "/" });
     response.json(claimed);
   });

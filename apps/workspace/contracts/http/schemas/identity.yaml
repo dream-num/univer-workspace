@@ -509,6 +509,13 @@ AgentClaim:
   properties:
     code:
       type: string
+    keepFileLinks:
+      type: boolean
+      description: |
+        When true, each file in the agent's Personal Space that had no Link Sharing setting at the
+        claim gets Link Sharing with the viewer role, so its link keeps working for anyone who has
+        it. Absent or false, those links stop with the claim. Files in the agent's Team Spaces are
+        never included, because a Team Space has no Link Sharing.
 
 AgentSummary:
   type: object

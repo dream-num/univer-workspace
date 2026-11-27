@@ -23,8 +23,8 @@ export function agentClaimQueryOptions(code: string) {
   });
 }
 
-export async function claimAgent(code: string) {
-  const { data, error } = await api.POST("/api/agents/claim", { body: { code } });
+export async function claimAgent(code: string, keepFileLinks: boolean) {
+  const { data, error } = await api.POST("/api/agents/claim", { body: { code, keepFileLinks } });
   if (error) throw apiError(error);
   return data;
 }
