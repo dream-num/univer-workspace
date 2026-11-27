@@ -260,15 +260,12 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 | 动作 | 禁止条件 | 错误码 |
 | --- | --- | --- |
 | `createTeamSpace` | 主体是未认领 agent，已持有 3 个 Team Space | `AGENT_QUOTA_EXCEEDED` |
-| `updateSpace` | 主体是未认领 agent，且创建或更新 Space 时请求 `publicRead: true` | `AGENT_NOT_ALLOWED` |
-| `addTeamMember` | 主体是未认领 agent；或被加入或改角色的 User 是未认领 agent；或被加入的 User 是 agent，角色为 admin，而 Space 的所有者是人 | `AGENT_NOT_ALLOWED` |
+| `addTeamMember` | 被加入或改角色的 User 是未认领 agent；或被加入的 User 是 agent，角色为 admin，而 Space 的所有者是人 | `AGENT_NOT_ALLOWED` |
 | `searchUsers` | 主体是未认领 agent | `AGENT_NOT_ALLOWED` |
 | `createFiles` | 主体是未认领 agent，它持有的全部 Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
 | `openWorktree` | 主体是 agent（认领与否），未结束的 Worktree 将超过 10 个 | `AGENT_QUOTA_EXCEEDED` |
 | `mergeWorktree` | 主体是 agent（认领与否），最近 24 小时发起的合入将超过 50 次 | `AGENT_QUOTA_EXCEEDED` |
-| `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
-| `publishSpace` | 主体是人，Session 由个人访问令牌或 OAuth Grant 换出，且创建或更新 Space 时请求 `publicRead: true` | `INTERACTIVE_SESSION_REQUIRED` |
 
 文件数包括 Trash 之外有 Resource 的 Node、未完成 Pull request 中的新建文件和仍在进行的创建 Operation；
 重放同一个 Operation 不重复计数。Team Space 的数量在创建它的同一个事务里读取，并发的创建不会越过上限。
@@ -277,8 +274,22 @@ agent 的预算按产品数据计数：未结束的 Worktree 是它创建、`pro
 预留 Operation 的同一个事务里读取，所以并发的创建或合入在多个副本上也只放行到上限。同一个 Idempotency-Key 重放进行中或已完成的
 创建，读到已有的 Operation，不再计数。失败的 Operation 再次执行之前先回到 `pending`，无论是同一个 Idempotency-Key 的重放还是
 `POST /api/operations/{operationId}/retry`，失败的创建在这个事务里计数，要先有空位。人的创建和合入不计数。
-`GET /api/session` 给 agent 返回 `budget`，即这两项的 `used` 和 `limit`。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
-Personal Space 的 Node，因为分享 Capability 只给 Personal Space 的 Owner。用户搜索只返回人。
+`GET /api/session` 给 agent 返回 `budget`，即这两项的 `used` 和 `limit`。用户搜索只返回人。
+
+`modules/access/exposure.ts` 管“让更多人看到数据”的写入，和上限分开。这类写入有四种：把 Space 设为公开，添加 Team Space 成员或
+提高成员角色，把 Node 授权给某个 User 或提高其角色，打开 Link Sharing 或把它提高到 `editor`。Service 用 `exposureGuard(principal, change)`
+得到一个 guard，交给 Repository。Repository 在写入所在的事务里先做 Capability 检查，再读出已存的级别，调用 guard，然后写入。
+所以没有 `manageMembers` 或 `share` 的调用者照旧得到 `FORBIDDEN`，判断用的是事务里读到的状态，不是调用者先前看到的状态，
+多个副本并发时也成立。guard 只有抛错一个副作用，拒绝在抛错处计入 `workspace_exposure_refusals_total`，
+所以 PostgreSQL 因可串行化冲突重放事务时，一次拒绝只计一次。
+
+guard 的规则：请求的级别不高于已存级别时对任何 Session 放行，包括设为私有、移除成员或授权、降低角色、关闭链接。
+请求扩大时，只有人在 Browser 里登录的 Session（`personInBrowser`）放行。未认领 agent 得到 403 `AGENT_NOT_ALLOWED`，
+消息让它把认领链接交给用户；它给自己 Personal Space 的 Node 打开 `viewer` 链接仍然放行。其余 Session 得到 403
+`INTERACTIVE_SESSION_REQUIRED`，错误信封的 `url` 是确认页的路径：`/confirm/public?space=`、`/confirm/member?space=&user=&role=`、
+`/confirm/grant?node=&user=&role=` 或 `/confirm/link-sharing?node=&role=`。创建时请求 `publicRead: true` 的拒绝没有 `url`，
+因为还没有可确认的 Space。Web 的 `/confirm/$action` 页面解析这四种链接，用这个人自己的 Session 读名字，
+确认时调用原有的写入接口，没有新增写入接口。
 
 `POST /api/nodes/{nodeId}/reports` 接受对请求者可读 Node 的举报，登录与否均可，按来源 IP 每小时最多 10 次，
 超出返回 429 `REPORT_RATE_LIMITED`。举报写入 `node_reports`，并以 `warn` 级别记一条只含 Node ID 与举报 ID 的日志。

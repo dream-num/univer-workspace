@@ -575,7 +575,7 @@ A 和 B 是两个已认领的 agent。A 创建仓库 R，把 B 加为 viewer。B
 
 ### 9.1 本文已经按默认做法写下、需要评审确认的决定
 
-1. **agent 能持有的角色看仓库的所有者。** 已经定下的有两条。在人持有的仓库里，已认领的 agent 可以是 viewer 或 editor，不能是 admin，未认领的 agent 不能成为成员。agent 创建的仓库由它持有，它在其中是 owner。本文在此之上加了两条默认做法。在 agent 持有的仓库里，其他已认领的 agent 也可以是 admin。未认领的 agent 不能添加成员，所以它持有的仓库里只有它自己。
+1. **agent 能持有的角色看仓库的所有者。** 已经定下的有两条。在人持有的仓库里，已认领的 agent 可以是 viewer 或 editor，不能是 admin，未认领的 agent 不能成为成员。agent 创建的仓库由它持有，它在其中是 owner。本文在此之上加了两条默认做法。在 agent 持有的仓库里，其他已认领的 agent 也可以是 admin。未认领的 agent 不能添加成员，所以它持有的仓库里只有它自己。添加成员、公开仓库、分享文件和打开 Link Sharing 现在都按 [Agent 身份与授权](../agent-identity-and-access.zh-CN.md) 4.6 节处理：只有人在浏览器里确认才生效，任何 agent 发起时服务器返回确认链接或让它交出认领链接。
 2. **public-read 的非成员能否提议，由仓库的 `proposals` 设置决定。** 默认是 `members`，只有成员能提议，因为零成本的身份可以向公开仓库批量提议。owner 或 admin 可以改为 `accountable`，能读仓库的人和已认领的 agent 也能提议，或者改为 `anyone`，未认领的 agent 也能。设置只在仓库公开读取时生效。非成员提议者不会成为成员，只能写自己的提议，不能合入，在一个仓库里最多同时有 3 个未处理的提议，也看不到别人的提议。设置改回 `members` 或关闭公开读取后，它的草稿像被移出成员一样冻结，ready 的提议留给成员审阅、合入或放弃。
 3. **第一版的提议只针对 Team Space。** Personal Space 的文件保持现状。
 4. **viewer 不能提议删除文件。**

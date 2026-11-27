@@ -92,7 +92,11 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 共享 MCP 执行层在同一个容器里为所有用户运行脚本，因此由运维决定谁能使用。运行 `pnpm db:executor-access grant <username or user id>` 授权，`revoke` 撤销，`list` 列出已授权的用户，没有时提示无人获得授权；生产构建使用 `db:executor-access:production`，运行时镜像内执行 `node dist/server/db/executor-access.js`。重复授权或撤销不会再次变更状态，参数同时指向两个用户时与 `db:ban-agent` 一样拒绝执行。没有任何 HTTP 接口能修改授权，用户和 Agent 都不能给自己授权。已授权用户的 `GET /api/session` 返回 `executorAccess: true`，令牌兑换返回 `executor_access: true`，未授权时不返回该字段。MCP 设置 `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` 后，网关和执行层约 30 秒后跟随授权变化，无需重启。MCP 从 `*` 或用户 ID 列表切换到 `workspace` 之前，先授权当前使用执行层的用户，`workspace` 不放行其他人。
 
-以下限制适用于所有角色，违规返回 `403`。Agent 可以创建团队空间，并成为它的所有者。未认领的 Agent 不能公开空间，不能成为团队空间成员，也不能添加成员。已认领的 Agent 在人持有的团队空间里可以是查看者或编辑者，在 Agent 持有的团队空间里还可以是管理员（`AGENT_NOT_ALLOWED`）。未认领的 Agent 最多持有 3 个团队空间，在它的全部空间里最多保留 20 个文件（含未完成 Pull request 中的新建文件），单个文件最多 10 MiB（`AGENT_QUOTA_EXCEEDED`），通过链接分享最多获得查看者（Viewer）权限。真人用户通过访问令牌兑换的会话也不能更改链接分享或公开空间（`INTERACTIVE_SESSION_REQUIRED`）。用户搜索结果不含未认领或已停用的 Agent，未认领 Agent 发起搜索会收到 `AGENT_NOT_ALLOWED`。不是团队空间成员的提议者在一个团队空间里最多同时有 3 个未处理的 Team Worktree（`FORBIDDEN`）。每个 Agent，无论是否认领，最多同时有 10 个未结束的 Pull request，任意 24 小时内最多发起 50 次合入（`AGENT_QUOTA_EXCEEDED`），`GET /api/session` 的 `budget` 显示用量。真人用户没有这项预算。
+以下限制适用于所有角色，违规返回 `403`。Agent 可以创建团队空间，并成为它的所有者。未认领的 Agent 不能成为团队空间成员。已认领的 Agent 在人持有的团队空间里可以是查看者或编辑者，在 Agent 持有的团队空间里还可以是管理员（`AGENT_NOT_ALLOWED`）。未认领的 Agent 最多持有 3 个团队空间，在它的全部空间里最多保留 20 个文件（含未完成 Pull request 中的新建文件），单个文件最多 10 MiB（`AGENT_QUOTA_EXCEEDED`），通过链接分享最多获得查看者（Viewer）权限。用户搜索结果不含未认领或已停用的 Agent，未认领 Agent 发起搜索会收到 `AGENT_NOT_ALLOWED`。不是团队空间成员的提议者在一个团队空间里最多同时有 3 个未处理的 Team Worktree（`FORBIDDEN`）。每个 Agent，无论是否认领，最多同时有 10 个未结束的 Pull request，任意 24 小时内最多发起 50 次合入（`AGENT_QUOTA_EXCEEDED`），`GET /api/session` 的 `budget` 显示用量。真人用户没有这项预算。
+
+只有人在浏览器里登录 Workspace 时，才能让更多人看到数据。这类修改有四种：公开空间，添加团队空间成员或提高成员角色，把文件分享给某个用户或提高其角色，打开 Link Sharing 或把它提高到编辑者。服务端先检查 capability，没有 `manageMembers` 或 `share` 的调用者照旧收到 `FORBIDDEN`。其他会话发起这类修改时，服务端什么都不改，返回 `403 INTERACTIVE_SESSION_REQUIRED`，`error.url` 是确认页的路径：`/confirm/public?space=`、`/confirm/member?space=&user=&role=`、`/confirm/grant?node=&user=&role=` 或 `/confirm/link-sharing?node=&role=`。其他会话指 Agent、CLI 登录（包括 Workspace Agent 和 Space 插件的会话）以及为令牌签发的会话。创建时就公开的空间返回同样的 code，但没有 `url`，因为还没有可确认的空间。服务端在写入所在的事务里把请求和已存状态做比较，所以保持或收窄已存权限的写入对任何会话都放行：把空间设为私有，移除成员或授权，降低角色，关闭链接，或重复已有的角色。未认领的 Agent 没有可以替它确认的人，收到 `AGENT_NOT_ALLOWED`，消息让它把认领链接交给用户。它仍然可以给自己 Personal Space 里的文件打开查看者链接。
+
+确认页用这个人自己的会话读取空间、文件和用户的名字，不显示链接里的任何文字。页面说明后果，显示当前权限和修改后的权限，只有“确认”和“放弃”两个按钮。确认调用的是被拒会话调用的同一个接口，所以这个人需要同样的 capability。未登录或以 Agent 身份登录的浏览器会先被要求以人的身份登录。
 
 可免凭据调用 `POST /api/nodes/:nodeId/reports` 举报调用方可读的节点。请求体为 `{ "reason" }`，最多 1,000 个字符，成功返回 `201` 和 `{ id }`。每个来源 IP 每小时最多举报十次，超出返回 `429` 和 `REPORT_RATE_LIMITED`。日志仅记录节点及举报 ID。
 
@@ -163,6 +167,8 @@ UNIVER_LICENSE_KEY=<licenseKey.txt 的内容>
 ### 指标与传播回路事件
 
 设置 `METRICS_TOKEN` 后，`GET /metrics` 凭 `Authorization: Bearer <token>` 输出 Prometheus 指标，未设置时返回 `404`。抓取方式和仪表盘见 [observability/README.md](../../observability/README.md)。
+
+`workspace_exposure_refusals_total` 统计因为会话不是浏览器里的人而被拒绝的扩大可见范围的写入，标签是 `change`、`code` 和 `principal_category`。
 
 除 `http_request_duration_seconds` 外，四个计数器度量传播回路：`workspace_link_sharing_changes_total`（Link Sharing 打开或关闭）、`workspace_share_page_views_total`（服务端渲染的分享页 `GET` 加载，含 `304` 再验证，不含 `HEAD`）、`workspace_signups_total`（注册，按方式和来源）、`workspace_guest_agents_created_total`（访客 agent，按入口）。标签保持低基数。每次计数另写一行 `event` 为 `workspace.*` 的 `info` 日志，Node ID、用户 ID 和 User-Agent 只出现在日志里。标签取值和日志字段见英文版 README。
 

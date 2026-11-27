@@ -320,15 +320,33 @@ restart. Grant the users who use the executor today before you switch MCP from `
 which admits nobody else.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. An agent can create a
-Team Space and owns it. An unclaimed agent cannot make a Space public, become a Team Space member or
-add one. A claimed agent can be a viewer or editor of a Team Space a human owns, and also an admin of
+Team Space and owns it. An unclaimed agent cannot become a Team Space member. A claimed agent can be a viewer or editor of a Team Space a human owns, and also an admin of
 one an agent owns (`AGENT_NOT_ALLOWED`). An unclaimed agent owns at most 3 Team Spaces and 3 forks, and keeps at
 most 20 files across all its Spaces, pending pull-request files included, each of at most 10 MiB
-(`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
-Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return unclaimed or stopped agents, and refuses an unclaimed
+(`AGENT_QUOTA_EXCEEDED`), and gets Viewer at most from Link Sharing. User search does not return unclaimed or stopped agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`). A proposer who is not a Space Member holds at most 3 open Team Worktrees in one Team
 Space (`FORBIDDEN`). Every agent, claimed or not, has at most 10 open pull requests and starts at most 50 merges in
 any 24 hours (`AGENT_QUOTA_EXCEEDED`); `GET /api/session` shows its use as `budget`. People have no such budget.
+
+Only a person signed in to Workspace in a browser lets more people see data. Four changes do that: making a
+Space public, adding a Team Space member or raising a member's role, sharing a file with a user or raising their
+role, and turning Link Sharing on or raising it to editor. The capability check runs first, so a caller without
+`manageMembers` or `share` gets `FORBIDDEN` as before. When any other session asks for such a change, the server
+changes nothing and returns `403 INTERACTIVE_SESSION_REQUIRED` with `error.url`, the path of a confirm page:
+`/confirm/public?space=`, `/confirm/member?space=&user=&role=`, `/confirm/grant?node=&user=&role=` or
+`/confirm/link-sharing?node=&role=`. Those sessions are an agent, a CLI login (the Workspace Agent's and the Space
+plugin's sessions included) and a session issued for a token. Creating a Space that is already public gets the same
+code without `url`, because no Space exists to confirm. The server compares the request with the stored state
+inside the write's own transaction. A write that keeps or lowers the stored access therefore passes for every
+session: making a Space private, removing a member or a grant, lowering a role, turning a link off, or repeating
+a role already held. An unclaimed agent has no person to confirm for it and gets `AGENT_NOT_ALLOWED`, with a
+message telling it to give the user a claim link. It can still turn on a viewer link for a file in its own
+Personal Space.
+
+The confirm page reads the Space, file and user names with the person's own session and shows no text from the
+link. It states the consequence, shows the current and the new access, and offers Confirm and Give up. Confirm
+calls the endpoint the refused session called, so the person needs the same capability. A browser that is signed
+out, or signed in as an agent, is asked to sign in as a person first.
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
 for any Node the caller can read and returns `201` with `{ id }`. Each source IP may send 10 an hour,
@@ -467,7 +485,8 @@ loop count.
 | `workspace_share_page_views_total` | A `GET` page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open, including a `304` revalidation, which is a real open. `HEAD` and in-app navigation do not count | `session` (`signed_in`, `signed_out`), `owner_category` |
 | `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`, `auth_token` for a guest authorization code redeemed at `POST /api/auth/token`) |
-| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an unclaimed agent making a Space public. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `INTERACTIVE_SESSION_REQUIRED`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
+| `workspace_ceiling_denials_total` | An action that a ceiling refused whatever the principal's role, such as an unclaimed agent creating a fourth Team Space. It has no log line | `action` (the ceiling, such as `createTeamSpace`), `code` (`AGENT_NOT_ALLOWED`, `AGENT_QUOTA_EXCEEDED` or `FORBIDDEN`), `principal_category` (`human`, `agent_claimed` or `agent_unclaimed`, the principal that attempted the action) |
+| `workspace_exposure_refusals_total` | A write refused because it would let more people see data and its session is not a person in a browser. It has no log line | `change` (`public`, `member`, `grant`, `link-sharing` or `create-public`), `code` (`INTERACTIVE_SESSION_REQUIRED`, or `AGENT_NOT_ALLOWED` for an unclaimed agent), `principal_category` (as above) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
 `source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
