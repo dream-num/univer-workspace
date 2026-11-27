@@ -13,7 +13,9 @@ import {
   useSetLinkSharing,
   useSetMemberRole,
   useSetNodeGrant,
+  SourceSheets,
 } from "../permissions";
+import { defaultSharedView } from "../resource-view/resource-view";
 import { spaceQueryOptions, useUpdateSpace } from "../spaces";
 import { useI18n } from "../../shared/i18n";
 import { Alert, Button, Spinner } from "../../shared/ui";
@@ -80,7 +82,9 @@ function LinkSharingPanel({ request }: Of<"link-sharing">) {
   const setSharing = useSetLinkSharing();
   return <Panel request={request} reads={[node, sharing]} names={fileName(node.data)}
     before={sharing.data?.enabled ? sharing.data.role : null} write={setSharing}
-    onConfirm={() => setSharing.mutate({ nodeId: request.nodeId, enabled: true, role: request.role })} />;
+    onConfirm={() => setSharing.mutate({ nodeId: request.nodeId, enabled: true, role: request.role })}>
+    {defaultSharedView(node.data?.node) === "immersive" && <SourceSheets nodeId={request.nodeId} linkSharingEnabled />}
+  </Panel>;
 }
 
 const repositoryName = (space: components["schemas"]["SpaceView"] | undefined) => space?.fullName ?? space?.name;
@@ -98,13 +102,14 @@ function useNamedUser(userId: string, listedUser: PublicUser | undefined, listLo
   };
 }
 
-function Panel({ request, reads, names, before, write, onConfirm }: {
+function Panel({ request, reads, names, before, write, onConfirm, children }: {
   readonly request: ConfirmRequest;
   readonly reads: readonly Read[];
   readonly names: ConfirmNames;
   readonly before: ConfirmLevel;
   readonly write: { readonly isPending: boolean; readonly isSuccess: boolean; readonly error: Error | null };
   readonly onConfirm: () => void;
+  readonly children?: ReactNode;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -130,6 +135,7 @@ function Panel({ request, reads, names, before, write, onConfirm }: {
           </div>
         )}
       </dl>
+      {children}
       {write.error ? <Alert variant="destructive">{write.error.message}</Alert> : null}
       {write.isSuccess ? (
         <>
