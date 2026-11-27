@@ -119,6 +119,7 @@ if (command === 'login') {
       throw new Error(`authorize sent the browser to sign in: guest agents are off, or the anonymous metadata fetch was refused because ${limited}`);
     }
     browser('wait', '--text', 'Connect an AI assistant');
+    browser('set', 'viewport', '1440', '1500');
     const shownName = evaluate("document.querySelector('.request strong').textContent");
     let page, trial = null, accessRecord = null;
     const trialButton = 'form[action="/api/auth/authorize/guest"] button';

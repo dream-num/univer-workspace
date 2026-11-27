@@ -79,7 +79,7 @@ if (command === 'vscode') {
     } else {
       assert.ok([400, 503].includes(response.status), `${label}: ${response.status}`);
       assert.equal(fetched.length, 1, 'a document missing from the cache is fetched');
-      assert.match(body, /The application's metadata document could not be checked\./);
+      assert.match(body, /The application(?:'|&#39;)s metadata document could not be checked\./);
     }
     anonymous[label] = { status: response.status, fetches: fetched };
   }
