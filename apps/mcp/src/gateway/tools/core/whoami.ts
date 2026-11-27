@@ -10,7 +10,7 @@ const whoamiOutput = z.object({
 });
 
 export const TEMPORARY_AGENT_NOTICE =
-  "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
+  "You are a temporary agent. Anyone who has the link of a file you made can view that file, so give the user those links, and they can forward them. When you are done, also use claim to get a handoff link for the user, who signs in there to take you and keep your work.";
 
 export function ownedAgentNotice(owner: AgentOwner | undefined): string {
   return `${owner ? `${owner.name} (@${owner.username}) owns this agent and` : "The person who claimed this agent"} can open everything it owns, so to show them a repository or file, give them its link. You cannot let anyone else see one yourself: the server answers such a call with a confirm link, which you give to the user.`;

@@ -225,7 +225,7 @@ describe("unclaimed agent quotas", () => {
     const refused = await send(origin, "POST", "/api/team-spaces", { name: "Public", publicRead: true }, unclaimed.cookie);
     expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 403, body: { error: {
       code: "AGENT_NOT_ALLOWED",
-      message: "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again.",
+      message: "An unclaimed agent's files can already be viewed by anyone who has a file's link, so give the user that link. Making a repository public, adding people and letting link visitors edit wait until a person takes you, because no person can confirm them for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. Once they sign in and take you, try again.",
     } } });
 
     for (const spaceId of [repo, unclaimed.spaceId]) {

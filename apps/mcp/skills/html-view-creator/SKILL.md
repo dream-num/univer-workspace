@@ -132,6 +132,8 @@ Explain draft.publishWhen: `merge` goes live when its pull request merges, publi
 whoever merges it; never tell them to press Publish. `publish` means open the preview and press **Publish**.
 Explain access from `repositoryVisibility` and `privateSourceUnitIds`: public with no
 private sources means anyone with the link once published; otherwise permission is needed.
+An unclaimed agent's published page is the exception: until a person takes the agent, anyone
+with the link can view it with live data from the agent's own Sheets.
 Page access does not grant source access. Never change sharing without permission.
 With a local shell and `node`, and not as an agent identity, end the reply with exactly
 this sentence, translated into the user's language:

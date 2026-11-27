@@ -78,7 +78,7 @@ export function buildServerInstructions(
       ? [
           `Editing document contents is not enabled for this account; ask the user to edit in the browser.${
             finishes && handsOver && has("unit_create")
-              ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They see the copy through your handoff link, and can edit it in the browser once they take you."
+              ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They open the copy by its link, and can edit it in the browser once they take you through your handoff link."
               : ""
           }`,
         ]

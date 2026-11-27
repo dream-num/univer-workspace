@@ -260,7 +260,7 @@ describe("capabilities through MCP tools/list and initialize", () => {
 
   it("tells an unclaimed agent that cannot read file contents to hand over a copy the person edits in the browser", async () => {
     const copy =
-      "Reading them is not enabled either. When the user wants a file read or changed, make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They see the copy through your handoff link, and can edit it in the browser once they take you.";
+      "Reading them is not enabled either. When the user wants a file read or changed, make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They open the copy by its link, and can edit it in the browser once they take you through your handoff link.";
     const restricted = await start([replica()], "workspace");
     const open = await start([replica()], "*");
     for (const toolset of ["core", "all"]) {

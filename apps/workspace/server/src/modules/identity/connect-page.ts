@@ -28,6 +28,7 @@ export const TRIAL_LINES: Readonly<Record<AccessTier, readonly string[]>> = {
   read_write: [
     "A temporary agent with an empty space of its own. No account needed.",
     "It cannot read anyone's private files.",
+    "Anyone who has the link of a file it makes can view that file.",
     "Its files are paused after 30 days without use. To keep them, ask it for a handoff link.",
   ],
 };
