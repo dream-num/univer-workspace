@@ -1,7 +1,7 @@
 import { AGENT_MERGE_WINDOW_MS, assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
 import type { PoolClient } from "pg";
 import type { PostgresDatabase, PostgresStatement } from "../connection.js";
-import { previewedSql } from "../../preview-sql.js";
+import { linkViewableSql, previewedSql } from "../../preview-sql.js";
 import type {
   ResolvedNodeRow,
   StoredSpaceAccess,
@@ -331,7 +331,7 @@ export class PostgresAccessRepository implements AccessRepository {
       .prepare(`
       SELECT ${nodeDisplayColumns()}
         space.type AS space_type, space.name AS space_name, space.landing AS space_landing,
-        1 AS requester_owns, space.public_read::integer AS public_read, 0 AS previewed,
+        1 AS requester_owns, space.public_read::integer AS public_read, 0 AS previewed, 0 AS link_viewable,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
         NULL AS navigation_root_id, NULL AS requester_kind, NULL AS requester_claimed
@@ -406,6 +406,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
              ${ownsSpaceSql("space.owner_user_id")}::integer AS requester_owns,
              space.public_read::integer AS public_read,
              ${previewedSql("space.owner_user_id")}::integer AS previewed,
+             ${linkViewableSql("space.owner_user_id", "node.id")}::integer AS link_viewable,
              member.role AS member_role,
              (
                SELECT grant_node.role
@@ -481,6 +482,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
                    (space.type = 'team' AND member.user_id IS NOT NULL)
                    OR space.public_read
                    OR ${previewedSql("space.owner_user_id")}
+                   OR ${linkViewableSql("space.owner_user_id", "node.id")}
                    OR (
                      space.type = 'personal'
                      AND (

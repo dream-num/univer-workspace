@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { previewReaderId } from "../../server/src/modules/identity/index.js";
 import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
+import { agentPrincipal } from "../fixtures/principal.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -94,9 +96,10 @@ describe("claiming an agent", () => {
     const aliceSpaceId = await personalSpaceId(origin, alice.cookie);
     const agentSpaceId = await personalSpaceId(origin, agent.cookie);
     const bob = await register(origin, "bob");
-    expect(await accessRole(origin, agentNodeId, alice.cookie)).toBeNull();
+    expect(await accessRole(origin, agentNodeId, alice.cookie)).toBe("viewer");
 
     expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+    expect(await accessRole(origin, agentNodeId, bob.cookie)).toBeNull();
 
     expect(await accessRole(origin, agentNodeId, alice.cookie)).toBe("owner");
     expect(await (await send(origin, "GET", `/api/spaces/${agentSpaceId}`, undefined, alice.cookie)).json()).toMatchObject({ accessRole: "owner" });
@@ -212,9 +215,10 @@ describe("the handoff link", () => {
     const team = await teamSpaceId(origin, agent.cookie, "Reports");
     const teamSheet = await createFile(origin, agent.cookie, "Q4", team);
     const other = await guestAgent(origin);
-    const otherSheet = await createFile(origin, other.cookie, "Elsewhere");
+    const otherPersonal = await personalSpaceId(origin, other.cookie);
+    await createFile(origin, other.cookie, "Elsewhere");
     const code = await claimCode(origin, agent.cookie);
-    expect((await send(origin, "GET", `/api/nodes/${sheet}`)).status).toBe(404);
+    expect((await send(origin, "GET", `/api/spaces/${personal}/nodes`)).status).toBe(404);
 
     const opened = await send(origin, "GET", `/api/agents/claim?code=${code}`);
     expect(opened.status).toBe(200);
@@ -232,7 +236,7 @@ describe("the handoff link", () => {
       expect(await spaceFileNames(origin, spaceId, preview)).toHaveLength(1);
       expect(await accessRole(origin, nodeId, preview)).toBe("viewer");
     }
-    expect(await accessRole(origin, otherSheet, preview)).toBeNull();
+    expect((await send(origin, "GET", `/api/spaces/${otherPersonal}/nodes`, undefined, preview)).status).toBe(404);
     const { resource } = ((await (await send(origin, "GET", `/api/nodes/${sheet}`, undefined, preview)).json()) as { node: { resource: { id: string; unitId: string } } }).node;
     expect((await send(origin, "GET", `/api/unit-resources/${resource.unitId}`, undefined, preview)).status).toBe(200);
     expect(await (await send(origin, "POST", `/api/resources/${resource.id}/open`, undefined, preview)).json())
@@ -282,20 +286,22 @@ describe("the handoff link", () => {
     const sheet = await createFile(origin, agent.cookie, "Budget");
     const code = await claimCode(origin, agent.cookie);
     const preview = `workspace_handoff=${code}`;
-    expect(await accessRole(origin, sheet, preview)).toBe("viewer");
+    const personal = await personalSpaceId(origin, agent.cookie);
+    const listsSpace = async (cookie: string) => (await send(origin, "GET", `/api/spaces/${personal}/nodes`, undefined, cookie)).status === 200;
+    expect(await listsSpace(preview)).toBe(true);
 
     const bob = await register(origin, "bob");
-    expect(await accessRole(origin, sheet, `${bob.cookie}; ${preview}`)).toBeNull();
-    expect(await accessRole(origin, sheet, `workspace_handoff=${code}x`)).toBeNull();
-    expect(await accessRole(origin, sheet, `workspace_handoff=${(await claimCode(origin, (await guestAgent(origin)).cookie))}`)).toBeNull();
+    expect(await listsSpace(`${bob.cookie}; ${preview}`)).toBe(false);
+    expect(await listsSpace(`workspace_handoff=${code}x`)).toBe(false);
+    expect(await listsSpace(`workspace_handoff=${(await claimCode(origin, (await guestAgent(origin)).cookie))}`)).toBe(false);
 
     await repositories.identity.touchAgent({ userId: agent.id }, Date.now(), Date.now() + 1, Date.now() - 1);
     expect(await accessRole(origin, sheet, preview)).toBeNull();
     expect((await send(origin, "GET", `/api/agents/claim?code=${code}`)).status).toBe(200);
-    expect(await accessRole(origin, sheet, preview)).toBe("viewer");
+    expect(await listsSpace(preview)).toBe(true);
 
     vi.setSystemTime(Date.now() + 7 * 24 * HOUR);
-    expect(await accessRole(origin, sheet, preview)).toBeNull();
+    expect(await listsSpace(preview)).toBe(false);
     const expired = send(origin, "GET", `/api/agents/claim?code=${code}`, undefined, preview);
     expect((await expired).headers.getSetCookie()).toEqual([expect.stringMatching(/^workspace_handoff=; /u)]);
     await expectError(expired, 410, "AGENT_CLAIM_EXPIRED");
@@ -309,6 +315,76 @@ describe("the handoff link", () => {
     await repositories.identity.banAgent(stopped.id, Date.now());
     expect(await accessRole(origin, stoppedSheet, `workspace_handoff=${stoppedCode}`)).toBeNull();
     await expectError(send(origin, "GET", `/api/agents/claim?code=${stoppedCode}`), 404, "AGENT_CLAIM_INVALID");
+  });
+});
+
+describe("a temporary agent's file links", () => {
+  it("open each file, and only that file, to anyone until the agent has an owner, is banned or expires", async () => {
+    const origin = await start({ realtime: true });
+    const { blobs, repositories } = applications.at(-1)!;
+    const agent = await guestAgent(origin);
+    const personal = await personalSpaceId(origin, agent.cookie);
+    const folder = await createFolder(origin, agent.cookie, "Reports", personal);
+    const sheet = await createFile(origin, agent.cookie, "Budget", personal, folder);
+    const sibling = await createFile(origin, agent.cookie, "Salaries", personal, folder);
+    const html = Buffer.from("<!doctype html><title>Budget page</title>");
+    const upload = (await blobs.createUpload(agentPrincipal(agent.id, false), randomUUID(), {
+      spaceId: personal, parentNodeId: folder, name: "Budget.univer.html", originalFilename: "Budget.univer.html", byteSize: html.length,
+    })).body.upload;
+    await blobs.upload(agent.id, upload.id, String(html.length), Readable.from([html]));
+    const page = (await blobs.complete(agentPrincipal(agent.id, false), upload.id)).body.node;
+    const team = await teamSpaceId(origin, agent.cookie, "Reports");
+    const teamSheet = await createFile(origin, agent.cookie, "Q4", team);
+    const { id: resourceId, unitId } = ((await (await send(origin, "GET", `/api/nodes/${sheet}`, undefined, agent.cookie)).json()) as { node: { resource: { id: string; unitId: string } } }).node.resource;
+    const readers = { "signed-out visitor": undefined, "signed-in stranger": (await register(origin, "bob")).cookie, "other agent": (await guestAgent(origin)).cookie };
+
+    for (const [reader, cookie] of Object.entries(readers)) {
+      for (const file of [sheet, page.id, teamSheet]) {
+        const response = await send(origin, "GET", `/api/nodes/${file}`, undefined, cookie);
+        const text = await response.text();
+        expect(JSON.parse(text), reader).toMatchObject({
+          node: { id: file, parentNodeId: null, accessRole: "viewer" }, navigationRootNodeId: file, breadcrumbs: [{ id: file }],
+        });
+        expect(text, reader).not.toContain(folder);
+        expect(text, reader).not.toContain(sibling);
+      }
+      expect((await send(origin, "GET", `/api/blob-resources/${page.resource!.id}/content`, undefined, cookie)).status, reader).toBe(200);
+      expect((await send(origin, "GET", `/api/unit-resources/${unitId}`, undefined, cookie)).status, reader).toBe(200);
+      expect((await send(origin, "GET", `/universer-api/snapshot/2/unit/${unitId}/rev/0`, undefined, cookie)).status, reader).toBe(200);
+      expect(await (await send(origin, "POST", `/api/resources/${resourceId}/open`, undefined, cookie)).json(), reader)
+        .toMatchObject({ resource: { editorMode: "readOnly", accessRole: "viewer" } });
+      for (const [method, path, body] of [
+        ["PATCH", `/api/nodes/${sheet}`, { name: "Renamed" }],
+        ["GET", `/api/nodes/${sheet}/link-sharing`, undefined],
+      ] as const) {
+        expect([401, 403], `${reader} ${method} ${path}`).toContain((await send(origin, method, path, body, cookie)).status);
+      }
+      for (const closed of [
+        `/api/nodes/${folder}`, `/api/nodes/${folder}/children`,
+        `/api/spaces/${personal}`, `/api/spaces/${personal}/nodes`, `/api/spaces/${team}`, `/api/spaces/${team}/nodes`,
+      ]) {
+        expect([401, 404], `${reader} ${closed}`).toContain((await send(origin, "GET", closed, undefined, cookie)).status);
+      }
+    }
+    expect(await accessRole(origin, sheet, agent.cookie)).toBe("owner");
+
+    const alice = await register(origin, "alice");
+    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+    const banned = await guestAgent(origin);
+    const bannedSheet = await createFile(origin, banned.cookie, "Banned");
+    const expired = await guestAgent(origin);
+    const expiredSheet = await createFile(origin, expired.cookie, "Expired");
+    expect(await accessRole(origin, bannedSheet, undefined)).toBe("viewer");
+    expect(await accessRole(origin, expiredSheet, undefined)).toBe("viewer");
+    await repositories.identity.banAgent(banned.id, Date.now());
+    await repositories.identity.touchAgent({ userId: expired.id }, Date.now(), Date.now() + 1, Date.now() - 1);
+
+    for (const [reader, cookie] of Object.entries(readers)) {
+      for (const file of [sheet, page.id, teamSheet, bannedSheet, expiredSheet]) expect(await accessRole(origin, file, cookie), reader).toBeNull();
+      expect((await send(origin, "GET", `/api/unit-resources/${unitId}`, undefined, cookie)).status, reader).toBe(404);
+      expect([401, 403], reader).toContain((await send(origin, "GET", `/universer-api/snapshot/2/unit/${unitId}/rev/0`, undefined, cookie)).status);
+    }
+    expect(await accessRole(origin, sheet, alice.cookie)).toBe("owner");
   });
 });
 
@@ -543,9 +619,15 @@ async function teamSpaceId(origin: string, cookie: string, name: string): Promis
   return ((await response.json()) as { id: string }).id;
 }
 
-async function createFile(origin: string, cookie: string, name: string, spaceId?: string): Promise<string> {
+async function createFolder(origin: string, cookie: string, name: string, spaceId: string): Promise<string> {
+  const response = await send(origin, "POST", "/api/nodes", { spaceId, parentNodeId: null, name }, cookie);
+  if (response.status !== 201) throw new Error(`Folder creation failed with ${response.status}`);
+  return ((await response.json()) as { id: string }).id;
+}
+
+async function createFile(origin: string, cookie: string, name: string, spaceId?: string, parentNodeId: string | null = null): Promise<string> {
   const response = await send(origin, "POST", "/api/resources",
-    { kind: "univer", spaceId: spaceId ?? await personalSpaceId(origin, cookie), parentNodeId: null, name, unitType: "sheet" },
+    { kind: "univer", spaceId: spaceId ?? await personalSpaceId(origin, cookie), parentNodeId, name, unitType: "sheet" },
     cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 201) throw new Error(`File creation failed with ${response.status}`);
   return ((await response.json()) as { node: { id: string } }).node.id;
