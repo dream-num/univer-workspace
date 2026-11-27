@@ -124,6 +124,15 @@ becomes an owner of the agent's Personal Space, the agent stops expiring, and th
 agent gains no access to the claimer's content. `GET /api/agents` lists the
 claimer's agents; `POST /api/agents/{agentId}/stop` bans one for good.
 
+Every file an unclaimed agent owns is also readable by its own link. Any reader, signed in or
+not, gets the viewer role on a Node that holds a Resource in a Space the agent owns, Personal or
+Team, and never a higher one. Such a reader's navigation root is the file itself: the response
+names no parent, and folders, Space listings and the Space answer as before. This needs no Link
+Sharing and ignores it. It ends when a human takes the agent, when the agent is banned, and while
+the agent is expired. The human who takes the agent can send `keepFileLinks: true` with the claim.
+The server then turns on viewer Link Sharing for each Personal Space file that has no Link Sharing
+setting, so those links keep working. Links to files in the agent's Team Spaces always stop.
+
 ## Capabilities
 
 The server resolves effective Roles and Capabilities from Space ownership, Team
@@ -189,8 +198,8 @@ The server compares the request with the level stored inside the write's own tra
 that keeps or lowers that level passes for every session: making a Space private, lowering a role,
 removing a member or a grant, turning Link Sharing off, or changing its role from editor to viewer.
 Creating a Space with `publicRead: true` has no Space to confirm yet, so that refusal has no `url`.
-An unclaimed agent has no person who can confirm for it. It gets `403 AGENT_NOT_ALLOWED`, and
-shows its work with its handoff link.
+An unclaimed agent has no person who can confirm for it. It gets `403 AGENT_NOT_ALLOWED`. Its
+files are already readable by link, and it hands everything over with its handoff link.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.

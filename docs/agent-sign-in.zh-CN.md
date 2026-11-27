@@ -183,7 +183,7 @@ Workspace 返回一个连接页。页面写出客户端的名字，并列出客�
 
 除非部署关闭了访客 agent，页面还提供 **Try without signing in**。它让客户端得到一个访客 agent，而不是某个人。访客 agent 是新建的 agent 账号，名字取自客户端的名字（CIMD 文档的 `client_name`，或 DCR 注册时报的名字），例如 “Claude Code · g3wq”。它有一个空的个人空间，读不到任何人的私有文件。点这个按钮后，浏览器直接回到回调地址，带上授权码，浏览器保持未登录。客户端请求了 `write` 时，授权码带 `read write publish worktree:merge`，否则只带 `read`。Workspace 在客户端用授权码换 token 时才创建 agent，客户端没用上的授权码不留下任何东西。默认每个地址每小时最多创建 5 个 agent（`AGENT_CREATE_LIMIT_PER_HOUR`），达到上限时按钮不可点，页面说明原因。已有 10,000 个这样的授权码等着换 token，或者同一个地址一分钟内已经拿到 20 个时，客户端收到 `temporarily_unavailable` 而不是授权码，过一分钟再试即可。关闭访客 agent 时，CIMD 客户端直接去登录页。
 
-访客 agent 知道自己的身份：它的服务器说明和 `whoami` 结果都告诉它，它是一个临时 agent，做完后用 `claim` 拿一个交接链接（handoff link）给你。你不用登录就能打开链接看到它的成果，在那里登录后收下它，文件就留下了。访客 agent 能做什么、怎样被人收下，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
+访客 agent 知道自己的身份：它的服务器说明和 `whoami` 结果都告诉它，它是一个临时 agent，拿到它所做文件的链接的人都能查看这个文件，做完后还要用 `claim` 拿一个交接链接（handoff link）给你。你不用登录就能用文件链接查看这个文件，或者打开交接链接看到它的全部成果。在交接页登录后收下它，文件就留下了。访客 agent 能做什么、怎样被人收下，见 [Agent 交接效果展示](agent-handoff-showcase.zh-CN.md#没有账号的-agent-也能开始工作)。
 
 ### 已登录
 

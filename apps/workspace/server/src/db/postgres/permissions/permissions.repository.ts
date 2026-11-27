@@ -300,6 +300,22 @@ export class PostgresPermissionsRepository implements PermissionsRepository {
       .get(nodeId) as unknown as NodeOwnerRow;
   }
 
+  async listAgentFilesWithoutLinkSharing(agentUserId: string): Promise<readonly string[]> {
+    const rows = await this._database
+      .prepare(
+        `SELECT nodes.id FROM nodes
+         JOIN spaces ON spaces.id = nodes.space_id
+         JOIN agents ON agents.user_id = spaces.owner_user_id
+         WHERE spaces.type = 'personal' AND spaces.owner_user_id = ?
+           AND nodes.trash_batch_id IS NULL AND nodes.created_at <= agents.claimed_at
+           AND EXISTS (SELECT 1 FROM resources WHERE resources.node_id = nodes.id)
+           AND NOT EXISTS (SELECT 1 FROM node_link_sharing WHERE node_link_sharing.node_id = nodes.id)
+         ORDER BY nodes.id`
+      )
+      .all(agentUserId) as unknown as readonly { readonly id: string }[];
+    return rows.map((row) => row.id);
+  }
+
   async upsertLinkSharing(input: {
     readonly nodeId: string;
     readonly enabled: boolean;

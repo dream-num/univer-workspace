@@ -716,7 +716,6 @@ describe("agent expiry", () => {
     const pages = await startPages(application);
     const agent = await createAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Budget");
-    await linkOpenedEarlier(application, agent.id, nodeId);
     const lifecycle = agentLifecycle(application, agent.id);
     const page = async () => (await fetch(`${pages}/nodes/${nodeId}`)).text();
     expect(await page()).toContain("<title>Budget · Univer Workspace</title>");
@@ -732,19 +731,36 @@ describe("agent expiry", () => {
     expect(await page()).toContain("<title>Budget · Univer Workspace</title>");
   });
 
-  it("leaves the expiry alone when a reader opens a page the agent shared before it lost that right", async () => {
+  it("moves the expiry out when a reader opens the page of the agent's file, at most once a day", async () => {
     const { origin, application } = await start();
     const pages = await startPages(application);
     const agent = await createAgent(origin);
     const nodeId = await createFile(origin, agent.cookie, "Budget");
-    await linkOpenedEarlier(application, agent.id, nodeId);
+    const folder = await post(origin, "/api/nodes", { spaceId: await personalSpaceId(origin, agent.cookie), parentNodeId: null, name: "Drafts" }, { cookie: agent.cookie });
+    const folderId = ((await folder.json()) as { id: string }).id;
     const lifecycle = agentLifecycle(application, agent.id);
 
     lifecycle.set({ last_active_at: Date.now() - 25 * HOUR, expires_at: Date.now() + DAY });
     const stale = lifecycle.get();
-    expect(await (await fetch(`${pages}/nodes/${nodeId}`)).text()).toContain("<title>Budget · Univer Workspace</title>");
-    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
+    expect(await (await fetch(`${pages}/nodes/${folderId}`)).text()).toContain("<title>Univer Workspace</title>");
     expect(lifecycle.get()).toEqual(stale);
+
+    const before = Date.now();
+    expect(await (await fetch(`${pages}/nodes/${nodeId}`)).text()).toContain("<title>Budget · Univer Workspace</title>");
+    await expect.poll(() => lifecycle.get().last_active_at).toBeGreaterThanOrEqual(before);
+    expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
+
+    lifecycle.set({ last_active_at: Date.now() - 23 * HOUR, expires_at: Date.now() + DAY });
+    const fresh = lifecycle.get();
+    await fetch(`${pages}/nodes/${nodeId}`);
+    expect(lifecycle.get()).toEqual(fresh);
+
+    const human = await register(origin, "claimer");
+    await linkOpenedEarlier(application, agent.id, nodeId);
+    claim(application, agent.id, human.id);
+    lifecycle.set({ last_active_at: 0, expires_at: null });
+    expect(await (await fetch(`${pages}/nodes/${nodeId}`)).text()).toContain("<title>Budget · Univer Workspace</title>");
+    expect(lifecycle.get()).toEqual({ last_active_at: 0, expires_at: null });
   });
 });
 

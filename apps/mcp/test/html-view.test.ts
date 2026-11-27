@@ -55,6 +55,7 @@ function setup(page = html, publicRead = false, privateUnits: readonly string[] 
       const unitId = decodeURIComponent(new URL(request.url).pathname.split("/").at(-1) ?? "");
       return Response.json({ node: { ...node, spaceId: privateUnits.includes(unitId) ? "private" : "space", resource: { ...resource, kind: "univer", unitId, unitType: "sheet" } } });
     }
+    if (request.url.endsWith("/api/session")) return Response.json({ authenticated: true, user: { id: "owner", displayName: "Owner", kind: "human" } });
     if (request.url.endsWith("/api/spaces/private")) return Response.json({ id: "private", name: "Private", publicRead: false });
     if (request.url.endsWith("/api/spaces/space")) return Response.json({
       id: "space", name: "Team", type: "team", fullName: "owner/team", slug: "team",

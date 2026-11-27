@@ -25,7 +25,7 @@ listed users receive them. `*` admits every user, which is acceptable only where
 such as an internal staging deployment.
 Other users retain every tool that does not need the executor, and their server instructions
 ask them to edit document contents in the browser. An unclaimed agent with the `publish` scope that `claim` needs is also told to make the user an editable copy
-instead: they see it through its handoff link, and can edit it in the browser once they take the agent. The executor checks each grant on its own: against its list before
+instead: they open it by its link, and can edit it in the browser once they take the agent through its handoff link. The executor checks each grant on its own: against its list before
 contacting Workspace, and in `workspace` mode against the access Workspace reports for the grant's session.
 
 The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response
@@ -42,8 +42,9 @@ file capabilities missing from their list. With `space_node`, `blob_upload` and 
 checks in `.agents/checks.md` of a repository the caller owns and turn on `landing` `checks`.
 The granted scopes choose the merge workflow. A connection that has `worktree:merge` and `pr_merge` in its list is told
 to mark the verified pull request ready, merge it, and give the user the pull request link. An unclaimed agent that
-lists `claim` is told instead that it is a temporary agent, and to give the user its handoff link from `claim` when it is
-done: the user opens it to see the agent's work and signs in to take the agent.
+lists `claim` is told instead that it is a temporary agent, that anyone who has the link of a file it made can view
+that file, to give the user those links, and to give the user its handoff link from `claim` when it is
+done: the user signs in there to take the agent and keep its work.
 A person, and a claimed agent, are told instead to give the pull request link to the user, or to the person who claimed the
 agent, and stop, when that person asked to review the work or the change needs a person's decision; nothing enforces either
 choice. Any other connection is told to hand over the pull request link and leave merging to the user. The core Skill and the
@@ -196,16 +197,17 @@ answers such a call with a confirm link, which the agent gives to the user. Its 
 `notice` says the same. Right after a person claims an agent, its cached exchange may still
 lack the owner for up to 30 seconds, and the instructions then name only the person who claimed it.
 An unclaimed agent with the `publish` scope that `claim` needs gets one sentence in its server instructions and its
-`whoami` `notice`, however it was created: "You are a temporary agent. When you are done, use claim to get a handoff link
-for the user, who can open it to see your work and sign in to take it." An unclaimed agent without `publish`, a claimed
-agent and a person do not get it.
+`whoami` `notice`, however it was created: "You are a temporary agent. Anyone who has the link of a file you made can
+view that file, so give the user those links, and they can forward them. When you are done, also use claim to get a
+handoff link for the user, who signs in there to take you and keep your work." An unclaimed agent without `publish`, a
+claimed agent and a person do not get it.
 Some MCP clients, WorkBuddy 5.11.3 among them, never give the model the server instructions. They pass on tool names,
 the descriptions of the tools the model looks up, and tool results. So an agent's `whoami` description asks it to call
 `whoami` before its first reply, and an agent's `notice` also says, in the instructions' words, how it finishes a pull request.
 With `worktree:merge`, an unclaimed agent marks its own ready and merges it. A claimed agent marks it ready and merges it
 unless the person who claimed it asked to review the work or it needs a person's decision. A claimed agent then gives
 the pull request link. With the `publish` scope that `claim` needs, an unclaimed agent hands its work over with its
-handoff link. Without `publish`, it gives the pull
+file links and its handoff link. Without `publish`, it gives the pull
 request link. With `write` but not
 `worktree:merge`, the agent keeps the draft until the user says the work is finished or asks for review, gives the user the
 pull request link, and leaves merging and discarding to the user. A read-only connection gets no finish rule, and a person's
@@ -386,8 +388,8 @@ and the matching owner/slug candidates when available.
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo` (a repository or a fork address); optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }`. A fork lists its upstream without the files its pull request removes and with the files it creates; a created file's `url` opens it in the pull request |
 | `space_find` | Required `repo` (a repository or a fork address), `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
-| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt?, access? }`. `access` says who can open the link and, while Link Sharing is off, the next step the caller can take; the wording follows the caller, not the owner, so a person reading the file of an agent they claimed gets a person's step. The text content repeats these lines. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. Turning the link on, or raising it to `editor`, needs a person in a browser: the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`, and the tool error carries the confirm link to give the user (see [Confirm links](#confirm-links)). An unclaimed agent does not list `share`: the server answers its Link Sharing writes with `AGENT_NOT_ALLOWED`, and it shows its work with `claim`. A link of another origin is `workspace-origin-mismatch`. A file in a Team Space has no Link Sharing, in the browser either: the tool error is `workspace-argument-invalid`, names the repository, and points to `repo_member_write` and `repo_edit`. `expiresAt` appears while the owner is an unclaimed agent: the date that agent, and any link it turned on earlier, stops working unless the agent is used before then |
-| `claim` | None. Listed only for an unclaimed agent | `{ claimUrl, expiresAt }`: the agent's handoff link, `<identity origin>/claim/<code>`. Whoever opens it sees everything the agent owns, read-only and live, without signing in, private repositories included, and a person signs in there to take the agent. The link works for 7 days, or until a person takes the agent; the agent gives the same link again and calls `claim` again only when the link is lost or has expired. An agent keeps at most 10 working links. Scope `publish`, because the link shows the agent's files and the person who takes the agent becomes their owner |
+| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt?, access? }`. `access` says who can open the link and, while Link Sharing is off, the next step the caller can take; the wording follows the caller, not the owner, so a person reading the file of an agent they claimed gets a person's step. The text content repeats these lines. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. Turning the link on, or raising it to `editor`, needs a person in a browser: the server changes nothing and answers `INTERACTIVE_SESSION_REQUIRED`, and the tool error carries the confirm link to give the user (see [Confirm links](#confirm-links)). An unclaimed agent does not list `share`: the server answers its Link Sharing writes with `AGENT_NOT_ALLOWED`. Anyone who has the link of a file it owns can view that file until a person takes it, and it hands everything over with `claim`. A link of another origin is `workspace-origin-mismatch`. A file in a Team Space has no Link Sharing, in the browser either: the tool error is `workspace-argument-invalid`, names the repository, and points to `repo_member_write` and `repo_edit`. `expiresAt` appears while the owner is an unclaimed agent: the date that agent, and any link it turned on earlier, stops working unless the agent is used before then |
+| `claim` | None. Listed only for an unclaimed agent | `{ claimUrl, expiresAt }`: the agent's handoff link, `<identity origin>/claim/<code>`. Whoever opens it sees everything the agent owns, read-only and live, without signing in, private repositories included, and a person signs in there to take the agent and chooses whether the agent's file links keep working. The text content says how to hand the link over and that each file also opens by its own link. The link works for 7 days, or until a person takes the agent; the agent gives the same link again and calls `claim` again only when the link is lost or has expired. An agent keeps at most 10 working links. Scope `publish`, because the link shows the agent's files and the person who takes the agent becomes their owner |
 | `unit_list` | Required `worktree` (Worktree ID or fork address) | `{ units: [...] }`, each with the pull request page `url`. A clean fork lists none |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space` (a fork address names its upstream), `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `from` (a file link or Node ID of a file the caller can open; not with a fork address), `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit. With `from` the Unit is a copy of that file with its content and images, `type` must be its type, and the merged file records it as its source. An unreadable `from` is `workspace-not-found` |
@@ -501,8 +503,9 @@ A `url` that resolves to another origin is dropped. The person opens the link, s
 and confirms or gives up. A call that keeps or lowers the stored access, such as making a repository private, removing
 a member or turning a link off, runs as before.
 
-An unclaimed agent has no person to confirm for it. Every such call returns `AGENT_NOT_ALLOWED` with a message
-telling it to give the user its handoff link from `claim`.
+An unclaimed agent has no person to confirm for it. Every such call returns `AGENT_NOT_ALLOWED`. The message says
+that its files can already be viewed by link, and that a public repository, a new member and an editor link wait until
+a person takes it through its handoff link from `claim`.
 
 ## SVG resource catalog
 
@@ -988,8 +991,11 @@ hides the save tool when an old executor lacks this operation. The preview URL
 and published immersive share URL use the identity origin.
 `repositoryVisibility` is `public` or `private`, from destination `publicRead`.
 Sorted `privateSourceUnitIds` identify declared Sheets in non-public repositories.
+For an unclaimed agent, the list leaves out the Sheets in repositories that the agent owns,
+because anyone who has the page link reads them until a person takes the agent.
 Anyone with the published link can view the page and its declared data when visibility
-is public and the private-source list is empty. Private sources remain inaccessible
+is public and the private-source list is empty, and also when an unclaimed agent owns the
+page and the list is empty. Private sources remain inaccessible
 to signed-out visitors even on a public page. Signed-out visitors and signed-in
 non-members are read-only; page writes are rejected for them.
 Validation and source-read failures before the draft POST preserve their read error

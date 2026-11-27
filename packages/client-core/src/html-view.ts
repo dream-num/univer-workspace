@@ -9,6 +9,7 @@ import {
   type ICellData,
 } from "@univerjs/core";
 import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewBinding } from "@univerjs-labs/html-view";
+import { sessionIdentity } from "./auth.js";
 import { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import { parseHtmlViewDraft, readWorkspaceHtmlViewDraft } from "./html-view-draft.js";
@@ -16,7 +17,7 @@ import { readWorkspaceHtmlView, requireHtmlView, htmlViewUrls } from "./html-vie
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp } from "./http.js";
-import { parseDetachedNode } from "./space-model.js";
+import { parseDetachedNode, type WorkspaceSpace } from "./space-model.js";
 import { WorkspaceSpaceFeature } from "./space.js";
 import { WorkspaceContentSource } from "./runtime-source.js";
 import { getWorktree } from "./worktree.js";
@@ -214,7 +215,13 @@ export class WorkspaceHtmlViewFeature {
     const http = await this.options.authenticatedHttp();
     const spaces = new WorkspaceSpaceFeature(async () => http);
     const destination = await spaces.get(spaceId);
-    const publicSpaces = new Map([[spaceId, destination.publicRead === true]]);
+    let temporary: Promise<boolean> | undefined;
+    // Anyone with the link reads a temporary agent's own files, so its own Sheets are not private to a page visitor.
+    const visitorsRead = async (space: WorkspaceSpace) =>
+      space.publicRead === true ||
+      (space.affiliation === "owner" &&
+        (await (temporary ??= sessionIdentity(http).then(({ subject }) => subject.kind === "agent" && !subject.claimed))));
+    const publicSpaces = new Map([[spaceId, await visitorsRead(destination)]]);
     const privateSourceUnitIds: string[] = [];
     for (const unitId of unitIds) {
       const addedUnit = worktree?.units.find((unit) => unit.unitId === unitId && unit.source === "worktree");
@@ -232,7 +239,7 @@ export class WorkspaceHtmlViewFeature {
       }
       if (!publicSpaces.has(sourceSpaceId)) {
         try {
-          publicSpaces.set(sourceSpaceId, (await spaces.get(sourceSpaceId)).publicRead === true);
+          publicSpaces.set(sourceSpaceId, await visitorsRead(await spaces.get(sourceSpaceId)));
         } catch (error) {
           if (!(error instanceof WorkspaceApplicationError) || (error.detail as { status?: unknown } | undefined)?.status !== 404) {
             throw error;

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Bot, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { claimLanding } from "../features/account/claim-landing";
 import { agentClaimQueryOptions, claimAgent } from "../features/account/claimed-agents.queries";
 import { HandoffSpaces } from "../features/account/handoff-spaces";
@@ -43,8 +44,9 @@ function ClaimAgentPage() {
     const spaces = await queryClient.fetchQuery({ ...mySpacesQueryOptions, staleTime: 0 }).then(({ spaces }) => spaces, () => []);
     await navigate(claimLanding(agent, spaces));
   };
+  const [keepFileLinks, setKeepFileLinks] = useState(true);
   const claim = useMutation({
-    mutationFn: () => claimAgent(code),
+    mutationFn: () => claimAgent(code, keepFileLinks),
     onSuccess: ({ agent }) => openWork(agent),
   });
   // Staying on this page keeps the handoff link.
@@ -76,6 +78,8 @@ function ClaimAgentPage() {
   );
   const view = handoff.data;
   const claimed = view?.claimed === true;
+  // A Team Space has no Link Sharing, so nothing keeps the links of its files.
+  const teamSpaces = view?.spaces.filter((space) => space.type === "team" && space.files > 0).map((space) => space.name) ?? [];
   // The server takes an agent only for a person signed in to Workspace in a browser, and says so when the take is refused.
   const notPerson = user?.kind === "agent" || claimErrorKey(claim.error) === "claimAgentNotHuman";
   return (
@@ -145,6 +149,23 @@ function ClaimAgentPage() {
             ) : (
               <>
                 <Alert title={t("claimAgentAccount")}>{t("claimAgentAccountDescription", { name: user.displayName })}</Alert>
+                <label className="flex items-start gap-2.5 text-sm">
+                  <input
+                    className="mt-0.5 size-4 accent-primary"
+                    type="checkbox"
+                    checked={keepFileLinks}
+                    onChange={(event) => setKeepFileLinks(event.target.checked)}
+                  />
+                  <span>
+                    {t("claimAgentKeepFileLinks")}
+                    <span className="mt-0.5 block text-muted-foreground">{t("claimAgentKeepFileLinksDescription")}</span>
+                    {teamSpaces.length > 0 ? (
+                      <span className="mt-0.5 block text-muted-foreground">
+                        {t("claimAgentTeamFileLinks", { names: new Intl.ListFormat(language).format(teamSpaces) })}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
                 <Button className="w-full" size="lg" disabled={claim.isPending} onClick={() => claim.mutate()}>
                   {t("claimAgentConfirm")}
                 </Button>

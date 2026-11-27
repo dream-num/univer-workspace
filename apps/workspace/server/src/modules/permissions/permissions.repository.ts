@@ -105,6 +105,11 @@ export interface PermissionsRepository {
     limit: number,
   ): Promise<{ readonly owned: boolean; readonly rows: PersonalSharingRow[] }>;
   findNodeOwner(nodeId: string): Promise<NodeOwnerRow>;
+  /**
+   * The files a claimed agent made before its claim in its Personal Space that are not in Trash and
+   * have no Link Sharing row: the ones whose links the claim closed.
+   */
+  listAgentFilesWithoutLinkSharing(agentUserId: string): Promise<readonly string[]>;
   upsertLinkSharing(input: {
     readonly nodeId: string;
     readonly enabled: boolean;

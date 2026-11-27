@@ -1268,7 +1268,7 @@ describe("uvw share", () => {
   const expiresAt = "2026-12-14T00:00:00.000Z";
 
   const claimUrl = `${ORIGIN}/claim/c0de`;
-  const privateAccess = "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).";
+  const openByLink = "Anyone with the link can read the file without signing in. A temporary agent's files open by link whatever their Link Sharing says, until a person takes the agent. Give the user your handoff link from claim (uvw claim in the CLI) too, so they can sign in and keep the file.";
   const human = { kind: "human", username: "ana" };
 
   const agent = { id: "a1", name: "budget-bot-x7k2", kind: "agent", claimed: false } as const;
@@ -1290,15 +1290,15 @@ describe("uvw share", () => {
     return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN, whoami), spaces, whoami };
   }
 
-  it("reads the Link Sharing of a file link or Node ID without changing it or making a claim code, and points an unclaimed agent to its handoff link", async () => {
+  it("reads the Link Sharing of a file link or Node ID without changing it or making a claim code, and reports an unclaimed agent's file as open by link", async () => {
     const { command, spaces } = share();
     const text = await run(command, [url]);
     expect(text.trimEnd()).toBe([
       `Budget  ${url}`,
-      `Link Sharing: off. ${privateAccess}`,
+      `Link Sharing: viewer. ${openByLink}`,
     ].join("\n"));
     expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
-      access: privateAccess, expiresAt, link: "off", name: "Budget", owner, url,
+      access: openByLink, expiresAt, link: "viewer", name: "Budget", owner, url,
     });
     expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
     expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
@@ -1352,6 +1352,7 @@ describe("uvw share", () => {
     expect(text).toContain(`Handoff link: ${claimUrl}`);
     expect(text).toContain("without signing in");
     expect(text).toContain("for 7 days");
+    expect(text).toContain("each file also opens by its own link for anyone who has that link");
     const before = Date.now();
     const json = JSON.parse(await run(command, ["--json"])) as { claimUrl: string; expiresAt: string };
     expect(json.claimUrl).toBe(claimUrl);
@@ -1360,7 +1361,7 @@ describe("uvw share", () => {
   });
 
   it("exits 1 with the server's refusal when an unclaimed agent turns the link on", async () => {
-    const refusal = "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user.";
+    const refusal = "An unclaimed agent's files can already be viewed by anyone who has a file's link, so give the user that link. Making a repository public, adding people and letting link visitors edit wait until a person takes you, because no person can confirm them for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. Once they sign in and take you, try again.";
     const { command } = share(async () => {
       throw workspaceError("AGENT_NOT_ALLOWED", refusal, { status: 403 });
     });

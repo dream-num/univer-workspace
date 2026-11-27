@@ -92,7 +92,7 @@ repository 设为公开后，任何人打开页面的沉浸视图链接 `/nodes/
 | --- | --- |
 | `shareUrl` | 沉浸视图链接，与 Browser 分享对话框生成的一致 |
 | `repositoryVisibility` | 目标 repository 是 `public` 还是 `private` |
-| `privateSourceUnitIds` | 所在 repository 不公开的来源 Sheet；匿名访客读不到它们 |
+| `privateSourceUnitIds` | 所在 repository 不公开的来源 Sheet；匿名访客读不到它们。未认领 agent 自己 repository 里的 Sheet 不计入，因为它的文件凭链接可见 |
 
 HTML View Skill 增加 “Share the page” 一节，要求 Agent 把 `shareUrl` 交给用户并说明谁能打开。
 用户要“任何人可看”而 repository 是私有的时，Agent 先征求用户同意再公开 repository，因为公开会立即暴露库里的全部内容。

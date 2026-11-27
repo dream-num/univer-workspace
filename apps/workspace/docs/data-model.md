@@ -107,8 +107,15 @@ Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本
 不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
 
 agent 认证成功时 `last_active_at` 写为当前时间；未认领 agent 同时把 `expires_at` 写为 30 天后，有人打开它的
-handoff link（`GET /api/agents/claim`）时也这样写。每个 agent 每天最多写一次，已过期的 agent
-认证成功时不受这个间隔限制。打开它以前开启了 Link Sharing 的页面不再顺延。
+handoff link（`GET /api/agents/claim`）或它的文件页（Server 的 `/nodes/<nodeId>` 页面路由）时也这样写。每个 agent 每天最多写一次，已过期的 agent
+认证成功时不受这个间隔限制。文件页的顺延不等写入完成就返回页面，只有匿名读者打得开的页面才算，所以已过期或已封禁的 agent 的页面不会把它续回来。
+顺延没有次数上限。
+
+未认领、未封禁的 agent 拥有的文件凭链接可见：对它拥有的任意 Space（Personal 或 Team）里带 Resource 的 Node，Access Resolver
+给任何读者 `viewer`，包括匿名读者、已登录的人和其他 agent，不会更高。这条规则不读也不写 [`node_link_sharing`](#node_link_sharing)，
+只由本行的 `owner_user_id` 和 `banned_at` 推出，所以认领的那一次写入同时结束它。文件夹、Space 的文件列表和 Space 本身不在其内。
+Node 响应的 `owner` 对这些文件都有值，Team Space 里的也是，所以链接访客看到作者和 Unverified agent 标记；有主人之后，
+Team Space 里 Node 的 `owner` 恢复为空。
 
 人认领 agent 时，一次条件更新在 `owner_user_id` 为空且 `banned_at` 为空时写入 `owner_user_id`、
 `claimed_at` 并把 `expires_at` 置空，所以同一个 agent 只能被认领一次。认领码的哈希存在 [`sign_in_codes`](#sign_in_codes) 里，认领不消耗它。
@@ -119,6 +126,10 @@ handoff link（`GET /api/agents/claim`）时也这样写。每个 agent 每天�
 任意副本上的下一个请求和下一次实时连接起预览结束。处理认领的副本还会立刻关闭它上面的 Trunk 协同连接，它们重连时重新鉴权；其他副本上已打开的连接
 和 Link Sharing 变更时一样，保持到断开。码过期或 agent 被封禁不会主动关闭已打开的预览连接，它们同样保持到断开。
 同时带有 Login Session 的请求只按 Session 解析。
+`POST /api/agents/claim` 带 `keepFileLinks: true` 时，Server 在认领写入之后、同一个请求里，以收下它的人的身份给这个 agent
+Personal Space 中的文件各写一行 `viewer` 的 [`node_link_sharing`](#node_link_sharing)。只写认领之前创建、不在回收站里、
+还没有 Link Sharing 行的文件，已有的行不动。两次写入不在一个事务里：认领成功而写行失败时，认领保持，同一个人再提交一次补齐余下的行。
+不带这个字段时不写任何行，文件链接随认领失效。Team Space 没有 Link Sharing，其中的文件链接总是随认领失效。
 登录的人在 MCP 连接页上以新 agent 连接时，兑换授权码经 `createAgent` 用同一条 INSERT 写入 `owner_user_id`、
 等于创建时间的 `claimed_at` 和为空的 `expires_at`，所以它和被这个人认领的访客 agent 状态相同，SQLite 与 PostgreSQL 的写法一样。
 连接页还列出这个人拥有、没有停用的 agent（最多 5 个，最近活跃的在前），选中其中一个时不创建 agent，授权码直接代表它。
@@ -385,16 +396,18 @@ Grant。
 
 Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访客与未认领 agent 固定为 `viewer`。
 策略同样按 Node 祖先链继承。
-Trigger 限制它只用于 Personal Space。未认领 agent 不能开启 Link Sharing 或提高它的角色（`AGENT_NOT_ALLOWED`），
-它用 handoff link 展示成果；它在此之前开启的行保持有效，随 agent 过期而失效。
+Trigger 限制它只用于 Personal Space。未认领 agent 不能开启 Link Sharing 或提高它的角色（`AGENT_NOT_ALLOWED`）。
+它的文件不靠这张表就凭链接可见（见 [`agents`](#agents)），它关闭某个文件的 Link Sharing 也不会让这个文件对链接访客关闭。
+它的文件夹和文件的编辑权限仍然只看这张表；它在 `AGENT_NOT_ALLOWED` 之前开启的行保持有效，随 agent 过期而失效。
+人收下 agent 时可以让 Server 给它的文件补写 `viewer` 行，见 [`agents`](#agents)。
 
 V24 追加两列，当前版本只建列，没有读写入口：`unverified_role`（`editor | viewer`，默认 `viewer`）为匿名访客与
 未认领 agent 的角色预留，Access Resolver 仍固定按 `viewer` 解析；`making_of_note`（可空）为作者自述的制作说明
 预留。制作说明随分享一起写入，所以放在这张表：它与 Link Sharing 共用仅所有者可写、仅 Personal Space
 和随 Node 级联删除的约束，长度上限留给写入它的 Service，调整上限不需要重建表。
 
-匿名读取以保留 ID `workspace:anonymous` 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
-不创建 User、Login Session 或 Recent，读取本身不写入产品数据。带 handoff cookie 的预览读者在此之上多一项：对那个
+匿名读取以保留 ID `workspace:anonymous` 进入 Access Resolver，只使用 Space 公开可读、Link Sharing 和未认领 agent 的文件凭链接可见；
+不创建 User、Login Session 或 Recent。读取本身不写入产品数据，只有打开未认领 agent 的文件页时顺延它的到期时间。带 handoff cookie 的预览读者在此之上多一项：对那个
 未认领 agent 拥有的 Space 是 `viewer`；打开 handoff link 时顺延 agent 的到期时间，见上文 [`agents`](#agents)。
 
 登录用户的有效 Role 由 Access Resolver 每次按以下来源计算最高权限：

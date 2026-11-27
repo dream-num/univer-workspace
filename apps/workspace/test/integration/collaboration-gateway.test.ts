@@ -2190,7 +2190,7 @@ describe("content permission integration", () => {
     }
   });
 
-  it("lets a handoff preview join a temporary agent's Unit read-only, and closes it when a person takes the agent", async () => {
+  it("lets a link visitor and a handoff preview join a temporary agent's Unit read-only, and closes them when a person takes the agent", async () => {
     const f = await fixture();
     const agent = await agentSession(f);
     const agentSpace = (await f.application.spaces.list(agent.id)).spaces[0]!;
@@ -2206,24 +2206,26 @@ describe("content permission integration", () => {
     const unitId = created.body.node.resource.unitId;
     const { code } = (await (await fetch(`${f.origin}/api/agents/claim-codes`, { method: "POST", headers: { cookie: agent.cookie } })).json()) as { code: string };
     const preview = `workspace_handoff=${code}`;
-    expect((await requestJoin(f.origin, "", unitId)).joined.code).not.toBe(CmdRspCode.OK);
+    const readers = ["", preview];
 
-    const joined = await joinUnit(f.origin, preview, unitId);
-    expect(joined.members).toHaveLength(1);
-    const allowed = await fetch(`${f.origin}/universer-api/authz/-/object/-/batch_allowed`, {
-      method: "POST",
-      headers: { cookie: preview, "content-type": "application/json" },
-      body: JSON.stringify({ requests: [{ unitID: unitId, actions: [UnitAction.View, UnitAction.Edit] }] }),
-    });
-    await expect(allowed.json()).resolves.toMatchObject({
-      objectActions: [{ actions: [{ action: UnitAction.View, allowed: true }, { action: UnitAction.Edit, allowed: false }] }],
-    });
-    for (const [path, method] of [
-      [`/universer-api/comb/${f.protocolType}/unit/${unitId}/new_changes`, "POST"],
-      [`/universer-api/comment/unit/${unitId}/add`, "POST"],
-      ["/universer-api/worktrees/unknown", "GET"],
-    ] as const) {
-      expect((await fetch(`${f.origin}${path}`, { method, headers: { cookie: preview } })).status, `${method} ${path}`).toBe(401);
+    const joined = [];
+    for (const cookie of readers) {
+      joined.push(await joinUnit(f.origin, cookie, unitId));
+      const allowed = await fetch(`${f.origin}/universer-api/authz/-/object/-/batch_allowed`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify({ requests: [{ unitID: unitId, actions: [UnitAction.View, UnitAction.Edit] }] }),
+      });
+      await expect(allowed.json()).resolves.toMatchObject({
+        objectActions: [{ actions: [{ action: UnitAction.View, allowed: true }, { action: UnitAction.Edit, allowed: false }] }],
+      });
+      for (const [path, method] of [
+        [`/universer-api/comb/${f.protocolType}/unit/${unitId}/new_changes`, "POST"],
+        [`/universer-api/comment/unit/${unitId}/add`, "POST"],
+        ["/universer-api/worktrees/unknown", "GET"],
+      ] as const) {
+        expect((await fetch(`${f.origin}${path}`, { method, headers: { cookie } })).status, `${method} ${path}`).toBe(401);
+      }
     }
 
     const claimed = await fetch(`${f.origin}/api/agents/claim`, {
@@ -2232,8 +2234,8 @@ describe("content permission integration", () => {
       body: JSON.stringify({ code }),
     });
     expect(claimed.status).toBe(200);
-    await expect.poll(() => joined.socket.readyState).toBe(WebSocket.CLOSED);
-    expect((await requestJoin(f.origin, preview, unitId)).joined.code).not.toBe(CmdRspCode.OK);
+    for (const { socket } of joined) await expect.poll(() => socket.readyState).toBe(WebSocket.CLOSED);
+    for (const cookie of readers) expect((await requestJoin(f.origin, cookie, unitId)).joined.code).not.toBe(CmdRspCode.OK);
   });
 
   async function agentSession(f: Awaited<ReturnType<typeof fixture>>) {

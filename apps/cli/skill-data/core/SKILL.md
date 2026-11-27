@@ -267,9 +267,10 @@ and the CLI cannot sign in to the same agent again.
 A guest session renews like a login: it lasts 7 days by default, and regular use keeps it signed in.
 Left unused, it ends after 3.5 to 7 days. After it ends, commands exit with code 4. Run `uvw auth logout` and then `uvw auth guest`. That
 creates a new agent with an empty Personal Space, and only a person who claimed the old agent can
-still change its files. The old agent's handoff link shows its files until it expires, 7 days after
-`uvw claim` made it. The old agent itself expires 30 days after it was last used or its handoff link
-was last opened. A claimed agent never expires.
+still change its files. The old agent's files still open by their own links, and its handoff link
+shows all of them until it expires, 7 days after `uvw claim` made it. The old agent itself expires
+30 days after it was last used, or after its handoff link or the page of one of its files was last
+opened. A claimed agent never expires.
 
 ## Find your work
 
@@ -574,17 +575,25 @@ finishes the task itself. A claimed one (`uvw auth status --json` shows `"claime
 off as above instead when the person who claimed it asked to review the work or the change needs
 a person's decision; that person merges it. Otherwise, after step 4, merge the pull request. A claimed
 agent returns the review URL, which the person who claimed it can open. An unclaimed agent returns
-its handoff link instead:
+the links of the files it made and its handoff link instead:
 
 ```bash
 uvw pr merge <n> -R <username>/personal --json
+uvw share <nodeId> --json
 uvw claim --json
 ```
 
-Give the user `claimUrl`. They open it to see everything the agent owns without signing in, in its
-Personal Space and its repositories, and sign in there to take the agent. Then its files are theirs
-to open and edit. The link works for 7 days, or until a person takes the agent. Run `uvw claim`
-once and give the same link again. Run it again only when the link is lost or has expired.
+Give the user each file's `url`. Until a person takes the agent, anyone who has a file's link can
+view that file without signing in, so the user can open it at once and forward it. A link opens
+that one file, never a folder or the repository, and nobody edits through it. `uvw share` reports
+such a file as `viewer` whatever Link Sharing was set, and the agent cannot close the link.
+
+Give the user `claimUrl` too. They open it to see everything the agent owns without signing in, in
+its Personal Space and its repositories, and sign in there to take the agent. Then its files are
+theirs to open and edit, and they choose there whether the file links keep working for other
+people. Links to files in a Team repository always stop when a person takes the agent. The handoff
+link works for 7 days, or until a person takes the agent. Run `uvw claim` once and give the same
+link again. Run it again only when the link is lost or has expired.
 
 ### Share a file by link
 
@@ -601,7 +610,8 @@ Only a person in a browser lets more people see data. `uvw share --link viewer` 
 `uvw repo edit --visibility public`, `uvw repo member add` and a higher `uvw repo member edit --role`
 change nothing and exit 1 with `INTERACTIVE_SESSION_REQUIRED` and a confirm link. Give the link to
 the user, who opens it and confirms. An unclaimed agent has no person to confirm for it, so for it
-these commands exit 1 with `AGENT_NOT_ALLOWED`, which says to give the user its handoff link.
+these commands exit 1 with `AGENT_NOT_ALLOWED`. Its files already open by link for viewing. A public
+repository, a new member and an editor link wait until a person takes it through its handoff link.
 
 ## Command map
 
@@ -632,6 +642,6 @@ repository; there is no stored default repository.
 | Hand off                  | `pr ready`, `pr check <n> <name> --passed\|--failed`, `browse <n> --unit <id>`                         |
 | User-authorized lifecycle | `pr merge` (needs edit access to every changed file), `pr discard` (irreversible), `pr revert` (plan; `--yes` reverts) |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (turning it on needs a person)          |
-| Hand work to the user     | `claim` (an unclaimed guest agent only; the handoff link works for 7 days)                           |
+| Hand work to the user     | `claim` (an unclaimed guest agent only; the handoff link works for 7 days), and its file links       |
 | User-authorized cleanup   | `space node trash`                                                                                   |
 | Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                                               |

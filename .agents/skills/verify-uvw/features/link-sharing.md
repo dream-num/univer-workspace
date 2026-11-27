@@ -130,9 +130,10 @@ visit reports `404`.
 - The switch's accessible name follows its state: `Enable link sharing` when off, `Disable link sharing` when on.
 - Prove the state with `open-anon` or `uvw share`, not the toast. `open-anon` uses its own cookie-less session,
   so the run's signed-in browser is unaffected.
-- An unclaimed agent cannot turn the link on (`AGENT_NOT_ALLOWED`); with the link off, its `uvw share` points to its
-  handoff link, and `--json` carries `expiresAt`, the date the agent expires. For a person the `expiresAt` key is
-  absent.
+- An unclaimed agent cannot turn the link on (`AGENT_NOT_ALLOWED`). Its files open by link without Link Sharing
+  ([HO15 in agent handoff](./agent-handoff.md#ho15-anyone-opens-a-guest-agents-file-by-its-link-and-the-take-keeps-or-stops-the-links-ah15)),
+  so its `uvw share` reports `viewer`, and `--json` carries `expiresAt`, the date the agent expires. For a person
+  the `expiresAt` key is absent.
 - Link previews come only from the built server (`apps/workspace/dist/public`, from `build:web` before `up`).
   Vite on the web port never injects them.
 - `Save my version` on a page in trial mode copies the page and the Sheets it binds; see HV6-HV7 in

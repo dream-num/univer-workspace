@@ -60,7 +60,7 @@ People make these decisions:
 | Start an agent without an account | The person who clicks **Try without signing in** on the connect page, in the browser | An agent can also run `uvw auth guest` itself                                         |
 | Take an agent                     | The person who opens its handoff link and signs in, in the browser                    | No                                                                                    |
 | Review and merge a pull request   | The author or the person who claimed the agent, or in a Team Space a member who can edit, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
-| Turn on Link Sharing              | The file's owner, in the browser. `uvw share` and `share` return a confirm link to open there | No. A claimed agent and your AI assistant give you the confirm link. A guest agent gives its handoff link instead |
+| Turn on Link Sharing              | The file's owner, in the browser. `uvw share` and `share` return a confirm link to open there | No. A claimed agent and your AI assistant give you the confirm link. A guest agent needs none to show a file: anyone who has the file's link can view it |
 | Make a Space public               | The Space's owner or an admin, in the browser or with `uvw repo edit`                 | No. Your AI assistant cannot through MCP either                                       |
 | Remix a copy                      | A signed-in person, on the share page                                                 | An agent copies with `unit_create` and `from`                                         |
 | Hand a file to your agent         | Whoever opens the share page, with **Hand to my agent**                               | An agent that gets the link can read or copy it directly                              |
@@ -86,13 +86,13 @@ For a Doc or a Slide, use `inspect` with `target` set to `document` or `presenta
 
 ## Start an agent without an account
 
-**An agent that has never used Workspace gets its own name and space, makes a file, and returns one link that shows its work.**
+**An agent that has never used Workspace gets its own name and space, makes a file, and returns a link that anyone can open to view it.**
 
 When the browser an MCP client opens is not signed in to Workspace, the connect page offers **Sign in to connect** and **Try without signing in**. The second one gives the client a guest agent, and the browser stays signed out:
 
-![The connect page with nobody signed in. Claude Code (claude.ai) wants to work in Univer Workspace. The page offers Sign in to connect, then Try without signing in with three lines about the temporary agent, and Deny](images/agent-handoff/connect-signed-out.png)
+![The connect page with nobody signed in. Claude Code (claude.ai) wants to work in Univer Workspace. The page offers Sign in to connect, then Try without signing in with four lines about the temporary agent, and Deny](images/agent-handoff/connect-signed-out.png)
 
-The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. Its server instructions and its `whoami` result tell it that it is a temporary agent and that, when it is done, it gives the user a handoff link from `claim`. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, and makes its handoff link:
+The guest is named after its client, such as "Claude Code · g3wq", and gets an empty Personal Space. Its server instructions and its `whoami` result tell it that it is a temporary agent, that anyone who has the link of a file it made can view that file, and that, when it is done, it also gives the user a handoff link from `claim`. `whoami` carries this for clients that never show the model the server instructions. The agent works in a pull request, merges it, gives the user the file's link, and makes its handoff link:
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -117,13 +117,15 @@ uvw claim
 
 `claim` returns the handoff link, `{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<in 7 days>" }`, and `uvw claim` prints it. The link works for 7 days, or until a person takes the agent, so the agent gives the same link again and makes a new one only when it is lost or has expired.
 
-The handoff link is the one way a guest agent shows its work. It cannot turn on Link Sharing, make a repository public or add members: the server refuses, and tells it to give the user the handoff link.
+A guest agent shows its work in two ways. Anyone who has the link of a file it made, `https://space.univer.ai/nodes/<nodeId>`, can view that file without signing in, and can forward the link. The link opens that file only, never a folder or the repository, and nobody edits through it. A page opens with live data from the agent's own Sheets. The handoff link shows everything the agent owns in one place, and a person takes the agent there.
+
+The agent cannot do more than that by itself. It cannot let link visitors edit, make a repository public or add members: the server refuses, and tells it that these wait until a person takes it. It also cannot close a file's link.
 
 Until a person takes it, a guest agent keeps at most 20 files of up to 10 MiB each, its files expire after 30 days without use, and its files are marked **Unverified agent**. It cannot read anyone's private files or join a Team Space.
 
 ## See the agent's work, then take the agent
 
-**Whoever opens the handoff link sees the agent's work at once, read-only and live, without signing in. A person signs in there to take the agent and keep its files.**
+**Whoever opens the handoff link sees all of the agent's work at once, read-only and live, without signing in. A person signs in there to take the agent, keep its files, and choose whether its file links keep working.**
 
 ```mermaid
 flowchart TB
@@ -135,9 +137,13 @@ flowchart TB
 
 The handoff page names the agent and lists the Spaces it owns with their files. Without signing in, you open any of them read-only, private repositories included, and an HTML View among them reads its Sheet data live. The browser keeps this preview for as long as the link works: 7 days, or until a person takes the agent.
 
-**Sign in and take it** signs you in and comes back to the page, and **Take it** makes you the agent's owner. The page then opens where the agent's work is: the one Team repository or Personal Space that holds it, or, when its work is in more than one of them, the repository list filtered to the agent. Once you are signed in, the page shows the summary only, and you open the files after you take the agent.
+**Sign in and take it** signs you in and comes back to the page, and **Take it** makes you the agent's owner. The page then opens where the agent's work is: the one Team repository or Personal Space that holds it, or, when its work is in more than one of them, the repository list filtered to the agent. Once you are signed in, the page shows the summary only. You open a file by its own link, and browse the Spaces after you take the agent.
 
-After that, the link shows nothing to anyone else: it says that the agent has an owner. The agent's files stop expiring and lose the **Unverified agent** mark, and you turn on Link Sharing in the browser for a file you want to send on.
+![The handoff page for a signed-in person. Under the account that will own the agent, a checked box reads Keep its file links working for anyone who has them, above the Take it button](images/agent-handoff/take-agent.png)
+
+Taking the agent ends the rule that opens its files by link. The checkbox **Keep its file links working for anyone who has them** is checked by default. With it, each file in the agent's Personal Space that has no Link Sharing setting gets viewer Link Sharing, so the links that the agent gave out keep working, and you turn any of them off in the Share dialog. Without it, those links stop when you take the agent. A Team repository has no Link Sharing, so links to its files always stop, and the page names those repositories.
+
+After that, the handoff link shows nothing to anyone else: it says that the agent has an owner. The agent's files stop expiring and lose the **Unverified agent** mark.
 
 ## One file brings the next
 

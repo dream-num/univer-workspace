@@ -199,6 +199,11 @@ export interface IdentityModule {
   }>;
   unlinkDiscord(cookieHeader: string | undefined): Promise<AuthenticatedSession>;
   findUsers(userIds: readonly string[]): Promise<readonly User[]>;
+  /**
+   * A reader opened the page of this Node. When an unclaimed agent owns it, its expiry moves 30
+   * days out, as when the agent authenticates; either happens at most once a day.
+   */
+  recordAgentPageView(nodeId: string): Promise<void>;
   /** Whether the cookie holds a valid session, without the cleanup and agent activity that reading one causes. */
   hasSession(cookieHeader: string | undefined): Promise<boolean>;
   requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal>;
@@ -414,6 +419,11 @@ export function createIdentityModule(options: {
 
     async hasSession(cookieHeader) {
       return (await storedSession(cookieHeader, true)) !== null;
+    },
+
+    async recordAgentPageView(nodeId) {
+      const { at, staleBefore, expiresAt } = agentActivityWindow(now());
+      await repository.touchAgent({ nodeId }, at, staleBefore, expiresAt);
     },
 
     async registerWithPassword(input) {

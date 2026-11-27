@@ -102,6 +102,7 @@ export {
 } from "./space.js";
 export {
   createClaimLink,
+  formatClaimLink,
   formatShare,
   SHARE_LINKS,
   shareNode,

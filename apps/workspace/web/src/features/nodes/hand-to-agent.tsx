@@ -12,7 +12,7 @@ export type AgentTask = "read" | "copy";
 export const HAND_OFFS = ["mcp", "cli"] as const;
 export type HandOff = (typeof HAND_OFFS)[number];
 
-const HANDOFF_FIRST = "Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only or not at all.";
+const HANDOFF_FIRST = "Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only, for me and for anyone I forward it to.";
 
 const mcpCopySteps = (origin: string) => `1. Call \`repo_list\` to find your Personal Space repository, then \`pr_create\` in it with the title "My copy".
 2. Call \`unit_create\` with that pull request's id as \`worktree\`, the repository as \`space\`, \`type\` sheet, the name "My copy" and the link as \`from\`. If the file is a Doc or a Slide, the error says so: use \`type\` doc or slide.

@@ -195,7 +195,7 @@ done
 jq -s -e 'map(.fullName) == ["'"$Q/q1"'", "'"$Q/q2"'", "'"$Q/q3"'"]' "$EVIDENCE"/ce2-repo-[123].out
 $V mcp --as ce-quota ce2-public repo_edit "{\"repo\":\"$Q/q1\",\"visibility\":\"public\"}"
 test $? -eq 1
-jq -e '.code == "AGENT_NOT_ALLOWED" and (.detail.url == null) and .message == "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again."' "$EVIDENCE/ce2-public.out"
+jq -e --arg message "An unclaimed agent's files can already be viewed by anyone who has a file's link, so give the user that link. Making a repository public, adding people and letting link visitors edit wait until a person takes you, because no person can confirm them for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. Once they sign in and take you, try again." '.code == "AGENT_NOT_ALLOWED" and (.detail.url == null) and .message == $message' "$EVIDENCE/ce2-public.out"
 $V mcp --as ce-quota ce2-repo-4 repo_create '{"slug":"q4"}'
 test $? -eq 1
 jq -e '.code == "AGENT_QUOTA_EXCEEDED" and .message == "An unclaimed agent can own at most 3 Team Spaces. Work in one you already own, or give a person a handoff link so they can take you, which lifts this limit."' "$EVIDENCE/ce2-repo-4.out"

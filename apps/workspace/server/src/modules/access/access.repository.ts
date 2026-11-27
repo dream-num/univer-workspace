@@ -20,6 +20,8 @@ export interface ResolvedNodeRow {
   readonly requester_owns: 0 | 1;
   readonly public_read: 0 | 1;
   readonly previewed: 0 | 1;
+  /** A temporary agent's file: anyone holding the link reads it, and only it. */
+  readonly link_viewable: 0 | 1;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
   readonly grant_role: "editor" | "viewer" | null;
   readonly grant_navigation_root_id: string | null;
@@ -65,6 +67,7 @@ export type NodeAuthorizationRow = Pick<
   | "space_landing"
   | "public_read"
   | "previewed"
+  | "link_viewable"
   | "member_role"
   | "grant_role"
   | "link_sharing_role"

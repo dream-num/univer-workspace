@@ -177,6 +177,47 @@ it.each([
   expect(json.mock.calls.filter(([path]) => path === "/api/spaces/private")).toHaveLength(privateUnits.length ? 1 : 0);
 });
 
+it.each([
+  { user: { id: "agent", displayName: "Agent", kind: "agent", claimed: false }, expected: ["theirs"] },
+  { user: { id: "agent", displayName: "Agent", kind: "agent", claimed: true }, expected: ["mine", "theirs"] },
+  { user: { id: "person", displayName: "Person", kind: "human" }, expected: ["mine", "theirs"] },
+])("lists no source of its own private repositories as private for a temporary agent ($user.kind, claimed $user.claimed)", async ({ user, expected }) => {
+  const http = new WorkspaceHttp({
+    origin: "https://workspace.test", role: "client", cookie: "workspace_session=test",
+    fetcher: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api/session") return Response.json({ authenticated: true, user });
+      if (path.startsWith("/api/spaces/")) {
+        const id = path.split("/").at(-1);
+        return Response.json({ id, name: "Space", publicRead: false, affiliation: id === "theirs-space" ? "none" : "owner" });
+      }
+      const unitId = decodeURIComponent(path.split("/").at(-1) ?? "");
+      return Response.json({ node: {
+        id: "source-node", spaceId: unitId === "theirs" ? "theirs-space" : "space",
+        parentNodeId: null, name: "Sheet", hasChildren: false, updatedAt: "now", accessRole: "viewer",
+        capabilities: { browseChildren: false, createChildren: false, rename: false, move: false, trash: false, share: false },
+        resource: { id: "sheet-resource", kind: "univer", unitId, unitType: "sheet",
+          capabilities: { downloadContent: true, editContent: false, openContent: true } },
+      } });
+    },
+  });
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => http,
+    configuredOrigin: async () => "https://workspace.test",
+    blobs: { uploadBytes: async () => ({ nodeId: "node" }) },
+    resolveTrunkRuntimeTarget: async ({ unitId }) => ({
+      origin: "https://workspace.test", scope: { kind: "trunk" }, unitId, unitType: "sheet", revision: 1,
+    }),
+    runtime: { exportUnitData: async ({ target }) => ({
+      id: target.unitId, name: "Budget", appVersion: "1", locale: LocaleType.EN_US,
+      styles: {}, sheetOrder: ["budget"], sheets: { budget: { rowCount: 10, columnCount: 3 } },
+    }) },
+  });
+  const html = ["mine", "theirs"].map((id) => `<output data-univer-cell-text="${id}:budget:B2"></output>`).join("");
+  await expect(feature.create({ source: { bytes: Buffer.from(html), name: "view.univer.html" }, name: "View", spaceId: "space", idempotencyKey: "key" }))
+    .resolves.toMatchObject({ repositoryVisibility: "private", privateSourceUnitIds: expected });
+});
+
 it.each([404, 403, 500])("handles source Space HTTP %s without hiding other failures", async (status) => {
   const http = sharingHttp(true, ["unit"], status);
   const uploadBytes = vi.fn(async () => ({ nodeId: "node" }));

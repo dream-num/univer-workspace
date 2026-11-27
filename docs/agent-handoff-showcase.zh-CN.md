@@ -60,7 +60,7 @@ sequenceDiagram
 | 让 Agent 不用账号开始   | 在连接页上点 **Try without signing in** 的人，在浏览器里 | Agent 也可以自己运行 `uvw auth guest`                      |
 | 收下 Agent              | 打开交接链接并登录的人，在浏览器里                   | 不能                                                       |
 | 审阅并合入 Pull request | 作者或认领人，在 Team Space 里还有能编辑的成员，在浏览器里或用 `uvw pr merge` | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
-| 打开链接分享            | 文件的所有者，在浏览器里。`uvw share` 和 `share` 返回一个确认链接，要在浏览器里打开 | 不能。已认领的 Agent 和你的 AI 助手把确认链接交给你，访客 Agent 改给交接链接 |
+| 打开链接分享            | 文件的所有者，在浏览器里。`uvw share` 和 `share` 返回一个确认链接，要在浏览器里打开 | 不能。已认领的 Agent 和你的 AI 助手把确认链接交给你。访客 Agent 展示文件不需要它：拿到文件链接的人都能查看 |
 | 公开一个空间            | 空间的所有者或管理员，在浏览器里或用 `uvw repo edit` | 不能。你的 AI 助手通过 MCP 也不能                          |
 | Remix 一份副本          | 已登录的人，在分享页                                 | Agent 用 `unit_create` 带 `from` 复制                      |
 | 把文件交给自己的 Agent  | 打开分享页的人，点 **交给我的 Agent**                | 拿到链接的 Agent 可以直接读取或复制                        |
@@ -86,13 +86,13 @@ Doc 或 Slide 用 `inspect`，并把 `target` 设为 `document` 或 `presentatio
 
 ## 没有账号的 Agent 也能开始工作
 
-**从未用过 Workspace 的 Agent 得到自己的名字和空间，创建文件，并返回一个能看到它成果的链接。**
+**从未用过 Workspace 的 Agent 得到自己的名字和空间，创建文件，并返回一个任何人都能打开查看的链接。**
 
 MCP 客户端打开的浏览器没有登录 Workspace 时，连接页提供 **Sign in to connect** 和 **Try without signing in**。点后者，客户端得到一个访客 Agent，浏览器保持未登录：
 
-![没有人登录时的连接页。Claude Code (claude.ai) wants to work in Univer Workspace，页面提供 Sign in to connect，然后是 Try without signing in 和三行关于临时 Agent 的说明，最后是 Deny](images/agent-handoff/connect-signed-out.png)
+![没有人登录时的连接页。Claude Code (claude.ai) wants to work in Univer Workspace，页面提供 Sign in to connect，然后是 Try without signing in 和四行关于临时 Agent 的说明，最后是 Deny](images/agent-handoff/connect-signed-out.png)
 
-访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。服务器说明和 `whoami` 结果都告诉它：它是一个临时 Agent，做完后用 `claim` 拿一个交接链接（handoff link）给用户。有些客户端不把服务器说明交给模型，所以 `whoami` 也写明这句话。Agent 在 Pull request 里工作，合入后生成交接链接：
+访客 Agent 以客户端命名，例如 "Claude Code · g3wq"，并得到一个空的个人空间。服务器说明和 `whoami` 结果都告诉它：它是一个临时 Agent，拿到它所做文件的链接的人都能查看这个文件，做完后还要用 `claim` 拿一个交接链接（handoff link）给用户。有些客户端不把服务器说明交给模型，所以 `whoami` 也写明这些话。Agent 在 Pull request 里工作，合入后把文件链接交给用户，并生成交接链接：
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "Q3 team budget" }
@@ -117,13 +117,15 @@ uvw claim
 
 `claim` 返回交接链接，`{ "claimUrl": "https://space.univer.ai/claim/<code>", "expiresAt": "<7 天后>" }`，`uvw claim` 打印同一个链接。链接 7 天内有效，有人收下 Agent 后也随之结束，所以 Agent 再次给出的是同一个链接，只有链接丢了或过期了才重新生成。
 
-交接链接是访客 Agent 展示成果的唯一方式。它不能打开链接分享、公开仓库或添加成员：服务端会拒绝，并告诉它把交接链接交给用户。
+访客 Agent 有两种方式展示成果。拿到它所做文件的链接 `https://space.univer.ai/nodes/<nodeId>` 的任何人都能查看这个文件，不用登录，也可以把链接转发给别人。一个链接只打开这一个文件，打不开文件夹和仓库，也不能通过它编辑。页面打开时带着 Agent 自己的 Sheet 里的实时数据。交接链接在一处显示 Agent 拥有的全部内容，人在那里收下 Agent。
+
+除此之外，Agent 自己做不了更多。它不能让链接访客编辑、公开仓库或添加成员：服务端会拒绝，并告诉它这些要等有人收下它。它也不能关闭某个文件的链接。
 
 在有人收下之前，访客 Agent 最多保留 20 个文件，每个不超过 10 MiB，文件 30 天不用会过期，文件上也标着 **未验证的 Agent**。它读不到任何人的私有文件，也不能加入团队空间。
 
 ## 先看 Agent 的成果，再收下它
 
-**打开交接链接的人不用登录，立刻就能看到 Agent 的成果，只读，数据是实时的。在那里登录后收下 Agent，它的文件就留下了。**
+**打开交接链接的人不用登录，立刻就能看到 Agent 的全部成果，只读，数据是实时的。在那里登录后收下 Agent，它的文件就留下了，还可以选择它的文件链接是否继续有效。**
 
 ```mermaid
 flowchart TB
@@ -135,9 +137,13 @@ flowchart TB
 
 交接页显示 Agent 的名字，并列出它拥有的空间和其中的文件。不用登录，你就能只读打开其中任何一个，私有仓库里的也可以，其中的 HTML View 实时读取它的 Sheet 数据。链接有效期内，浏览器一直保留这份预览：7 天，或者到有人收下 Agent 为止。
 
-点 **登录后收下** 登录并回到这个页面，再点 **收下**，你就成为 Agent 的主人。随后页面打开 Agent 的成果所在的位置：只有一个团队仓库或个人空间有内容时打开它，分布在多处时打开按这个 Agent 筛选的仓库列表。你已登录时，页面只显示摘要，收下 Agent 之后才能打开文件。
+点 **登录后收下** 登录并回到这个页面，再点 **收下**，你就成为 Agent 的主人。随后页面打开 Agent 的成果所在的位置：只有一个团队仓库或个人空间有内容时打开它，分布在多处时打开按这个 Agent 筛选的仓库列表。你已登录时，页面只显示摘要。你可以用文件自己的链接打开文件，收下 Agent 之后才能浏览它的空间。
 
-此后别人打开这个链接什么也看不到，页面只说明这个 Agent 已经有主人了。Agent 的文件不再过期，也去掉 **未验证的 Agent** 标记；想把某个文件发给别人时，你在浏览器里为它打开链接分享。
+![已登录的人看到的交接页。在归属账号下面有一个已勾选的复选框“让它的文件链接对持有链接的人继续有效”，再下面是“收下”按钮](images/agent-handoff/take-agent.zh-CN.png)
+
+收下 Agent 会结束“文件凭链接可见”这条规则。复选框 **让它的文件链接对持有链接的人继续有效** 默认勾选。勾选时，Agent 个人空间里还没有链接分享设置的文件各开启查看者权限的链接分享，Agent 给出去的链接继续有效，你可以在分享对话框里逐个关闭。不勾选时，这些链接在你收下 Agent 后失效。团队仓库没有链接分享，其中的文件链接总是失效，页面会列出这些仓库。
+
+此后别人打开交接链接什么也看不到，页面只说明这个 Agent 已经有主人了。Agent 的文件不再过期，也去掉 **未验证的 Agent** 标记。
 
 ## 一个文件带来下一个
 

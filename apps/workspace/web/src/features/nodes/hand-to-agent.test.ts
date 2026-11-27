@@ -33,7 +33,7 @@ describe("handToAgentPrompt", () => {
       "the link as `from`",
       "`pr_merge`",
       "give me the handoff link",
-      "Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only or not at all.",
+      "Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only, for me and for anyone I forward it to.",
       `give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned`,
       "tell me to use the Command line (uvw) option of Hand to my agent",
     ].map((step) => prompt.indexOf(step));
@@ -79,7 +79,7 @@ uvw pr ready <id> --json
 uvw pr merge <id> --json
 uvw claim
 
-<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the handoff link that uvw claim prints. Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only or not at all.
+<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the handoff link that uvw claim prints. Tell me to open the handoff link first: I can see the copy there without signing in, and it is mine to edit once I sign in and take you. Until then, the copy's own link opens read-only, for me and for anyone I forward it to.
 Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the nodeId that unit create returns. I open it to edit the copy in the browser.
 
 With MCP, you can instead connect to ${origin}/mcp and call \`pr_create\`, \`unit_create\` with the link as \`from\`, \`pr_ready\`, \`pr_merge\` and \`claim\`. If \`unit_create\` has no \`from\`, use the CLI.`);

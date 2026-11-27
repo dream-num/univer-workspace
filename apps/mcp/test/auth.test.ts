@@ -364,7 +364,7 @@ describe("gateway authentication", () => {
       return { instructions: client.getInstructions()!, notice: (whoami.structuredContent as { notice?: string }).notice, whoami: whoami.structuredContent };
     };
     const temporary =
-      "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
+      "You are a temporary agent. Anyone who has the link of a file you made can view that file, so give the user those links, and they can forward them. When you are done, also use claim to get a handoff link for the user, who signs in there to take you and keep your work.";
     const mergeOwn = "Nobody else reviews or merges in your own Personal Space and repositories, so once a result there is verified, mark its pull request ready with pr_ready and merge it with pr_merge.";
     const pullLink = "Then give the user the pull request link.";
     const owns = (who: string) =>
@@ -434,7 +434,7 @@ describe("gateway authentication", () => {
       product: (path) => (path === "/api/session" ? { body: { authenticated: true, user: agent } } : undefined),
     });
     const restricted = "Editing document contents is not enabled for this account; ask the user to edit in the browser.";
-    const copy = "make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They see the copy through your handoff link";
+    const copy = "make them a copy: in a pull request, create it with unit_create and the file's link as from, then merge it. They open the copy by its link";
     const withPublish = (await gateway.connect("uvw_at_guest")).getInstructions()!;
     expect(withPublish).toContain(`${restricted} Reading them is not enabled either.`);
     expect(withPublish).toContain(copy);

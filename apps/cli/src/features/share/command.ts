@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import {
   createClaimLink,
+  formatClaimLink,
   formatShare,
   SHARE_LINKS,
   shareNode,
@@ -47,15 +48,7 @@ export function createClaimCommand(spaces: WorkspaceSpaceFeature, origin: () => 
     .addOption(jsonFieldsOption(CLAIM_JSON_FIELDS))
     .action(async (options: JsonFieldsOption) => {
       const link = await executeCommand(claim, async () => await createClaimLink(spaces, await origin()));
-      emit(
-        claim,
-        options,
-        link,
-        [
-          `Handoff link: ${link.claimUrl}`,
-          "Give it to the user. They open it to see everything this agent owns without signing in, and sign in there to take the agent and keep its files. The link works for 7 days.",
-        ].join("\n"),
-      );
+      emit(claim, options, link, formatClaimLink(link));
     });
   return claim;
 }

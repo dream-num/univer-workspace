@@ -121,11 +121,13 @@ export function createNodesModule(options: {
         await options.access.resolveSpace(userId, node.spaceId) ??
         syntheticSpace(node);
       const { copiedFromNodeId, copyCount } = await options.repository.copies(node.id);
+      const owner = await options.repository.findSpaceOwner(node.spaceId);
       return {
         node: nodeSummary(node),
         space: spaceSummary(space),
-        owner: node.spaceType === "personal"
-          ? nodeOwner(await options.repository.findSpaceOwner(node.spaceId))
+        // Anyone with the link reads an unclaimed agent's Team Space file, and must see who made it.
+        owner: node.spaceType === "personal" || (owner.kind === "agent" && owner.claimed !== 1)
+          ? nodeOwner(owner)
           : null,
         breadcrumbs: visibleBreadcrumbs(
           await options.repository.breadcrumbs(node.id),

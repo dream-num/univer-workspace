@@ -780,7 +780,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       "Once the result is verified, mark the pull request ready with pr_ready, then merge it with pr_merge.",
     );
     const handoff =
-      "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
+      "You are a temporary agent. Anyone who has the link of a file you made can view that file, so give the user those links, and they can forward them. When you are done, also use claim to get a handoff link for the user, who signs in there to take you and keep your work.";
     expect(agent).toContain(handoff);
     expect(human).not.toContain(handoff);
     for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when", "call share", "Then give the user the pull request link.", "cannot make a repository public"]) {

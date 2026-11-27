@@ -128,7 +128,10 @@ uvw auth guest [--label <name>]
 The command creates a new guest agent with its own Personal Space, stores its session in the same
 session file as a login, and prints the agent's username and its repository `<username>/personal`.
 The agent creates files there with the usual commands, merges its pull request, and gives the user the
-handoff link from [`uvw claim`](#hand-a-guest-agents-work-over). Once a person takes it, the agent can also leave a ready pull
+links of the files it made and the handoff link from [`uvw claim`](#hand-a-guest-agents-work-over).
+Until a person takes the agent, anyone who has the link of one of its files can view that file without
+signing in. The link opens that file only, never a folder or the repository, and nobody edits through
+it. Once a person takes it, the agent can also leave a ready pull
 request for that person to review and merge; nothing enforces either choice. No agent turns a link on
 itself (see [Confirm links](#confirm-links)); the person who took it can open
 everything it owns. Before it is claimed, a guest
@@ -143,8 +146,9 @@ A guest session renews like a login session: it lasts 7 days by default, and a g
 use stays signed in. Left unused, it ends after 3.5 to 7 days by default. After the session ends, or
 after `uvw auth logout`, the CLI cannot sign in to the same agent again.
 `uvw auth guest` then creates a new agent, and nobody but a person who claimed it can change the old
-agent's files. A handoff link that the old agent gave keeps working until it expires, and the old agent
-expires 30 days after it was last used or its handoff link was last opened. A claimed agent never expires.
+agent's files. The old agent's file links, and a handoff link that it gave, keep working until they
+expire. The handoff link lasts 7 days. The old agent expires 30 days after it was last used, or after
+its handoff link or the page of one of its files was last opened. A claimed agent never expires.
 
 ## Share a file by link
 
@@ -160,12 +164,15 @@ Share a file after its pull request is merged. Only the owner of the file can us
 `--json` prints `url`, `name`, `link`, `owner`, and `access`, which says who can open the link. A
 folder's link opens everything in it. While Link Sharing is off, `access` also gives the command that
 lets anyone with the link read the file; for a person's session, it says to run it only if the user
-asks. For a guest agent, `access` points to its handoff link instead, because the server refuses it
-Link Sharing. When the owner is an unclaimed agent, the output also has `expiresAt`, the date the agent
-and any link it turned on earlier stop working unless the agent is used before then. A file in a Team
+asks. For a guest agent's file, `link` is `viewer` whatever Link Sharing is stored, `--link off`
+included, because anyone who has the link can view the file until a person takes the agent. `access`
+says so and points to the handoff link as well. A guest agent's folder reads `off`. When the owner is
+an unclaimed agent, the output also has `expiresAt`, the date the agent and its file links stop working
+unless the agent is used or one of its file pages is opened before then. A file in a Team
 Space has no Link Sharing, so the command exits 1 with
 `workspace-argument-invalid`, names the repository, and points to `uvw repo member add` and
-`uvw repo edit --visibility public`.
+`uvw repo edit --visibility public`. For a guest agent's own Team Space file, the message adds that
+the link already opens the file for viewing until a person takes the agent.
 
 ### Confirm links
 
@@ -179,7 +186,9 @@ stored access, such as `--link off`, `--visibility private` or `repo member remo
 `uvw repo create` makes a private repository and has no `--public` option.
 
 A guest agent has no person to confirm for it. Every such command, `--link viewer` included, exits 1
-with `AGENT_NOT_ALLOWED` and a message telling it to give the user its handoff link from `uvw claim`.
+with `AGENT_NOT_ALLOWED`. The message says that its files can already be viewed by link, and that a
+public repository, a new member and an editor link wait until a person takes it through the handoff
+link from `uvw claim`.
 
 ### Hand a guest agent's work over
 
@@ -191,7 +200,10 @@ uvw claim [--json]
 `--json`. Whoever opens it sees everything the agent owns, read-only and live, without signing in,
 private repositories included. A person who signs in there and takes the agent becomes its owner: the
 agent stops expiring, and the person opens, edits and manages its files in the browser. The agent
-gets no access to the person's files. The link works for 7 days, or until a person takes the agent, so
+gets no access to the person's files. On that page the person also chooses whether the agent's file
+links keep working for anyone who has them. The choice is on by default and covers the files in the
+agent's Personal Space. Links to files in its Team Spaces stop.
+The handoff link works for 7 days, or until a person takes the agent, so
 give the same link again and make a new one only when it is lost or has expired. An agent keeps at most
 10 working links, and the eleventh ends the oldest. A claimed agent or a person gets an error.
 

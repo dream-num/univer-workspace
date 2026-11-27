@@ -136,10 +136,10 @@ export function resolveStoredNodeAccess(userId: string, row: ResolvedNodeRow | n
   if (!row) return null;
   const { regularRole, role } = resolvedRoles(userId, row);
   if (!role) return null;
-  const navigationRootNodeId =
-    role === "owner" || row.space_type === "team" || readerRole(row) !== null
-      ? null
-      : row.navigation_root_id;
+  const readsWholeSpace =
+    role === "owner" || spaceReaderRole(row) !== null || (row.space_type === "team" && row.member_role !== null);
+  // Without a grant or a Link Sharing ancestor, the reader holds only this file's link.
+  const navigationRootNodeId = readsWholeSpace ? null : row.navigation_root_id ?? row.id;
   return {
     id: row.id,
     spaceId: row.space_id,
@@ -225,7 +225,7 @@ export function resolveStoredSpaceAccess(userId: string, row: StoredSpaceAccess)
   const member = !isUserlessReader(userId) && assignedRole !== null;
   const role = highestRole(
     isUserlessReader(userId) ? null : assignedRole,
-    readerRole({ public_read: row.publicRead, previewed: row.previewed }),
+    spaceReaderRole({ public_read: row.publicRead, previewed: row.previewed }),
   );
   if (!role) return null;
   return {
@@ -286,8 +286,12 @@ export function resourceCapabilities(
   };
 }
 
-function readerRole(row: { readonly public_read: unknown; readonly previewed: unknown }): "viewer" | null {
+function spaceReaderRole(row: { readonly public_read: unknown; readonly previewed: unknown }): "viewer" | null {
   return row.public_read || row.previewed ? "viewer" : null;
+}
+
+function readerRole(row: Pick<NodeAuthorizationRow, "public_read" | "previewed" | "link_viewable">): "viewer" | null {
+  return row.link_viewable ? "viewer" : spaceReaderRole(row);
 }
 
 function linkSharingNodeCapabilities(): NodeCapabilities {

@@ -144,8 +144,8 @@ NodeLinkSharing:
       format: date-time
       description: |
         When the link stops working because its owner, an unclaimed agent, expires. The date moves
-        30 days out while the agent stays active or someone opens its handoff page. Null when the owner
-        does not expire.
+        30 days out while the agent stays active or someone opens its handoff page or the page of one
+        of its files. Null when the owner does not expire.
     createdBy:
       oneOf:
         - $ref: ./identity.yaml#/PublicUser

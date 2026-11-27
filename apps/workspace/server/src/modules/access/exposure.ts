@@ -50,7 +50,7 @@ const REFUSED: Readonly<Record<ExposureChange["kind"], string>> = {
   "create-public": "A repository is created private. Create it, then make it public, which needs a person to confirm it in the browser.",
 };
 const UNCLAIMED_REFUSED =
-  "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. They can open it to see your work without signing in. Once they sign in and take you, try again.";
+  "An unclaimed agent's files can already be viewed by anyone who has a file's link, so give the user that link. Making a repository public, adding people and letting link visitors edit wait until a person takes you, because no person can confirm them for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user. Once they sign in and take you, try again.";
 
 const refusalCode = (category: PrincipalCategory) =>
   category === "agent_unclaimed" ? "AGENT_NOT_ALLOWED" : "INTERACTIVE_SESSION_REQUIRED";
