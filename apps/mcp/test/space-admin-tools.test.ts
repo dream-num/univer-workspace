@@ -784,8 +784,10 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(listed?.description).toContain("without signing in");
     for (const stale of ["works once", "10 minutes"]) expect(listed?.description).not.toContain(stale);
     const before = Date.now();
-    const { structuredContent } = await client.callTool({ name: "claim", arguments: {} });
+    const { structuredContent, content } = await client.callTool({ name: "claim", arguments: {} });
     expect(structuredContent).toEqual({ claimUrl: `${origin}/claim/c0de`, expiresAt: expect.any(String) });
+    expect((content as { text: string }[])[0]!.text).toContain(`Handoff link: ${origin}/claim/c0de\nGive it to the user.`);
+    expect((content as { text: string }[])[0]!.text).toContain("each file also opens by its own link for anyone who has that link");
     const expiresAt = Date.parse((structuredContent as { expiresAt: string }).expiresAt);
     expect(expiresAt - before).toBeGreaterThanOrEqual(604_800_000);
     expect(expiresAt - Date.now()).toBeLessThanOrEqual(604_800_000);

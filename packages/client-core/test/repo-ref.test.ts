@@ -99,15 +99,17 @@ describe("file links", () => {
     });
   });
 
-  it("reads Link Sharing without writing when no link is given, and points an unclaimed owner to its handoff link without making a claim code", async () => {
+  const openByLink = "Anyone with the link can read the file without signing in. A temporary agent's files open by link whatever their Link Sharing says, until a person takes the agent. Give the user your handoff link from claim (uvw claim in the CLI) too, so they can sign in and keep the file.";
+
+  it("reads Link Sharing without writing when no link is given, and reports an unclaimed owner's file as open by link whatever is stored", async () => {
     const { spaces, calls } = clients((call) => Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
     await expect(shareNode(spaces, origin, { node: `${origin}/nodes/n1`, caller: agent, turnOn })).resolves.toEqual({
       url: `${origin}/nodes/n1`,
       name: "Budget",
-      link: "off",
+      link: "viewer",
       owner: { username: "budget-x7k2", kind: "agent", claimed: false },
       expiresAt: "2026-12-14T00:00:00.000Z",
-      access: "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).",
+      access: openByLink,
     });
     expect(calls.map(({ method, path }) => [method, path])).toEqual([
       ["GET", "/api/nodes/n1"],
@@ -118,7 +120,14 @@ describe("file links", () => {
   it("reports a link an unclaimed agent turned on earlier with the date it expires, in the field alone", async () => {
     const { spaces } = clients((call) => Response.json(call.path.endsWith("/link-sharing") ? sharing({ enabled: true }) : node(sheet)));
     await expect(shareNode(spaces, origin, { node: "n1", caller: agent, turnOn })).resolves.toMatchObject({
-      link: "viewer", expiresAt: "2026-12-14T00:00:00.000Z", access: "Anyone with the link can read the file without signing in.",
+      link: "viewer", expiresAt: "2026-12-14T00:00:00.000Z", access: openByLink,
+    });
+  });
+
+  it("reports an unclaimed agent's folder as closed, and says its files open one by one", async () => {
+    const { spaces } = clients((call) => Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(null)));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: agent, turnOn })).resolves.toMatchObject({
+      link: "off", access: "Only this agent can open the folder. Each file in it opens by its own link for anyone who has that link.",
     });
   });
 
@@ -139,8 +148,7 @@ describe("file links", () => {
   });
 
   it.each([
-    ["an unclaimed agent", { username: "budget-x7k2", kind: "agent", claimed: false }, agent, turnOn,
-      "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI)."],
+    ["an unclaimed agent", { username: "budget-x7k2", kind: "agent", claimed: false }, agent, turnOn, openByLink],
     ["a claimed agent", { username: "budget-x7k2", kind: "agent", claimed: true }, { ...agent, claimed: true },
       "call share with node n1 and link viewer",
       "Only people with access to the repository can open the link. To let anyone with the link read it, call share with node n1 and link viewer."],
@@ -207,6 +215,16 @@ describe("file links", () => {
       }
     }
     expect(calls.map(({ path }) => path)).not.toContain("/api/agents/claim-codes");
+  });
+
+  it("tells a temporary agent that its own Team Space file already opens by link, until a person takes it", async () => {
+    const { spaces } = clients((call) =>
+      call.path.endsWith("/link-sharing") ? notFound()
+        : call.path === "/api/spaces/s1" ? Response.json(view({ owner: { id: agent.id, username: "budget-x7k2" } }))
+          : Response.json(node(sheet)));
+    await expect(shareNode(spaces, origin, { node: "n1", caller: agent, turnOn })).rejects.toMatchObject({
+      message: expect.stringContaining(`Until a person takes you, anyone who has the link can already view this file: ${origin}/nodes/n1. The link stops when a person takes you.`),
+    });
   });
 
   it("passes other Link Sharing refusals through and rejects a malformed response", async () => {

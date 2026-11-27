@@ -13,6 +13,7 @@ export interface WorkspaceShare {
   /** The file link. Anyone can open it while `link` is not off. */
   readonly url: string;
   readonly name: string;
+  /** What the link does now. An unclaimed agent's file reads `viewer` whatever its stored Link Sharing is. */
   readonly link: WorkspaceShareLink;
   readonly owner: WorkspaceLinkSharing["owner"];
   /** Set when the owner is an unclaimed agent: its links stop working when it expires, on that date. */
@@ -69,7 +70,7 @@ export async function shareNode(
         if (lookup instanceof WorkspaceApplicationError) return null;
         throw lookup;
       });
-      if (space?.type === "team") throw teamSpaceRefusal(url, name, space);
+      if (space?.type === "team") throw teamSpaceRefusal(url, name, space, input.caller);
     }
     if (error.code === "FORBIDDEN") {
       throw workspaceError(
@@ -80,7 +81,8 @@ export async function shareNode(
     }
     throw error;
   }
-  const link = sharing.enabled ? sharing.role : "off";
+  const stored = sharing.enabled ? sharing.role : "off";
+  const link = stored === "off" && sharing.owner.claimed === false && resource !== null ? "viewer" : stored;
   return {
     url,
     name,
@@ -90,6 +92,9 @@ export async function shareNode(
     access: describeAccess(link, sharing, resource === null, input.caller, input.turnOn),
   };
 }
+
+const TEMPORARY_AGENT_FILE =
+  "A temporary agent's files open by link whatever their Link Sharing says, until a person takes the agent. Give the user your handoff link from claim (uvw claim in the CLI) too, so they can sign in and keep the file.";
 
 // The owner and the caller differ when a person reads the file of an agent they claimed.
 function describeAccess(
@@ -101,18 +106,26 @@ function describeAccess(
 ): string {
   if (link !== "off") {
     const target = folder ? "the folder and everything in it" : "the file";
-    return link === "viewer"
+    const access = link === "viewer"
       ? `Anyone with the link can read ${target} without signing in.`
       : `Anyone with the link can read ${target}, and signed-in people can edit ${folder ? "them" : "it"}. Through the link, an agent can edit only after a person claims that agent.`;
+    return owner.claimed === false && !folder ? `${access} ${TEMPORARY_AGENT_FILE}` : access;
   }
-  // The server refuses an unclaimed agent Link Sharing.
   if (owner.claimed === false) {
-    return "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).";
+    return "Only this agent can open the folder. Each file in it opens by its own link for anyone who has that link.";
   }
   const next = caller.kind === "agent"
     ? `To let anyone with the link read it, ${turnOn}.`
     : `Only if the user asks, ${turnOn} to let anyone with the link read it.`;
   return `Only people with access to the repository can open the link. ${next}`;
+}
+
+/** The handoff link as the lines a client prints. */
+export function formatClaimLink(link: WorkspaceClaimLink): string {
+  return [
+    `Handoff link: ${link.claimUrl}`,
+    "Give it to the user. They open it to see everything this agent owns without signing in, and sign in there to take the agent and keep its files. The link works for 7 days. Until a person takes the agent, each file also opens by its own link for anyone who has that link. The user chooses whether those links keep working when they take the agent.",
+  ].join("\n");
 }
 
 /** The share as the lines a client prints. */
@@ -123,10 +136,13 @@ export function formatShare(shared: WorkspaceShare): string {
   ].join("\n");
 }
 
-function teamSpaceRefusal(url: string, name: string, space: WorkspaceSpace): WorkspaceApplicationError {
+function teamSpaceRefusal(url: string, name: string, space: WorkspaceSpace, caller: WorkspaceSubject): WorkspaceApplicationError {
+  const viewable = caller.kind === "agent" && !caller.claimed && space.owner?.id === caller.id
+    ? ` Until a person takes you, anyone who has the link can already view this file: ${url}. The link stops when a person takes you.`
+    : "";
   return workspaceError(
     "workspace-argument-invalid",
-    `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${space.fullName ?? space.name}. To let more people open it, add them as members with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI). Either one needs the user, and the server's answer says what to give them.`,
+    `Link Sharing works only for files in a Personal Space, and "${name}" is in the repository ${space.fullName ?? space.name}.${viewable} To let more people open it, add them as members with repo_member_write (uvw repo member add in the CLI), or make the repository public with repo_edit (uvw repo edit --visibility public in the CLI). Either one needs the user, and the server's answer says what to give them.`,
     { url },
   );
 }
