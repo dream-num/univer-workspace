@@ -1485,7 +1485,8 @@ export interface paths {
         };
         /**
          * List the current User's forks by name.
-         * @description Only a fork's owner sees it.
+         * @description Lists the caller's forks and the forks of every agent the caller owns. Nobody else sees a fork.
+         *     `owner` names whose fork each one is.
          */
         get: operations["listForks"];
         put?: never;
@@ -1515,8 +1516,9 @@ export interface paths {
         };
         /**
          * Resolve `<owner>/<name>` to one of the current User's forks.
-         * @description `owner` is a username and `name` a fork name, both case-insensitive. Another User's fork and a
-         *     missing fork both return 404. `GET /api/spaces/lookup` never resolves a fork address.
+         * @description `owner` is a username and `name` a fork name, both case-insensitive. The caller reaches its own forks
+         *     and those of an agent it owns. Any other fork and a missing fork both return 404.
+         *     `GET /api/spaces/lookup` never resolves a fork address.
          */
         get: operations["lookupFork"];
         put?: never;
@@ -1538,7 +1540,8 @@ export interface paths {
         };
         /**
          * Read one of the current User's forks.
-         * @description Another User's fork returns 404. The fork stays readable after the owner loses the upstream, with `upstream` null.
+         * @description The caller reads its own forks and those of an agent it owns. Any other fork returns 404. The fork
+         *     stays readable after the caller loses the upstream, with `upstream` null.
          */
         get: operations["getFork"];
         put?: never;
@@ -1546,7 +1549,8 @@ export interface paths {
         /**
          * Delete one of the current User's forks.
          * @description Deletes the fork row only. The upstream does not change, and every Worktree the fork had keeps its
-         *     history and becomes an ordinary Team Worktree of the upstream. Another User's fork returns 404.
+         *     history and becomes an ordinary Team Worktree of the upstream. The caller deletes its own forks and
+         *     those of an agent it owns. Any other fork returns 404.
          */
         delete: operations["deleteFork"];
         options?: never;
@@ -1575,7 +1579,8 @@ export interface paths {
          *     open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
          *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
          *     finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
-         *     Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. An owner
+         *     Worktree. Only the fork's owner writes through it. Another User's fork, the fork of an agent the caller
+         *     owns included, and a fork whose upstream its owner can no longer read, return `404`. An owner
          *     who may no longer propose in the upstream gets `403 FORBIDDEN`, and so does one who is not a Space Member
          *     and already holds 3 open proposals there. Opening the Worktree counts against an agent's 10 open Worktrees
          *     (`403 AGENT_QUOTA_EXCEEDED`), as `POST /api/worktrees` does. The Unit's content is then written through the
@@ -1605,8 +1610,8 @@ export interface paths {
          *     fork it opens that Worktree as `POST /api/forks/{forkId}/units` does, with no Unit, and returns `201`.
          *     The Collaboration SDK readies and merges a Worktree with no Unit, so a proposal of pages alone is a pull
          *     request like any other. When the open Worktree is not a draft, the request returns
-         *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, and a fork whose upstream its owner
-         *     can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`,
+         *     `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Another User's fork, the fork of an agent the caller owns
+         *     included, and a fork whose upstream its owner can no longer read, return `404`. An owner who may no longer propose in the upstream gets `403 FORBIDDEN`,
          *     and an agent already at 10 open Worktrees `403 AGENT_QUOTA_EXCEEDED`.
          */
         post: operations["openForkWorktree"];

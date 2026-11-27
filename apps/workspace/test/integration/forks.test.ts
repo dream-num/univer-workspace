@@ -142,6 +142,39 @@ describe("forks", () => {
     for (const name of ["one", "two", "three", "four"]) await createFork(origin, claimed, claimedRepo, name);
   }, 60_000);
 
+  it("follows an agent to the person who takes it, who lists, opens, looks up and deletes its forks but never writes through them", async () => {
+    const { origin } = await start();
+    const agent = await guestAgent(origin);
+    const repo = await createRepo(origin, agent, "Research");
+    const sheet = await createSheet(origin, agent, repo, "Totals");
+    const [dropped, kept, third] = [await createFork(origin, agent, repo, "dropped"), await createFork(origin, agent, repo, "kept"), await createFork(origin, agent, repo, "third")];
+    await writeThrough(origin, agent, kept, sheet);
+    const [owner, stranger] = [await person(origin, "owner"), await person(origin, "stranger")];
+    expect(await forkIds(origin, owner)).toEqual([]);
+
+    await claim(origin, agent, owner);
+
+    expect(await forkIds(origin, owner)).toEqual([dropped, kept, third]);
+    expect(await forkView(origin, owner, kept)).toMatchObject({
+      fullName: `${agent.username}/kept`, owner: { id: agent.id }, upstream: { id: repo }, state: "drafting", worktree: { state: "draft" },
+    });
+    const looked = await send(origin, "GET", `/api/forks/lookup?owner=${agent.username}&name=kept`, undefined, owner.cookie);
+    expect(await looked.json()).toMatchObject({ id: kept });
+    for (const [path, body] of [[`/api/forks/${kept}/worktree`, undefined], [`/api/forks/${kept}/units`, { source: "trunk", resourceId: sheet.resourceId }]] as const) {
+      await expectError(send(origin, "POST", path, body, owner.cookie, { "idempotency-key": randomUUID() }), 404, "NOT_FOUND");
+    }
+    expect((await writeThrough(origin, agent, kept, sheet)).status).toBe(200);
+
+    expect(await forkIds(origin, stranger)).toEqual([]);
+    expect((await send(origin, "GET", `/api/forks/${kept}`, undefined, stranger.cookie)).status).toBe(404);
+    expect((await send(origin, "DELETE", `/api/forks/${kept}`, undefined, stranger.cookie)).status).toBe(404);
+
+    expect((await send(origin, "DELETE", `/api/forks/${dropped}`, undefined, owner.cookie)).status).toBe(200);
+    expect(await forkIds(origin, agent)).toEqual([kept, third]);
+    await createFork(origin, owner, repo, "kept");
+    expect(await forkIds(origin, agent)).toEqual([kept, third]);
+  }, 60_000);
+
   it("leaves its Worktrees and their history to the upstream when deleted (A4.10)", async () => {
     const { origin, database } = await start();
     const [holder, agent] = await Promise.all([person(origin, "holder"), person(origin, "agent")]);

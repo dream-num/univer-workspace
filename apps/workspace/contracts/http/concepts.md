@@ -488,7 +488,9 @@ whose message names the upstream's `proposals` setting, and a caller who cannot 
 names a Personal Space, gets `404`. One owner may fork one upstream several times under different names.
 Repeating a create with the same name and upstream returns the existing fork with `200`.
 
-Only a fork's owner lists, reads, looks up and deletes it; anyone else gets `404`. A fork
+A fork's owner lists, reads, looks up and deletes it, and so does the human who owns an
+agent that owns it; anyone else gets `404`. Only the fork's owner writes through it, so that
+human gets `404` from the fork's write routes. A fork
 stays readable after its owner loses the upstream, with `upstream: null`, so the owner can
 still delete it. A fork's `state` is derived from its open Worktree, the one Team Worktree
 of the upstream that links to the fork and is not yet merged or discarded, and is never
