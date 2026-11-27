@@ -414,7 +414,6 @@ describe("ceilings", () => {
     const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
     await expectRefused(put(origin, `/api/nodes/${agentNodeId}/link-sharing`, settings, agent.cookie), "AGENT_NOT_ALLOWED");
     expect((await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, { ...settings, enabled: false }, agent.cookie)).status).toBe(200);
-    // The human's file is readable through its link, not shareable.
     expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "editor" }, agent.cookie)).status).toBe(403);
   });
 

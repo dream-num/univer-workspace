@@ -121,11 +121,7 @@ export interface IdentityModule {
     input: PasswordChange
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): Promise<SessionView>;
-  /**
-   * Who a read is for. A session wins. Without one, the handoff cookie of a live code whose agent is
-   * still temporary reads as that agent's preview reader, and everything else as the anonymous reader.
-   * The code is looked up on every call, so a claim ends the preview on every replica at once.
-   */
+  /** The handoff code is looked up on every call, so a claim ends the preview for new requests on every replica. */
   getReader(cookieHeader: string | undefined): Promise<Reader>;
   /** Whether the operator granted the User the shared MCP executor (`db:executor-access`). */
   hasExecutorAccess(userId: string): Promise<boolean>;

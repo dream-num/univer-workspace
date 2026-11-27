@@ -9,7 +9,6 @@ const whoamiOutput = z.object({
   budget: z.object({ openWorktrees: budgetUse, merges: budgetUse }).optional(),
 });
 
-/** For an unclaimed agent that lists claim, which needs the publish scope. */
 export const TEMPORARY_AGENT_NOTICE =
   "You are a temporary agent. When you are done, use claim to get a handoff link for the user, who can open it to see your work and sign in to take it.";
 

@@ -68,7 +68,6 @@ describe("claiming an agent", () => {
     const dave = await register(origin, "dave");
     await expectError(send(origin, "POST", "/api/agents/claim", { code: "not-a-code" }, dave.cookie), 404, "AGENT_CLAIM_INVALID");
     vi.setSystemTime(Date.now() + 7 * 24 * HOUR + 1);
-    // Every session above ended with the clock, so a person who signs in now tries the old code.
     const erin = await register(origin, "erin");
     await expectError(send(origin, "POST", "/api/agents/claim", { code }, erin.cookie), 410, "AGENT_CLAIM_EXPIRED");
     expect(await agents(origin, erin.cookie)).toEqual([]);

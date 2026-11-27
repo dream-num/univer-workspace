@@ -339,7 +339,6 @@ export class WorkspaceSpaceFeature {
     return parseLinkSharing(await http.json(`/api/nodes/${encodeURIComponent(nodeId)}/link-sharing`));
   }
 
-  /** Asks for the handoff page of the signed-in agent, as a path on the Workspace origin. */
   public async createAgentClaimCode(): Promise<{ readonly claimUrl: string; readonly expiresIn: number }> {
     const body = await (await this.authenticatedHttp()).json("/api/agents/claim-codes", { method: "POST" });
     const { claimUrl, expiresIn } = body;

@@ -10,7 +10,6 @@ const MARK = '[REDACTED]';
 const PATTERNS = [
   ['Workspace token', /uvw_(?:at|rt|pat)_[A-Za-z0-9._~-]+/g],
   ['session cookie', /(workspace_session=)(?![[<])[^;,\s"'\\&]+/g],
-  // The handoff cookie holds a claim code, which reads everything its agent owns for 7 days.
   ['handoff cookie', /(workspace_handoff=)(?![[<])[^;,\s"'\\&]+/g],
   // `Bearer name="..."` is a WWW-Authenticate challenge, not a credential.
   ['bearer credential', /(Bearer\s+)(?![a-z_]+=)[A-Za-z0-9._~+/=-]{16,}/gi],

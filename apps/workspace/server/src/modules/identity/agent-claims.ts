@@ -9,15 +9,12 @@ import { hashSessionSecret } from "./session-token.js";
 const CLAIM_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const EXPIRED_CODE_ANSWERED_FOR_MS = CLAIM_CODE_TTL_MS;
 const CLAIM_CODES_PER_AGENT = 10;
-// A source makes at most 5 agents an hour and each agent holds 10 codes for 7 days, about 8,400 live codes. The cap fits 12 sources doing that.
+// At the default 5 agents an hour, each holding 10 codes for 7 days, a source keeps about 8,400 live codes. The cap fits about 12 sources doing that.
 const CLAIM_CODE_CAPACITY = 100_000;
 
 export interface AgentClaims {
   createCode(cookieHeader: string | undefined): Promise<AgentClaimCode>;
-  /**
-   * Needs no session. `previewMs` is how long the caller's browser may keep the code as its handoff
-   * cookie, and null when the code no longer previews: the agent already belongs to the caller.
-   */
+  /** Needs no session. `previewMs` is the handoff cookie's lifetime, null once the agent belongs to the caller. */
   handoff(cookieHeader: string | undefined, code: unknown): Promise<{ readonly view: AgentHandoff; readonly previewMs: number | null }>;
   claim(cookieHeader: string | undefined, code: unknown): Promise<{ readonly agent: AgentView }>;
   list(cookieHeader: string | undefined): Promise<{ readonly agents: readonly AgentView[] }>;
@@ -34,7 +31,6 @@ export function createAgentClaims(options: {
   const { identity, repository } = options;
   const now = options.now ?? (() => Date.now());
 
-  /** `humanId` is null for a visitor who is not a person signed in through a browser. */
   async function claimable(code: unknown, humanId: string | null): Promise<{ readonly agent: StoredAgent; readonly claimed: boolean; readonly expiresAt: number }> {
     const claim = typeof code === "string" ? await repository.findSignInCode("claim", hashSessionSecret(code)) : null;
     const at = now();

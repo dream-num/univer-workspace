@@ -286,7 +286,6 @@ export function resourceCapabilities(
   };
 }
 
-/** The role a Space gives every reader it admits, public or previewed. It is never above viewer. */
 function readerRole(row: { readonly public_read: unknown; readonly previewed: unknown }): "viewer" | null {
   return row.public_read || row.previewed ? "viewer" : null;
 }

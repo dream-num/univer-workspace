@@ -416,9 +416,8 @@ export class SqliteIdentityRepository implements IdentityRepository {
   }
 
   /**
-   * Records activity of the agent and pushes out an unclaimed agent's expiry. It reads first, so an
-   * agent already seen since `staleBefore` costs no write. An agent that has already expired is
-   * always pushed out, so its next use brings it back.
+   * Reads first, so an agent already seen since `staleBefore` costs no write. An agent that has
+   * already expired is always pushed out, so its next use brings it back.
    */
   async touchAgent(
     target: { readonly userId: string },

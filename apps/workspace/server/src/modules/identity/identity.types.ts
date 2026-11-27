@@ -38,7 +38,6 @@ export interface CreatedAgent {
 
 export interface AgentClaimCode {
   readonly code: string;
-  /** The handoff page as a path on the Workspace origin. */
   readonly claimUrl: string;
   /** Seconds until the code stops working. */
   readonly expiresIn: number;
@@ -56,18 +55,13 @@ export interface AgentSpace {
   readonly id: string;
   readonly type: "personal" | "team";
   readonly name: string;
-  /** Files in the Space outside Trash. */
   readonly files: number;
 }
 
-/** What the handoff page shows of the agent its code names. */
 export interface AgentHandoff {
   readonly agent: AgentView;
-  /** The signed-in person already owns the agent. */
   readonly claimed: boolean;
-  /** When the code stops working, as an ISO 8601 time. */
   readonly expiresAt: string;
-  /** Every Space the agent owns, its Personal Space first. */
   readonly spaces: readonly AgentSpace[];
 }
 

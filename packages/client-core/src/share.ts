@@ -26,7 +26,6 @@ export interface WorkspaceClaimLink {
   readonly expiresAt: string;
 }
 
-/** The handoff link of the signed-in agent: a person opens it to see the agent's work, and signs in to take the agent. */
 export async function createClaimLink(
   spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
   origin: string,
@@ -106,7 +105,7 @@ function describeAccess(
       ? `Anyone with the link can read ${target} without signing in.`
       : `Anyone with the link can read ${target}, and signed-in people can edit ${folder ? "them" : "it"}. Through the link, an agent can edit only after a person claims that agent.`;
   }
-  // The server refuses an unclaimed agent Link Sharing, so the step it can take is its handoff link.
+  // The server refuses an unclaimed agent Link Sharing.
   if (owner.claimed === false) {
     return "Only this agent can open the link. To show the file to the user, give them your handoff link from claim (uvw claim in the CLI).";
   }

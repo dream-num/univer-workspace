@@ -35,7 +35,6 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
 
   expect((await post("/api/agents", {})).status).toBe(201);
   expect((await post("/api/auth/guest", {})).status).toBe(201);
-  // Only a person in a browser turns Link Sharing on, so a person shares the page the loop counts.
   const sharer = await post("/api/auth/password/register", { username: "sharer", displayName: "sharer", password: "correct horse battery staple" });
   const cookie = sharer.headers.get("set-cookie")!.split(";")[0]!;
   const sharerId = ((await sharer.json()) as { user: { id: string } }).user.id;
@@ -83,7 +82,6 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   await register("direct");
   const claimPage = `${origin}/login?returnTo=${encodeURIComponent("/claim/c0de-in-path")}`;
   await register("claimer", "/claim/c0de-in-path");
-  // A page's own address is not a returnTo: only the sign-in page carries one.
   for (const [username, referer] of [["sharepage", `${origin}/nodes/${node.id}`], ["handoffpage", `${origin}/claim/c0de-in-path`]]) {
     expect((await post("/api/auth/password/register", { username, displayName: username, password: "correct horse battery staple" }, { referer })).status).toBe(201);
   }

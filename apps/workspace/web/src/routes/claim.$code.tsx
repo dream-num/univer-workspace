@@ -47,7 +47,7 @@ function ClaimAgentPage() {
     mutationFn: () => claimAgent(code),
     onSuccess: ({ agent }) => openWork(agent),
   });
-  // Staying on this page keeps the handoff link; resetting drops everything cached for the session that signed out.
+  // Staying on this page keeps the handoff link.
   const signOut = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/api/auth/logout");

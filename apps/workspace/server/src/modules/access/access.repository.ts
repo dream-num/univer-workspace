@@ -19,7 +19,6 @@ export interface ResolvedNodeRow {
   readonly space_landing: SpaceLanding;
   readonly requester_owns: 0 | 1;
   readonly public_read: 0 | 1;
-  /** The requester is the preview reader of the temporary agent that owns the Space. */
   readonly previewed: 0 | 1;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
   readonly grant_role: "editor" | "viewer" | null;

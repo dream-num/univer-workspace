@@ -10,10 +10,8 @@ type AgentSpace = components["schemas"]["AgentSpace"];
 
 const rowClass = "flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-foreground no-underline hover:bg-muted/70";
 
-/** The agent's Spaces. `readable` is false for a signed-in person, who reads them only after taking the agent. */
 export function HandoffSpaces({ spaces, readable }: { readonly spaces: readonly AgentSpace[]; readonly readable: boolean }) {
   const { t } = useI18n();
-  // A Personal Space stores its name in the language of whoever created it.
   const name = (space: AgentSpace) => (space.type === "personal" ? t("personalSpace") : space.name);
   return (
     <ul className="m-0 grid list-none gap-3 p-0">

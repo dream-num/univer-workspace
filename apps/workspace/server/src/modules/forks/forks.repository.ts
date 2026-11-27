@@ -27,6 +27,6 @@ export interface ForksRepository {
   /** The actor's forks and those of the agents the actor owns. `findOwned` and `deleteOwned` reach the same forks. */
   listOwned(actorUserId: string): Promise<StoredFork[]>;
   findOwned(actorUserId: string, key: { readonly forkId: string } | { readonly username: string; readonly name: string }): Promise<StoredFork | null>;
-  /** Returns null when the actor reaches no such fork. Its open Worktree stays, with no fork. */
+  /** The fork's open Worktree stays, with no fork. */
   deleteOwned(actorUserId: string, forkId: string): Promise<StoredFork | null>;
 }

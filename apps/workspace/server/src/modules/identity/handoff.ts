@@ -1,4 +1,4 @@
-/** Holds the claim code of the handoff link a signed-out browser opened last. The cookie grants nothing by itself: every request looks the code up. */
+/** Grants nothing by itself: every request looks its claim code up. */
 export const HANDOFF_COOKIE = "workspace_handoff";
 
 const HANDOFF_CODE = new RegExp(`(?:^|;\\s*)${HANDOFF_COOKIE}=([A-Za-z0-9_-]{22})\\s*(?:;|$)`, "u");

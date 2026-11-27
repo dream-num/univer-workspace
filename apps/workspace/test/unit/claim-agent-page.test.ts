@@ -19,7 +19,6 @@ const http = vi.hoisted(() => {
   return { fetch, Request: globalThis.Request };
 });
 
-// The HTML View icon comes from a package that resolves its own React here; the Vite build dedupes it.
 vi.mock("../../web/src/features/nodes/node-icon", () => ({ NodeIcon: () => null }));
 
 const CODE = "claim-code-1";
