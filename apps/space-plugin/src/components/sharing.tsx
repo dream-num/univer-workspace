@@ -162,6 +162,7 @@ export function SpaceShareDialog({
     [invite, setInvite] = useState<Invite | undefined>(target.invite);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(target.error ?? ''),
+    [confirm, setConfirm] = useState(''),
     [notice, setNotice] = useState('');
   const alive = useRef(true);
   const close = () => {
@@ -184,6 +185,7 @@ export function SpaceShareDialog({
   const change = async (operation: () => Promise<unknown>, message: string) => {
     setBusy(true);
     setError('');
+    setConfirm('');
     setNotice('');
     try {
       await operation();
@@ -194,8 +196,10 @@ export function SpaceShareDialog({
         face.refresh();
       }
     } catch (cause) {
-      if (alive.current)
+      if (alive.current) {
         setError(cause instanceof Error ? cause.message : 'Sharing failed.');
+        setConfirm((cause as { url?: string }).url ?? '');
+      }
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -388,11 +392,20 @@ export function SpaceShareDialog({
       {error && (
         <p role="alert">
           {error}
+          {confirm && (
+            <button
+              className={button}
+              onClick={() => window.open(confirm, '_blank', 'noopener,noreferrer')}
+            >
+              Confirm in browser
+            </button>
+          )}
           <button
             className={button}
             disabled={busy}
             onClick={() => {
               setError('');
+              setConfirm('');
               void load().catch((cause) => setError(cause.message));
             }}
           >
@@ -425,6 +438,7 @@ export function FileShareDialog({
     [invite, setInvite] = useState<Invite>();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
+    [confirm, setConfirm] = useState(''),
     [notice, setNotice] = useState('');
   const close = () => {
     if (!busy) face.update({ sharing: null });
@@ -449,6 +463,7 @@ export function FileShareDialog({
   ) => {
     setBusy(true);
     setError('');
+    setConfirm('');
     setNotice('');
     try {
       const result = await face.sharing(input);
@@ -463,8 +478,10 @@ export function FileShareDialog({
         face.refresh();
       }
     } catch (cause) {
-      if (alive.current)
+      if (alive.current) {
         setError(cause instanceof Error ? cause.message : 'Sharing failed.');
+        setConfirm((cause as { url?: string }).url ?? '');
+      }
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -723,11 +740,20 @@ export function FileShareDialog({
       {error && (
         <p role="alert">
           {error}
+          {confirm && (
+            <button
+              className={button}
+              onClick={() => window.open(confirm, '_blank', 'noopener,noreferrer')}
+            >
+              Confirm in browser
+            </button>
+          )}
           <button
             className={button}
             disabled={busy}
             onClick={() => {
               setError('');
+              setConfirm('');
               void load().catch((cause) => setError(cause.message));
             }}
           >

@@ -18,8 +18,21 @@ export class SpaceError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The Workspace page where a person finishes what the server refused here. */
+    public url?: string,
   ) {
     super(message);
+  }
+}
+
+/** The server names a browser page by its path. A value that resolves to another origin is dropped. */
+function browserLink(raw: unknown, origin: string): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  try {
+    const url = new URL(raw, origin);
+    return url.origin === origin ? url.href : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -229,6 +242,7 @@ export class WorkspaceConnection {
           body?.error?.message ??
             body?.message ??
             `Workspace returned HTTP ${response.status}.`,
+          browserLink(body?.error?.url, this.endpoint),
         );
       }
       return response;

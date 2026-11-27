@@ -345,7 +345,7 @@ export function apply(ctx: any) {
     );
     if (before !== generation)
       throw new DOMException('Request superseded', 'AbortError');
-    if (!result.ok) throw Object.assign(new Error(result.error.message), { code: result.error.code });
+    if (!result.ok) throw Object.assign(new Error(result.error.message), { code: result.error.code, url: result.error.details?.url });
     return result.value;
   }
   const activities = new Set<() => boolean>();
