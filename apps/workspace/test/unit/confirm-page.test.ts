@@ -57,6 +57,12 @@ beforeEach(() => {
       enabled: server.link !== null, role: server.link ?? "viewer", owner: { username: "olivia", kind: "human" }, expiresAt: null,
       createdBy: null, updatedBy: null, createdAt: null, updatedAt: null,
     });
+    if (call === "POST /api/resources/page-resource/open") return Response.json({ resource: { kind: "blob", contentUrl: "/page-content" } });
+    if (call === "GET /page-content") return new Response('<!doctype html><html><body><p data-univer-cell-text="sheet-unit:Sheet1:A1"></p></body></html>');
+    if (request.credentials === "omit" && (call === "GET /api/nodes/PAGE-ID" || call === "GET /api/unit-resources/sheet-unit")) {
+      return Response.json({ error: { code: "NOT_FOUND", message: "The resource was not found." } }, { status: 404 });
+    }
+    if (call === "GET /api/unit-resources/sheet-unit") return Response.json({ node: { id: "SHEET-NODE", name: "Q3 numbers" } });
     if (request.method !== "GET") {
       const body: unknown = await request.json();
       writes.push({ call, body });
@@ -88,6 +94,13 @@ beforeEach(() => {
         space: space(), owner: null, breadcrumbs: [], navigationRootNodeId: null, copiedFromNodeId: null, copyCount: 0,
       });
     }
+    if (call === "GET /api/nodes/PAGE-ID") {
+      return Response.json({
+        node: { id: "PAGE-ID", spaceId: "SPACE-ID", parentNodeId: null, name: "Q3.univer.html", hasChildren: false, accessRole: "owner", updatedAt: "2026-11-26T00:00:00.000Z", resource: { id: "page-resource", kind: "blob" } },
+        space: space(), owner: null, breadcrumbs: [], navigationRootNodeId: null, copiedFromNodeId: null, copyCount: 0,
+      });
+    }
+    if (call === "GET /api/nodes/PAGE-ID/link-sharing") return Response.json(sharing());
     if (call === "GET /api/nodes/NODE-ID/grants") return Response.json({ grants: server.grant ? [row(server.grant)] : [] });
     if (call === "GET /api/nodes/NODE-ID/link-sharing") return Response.json(sharing());
     throw new Error(`Unexpected request ${call}`);
@@ -165,6 +178,20 @@ it.each([
   expect(levels()).toEqual([["Now", c.after]]);
   await act(async () => button("Open")!.click());
   await waitFor(() => expect(router.state.location.pathname).toBe(c.opened));
+});
+
+it("lists an HTML View's source Sheets on its Link Sharing confirm page and warns that link visitors cannot read them, and lists none for a Sheet", async () => {
+  const sources = () => container.querySelector('section[aria-label="Source Sheets"]');
+  await open("/confirm/link-sharing?node=NODE-ID&role=viewer");
+  await waitFor(() => expect(button("Confirm")).toBeDefined());
+  expect(sources()).toBeNull();
+
+  await open("/confirm/link-sharing?node=PAGE-ID&role=viewer");
+  await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Enable link sharing on the source Sheets too"));
+  expect(sources()?.querySelector("li")?.textContent).toContain("Q3 numbers");
+  expect(sources()?.querySelector("li")?.textContent).toContain("Not readable by link visitors");
+  expect(buttons()).toEqual(["Confirm", "Give up"]);
+  expect(writes).toEqual([]);
 });
 
 it("shows the stored role beside a lower one the link asks for, and still lets the person confirm it", async () => {
