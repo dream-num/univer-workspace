@@ -86,7 +86,7 @@ MH_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" --arg space "$MH
 $V mcp --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_save "$MH_ARGS"
 $V mcp mh-retry html_view_save "$MH_ARGS"
 diff <(jq -S .draft "$EVIDENCE/mh-create.out") <(jq -S .draft "$EVIDENCE/mh-retry.out")
-jq -e --arg origin "$ORIGIN" '.draft.state == "pending" and (.draft.previewUrl | startswith($origin + "/drafts/"))' "$EVIDENCE/mh-create.out"
+jq -e --arg origin "$ORIGIN" '.draft.state == "pending" and (.draft.previewUrl | startswith($origin + "/drafts/")) and (.draft.access | type == "string" and length > 0)' "$EVIDENCE/mh-create.out"
 MH_D=$(jq -r .draft.id "$EVIDENCE/mh-create.out")
 $V mcp mh-read-draft html_view_read "{\"draft\":\"$MH_D\"}"
 jq -j .html "$EVIDENCE/mh-read-draft.out" > "$EVIDENCE/mh-draft.univer.html"
@@ -128,8 +128,9 @@ agent-browser screenshot "$EVIDENCE/mh-draft.png"
 agent-browser find role button click --name Publish
 agent-browser wait --text 'Open page'
 $V mcp mh-draft-get html_view_draft_get "{\"draft\":\"$MH_REVISED_D\"}"
-jq -e '.draft.state == "published" and (.draft.shareUrl | test("\\?view=immersive$"))' "$EVIDENCE/mh-draft-get.out"
+jq -e '.draft.state == "published" and (.draft.shareUrl | test("\\?view=immersive$")) and (.draft.access | type == "string" and length > 0)' "$EVIDENCE/mh-draft-get.out"
 $V mcp mh-read html_view_read "{\"resource\":\"$(jq -r .draft.resource "$EVIDENCE/mh-draft-get.out")\"}"
+jq -e '.access | type == "string" and length > 0' "$EVIDENCE/mh-read.out"
 jq -j .html "$EVIDENCE/mh-read.out" > "$EVIDENCE/mh-published.univer.html"
 cmp "$EVIDENCE/mh-revised.univer.html" "$EVIDENCE/mh-published.univer.html"
 agent-browser open "$(jq -r .draft.shareUrl "$EVIDENCE/mh-draft-get.out")"

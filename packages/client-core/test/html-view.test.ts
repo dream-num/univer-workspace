@@ -2,6 +2,7 @@ import { LocaleType, type IWorkbookData } from "@univerjs/core";
 import { readFile } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
 import { WorkspaceBlobFeature } from "../src/blob.js";
+import { describeHtmlViewAccess } from "../src/html-view-page.js";
 import { WorkspaceHttp } from "../src/http.js";
 import { WorkspaceHtmlViewFeature, type WorkspaceHtmlViewOptions } from "../src/html-view.js";
 import { WorkspaceContentSource } from "../src/runtime-source.js";
@@ -87,6 +88,7 @@ it("snapshots source-neutral bytes before awaiting trunk validation", async () =
     shareUrl: "https://workspace.test/nodes/node?view=immersive",
     repositoryVisibility: "private",
     privateSourceUnitIds: ["unit"],
+    access: "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public.",
   });
 });
 
@@ -322,6 +324,9 @@ it.each([true, false])("replaces conditionally and idempotently with the creatio
     resourceId: "resource", nodeId: "node", operationId: replacement.idempotencyKey, etag: '"v2"',
     workspaceUrl: "https://workspace.test/nodes/node", shareUrl: "https://workspace.test/nodes/node?view=immersive",
     repositoryVisibility: publicRead ? "public" : "private", privateSourceUnitIds: ["unit"],
+    access: publicRead
+      ? "Anyone with the link can open shareUrl, but its private source Sheets (unit) require signing in with access."
+      : "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public.",
   });
   expect(writes).toEqual([Buffer.from(replacement.source.bytes).toString()]);
 });
@@ -547,4 +552,188 @@ it.each((["draft", "ready", "merged", "discarded"] as const).flatMap((state) => 
     ...(state === "merged" && kind === "create" ? {} : { sourceWorktreeId: "wt-1" }) }]);
   expect(result.privateSourceUnitIds).toEqual(state === "merged" ? [] : ["unit"]);
   if (state !== "merged") expect(json.mock.calls.some(([path]) => path === "/api/unit-resources/unit")).toBe(false);
+});
+
+it("describes HTML View access across caller, visibility, private source, and space type combinations", () => {
+  const unclaimed = { id: "a1", name: "agent", kind: "agent", claimed: false } as const;
+  const claimed = { id: "a1", name: "agent", kind: "agent", claimed: true } as const;
+  const person = { id: "u1", name: "alice" };
+
+  expect(describeHtmlViewAccess({
+    caller: unclaimed,
+    handoffUrl: "https://workspace.test/claim/abc?to=%2Fnodes%2Fn1%3Fview%3Dimmersive",
+    repositoryVisibility: "private",
+    spaceType: "personal",
+  })).toBe(
+    "Only this temporary agent can open shareUrl directly. Give the user handoffUrl instead so they can open the page live without signing in and claim this agent.",
+  );
+  expect(describeHtmlViewAccess({ caller: unclaimed, repositoryVisibility: "public" })).toBe(
+    "Only this temporary agent can open shareUrl directly. Do not give shareUrl to the user alone; run claim (uvw claim in the CLI) with this node to get a handoff link so they can open the page live without signing in.",
+  );
+  for (const caller of [undefined, person, claimed]) {
+    expect(describeHtmlViewAccess({ caller, repositoryVisibility: "public", privateSourceUnitIds: [] })).toBe(
+      "Anyone with the link can open shareUrl and view its live data without signing in (read-only for visitors).",
+    );
+    expect(describeHtmlViewAccess({ caller, repositoryVisibility: "public", privateSourceUnitIds: ["u1", "u2"] })).toBe(
+      "Anyone with the link can open shareUrl, but its private source Sheets (u1, u2) require signing in with access.",
+    );
+    expect(describeHtmlViewAccess({ caller, repositoryVisibility: "private", spaceType: "personal" })).toBe(
+      "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before turning on Link Sharing.",
+    );
+    expect(describeHtmlViewAccess({ caller, repositoryVisibility: "private", spaceType: "team" })).toBe(
+      "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public.",
+    );
+    expect(describeHtmlViewAccess({ caller })).toBe(
+      "Only signed-in people with access can open shareUrl unless the repository is public or Link Sharing is enabled.",
+    );
+  }
+});
+
+it.each([
+  { publicRead: true, spaceType: "team" as const, privateUnits: [] as string[], expectedAccess: "Anyone with the link can open shareUrl and view its live data without signing in (read-only for visitors)." },
+  { publicRead: true, spaceType: "team" as const, privateUnits: ["unit"], expectedAccess: "Anyone with the link can open shareUrl, but its private source Sheets (unit) require signing in with access." },
+  { publicRead: false, spaceType: "personal" as const, privateUnits: [] as string[], expectedAccess: "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before turning on Link Sharing." },
+  { publicRead: false, spaceType: "team" as const, privateUnits: [] as string[], expectedAccess: "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public." },
+])("returns access guidance for $spaceType repository (public $publicRead, private $privateUnits)", async ({ publicRead, spaceType, privateUnits, expectedAccess }) => {
+  const http = new WorkspaceHttp({
+    origin: "https://workspace.test",
+    role: "client",
+    cookie: "workspace_session=test",
+    fetcher: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.startsWith("/api/spaces/")) {
+        const id = path.split("/").at(-1);
+        return Response.json({ id, name: "Space", type: spaceType, publicRead: id === "private" ? false : publicRead });
+      }
+      if (path.startsWith("/api/unit-resources/")) {
+        const unitId = decodeURIComponent(path.split("/").at(-1) ?? "");
+        return Response.json({ node: {
+          id: "source-node", spaceId: privateUnits.includes(unitId) ? "private" : "space",
+          parentNodeId: null, name: "Sheet", hasChildren: false, updatedAt: "now", accessRole: "owner",
+          capabilities: { browseChildren: false, createChildren: false, rename: true, move: true, trash: true, share: true },
+          resource: { id: "sheet-resource", kind: "univer", unitId, unitType: "sheet",
+            capabilities: { downloadContent: true, editContent: true, openContent: true } },
+        } });
+      }
+      throw new Error(`Unexpected path: ${path}`);
+    },
+  });
+  const json = vi.spyOn(http, "json");
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => http,
+    configuredOrigin: async () => http.origin,
+    blobs: { uploadBytes: async () => ({ nodeId: "node" }) },
+    resolveTrunkRuntimeTarget: async ({ unitId }) => ({
+      origin: http.origin, scope: { kind: "trunk" }, unitId, unitType: "sheet", revision: 1,
+    }),
+    runtime: { exportUnitData: async () => ({
+      id: "unit", name: "Budget", appVersion: "1", locale: LocaleType.EN_US,
+      styles: {}, sheetOrder: ["budget"], sheets: { budget: { rowCount: 10, columnCount: 3 } },
+    }) },
+  });
+  const created = await feature.create({
+    source: { bytes: Buffer.from('<output data-univer-cell-text="unit:budget:B2"></output>'), name: "view.univer.html" },
+    name: "View",
+    spaceId: "space",
+    idempotencyKey: "key",
+  });
+  expect(created.access).toBe(expectedAccess);
+  expect(created).not.toHaveProperty("handoffUrl");
+  expect(created).not.toHaveProperty("handoffExpiresAt");
+  expect(json.mock.calls.some(([path]) => path === "/api/session" || path === "/api/agents/claim-codes")).toBe(false);
+});
+
+it("adds handoffUrl and unclaimed-agent guidance on create and replace, and guidance only on draft", async () => {
+  const base = revisionFeature({ publicRead: false });
+  const requests: string[] = [];
+  const unclaimed = { id: "a1", name: "agent-1", kind: "agent", claimed: false } as const;
+  const claimed = { id: "a1", name: "agent-1", kind: "agent", claimed: true } as const;
+  const sharing = sharingHttp(false, ["unit"]);
+  const http = new WorkspaceHttp({
+    origin: "https://workspace.test",
+    role: "client",
+    cookie: "workspace_session=test",
+    fetcher: async (url, init) => {
+      const request = new Request(url, init);
+      const path = new URL(request.url).pathname;
+      requests.push(`${request.method} ${path}`);
+      if (path === "/api/agents/claim-codes" && request.method === "POST") {
+        return Response.json({ claimUrl: "/claim/code-123", expiresIn: 600 });
+      }
+      if (path === "/api/resources/resource") {
+        return Response.json({
+          node: {
+            id: "node/1", spaceId: "space", parentNodeId: null, name: "Page.univer.html",
+            hasChildren: false, updatedAt: "now", accessRole: "owner",
+            capabilities: { browseChildren: false, createChildren: false, rename: true, move: true, trash: true, share: true },
+            resource: { id: "resource", kind: "blob", availability: "ready", byteSize: 10, mediaType: "text/html",
+              capabilities: { downloadContent: true, editContent: true, openContent: true } },
+          },
+          resource: { id: "resource", kind: "blob", availability: "ready", byteSize: 10, mediaType: "text/html",
+            capabilities: { downloadContent: true, editContent: true, openContent: true } },
+        });
+      }
+      if (path === "/api/html-view-drafts") {
+        return Response.json({ draft: { id: "draft-1", kind: "create", state: "pending", spaceId: "space",
+          name: "Page.univer.html", targetResourceId: null, published: null, expiresAt: "later" } });
+      }
+      return Response.json(await sharing.json(path));
+    },
+  });
+  const blobs = new WorkspaceBlobFeature(async () => http);
+  let caller: typeof unclaimed | typeof claimed = unclaimed;
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => http,
+    configuredOrigin: async () => http.origin,
+    caller: async () => caller,
+    blobs: {
+      uploadBytes: async () => ({ nodeId: "node/1" }),
+      get: (id) => blobs.get(id),
+      replaceBytes: async () => ({ resourceId: "resource", operationId: "op-1", etag: '"v2"' }),
+    },
+    resolveTrunkRuntimeTarget: async ({ unitId }) => ({
+      origin: http.origin, scope: { kind: "trunk" }, unitId, unitType: "sheet", revision: 1,
+    }),
+    runtime: { exportUnitData: async () => ({
+      id: "unit", name: "Budget", appVersion: "1", locale: LocaleType.EN_US,
+      styles: {}, sheetOrder: ["budget"], sheets: { budget: { rowCount: 10, columnCount: 3 } },
+    }) },
+  });
+
+  const created = await feature.create({
+    source: replacement.source, name: "Page", spaceId: "space", idempotencyKey: "k1",
+  });
+  expect(created.handoffUrl).toBe("https://workspace.test/claim/code-123?to=%2Fnodes%2Fnode%252F1%3Fview%3Dimmersive");
+  expect(typeof created.handoffExpiresAt).toBe("string");
+  expect(created.access).toBe(
+    "Only this temporary agent can open shareUrl directly. Give the user handoffUrl instead so they can open the page live without signing in and claim this agent.",
+  );
+
+  const replaced = await feature.replace(replacement);
+  expect(replaced.handoffUrl).toBe("https://workspace.test/claim/code-123?to=%2Fnodes%2Fnode%252F1%3Fview%3Dimmersive");
+  expect(typeof replaced.handoffExpiresAt).toBe("string");
+  expect(replaced.access).toBe(
+    "Only this temporary agent can open shareUrl directly. Give the user handoffUrl instead so they can open the page live without signing in and claim this agent.",
+  );
+
+  const drafted = await feature.draft({
+    kind: "create", source: replacement.source, name: "Page", spaceId: "space", idempotencyKey: "k2",
+  });
+  expect(drafted).not.toHaveProperty("handoffUrl");
+  expect(drafted).not.toHaveProperty("handoffExpiresAt");
+  expect(drafted.access).toBe(
+    "Only this temporary agent can open shareUrl directly. Do not give shareUrl to the user alone; run claim (uvw claim in the CLI) with this node to get a handoff link so they can open the page live without signing in.",
+  );
+  expect(requests.filter((entry) => entry === "POST /api/agents/claim-codes")).toHaveLength(2);
+
+  caller = claimed;
+  const claimedCreated = await feature.create({
+    source: replacement.source, name: "Page", spaceId: "space", idempotencyKey: "k3",
+  });
+  expect(claimedCreated).not.toHaveProperty("handoffUrl");
+  expect(claimedCreated.access).toBe(
+    "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public.",
+  );
+  expect(requests.filter((entry) => entry === "POST /api/agents/claim-codes")).toHaveLength(2);
+  expect(base.writes).toEqual([]);
 });

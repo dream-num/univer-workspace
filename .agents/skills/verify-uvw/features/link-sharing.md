@@ -2,8 +2,9 @@
 
 A file's owner turns Link Sharing on or off from the browser `Share` dialog or with `uvw share`. With the
 link set to `viewer`, anyone who opens the file URL without signing in sees the file read-only. With it
-`off`, only people with access to the repository can open it, and an anonymous visitor gets a not-found
-page, unless the Space is public. Both surfaces show the same state. A reader who is not the owner can
+`off`, only people with access to the repository can open it, and an anonymous visit returns 404 from the API
+(redirecting a signed-out browser to `/login?returnTo=...` while showing a not-found page to a signed-in reader
+without access), unless the Space is public. Both surfaces show the same state. A reader who is not the owner can
 **Remix** the file into their own Personal Space, and a shared link unfurls with a title and preview image.
 
 ## Sub-features
@@ -11,7 +12,8 @@ page, unless the Space is public. Both surfaces show the same state. A reader wh
 - LS1 shows a file's link and its Link Sharing state with `uvw share <node>`.
 - LS2 asks for a `viewer` link with `uvw share --link viewer`, which the server refuses with a confirm link. The owner
   confirms it in the browser, and an anonymous visitor opens the file read-only.
-- LS3 sets the link to `off`, and the anonymous visitor gets a 404 page.
+- LS3 sets the link to `off`: the node API answers `404` and a signed-out browser redirects to `/login?returnTo=/nodes/<id>`
+  with `Sign in to open this resource.` (a signed-in user without access still sees `Unable to open this resource`).
 - LS4 shows the CLI-set state in the browser `Share` dialog, turns sharing on there, and reads it back through
   uvw and an anonymous visit.
 - LS5 remixes a shared file: a signed-in reader copies it into their Personal Space, a signed-out reader signs up
@@ -69,8 +71,9 @@ and the bar with `By Verify <run-id>` and `More actions`.
 ### LS3. Off
 
 Run `$V cli share-off share "$N" --link off --json` (`link: "off"`), then
-`$V open-anon share-anon-off "$ORIGIN/nodes/$N"`. `share-anon-off.node-status` reports `404`, and the page
-text reads `Unable to open this resource`.
+`$V open-anon share-anon-off "$ORIGIN/nodes/$N"`. `share-anon-off.node-status` reports `404`, and the signed-out
+browser redirects to `/login?returnTo=%2Fnodes%2F$N` where the page text reads `Sign in to open this resource.`.
+A signed-in user without access opening `$ORIGIN/nodes/$N` still sees `Unable to open this resource`.
 
 ### LS4. Browser dialog
 

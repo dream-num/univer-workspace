@@ -179,6 +179,14 @@ describe("space, unit, repository admin, label and merge tools", () => {
         navigationRootNodeId: null,
       });
     }
+    if (at("GET", "/api/nodes/page")) {
+      return Response.json({
+        node: node("page", { name: "Dashboard.univer.html", resource: { ...blobResource, mediaType: "text/html" } }),
+        space: { id: "team-1", name: "Team" },
+        breadcrumbs: [{ id: "page", name: "Dashboard.univer.html" }],
+        navigationRootNodeId: null,
+      });
+    }
     if (target.pathname === "/api/nodes/sheet/link-sharing" && teamFile) {
       return Response.json({ error: { code: "NOT_FOUND", message: "The resource was not found." } }, { status: 404 });
     }
@@ -775,7 +783,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(writesOf()).toEqual([]);
   });
 
-  it("hands an unclaimed agent a handoff link on this Workspace that lasts seven days", async () => {
+  it("hands an unclaimed agent a handoff link on this Workspace that lasts seven days, with optional node and immersive targeting", async () => {
     sessionUser = { ...user, kind: "agent", claimed: false };
     const client = await connect();
     const listed = (await client.listTools()).tools.find((tool) => tool.name === "claim");
@@ -789,6 +797,36 @@ describe("space, unit, repository admin, label and merge tools", () => {
     const expiresAt = Date.parse((structuredContent as { expiresAt: string }).expiresAt);
     expect(expiresAt - before).toBeGreaterThanOrEqual(604_800_000);
     expect(expiresAt - Date.now()).toBeLessThanOrEqual(604_800_000);
+
+    const htmlTarget = await client.callTool({ name: "claim", arguments: { node: "page" } });
+    expect(htmlTarget.structuredContent).toEqual({
+      claimUrl: `${origin}/claim/c0de?to=%2Fnodes%2Fpage%3Fview%3Dimmersive`,
+      expiresAt: expect.any(String),
+    });
+
+    const explicitImmersive = await client.callTool({
+      name: "claim",
+      arguments: { node: `${origin}/nodes/sheet`, immersive: true },
+    });
+    expect(explicitImmersive.structuredContent).toEqual({
+      claimUrl: `${origin}/claim/c0de?to=%2Fnodes%2Fsheet%3Fview%3Dimmersive`,
+      expiresAt: expect.any(String),
+    });
+
+    const nonImmersive = await client.callTool({
+      name: "claim",
+      arguments: { node: "page", immersive: false },
+    });
+    expect(nonImmersive.structuredContent).toEqual({
+      claimUrl: `${origin}/claim/c0de?to=%2Fnodes%2Fpage`,
+      expiresAt: expect.any(String),
+    });
+
+    const missingNode = await client.callTool({ name: "claim", arguments: { immersive: true } });
+    expect(toolError(missingNode)).toMatchObject({
+      code: "workspace-argument-invalid",
+      message: "immersive requires node.",
+    });
   });
 
   it("states immediate effect, the slug warning, the irreversible discard rule and the merge pointer in the descriptions", async () => {

@@ -495,7 +495,9 @@ try {
       htmlCreated.workspaceUrl !== `${workspaceFixture.origin}/nodes/node-html` ||
       htmlCreated.shareUrl !== `${workspaceFixture.origin}/nodes/node-html?view=immersive` ||
       htmlCreated.repositoryVisibility !== "private" ||
-      JSON.stringify(htmlCreated.privateSourceUnitIds) !== JSON.stringify(["unit-1"])) {
+      JSON.stringify(htmlCreated.privateSourceUnitIds) !== JSON.stringify(["unit-1"]) ||
+      typeof htmlCreated.access !== "string" ||
+      htmlCreated.access.length === 0) {
     throw new Error("Installed HTML View creation did not return the published Blob URL");
   }
   const htmlRuntimeRequests = workspaceFixture.runtimeRequests.splice(htmlRuntimeStart);
@@ -580,7 +582,7 @@ try {
   if (JSON.stringify(workspaceFixture.requests) !== JSON.stringify({
     authorizationStarts: 1,
     authorizationExchanges: 2,
-    whoami: 2,
+    whoami: 3,
     spaceList: 1,
     spaceGet: 2,
     spaceBrowse: 1,

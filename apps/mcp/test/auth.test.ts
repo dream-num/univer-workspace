@@ -558,7 +558,10 @@ describe("gateway authentication", () => {
     } });
     expect(result.isError).not.toBe(true);
     const output = opSpecs["htmlView.draft"].output.parse(result.structuredContent);
-    expect(output.draft).toEqual(draft);
+    expect(output.draft).toEqual({
+      ...draft,
+      access: "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public.",
+    });
     expect(output.bindingCount).toBe(original.bindingCount);
     expect(output.truncated).toBe(true);
     expect(output.bindings.length).toBeGreaterThan(0);

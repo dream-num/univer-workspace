@@ -46,6 +46,7 @@ export const htmlViewDraft: Handler<"htmlView.draft"> = async (ctx, input) => {
     ...(result.targetResourceId === null ? {} : { resource: result.targetResourceId }),
     ...htmlViewDraftResult(result), repositoryVisibility: result.repositoryVisibility,
     privateSourceUnitIds: result.privateSourceUnitIds,
+    access: result.access,
   }, bindings: result.bindings, bindingCount: result.bindingCount,
     ...(result.truncated === undefined ? {} : { truncated: result.truncated }),
   }) };

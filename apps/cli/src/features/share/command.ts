@@ -2,8 +2,10 @@ import { Command } from "commander";
 import {
   createClaimLink,
   formatShare,
+  resolveClaimTarget,
   SHARE_LINKS,
   shareNode,
+  workspaceError,
   type WorkspaceClaimLink,
   type WorkspaceShare,
   type WorkspaceSpaceFeature,
@@ -44,9 +46,24 @@ export function createShareCommand(
 export function createClaimCommand(spaces: WorkspaceSpaceFeature, origin: () => Promise<string>): Command {
   const claim = new Command("claim")
     .description("Make this guest agent's handoff link: a person opens it to see the agent's work, and signs in to take the agent")
+    .option("--node <target>", "file link or Node ID to open directly from the handoff link")
+    .option("--immersive", "open the targeted node in immersive view")
     .addOption(jsonFieldsOption(CLAIM_JSON_FIELDS))
-    .action(async (options: JsonFieldsOption) => {
-      const link = await executeCommand(claim, async () => await createClaimLink(spaces, await origin()));
+    .action(async (options: JsonFieldsOption & { readonly node?: string; readonly immersive?: boolean }) => {
+      const link = await executeCommand(claim, async () => {
+        if (options.immersive && options.node === undefined) {
+          throw workspaceError("workspace-argument-invalid", "--immersive requires --node.");
+        }
+        const baseOrigin = await origin();
+        if (options.node !== undefined) {
+          const to = await resolveClaimTarget(spaces, baseOrigin, {
+            node: options.node,
+            ...(options.immersive ? { immersive: true } : {}),
+          });
+          return await createClaimLink(spaces, baseOrigin, { to });
+        }
+        return await createClaimLink(spaces, baseOrigin);
+      });
       emit(
         claim,
         options,

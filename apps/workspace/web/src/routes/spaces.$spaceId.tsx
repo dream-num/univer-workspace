@@ -2,14 +2,14 @@ import type { SpacePageView as RepositoryView } from "../modes/registry";
 import { useModeDefinition } from "../modes/registry";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ResourceUnavailablePage, isResourceUnavailableError, spaceNodesQueryOptions } from "../features/nodes";
-import { sessionQueryOptions } from "../features/auth";
+import { redirectToLogin, sessionQueryOptions } from "../features/auth";
 import { ensureSpace } from "../features/spaces";
 
 export const Route = createFileRoute("/spaces/$spaceId")({
   validateSearch: (search: Readonly<Record<string, unknown>>) => ({
     ...(isRepositoryView(search.view) ? { view: search.view } : {}),
   }),
-  loader: async ({ context, params }) => {
+  loader: async ({ context, params, location }) => {
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     try {
       await Promise.all([
@@ -17,7 +17,10 @@ export const Route = createFileRoute("/spaces/$spaceId")({
         context.queryClient.ensureQueryData(spaceNodesQueryOptions(params.spaceId)),
       ]);
     } catch (error) {
-      if (isResourceUnavailableError(error)) throw notFound();
+      if (isResourceUnavailableError(error)) {
+        if (!session.authenticated) redirectToLogin(location.href);
+        throw notFound();
+      }
       throw error;
     }
   },

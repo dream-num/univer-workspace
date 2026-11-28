@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Bot, ShieldCheck } from "lucide-react";
-import { claimLanding } from "../features/account/claim-landing";
+import { useEffect, useState } from "react";
+import { claimLanding, validClaimTarget } from "../features/account/claim-landing";
 import { agentClaimQueryOptions, claimAgent } from "../features/account/claimed-agents.queries";
+import { clearHandoffClaim, writeHandoffClaim } from "../features/account/handoff-session";
 import { HandoffSpaces } from "../features/account/handoff-spaces";
 import { sessionQueryOptions } from "../features/auth";
 import { mySpacesQueryOptions } from "../features/spaces";
@@ -13,6 +15,10 @@ import { Alert, Button, buttonVariants, Spinner } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
 
 export const Route = createFileRoute("/claim/$code")({
+  validateSearch: (search: Readonly<Record<string, unknown>>): { to?: string | undefined } => {
+    const to = validClaimTarget(search.to);
+    return to ? { to } : {};
+  },
   component: ClaimAgentPage,
 });
 
@@ -29,10 +35,13 @@ function claimErrorKey(error: Error | null): MessageKey | undefined {
 
 function ClaimAgentPage() {
   const { code } = Route.useParams();
+  const { to } = Route.useSearch();
+  const claimPath = to ? `/claim/${encodeURIComponent(code)}?to=${encodeURIComponent(to)}` : `/claim/${encodeURIComponent(code)}`;
   const session = useQuery(sessionQueryOptions);
   const handoff = useQuery(agentClaimQueryOptions(code));
   const navigate = useNavigate();
   const { language, t } = useI18n();
+  const [failedPreviewKey, setFailedPreviewKey] = useState<string | null>(null);
   const errorText = (error: Error | null) => {
     const key = claimErrorKey(error);
     return key ? t(key) : error?.message;
@@ -40,12 +49,19 @@ function ClaimAgentPage() {
   const queryClient = useQueryClient();
   // A claimed agent's repositories join the person's own list; without that list its Personal Space is still a valid landing.
   const openWork = async (agent: Parameters<typeof claimLanding>[0]) => {
+    if (to) {
+      window.location.assign(to);
+      return;
+    }
     const spaces = await queryClient.fetchQuery({ ...mySpacesQueryOptions, staleTime: 0 }).then(({ spaces }) => spaces, () => []);
     await navigate(claimLanding(agent, spaces));
   };
   const claim = useMutation({
     mutationFn: () => claimAgent(code),
-    onSuccess: ({ agent }) => openWork(agent),
+    onSuccess: ({ agent }) => {
+      clearHandoffClaim();
+      return openWork(agent);
+    },
   });
   // Staying on this page keeps the handoff link.
   const signOut = useMutation({
@@ -56,7 +72,82 @@ function ClaimAgentPage() {
     onSuccess: () => queryClient.resetQueries(),
   });
 
-  if (session.isPending || handoff.isPending) {
+  const user = session.data?.authenticated ? session.data.user : null;
+  const view = handoff.data;
+  const claimed = view?.claimed === true;
+  const previewKey = !user && view && !claimed && to ? `${code}:${to}` : null;
+  const checkingPreview = previewKey !== null && failedPreviewKey !== previewKey;
+
+  useEffect(() => {
+    if (claimed) {
+      clearHandoffClaim();
+      return;
+    }
+    if (!user && view) {
+      writeHandoffClaim(code);
+    }
+  }, [claimed, code, user, view]);
+
+  useEffect(() => {
+    if (!previewKey || !to || !view) return;
+    let cancelled = false;
+    const targetUrl = new URL(to, "http://workspace.local");
+
+    async function verifyAndRedirect() {
+      if (to!.startsWith("/nodes/")) {
+        const rawNodeId = targetUrl.pathname.slice("/nodes/".length).split("/")[0] ?? "";
+        let nodeId = "";
+        try {
+          nodeId = decodeURIComponent(rawNodeId);
+        } catch {
+          nodeId = "";
+        }
+        if (!nodeId) {
+          if (!cancelled) setFailedPreviewKey(previewKey);
+          return;
+        }
+        try {
+          const { error } = await api.GET("/api/nodes/{nodeId}", {
+            params: { path: { nodeId } },
+          });
+          if (cancelled) return;
+          if (!error) {
+            window.location.replace(to!);
+            return;
+          }
+        } catch {
+          if (cancelled) return;
+        }
+        setFailedPreviewKey(previewKey);
+        return;
+      }
+
+      if (to!.startsWith("/spaces/")) {
+        const rawSpaceId = targetUrl.pathname.slice("/spaces/".length).split("/")[0] ?? "";
+        let spaceId = "";
+        try {
+          spaceId = decodeURIComponent(rawSpaceId);
+        } catch {
+          spaceId = "";
+        }
+        if (spaceId && view!.spaces.some((space) => space.id === spaceId)) {
+          window.location.replace(to!);
+          return;
+        }
+        setFailedPreviewKey(previewKey);
+        return;
+      }
+
+      setFailedPreviewKey(previewKey);
+    }
+
+    void verifyAndRedirect();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewKey, to, view]);
+
+  if (session.isPending || handoff.isPending || checkingPreview) {
     return (
       <main className="auth-backdrop grid min-h-dvh place-items-center">
         <Spinner aria-label={t("claimAgentLoading")} />
@@ -64,18 +155,15 @@ function ClaimAgentPage() {
     );
   }
 
-  const user = session.data?.authenticated ? session.data.user : null;
   const signIn = (label: MessageKey) => (
     <Link
       to="/login"
-      search={{ oauthError: undefined, returnTo: `/claim/${encodeURIComponent(code)}` }}
+      search={{ oauthError: undefined, returnTo: claimPath }}
       className={cn(buttonVariants({ size: "lg" }), "w-full no-underline")}
     >
       {t(label)}
     </Link>
   );
-  const view = handoff.data;
-  const claimed = view?.claimed === true;
   // The server takes an agent only for a person signed in to Workspace in a browser, and says so when the take is refused.
   const notPerson = user?.kind === "agent" || claimErrorKey(claim.error) === "claimAgentNotHuman";
   return (

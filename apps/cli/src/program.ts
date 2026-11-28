@@ -240,6 +240,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
         blobs,
         runtime: runtimeOperations,
         configuredOrigin: async () => await auth.configuredOrigin(),
+        caller: async () => (await auth.whoami()).subject,
         resolveTrunkRuntimeTarget: async (input) =>
           await new WorkspaceContentSource(await authenticatedHttp()).resolveTrunkRuntimeTarget(
             input,

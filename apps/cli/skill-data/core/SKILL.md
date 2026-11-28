@@ -578,13 +578,16 @@ its handoff link instead:
 
 ```bash
 uvw pr merge <n> -R <username>/personal --json
-uvw claim --json
+uvw claim [--node <file-link-or-node-id>] [--immersive] --json
 ```
 
 Give the user `claimUrl`. They open it to see everything the agent owns without signing in, in its
-Personal Space and its repositories, and sign in there to take the agent. Then its files are theirs
-to open and edit. The link works for 7 days, or until a person takes the agent. Run `uvw claim`
-once and give the same link again. Run it again only when the link is lost or has expired.
+Personal Space and its repositories, and sign in there to take the agent. Pass
+`--node <file-link-or-node-id>` (and `--immersive`, automatic for `.univer.html` pages) to open a
+specific file or HTML View page directly from the handoff link without signing in. Then its files
+are theirs to open and edit. The link works for 7 days, or until a person takes the agent. Run
+`uvw claim` once and give the same link again. Run it again only when the link is lost or has
+expired.
 
 ### Share a file by link
 
@@ -632,6 +635,6 @@ repository; there is no stored default repository.
 | Hand off                  | `pr ready`, `pr check <n> <name> --passed\|--failed`, `browse <n> --unit <id>`                         |
 | User-authorized lifecycle | `pr merge` (needs edit access to every changed file), `pr discard` (irreversible), `pr revert` (plan; `--yes` reverts) |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (turning it on needs a person)          |
-| Hand work to the user     | `claim` (an unclaimed guest agent only; the handoff link works for 7 days)                           |
+| Hand work to the user     | `claim [--node <file-link-or-node-id>] [--immersive]` (an unclaimed guest agent only; the handoff link works for 7 days) |
 | User-authorized cleanup   | `space node trash`                                                                                   |
 | Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                                               |

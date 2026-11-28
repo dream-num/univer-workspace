@@ -1,7 +1,14 @@
 import type { components } from "../../../../generated/http/schema.js";
+import { validLoginReturnTo } from "../auth/auth.queries";
 
 type AgentSummary = components["schemas"]["AgentSummary"];
 type MySpace = components["schemas"]["MySpaceView"];
+
+export function validClaimTarget(value: unknown): string | undefined {
+  const valid = validLoginReturnTo(value);
+  if (!valid) return undefined;
+  return valid.startsWith("/nodes/") || valid.startsWith("/spaces/") ? valid : undefined;
+}
 
 /** Where a person lands after claiming an agent: the one place that holds its work, or a list of its repositories. */
 export function claimLanding(agent: AgentSummary, mySpaces: readonly MySpace[]) {

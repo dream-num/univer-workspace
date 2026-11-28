@@ -171,13 +171,17 @@ them, and lists what no journey covers yet.
   checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
   configuration and renderer separation, each reported `contained` or `exposed`.
 - [Link sharing](./link-sharing.md): LS1-LS4 cover `uvw share`, its confirm link and confirm page, the browser Share
-  dialog, and what an anonymous visitor sees with the link set to `viewer` or `off`. LS5-LS7 cover Remix, link preview tags
-  and public Spaces.
-- [HTML View](./html-view.md): HV1-HV7 cover publishing with uvw, the `Pages` tab, owner writes to the source
-  Sheet, live Sheet updates, read-only visitors, trial mode and `Save my version`.
-- [Agent handoff and claim](./agent-handoff.md): AH1-AH14 cover `Hand to my agent`, guest agents over
-  uvw and MCP, including the connect page's `Try without signing in`, handoff links, the handoff page and its signed-out preview, `My agents`, the claimer's pull request decisions, and the connect page's own agents, new or continued. MH1-MH5
-  cover agent principals over MCP: tool lists before and after a claim, public-Space refusals and copies.
+  dialog, what an anonymous visitor sees with the link set to `viewer` or `off` (404 API + `/login` redirect), and
+  what a signed-in non-member sees. LS5-LS7 cover Remix, link preview tags and public Spaces.
+- [HTML View](./html-view.md): HV1-HV8 cover publishing with uvw (`access`), the `Pages` tab, owner writes to the
+  source Sheet, live Sheet updates, read-only visitors, trial mode, `Save my version`, and unauthenticated private-link
+  redirect through sign-in back to immersive view.
+- [Agent handoff and claim](./agent-handoff.md): AH1-AH15 cover `Hand to my agent`, guest agents over
+  uvw and MCP, including the connect page's `Try without signing in`, handoff links, the handoff page, its signed-out
+  preview and direct `/claim/<code>?to=...` landing, `My agents`, the claimer's pull request decisions, the connect
+  page's own agents (new or continued), and real-model guest handoff stories (HO16, HO17). MH1-MH6
+  cover agent principals over MCP: tool lists before and after a claim, public-Space refusals, copies, and unclaimed
+  HTML View `handoffUrl` / targeted `claim`.
 
 ## Helper scripts
 

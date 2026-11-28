@@ -1359,6 +1359,40 @@ describe("uvw share", () => {
     expect(JSON.parse(await run(command, ["--json", "claimUrl"]))).toEqual({ claimUrl });
   });
 
+  it("targets a node directly with uvw claim --node and handles --immersive", async () => {
+    const createAgentClaimCode = vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 604_800 }));
+    const getNode = vi.fn(async (nodeId: string) => ({
+      nodeId,
+      name: nodeId === "html-1" ? "Dashboard.univer.html" : "Budget",
+    }));
+    const command = createClaimCommand(
+      { createAgentClaimCode, getNode } as unknown as WorkspaceSpaceFeature,
+      async () => ORIGIN,
+    );
+
+    const direct = JSON.parse(await run(command, ["--node", "sheet-1", "--json"])) as { claimUrl: string };
+    expect(direct.claimUrl).toBe(`${claimUrl}?to=%2Fnodes%2Fsheet-1`);
+
+    const autoImmersive = JSON.parse(await run(command, ["--node", "html-1", "--json"])) as { claimUrl: string };
+    expect(autoImmersive.claimUrl).toBe(`${claimUrl}?to=%2Fnodes%2Fhtml-1%3Fview%3Dimmersive`);
+
+    const explicitImmersive = JSON.parse(
+      await run(command, ["--node", "sheet-1", "--immersive", "--json"]),
+    ) as { claimUrl: string };
+    expect(explicitImmersive.claimUrl).toBe(`${claimUrl}?to=%2Fnodes%2Fsheet-1%3Fview%3Dimmersive`);
+
+    const text = await run(command, ["--node", "html-1"]);
+    expect(text).toContain(`Handoff link: ${claimUrl}?to=%2Fnodes%2Fhtml-1%3Fview%3Dimmersive`);
+
+    const error = await run(command, ["--immersive"]).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("--immersive requires --node."),
+    });
+    expect(getNode).toHaveBeenCalledTimes(4);
+    expect(createAgentClaimCode).toHaveBeenCalledTimes(4);
+  });
+
   it("exits 1 with the server's refusal when an unclaimed agent turns the link on", async () => {
     const refusal = "An unclaimed agent cannot let more people see its work, and no person can confirm it for you. Get a handoff link with claim (uvw claim in the CLI) and give it to the user.";
     const { command } = share(async () => {

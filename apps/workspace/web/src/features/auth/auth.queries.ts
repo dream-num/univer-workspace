@@ -35,19 +35,23 @@ export function validLoginReturnTo(value: unknown) {
   }
 }
 
+export function redirectToLogin(returnTo?: string): never {
+  throw redirect({
+    to: "/login",
+    search: {
+      oauthError: undefined,
+      returnTo: validLoginReturnTo(returnTo),
+    },
+  });
+}
+
 export async function requireAuthenticatedSession(
   queryClient: QueryClient,
   returnTo?: string
 ) {
   const session = await queryClient.ensureQueryData(sessionQueryOptions);
   if (!session.authenticated) {
-    throw redirect({
-      to: "/login",
-      search: {
-        oauthError: undefined,
-        returnTo: validLoginReturnTo(returnTo),
-      },
-    });
+    redirectToLogin(returnTo);
   }
   return session;
 }

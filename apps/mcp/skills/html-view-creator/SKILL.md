@@ -11,12 +11,12 @@ user-invocable: true
 - Live data only: no copied Sheet data, fallback numbers or page-side Sheet formulas.
   Controls write input cells; subscriptions show recalculated results.
 - A draft is not live. Until `html_view_draft_get` returns `state: "published"`,
-  give previewUrl only; never claim live or share shareUrl.
+  give previewUrl only; never claim live or share shareUrl. Once published, unclaimed temporary agents never give shareUrl alone: return handoffUrl (`html_view_draft_get`/`html_view_read`) or `claim` ({node, immersive: true}).
 - For sources new/changed in a pull request or fork, dry-run and save with `repo` and `pr`, or `worktree`. IDs survive merge. Merge per whoami notice (else server instructions); never use older merged data instead.
 - If `html_view_save` is unavailable, say this connection cannot draft pages and
   stop. Never substitute a Slide, Board or other Unit.
 - Ask mode cannot save. Read/describe; ask the user to switch to Auto and say "save it". Then save.
-- Use the user's language and plain words, not technical IDs.
+- Use user's language and plain words, not technical IDs.
 
 ## 1. Read and choose
 
@@ -26,9 +26,7 @@ ask at most one question only for unclear purpose/data or an explicit plan/style
 request.
 
 Use the named style; otherwise choose by purpose, audience, adjectives and data shape.
-If none fits, use `night-gauge`
-or a custom style from the structurally closest style card, changing palette, type and
-signature element while keeping the design floor. Name the style and reason and offer to change it.
+If none fits, use `night-gauge` or a custom style from the structurally closest style card (changing palette, type and signature while keeping design floor). Name the style and reason and offer to change it.
 
 STYLE CATALOG START
 - `night-gauge`. Calm charcoal/amber/cyan; operational time series/key figures; plot/control dock. Original: 36-month cash runway.
@@ -48,8 +46,7 @@ Read the style card by default via
 Read the full template via
 `skills_read {"name":"html-view","resource":"templates/<id>.univer.html"}`
 only when the data's shape is close to its original scenario in the catalog or the
-page needs that template's interaction. Keep catalog fonts/palette/density/signature; adapt bindings to inspected data. Localize text, units and dates;
-Chinese uses the card's CJK fonts first.
+page needs that template's interaction. Keep catalog fonts/palette/density/signature; adapt bindings to data. Localize text, units, dates; Chinese uses card CJK fonts first.
 
 ## 2. Bind
 
@@ -75,43 +72,39 @@ Methods return Promises; show error states on rejection. Empty cells are null. R
 with `getCellState`/`getRangeState`.
 
 Callbacks fire before the subscribe Promise resolves; never read the returned subscription
-inside its first callback. A range callback always delivers the full matrix padded with
-null, including for empty ranges, never a delta. The subscribe binding attributes never
+inside its first callback. Range callbacks always deliver the full matrix padded with
+null, including for empty ranges (never deltas). The subscribe binding attributes never
 change the DOM; render code must replace placeholders. Separate subscriptions have no
 ordering: when one widget needs several bindings or sheets, use one render function that
 every contributing callback calls. Write placeholders only in the initial HTML, never from
-another binding's state. If a binding pattern is still unclear, read
+another binding's state. Unclear binding pattern? Read
 `skills_read {"name":"html-view","resource":"references/authoring.md"}`.
 
 Await `setCellValue(reference, value)` then `flush()` before claiming saved. Strings
 are literal; scalar writes may partially succeed. Add records with `insertRowsWithValues`,
 not empty-row writes:
 `skills_read {"name":"html-view","resource":"references/adding-records.md"}`.
-Relocate records by stable ID after insertion. Dispose subscriptions and chart resources on removal. Prevent form navigation.
+Relocate by stable ID after insert; dispose subscriptions/charts on removal; prevent form navigation.
 
 Keep pending/rejected states and failed input. Editors save; host-provided read-only
 trials stay local/unsaved. When the host advertises write mode, call
 `window.univerWorkspace.getWriteMode(unitId)` before a success label; `trial` means
 "Trial only, not saved".
 
-Keep numbers in the Sheet. Formatting, filtering and arranging rows are presentation;
-never compute Sheet metrics in page code, including totals, ratios, achievement rates,
-forecasts or derived chart series. When a needed metric is missing, add formula cells to
+Keep numbers in Sheet. Format/filter/sort only in UI; never compute Sheet metrics in page code (totals, ratios, achievement rates, forecasts, derived series). When a needed metric is missing, add formula cells to
 the Sheet inside the session's pull request with `execute`. For a merged Sheet, open a
 pull request with `pr_create` and add the Sheet with `unit_add` first. Bind the new
 formula cells, then save with `repo` and `pr`.
 
-Design floor: CSS color variables; text contrast 4.5:1, large text/control boundaries
-3:1; visible keyboard focus, labels and non-color cues; 4/8px spacing, 16px body,
-clear type hierarchy and tabular figures; styled selection/caret/scrollbars; honest
-loading/empty/error states with `role="alert"` or `data-s="rejected"`. Keep a bound table if charts fail. Adapt to 360px, 390px and 1440px without shrinking the
-page. Do not add a strip of giant totals to every page. Avoid uniform card grids,
-decorative gradients and emoji icons. Never put loading text inside a chart container;
-echarts.init keeps existing children. Leave it empty and show loading in a sibling or
-the status line. After data arrives, no placeholder text may remain on the page. Pin exact
-fonts/libraries on https://cdn.jsdelivr.net; none are preloaded.
-Media uses `data-workspace-src` with real Node IDs on img/video/audio/source;
-private media stays empty, so provide a visible fallback.
+Design floor: CSS vars; 4.5:1 text / 3:1 UI contrast; focus rings, labels, non-color cues;
+4/8px spacing, 16px body, tabular nums; styled selection/caret/scrollbars; honest
+loading/empty/error (`role="alert"`/`data-s="rejected"`). Keep bound table if charts fail.
+Fit 360/390/1440px without shrinking. Do not add a strip of giant totals to every page.
+Avoid uniform card grids, decorative gradients, emoji. Never put loading text inside a chart
+container; echarts.init keeps existing children. Leave it empty and show loading in a sibling or
+the status line. After data arrives, no placeholder text may remain on the page. Pin
+fonts/libs on https://cdn.jsdelivr.net (none preloaded).
+Media: `data-workspace-src` with Node IDs on img/video/audio/source; provide visible fallback (private media stays empty).
 
 ## 3. Save and reply
 
@@ -120,18 +113,17 @@ formulas, date serials. Dry runs do not run scripts; say render checks did not r
 Then save the HTML once as a draft. Save local files with bindings
 as drafts too; never hand off local files unless requested.
 
-New: `html_view_save` with `space` (source repository by default), `name` and UUID
-idempotency_key. Revision: `html_view_read`, edit, then save with `page`,
-quoted `etag` and a new key. Revise pending drafts with `draft`, not name/space.
-Pass inline `html` by default; use html_upload_id for oversized HTML.
+New: `html_view_save` with `space` (default: source repo), `name`, UUID idempotency_key.
+Revise: `html_view_read`, edit, save with `page`, quoted `etag`, new key.
+Revise pending drafts with `draft`, not name/space. Pass inline `html` by default (else html_upload_id).
 Reuse keys only for identical retries.
 
 Reply with purpose, sources, cells controls change, previewUrl, and style.
 Say why the style fits in one clause.
 Explain draft.publishWhen: `merge` goes live when its pull request merges, published as
 whoever merges it; never tell them to press Publish. `publish` means open the preview and press **Publish**.
-Explain access from `repositoryVisibility` and `privateSourceUnitIds`: public with no
-private sources means anyone with the link once published; otherwise permission is needed.
+Explain access from draft.access (or repositoryVisibility, privateSourceUnitIds): public without private sources lets anyone open once published; private repos require signing in with access.
+Unclaimed temporary agents never give shareUrl alone once published: return handoffUrl or `claim` ({node, immersive: true}).
 Page access does not grant source access. Never change sharing without permission.
 With a local shell and `node`, and not as an agent identity, end the reply with exactly
 this sentence, translated into the user's language:
@@ -143,7 +135,7 @@ End the turn.
 
 Use `html_view_draft_get` before status/revision. Pending: read with `html_view_read`
 `draft` if HTML is absent, then `html_view_save` with `draft` and a new key.
-Published: shareUrl; revise with `page` and `etag` from `html_view_read`.
+Published: handoffUrl or `claim` ({node, immersive: true}) for unclaimed temporary agents, else shareUrl (private repos require signing in with access); revise with `page`, `etag` (`html_view_read`).
 Superseded: follow successorUrl. Rejected: reason. Conflicted: reread page/PR.
 Expired: new key. Restyle with `html_view_styles` when available; preserve data.
 On acceptance or any request for live preview, even without an offer, including 打开实时预览 or "open live preview", follow `skills_read {"name":"html-view","resource":"references/local-preview.md"}`,

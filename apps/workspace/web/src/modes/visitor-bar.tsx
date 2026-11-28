@@ -3,6 +3,8 @@ import { UniverCliIcon } from "@univerjs/icons";
 import { Bot, ChevronDown, ChevronUp, Copy, CopyPlus, Flag, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import type { components } from "../../../generated/http/schema.js";
+import { validClaimTarget } from "../features/account/claim-landing";
+import { readHandoffClaim } from "../features/account/handoff-session";
 import { HandToAgentDialog } from "../features/nodes/hand-to-agent";
 import { RemixDialog, useRemix } from "../features/nodes/remix";
 import { ReportNodeDialog } from "../features/nodes/report-node-dialog";
@@ -43,6 +45,11 @@ export function VisitorBar({
   const collapsed = offerSignUp && collapsedPreference;
   const author = owner ? t("sharePageAuthor", { name: owner.displayName }) : "";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const handoffCode = owner?.kind === "agent" && !owner.claimed ? readHandoffClaim()?.code : undefined;
+  const claimTarget = validClaimTarget(location.href);
+  const claimReturnTo = handoffCode
+    ? `/claim/${encodeURIComponent(handoffCode)}?to=${encodeURIComponent(location.href)}`
+    : undefined;
 
   function toggleCollapsed() {
     const next = !collapsed;
@@ -101,20 +108,42 @@ export function VisitorBar({
           <div className="flex shrink-0 items-center gap-1">
             {offerSignUp ? (
               <nav aria-label={t("signUp")} className="flex items-center gap-1">
-                <Link
-                  to="/login"
-                  search={{ mode: "register", oauthError: undefined, returnTo: location.href }}
-                  className={cn(buttonVariants({ size: "sm" }), "no-underline")}
-                >
-                  {t("signUpFree")}
-                </Link>
-                <Link
-                  to="/login"
-                  search={{ oauthError: undefined, returnTo: location.href }}
-                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "no-underline")}
-                >
-                  {t("signIn")}
-                </Link>
+                {handoffCode && claimReturnTo ? (
+                  <>
+                    <Link
+                      to="/login"
+                      search={{ oauthError: undefined, returnTo: claimReturnTo }}
+                      className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+                    >
+                      {t("claimAgentSignIn")}
+                    </Link>
+                    <Link
+                      to="/claim/$code"
+                      params={{ code: handoffCode }}
+                      search={claimTarget ? { to: claimTarget } : {}}
+                      className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "no-underline")}
+                    >
+                      {t("claimAgentViewHandoff")}
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/login"
+                      search={{ mode: "register", oauthError: undefined, returnTo: location.href }}
+                      className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+                    >
+                      {t("signUpFree")}
+                    </Link>
+                    <Link
+                      to="/login"
+                      search={{ oauthError: undefined, returnTo: location.href }}
+                      className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "no-underline")}
+                    >
+                      {t("signIn")}
+                    </Link>
+                  </>
+                )}
               </nav>
             ) : null}
             <MenuRoot>

@@ -4,8 +4,12 @@ import { dirname, join } from "node:path";
 import { Command } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_WORKSHEET_ROW_COUNT } from "@univerjs/core";
-import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core";
-import type { WorkspaceRuntimeTarget } from "@univerjs/univer-workspace-client-core";
+import {
+  describeHtmlViewAccess,
+  WorkspaceHttp,
+  type WorkspaceRuntimeTarget,
+  type WorkspaceSubject,
+} from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "../src/errors.js";
 import { createHtmlViewCommand } from "../src/features/html-view/command.js";
 import { WorkspaceHtmlViewFeature } from "../src/features/html-view/html-view.js";
@@ -19,7 +23,12 @@ afterEach(async () => {
 const binding = (unit = "unit", sheet = "budget", cell = "B2") =>
   `<output data-univer-cell-text="${encodeURIComponent(unit)}:${encodeURIComponent(sheet)}:${cell}"></output>`;
 const result = { nodeId: "node/1", resourceId: "blob", operationId: "create-key" };
-async function setup(html = binding(), publicRead = false, privateUnits: readonly string[] = []) {
+async function setup(
+  html = binding(),
+  publicRead = false,
+  privateUnits: readonly string[] = [],
+  caller?: () => Promise<WorkspaceSubject>,
+) {
   const directory = await mkdtemp(join(tmpdir(), "cli-html-view-test-"));
   directories.push(directory);
   const filePath = join(directory, "view.univer.html");
@@ -54,6 +63,7 @@ async function setup(html = binding(), publicRead = false, privateUnits: readonl
     >[0]["runtime"],
     resolveTrunkRuntimeTarget,
     configuredOrigin: async () => "https://workspace.test",
+    ...(caller === undefined ? {} : { caller }),
   });
   return {
     feature,
@@ -186,6 +196,10 @@ describe("HTML View workflow", () => {
       shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
       repositoryVisibility: "private" as const,
       privateSourceUnitIds: ["unit"],
+      access: describeHtmlViewAccess({
+        repositoryVisibility: "private",
+        privateSourceUnitIds: ["unit"],
+      }),
     });
     expect(await readFile(f.filePath, "utf8")).toBe("changed during remote validation");
     await expect(stat(dirname(staged))).rejects.toMatchObject({ code: "ENOENT" });
@@ -315,6 +329,7 @@ describe("HTML View commands", () => {
       shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
       repositoryVisibility,
       privateSourceUnitIds,
+      access: describeHtmlViewAccess({ repositoryVisibility, privateSourceUnitIds }),
     }));
     let output = "";
     const fork = (worktree: { id: string } | null) => ({ fullName: "agent/fix", upstream: { fullName: "hana/team" }, worktree });
@@ -388,7 +403,12 @@ describe("HTML View commands", () => {
   ])("prints sharing fields for $visibility with private sources $privateUnits", async ({ visibility, privateUnits }) => {
     for (const mode of [[], ["--json"]]) {
       const creation = await run(["create", "--file", "view.univer.html", "--space", "space", "--name", "View", "--idempotency-key", "key", ...mode], visibility, privateUnits);
-      expect(creation.output).toMatchObject({ shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive", repositoryVisibility: visibility, privateSourceUnitIds: privateUnits });
+      expect(creation.output).toMatchObject({
+        shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
+        repositoryVisibility: visibility,
+        privateSourceUnitIds: privateUnits,
+        access: describeHtmlViewAccess({ repositoryVisibility: visibility, privateSourceUnitIds: privateUnits }),
+      });
     }
   });
   it.each(["--file", "--space", "--name", "--idempotency-key"])(
@@ -412,8 +432,11 @@ function sharingHttp(publicRead = false, privateUnits: readonly string[] = []) {
     origin: "https://workspace.test",
     role: "client",
     cookie: "workspace_session=test",
-    fetcher: async (url) => {
+    fetcher: async (url, init) => {
       const path = new URL(String(url)).pathname;
+      if (init?.method === "POST" && path === "/api/agents/claim-codes") {
+        return Response.json({ claimUrl: "/claim/c0de", expiresIn: 604_800 });
+      }
       if (path.startsWith("/api/spaces/")) {
         const id = path.split("/").at(-1);
         return Response.json({ id, name: "Team", publicRead: id === "private" ? false : publicRead });
@@ -435,6 +458,42 @@ it.each([
   { publicRead: false, privateUnits: [], visibility: "private", expected: ["unit"] },
   { publicRead: true, privateUnits: ["unit"], visibility: "public", expected: ["unit"] },
 ])("CLI workflow reports sharing for $visibility with private sources $privateUnits", async ({ publicRead, privateUnits, visibility, expected }) => {
-  const f = await setup(binding(), publicRead, privateUnits);
-  await expect(f.feature.create(f.create)).resolves.toMatchObject({ shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive", repositoryVisibility: visibility, privateSourceUnitIds: expected });
+  const f = await setup(binding(), publicRead, privateUnits, async () => ({ id: "u1", name: "ana" }));
+  await expect(f.feature.create(f.create)).resolves.toMatchObject({
+    shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
+    repositoryVisibility: visibility,
+    privateSourceUnitIds: expected,
+    access: describeHtmlViewAccess({
+      repositoryVisibility: visibility as "public" | "private",
+      privateSourceUnitIds: expected,
+      caller: { id: "u1", name: "ana" },
+    }),
+  });
+});
+
+it("CLI workflow attaches handoffUrl, handoffExpiresAt and unclaimed access for an unclaimed guest agent", async () => {
+  const agent: WorkspaceSubject = { id: "a1", name: "bot", kind: "agent", claimed: false };
+  const f = await setup(binding(), false, [], async () => agent);
+  const before = Date.now();
+  const created = await f.feature.create(f.create);
+  const handoffUrl = "https://workspace.test/claim/c0de?to=%2Fnodes%2Fnode%252F1%3Fview%3Dimmersive";
+  expect(created).toMatchObject({
+    shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
+    repositoryVisibility: "private",
+    privateSourceUnitIds: ["unit"],
+    handoffUrl,
+    access: describeHtmlViewAccess({ caller: agent, handoffUrl }),
+  });
+  expect(Date.parse(created.handoffExpiresAt ?? "") - before).toBeGreaterThanOrEqual(604_800_000);
+});
+
+it("CLI workflow omits handoffUrl for a claimed agent", async () => {
+  const agent: WorkspaceSubject = { id: "a1", name: "bot", kind: "agent", claimed: true };
+  const f = await setup(binding(), true, [], async () => agent);
+  const created = await f.feature.create(f.create);
+  expect(created).not.toHaveProperty("handoffUrl");
+  expect(created).not.toHaveProperty("handoffExpiresAt");
+  expect(created.access).toBe(
+    describeHtmlViewAccess({ repositoryVisibility: "public", privateSourceUnitIds: [], caller: agent }),
+  );
 });

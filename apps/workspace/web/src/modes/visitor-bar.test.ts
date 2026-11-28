@@ -15,14 +15,19 @@ const href = "/nodes/one?view=immersive#chart";
 vi.mock("@tanstack/react-router", () => ({
   useLocation: () => ({ href: "/nodes/one?view=immersive#chart" }),
   useNavigate: () => vi.fn(),
-  Link: ({ to, search, children, ...props }: {
-    to: string; search: Record<string, string | undefined>; children: ReactNode;
+  Link: ({ to, params, search, children, ...props }: {
+    to: string; params?: Record<string, string>; search?: Record<string, string | undefined>; children: ReactNode;
   }) => {
+    let resolved = to;
+    for (const [key, value] of Object.entries(params ?? {})) {
+      resolved = resolved.replace(`$${key}`, encodeURIComponent(value));
+    }
     const query = new URLSearchParams();
-    for (const [key, value] of Object.entries(search)) {
+    for (const [key, value] of Object.entries(search ?? {})) {
       if (value !== undefined) query.set(key, value);
     }
-    return createElement("a", { ...props, href: `${to}?${query}` }, children);
+    const qs = query.toString();
+    return createElement("a", { ...props, href: qs ? `${resolved}?${qs}` : resolved }, children);
   },
 }));
 vi.mock("./registry", () => ({
@@ -251,6 +256,27 @@ describe("visitor sign-up bar", () => {
     Object.defineProperty(window, "sessionStorage", { get: () => { throw new Error("Storage denied"); } });
     expect(renderLayout()).toContain("Sign up free");
     expect(() => controls.get("Collapse sign-up bar")?.()).not.toThrow();
+  });
+
+  it("shows claim handoff CTAs when an active handoff code exists for an unclaimed agent", () => {
+    storage.set("univer-workspace-handoff-claim", JSON.stringify({ code: "claim-123" }));
+    const html = renderLayout(false, true, unverifiedAgent);
+    const claimReturnTo = `/claim/claim-123?to=${encodeURIComponent(href)}`;
+    expect(html).toContain("Sign in and take it");
+    expect(html).toContain(`href="/login?returnTo=${encodeURIComponent(claimReturnTo)}"`);
+    expect(html).toContain(">Handoff</a>");
+    expect(html).toContain(`href="/claim/claim-123?to=${encodeURIComponent(href)}"`);
+    expect(html).not.toContain("Sign up free");
+  });
+
+  it("keeps standard sign-up CTAs when owner is claimed or human even if handoff code is stored", () => {
+    storage.set("univer-workspace-handoff-claim", JSON.stringify({ code: "claim-123" }));
+    const claimedHtml = renderLayout(false, true, { ...unverifiedAgent, claimed: true });
+    expect(claimedHtml).toContain("Sign up free");
+    expect(claimedHtml).not.toContain("Sign in and take it");
+    const humanHtml = renderLayout(false, true, { displayName: "Alice", kind: "human" });
+    expect(humanHtml).toContain("Sign up free");
+    expect(humanHtml).not.toContain("Sign in and take it");
   });
 });
 
