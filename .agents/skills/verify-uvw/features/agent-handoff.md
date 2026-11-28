@@ -60,7 +60,15 @@ claimed, the agent's files carry an `Unverified agent` label, and the agent expi
   the httpOnly `workspace_handoff` cookie and, signed out, reads everything the agent owns as a viewer: its Spaces,
   its files, and an HTML View with its Sheet data, live. Nothing else reads the agent's private files, and a session
   in the browser wins over the cookie. The preview ends for every browser once a person takes the agent.
-- MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
+- AH15 targets a handoff link at a specific file or immersive HTML View (`/claim/<code>?to=...`): `uvw html-view create`
+  (and `replace`), MCP `html_view_draft_get` and `html_view_read` automatically attach `handoffUrl` and `handoffExpiresAt`
+  for an unclaimed agent alongside `access`, and `uvw claim --node [--immersive]` / `claim({ node, immersive })` mint
+  targeted links. Opening `/claim/<code>?to=...` signed out validates readability under `workspace_handoff` and lands
+  straight on the live target page (staying on the claim card when `?to=` is unreadable); `VisitorBar` routes sign-in
+  through `/claim/<code>?to=...`, and claiming lands directly back on the target page.
+- MH1 through MH6 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool
+  (including targeted `node` and `immersive` handoff links), a claimer's pull request decisions, public-Space refusals,
+  copies, and unclaimed HTML View `access` / `handoffUrl` guidance.
 
 ## How to get to it (user POV)
 
@@ -412,16 +420,58 @@ jq -e '.error.code == "AGENT_ALREADY_CLAIMED"' "$EVIDENCE/ho14-handoff-after.jso
 if grep -q workspace_handoff "$J"; then false; fi
 ```
 
-Reload session b's page: `Unable to open this resource`. Open `$CLAIM2` there: `Unable to open this handoff link`,
-`This agent already has an owner.`, `If you took it, sign in to open its files.` and `Sign in`. Remove `$G2`
-yourself after `$V down`.
+Reload session b's page: the signed-out browser redirects to `/login?returnTo=%2Fnodes%2F$PN%3Fview%3Dimmersive`
+and shows `Sign in to open this resource.` (instead of `Unable to open this resource`). Open `$CLAIM2` there:
+`Unable to open this handoff link`, `This agent already has an owner.`, `If you took it, sign in to open its files.`
+and `Sign in`. Remove `$G2` yourself after `$V down`.
 
 Pass when the page answers 404 without the link; the handoff answer names the agent, unclaimed, with two files, and
 sets an httpOnly cookie that reads the page and gets `401` on a write; both signed-out sessions list the two files
 and show the page with `5` and `Double: 10` under `Unverified agent`, and the Sheet opens read-only; session b's
 page turns to `3` and `Double: 6` with no reload after the guest's merge; the run user takes the agent from session
 a; and after that the cookie jar gets `404` for the page and `409` for the link, which clears the cookie, session
-b's reload cannot open the page, and its handoff page says the agent has an owner.
+b's reload redirects to `/login` with `Sign in to open this resource.`, and its handoff page says the agent has an owner.
+
+### HO15. Direct claim handoff lands straight on a live HTML View and returns there after claiming (AH15)
+
+A third guest, driven from its own home `G3`, merges a Sheet and publishes an HTML View bound to it in its private
+Personal Space. Keep raw `claimUrl` / `handoffUrl` outputs in `$RUN/home/` until redacted:
+
+```bash
+G3=$VERIFY_UVW_ROOT/$VERIFY_UVW_RUN/home-guest-ho15; g3(){ env UNIVER_HOME=$G3 node apps/cli/dist/main.js "$@"; }
+g3 config set workspace.origin $ORIGIN
+g3 auth guest --json > "$EVIDENCE/ho15-guest.json"; C=$(jq -r .agent.username "$EVIDENCE/ho15-guest.json")
+g3 pr create -R $C/personal -t "Direct handoff" --json > "$EVIDENCE/ho15-pr.json"; W3=$(jq -r .id "$EVIDENCE/ho15-pr.json")
+g3 unit create --worktree $W3 --space $C/personal --type sheet --name "Direct data" --json > "$EVIDENCE/ho15-unit.json"
+U3=$(jq -r .unit.unitId "$EVIDENCE/ho15-unit.json"); SN3=$(jq -r .unit.nodeId "$EVIDENCE/ho15-unit.json")
+g3 execute --worktree $W3 --unit $U3 --json -e 'const ws=workbook.getActiveSheet(); ws.getRange("A1:C2").setValues([["Item","Qty","Double"],["Rent",5,"=B2*2"]]); return {sheet:ws.getSheetId()};' > "$EVIDENCE/ho15-seed.json"
+S3=$(jq -r .value.sheet "$EVIDENCE/ho15-seed.json")
+g3 pr ready 1 -R $C/personal --json > /dev/null; g3 pr merge 1 -R $C/personal --json > /dev/null
+SPACE3=$(g3 repo list --owner @me --type personal --json | jq -r '.[0].id')
+printf '<!DOCTYPE html><html><head><title>Direct page</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>Direct page</h1><label>Qty <input type="number" data-univer-cell-model="%s:%s:B2"></label><p>Double: <output data-univer-cell-text="%s:%s:C2">loading</output></p></body></html>\n' $U3 $S3 $U3 $S3 > "$EVIDENCE/ho15.univer.html"
+g3 html-view create --file "$EVIDENCE/ho15.univer.html" --space $SPACE3 --name 'Direct page' --idempotency-key "ho15-$VERIFY_UVW_RUN-0001-abcdef" --json > "$RUN/home/ho15-page.json"
+PN3=$(jq -r .nodeId "$RUN/home/ho15-page.json"); SHARE3=$(jq -r .shareUrl "$RUN/home/ho15-page.json"); HANDOFF3=$(jq -r .handoffUrl "$RUN/home/ho15-page.json")
+jq -e --arg o "$ORIGIN" --arg pn "$PN3" '.repositoryVisibility == "private" and (.access | contains("Only this temporary agent can open shareUrl directly.") and contains("handoffUrl")) and (.handoffUrl | test("^" + $o + "/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $pn + "%3Fview%3Dimmersive$")) and (.handoffExpiresAt | type == "string")' "$RUN/home/ho15-page.json"
+g3 claim --node "$PN3" --json > "$RUN/home/ho15-claim-page.json"
+jq -e --arg pn "$PN3" '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $pn + "%3Fview%3Dimmersive$")' "$RUN/home/ho15-claim-page.json"
+g3 claim --node "$SN3" --json > "$RUN/home/ho15-claim-sheet.json"
+jq -e --arg sn "$SN3" '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $sn + "$")' "$RUN/home/ho15-claim-sheet.json"
+g3 claim --node "$SN3" --immersive --json > "$RUN/home/ho15-claim-sheet-imm.json"
+jq -e --arg sn "$SN3" '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $sn + "%3Fview%3Dimmersive$")' "$RUN/home/ho15-claim-sheet-imm.json"
+g3 claim --immersive --json 2> "$EVIDENCE/ho15-claim-err.txt"; test $? -eq 1
+grep -q 'workspace-argument-invalid' "$EVIDENCE/ho15-claim-err.txt"
+$V open-anon ho15-bare-share "$SHARE3"
+```
+
+Verify the browser flows (keeping raw codes out of `$EVIDENCE` and redacted before `$V secret-check`):
+
+1. `ho15-bare-share.node-status` reports `404`, and `ho15-bare-share.page.txt` shows `Sign in to open this resource.`.
+2. In a signed-out session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-ho15`), pin `en-US` and open `$HANDOFF3`, then wait 8 s: the browser automatically lands on `$ORIGIN/nodes/$PN3?view=immersive` (not stuck on `/claim/...`), renders `Qty` = `5` and `Double: 10`, and `VisitorBar` shows `Sign in and take it` and `Handoff`. Screenshot `$EVIDENCE/ho15-direct-preview.png`.
+3. In another signed-out session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-ho15-bad`), pin `en-US` and open `${HANDOFF3%%\?*}?to=%2Fnodes%2Fnon-existent-node`: confirm it stays on `/claim/...` (`Work from agent`) without a redirect loop.
+4. Back in `<run>-ho15`, click `Sign in and take it` (`find role link click --name "Sign in and take it"`): the URL moves to `/login?returnTo=%2Fclaim%2F...`. Sign in as the run user (`verify-$VERIFY_UVW_RUN` / `$RUN/user.pw`): the browser returns to `/claim/...?to=%2Fnodes%2F$PN3%3Fview%3Dimmersive` showing `Take it`. Click `Take it`: the browser lands **directly back** on `$ORIGIN/nodes/$PN3?view=immersive` as the owner. Fill `Qty` with `8`, press `Tab`, screenshot `$EVIDENCE/ho15-after-claim.png`, and confirm `$V cli ho15-trunk inspect range A1:C2 --trunk --unit "$U3" --worksheet "id:$S3" --json` reads `8` and `16`.
+5. Remove `$G3` after `$V down`.
+
+Pass when `handoffUrl` and `access` match the contract, `claim --node` auto-targets `.univer.html` with `?view=immersive` and refuses `--immersive` without `--node`, bare `shareUrl` redirects signed-out visitors to `/login`, `handoffUrl` lands directly on the live immersive page with `Sign in and take it` / `Handoff`, an invalid `?to=` stays on the claim card without looping, and claiming returns straight to the live page where the owner's edit persists to trunk.
 
 ### MH1. Unclaimed agent
 
@@ -495,6 +545,80 @@ does, then `$V person mh-share share <N> --link viewer --json`. bot1 runs `pr_cr
 `The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only after
 bot1's `pr_ready` and `pr_merge` merge its pull request.
 
+### MH6. Unclaimed agent HTML View handoffUrl and targeted claim over MCP
+
+Mode: mcp. Run: helper.
+
+```bash
+$V principal mh6bot
+MH6_USER=$(jq -r .agent.username "$EVIDENCE/principal-mh6bot.json")
+$V mcp --as mh6bot mh6-pr pr_create "{\"repo\":\"$MH6_USER/personal\",\"title\":\"MH6 page\"}"
+MH6_W=$(jq -r .id "$EVIDENCE/mh6-pr.out"); MH6_P=$(jq -r .number "$EVIDENCE/mh6-pr.out")
+$V mcp --as mh6bot mh6-unit unit_create "{\"worktree\":\"$MH6_W\",\"space\":\"$MH6_USER/personal\",\"type\":\"sheet\",\"name\":\"MH6 data\"}"
+MH6_U=$(jq -r .unit.unitId "$EVIDENCE/mh6-unit.out"); MH6_SN=$(jq -r .unit.nodeId "$EVIDENCE/mh6-unit.out")
+$V mcp --as mh6bot mh6-exec execute "$(jq -nc --arg w "$MH6_W" --arg u "$MH6_U" '{worktree:$w,unit:$u,code:"const ws=workbook.getActiveSheet(); ws.getRange(\"A1:C2\").setValues([[\"Item\",\"Qty\",\"Double\"],[\"Rent\",5,\"=B2*2\"]]); return {sheet:ws.getSheetId()};"}')"
+MH6_S=$(jq -r .value.sheet "$EVIDENCE/mh6-exec.out")
+printf '<!DOCTYPE html><html><head><title>MH6 page</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>MH6 page</h1><p>Double: <output data-univer-cell-text="%s:%s:C2">loading</output></p></body></html>\n' "$MH6_U" "$MH6_S" > "$EVIDENCE/mh6.univer.html"
+$V mcp --as mh6bot mh6-save html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mh6.univer.html" --arg space "$MH6_USER/personal" --arg repo "$MH6_USER/personal" --arg pr "$MH6_P" --arg key "mh6-save-$VERIFY_UVW_RUN-0001-abcdef" '{html:$html,space:$space,name:"MH6 page",repo:$repo,pr:$pr,idempotency_key:$key}')"
+jq -e '.draft.access | contains("Only this temporary agent can open shareUrl directly.")' "$EVIDENCE/mh6-save.out"
+MH6_D=$(jq -r .draft.id "$EVIDENCE/mh6-save.out")
+$V mcp --as mh6bot mh6-ready pr_ready "{\"repo\":\"$MH6_USER/personal\",\"number\":\"$MH6_P\"}"
+$V mcp --as mh6bot mh6-merge pr_merge "{\"repo\":\"$MH6_USER/personal\",\"number\":\"$MH6_P\"}"
+$V mcp --as mh6bot mh6-draft-get html_view_draft_get "{\"draft\":\"$MH6_D\"}" > /dev/null
+MH6_PN=$(jq -r .draft.node "$EVIDENCE/mh6-draft-get.out"); MH6_PR=$(jq -r .draft.resource "$EVIDENCE/mh6-draft-get.out")
+jq -e --arg pn "$MH6_PN" '.draft.state == "published" and (.draft.handoffUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $pn + "%3Fview%3Dimmersive$")) and (.draft.handoffExpiresAt | type == "string") and (.draft.access | contains("handoffUrl"))' "$EVIDENCE/mh6-draft-get.out"
+$V mcp --as mh6bot mh6-read html_view_read "{\"resource\":\"$MH6_PR\"}" > /dev/null
+jq -e --arg pn "$MH6_PN" '(.handoffUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $pn + "%3Fview%3Dimmersive$")) and (.handoffExpiresAt | type == "string") and (.access | contains("handoffUrl"))' "$EVIDENCE/mh6-read.out"
+$V mcp --as mh6bot mh6-claim-page claim "{\"node\":\"$MH6_PN\"}" > /dev/null
+jq -e --arg pn "$MH6_PN" '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $pn + "%3Fview%3Dimmersive$")' "$EVIDENCE/mh6-claim-page.out"
+$V mcp --as mh6bot mh6-claim-sheet claim "{\"node\":\"$MH6_SN\",\"immersive\":true}" > /dev/null
+jq -e --arg sn "$MH6_SN" '.claimUrl | test("/claim/[A-Za-z0-9_-]{22}\\?to=%2Fnodes%2F" + $sn + "%3Fview%3Dimmersive$")' "$EVIDENCE/mh6-claim-sheet.out"
+$V mcp --as mh6bot mh6-claim-bad claim '{"immersive":true}'; test $? -eq 1
+jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mh6-claim-bad.out"
+perl -pi -e 's{/claim/[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])}{/claim/[REDACTED]}g' "$EVIDENCE"/mh6-*
+```
+
+Pass when `html_view_save` gives unclaimed-agent `access`, publishing makes `html_view_draft_get` and `html_view_read`
+attach `handoffUrl` targeting `/nodes/<node>?view=immersive` and `handoffExpiresAt`, `claim` targets `.univer.html`
+automatically as immersive, `claim` with `immersive: true` without `node` exits 1 with `workspace-argument-invalid`,
+and claim codes in `mh6-*` are redacted cleanly.
+
+### HO16. Real-model story: MCP guest agent delivers a directly openable HTML View handoff link
+
+Mode: mcp.
+
+Run one real-model story as an OAuth guest (`Try without signing in` via `--oauth`) with no tool names, IDs or hints:
+
+```bash
+$V story --as ho16guest --oauth ho16-story mcp "帮我建一个预算表格（包含项目、数量和双倍数量公式）并做一个实时展示的交互页面，完成后把能直接打开查看的链接给我。"
+```
+
+Inspect `$EVIDENCE/ho16-story/trajectory.txt` and `$EVIDENCE/ho16-story/answer.txt`. Extract the handoff link from
+`answer.txt`, open it in a signed-out browser session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-ho16`), wait 8 s,
+and screenshot `$EVIDENCE/ho16-story-opened.png`. Afterwards redact any claim code in `$EVIDENCE/ho16-story/*` and
+run `$V secret-check`.
+
+Pass when `answer.txt` gives a `/claim/<code>` handoff link (not only a bare private `/nodes/<id>?view=immersive`), and
+opening that link signed out renders the live interactive page or handoff preview directly without hitting a dead 404 or
+forced sign-in error.
+
+### HO17. Real-model story: uvw guest agent delivers a directly openable HTML View handoff link
+
+Run one real-model story with the `uvw` client and a clean guest identity (no tool names, IDs or hints):
+
+```bash
+$V story --as ho17guest ho17-story uvw "不登录账号，以访客身份在 Univer Workspace 里建一个简易预算表和对应的实时 HTML 交互页面，完成后把可以直接点开看的链接给我。"
+```
+
+Inspect `$EVIDENCE/ho17-story/trajectory.txt` and `$EVIDENCE/ho17-story/answer.txt`. Extract the link(s) from
+`answer.txt`, open the delivered handoff link in a signed-out browser session
+(`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-ho17`), wait 8 s, and screenshot `$EVIDENCE/ho17-story-opened.png`.
+Afterwards redact any claim code in `$EVIDENCE/ho17-story/*` and run `$V secret-check`.
+
+Pass when `trajectory.txt` signs in with `uvw auth guest` and `answer.txt` gives a `/claim/<code>` handoff link (not
+only a bare private `shareUrl`), and opening that link signed out shows the live interactive page or handoff preview
+directly without signing in.
+
 ## Gotchas
 
 - The handoff link's code is a credential: until a person takes the agent it reads everything the agent owns, for 7
@@ -505,8 +629,9 @@ bot1's `pr_ready` and `pr_merge` merge its pull request.
   `claim` mints a new one, and an agent keeps its 10 newest.
 - A browser session holds one preview. Opening another agent's handoff link replaces it, and any session signed in
   to that browser wins over it, so use a session with nobody signed in for HO3, HO4 and HO14.
-- In a preview, the bar's `Sign up free` and `Sign in` return to the file, which the signed-in person cannot open
-  until they take the agent. Take the agent from the handoff page.
+- In a preview opened via `/claim/<code>`, `VisitorBar` stores the handoff code in `sessionStorage` so `Sign in and take it`
+  routes through `/login?returnTo=/claim/<code>?to=...` and `Handoff` links to `/claim/<code>?to=...`. If a visitor opens
+  a shared file without visiting `/claim/<code>`, `Sign up free` and `Sign in` still return to the file.
 - `My agents` is a menu item only for people. Its `Stop` is irreversible.
 - The MCP tool lists change on the first request after the claim: unclaimed agents have `claim`, claimed agents
   do not. See [MH1 and MH2](#mh1-unclaimed-agent).

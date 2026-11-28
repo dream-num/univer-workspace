@@ -99,10 +99,33 @@ test('run secrets cover the human, the principals, the model credential, story s
 test('a claim code fails the check and stays readable for the recipe, and the printed command redacts it', () => {
   const code = randomBytes(16).toString('base64url');
   const url = `http://127.0.0.1:5993/claim/${code}`;
-  for (const text of [url, `{"claimUrl": "${url}", "expiresAt": "2026-11-24T10:00:00Z"}`, `Handoff link: ${url}\n`]) {
+  for (const text of [
+    url,
+    `${url}?to=%2Fnodes%2Fn1%3Fview%3Dimmersive`,
+    `{"claimUrl": "${url}", "expiresAt": "2026-11-24T10:00:00Z"}`,
+    `Handoff link: ${url}\n`,
+  ]) {
     assert.deepEqual(findSecrets(text), ['claim code'], text);
     assert.equal(redact(text), text);
   }
+  const targeted = `${url}?to=%2Fnodes%2Fn1%3Fview%3Dimmersive`;
+  const runTargeted = mkdtempSync(join(tmpdir(), 'verify-uvw-claim-target-'));
+  try {
+    mkdirSync(join(runTargeted, 'evidence'));
+    writeFileSync(join(runTargeted, 'evidence/handoff.out'), `${targeted}\n`);
+    const failedTargeted = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL('./secrets.mjs', import.meta.url)), 'check', runTargeted, join(runTargeted, 'evidence')],
+      { encoding: 'utf8' },
+    );
+    assert.equal(failedTargeted.status, 1);
+    const fixLine = failedTargeted.stdout.trim().split('\n')[2];
+    assert.equal(spawnSync('sh', ['-c', fixLine], { encoding: 'utf8' }).status, 0, fixLine);
+    assert.equal(
+      readFileSync(join(runTargeted, 'evidence/handoff.out'), 'utf8'),
+      'http://127.0.0.1:5993/claim/[REDACTED]?to=%2Fnodes%2Fn1%3Fview%3Dimmersive\n',
+    );
+  } finally { rmSync(runTargeted, { recursive: true, force: true }); }
   for (const text of ['/claim/<code>', '/claim/<redacted>', '/claim/[REDACTED]', '$ORIGIN/claim/not-a-real-code', '/claim/:code', `/claim/${code}x`]) {
     assert.deepEqual(findSecrets(text), [], text);
   }

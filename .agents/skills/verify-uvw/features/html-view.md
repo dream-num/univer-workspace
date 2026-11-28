@@ -9,7 +9,8 @@ in their browser only, saves nothing, and offers `Save my version` to copy the p
 ## Sub-features
 
 - HV1 validates and publishes a page with `uvw html-view validate` and `uvw html-view create`; `create` returns
-  `workspaceUrl`, `shareUrl` (`?view=immersive`), `repositoryVisibility` and `privateSourceUnitIds`.
+  `workspaceUrl`, `shareUrl` (`?view=immersive`), `repositoryVisibility`, `privateSourceUnitIds` and `access`
+  (plus `handoffUrl` and `handoffExpiresAt` for an unclaimed guest agent).
 - HV2 lists pages on the repository `Pages` tab (`Default page: <name>`, `Visit page`, `Copy address`,
   `New page`) and opens one at `/nodes/<id>` with `Change with Agent`, `Inspect bindings`, `Open standalone` and
   `Enter immersive view`. `Open standalone` (`/apps/<id>/run`) redirects a bound page to `?view=immersive`.
@@ -22,6 +23,9 @@ in their browser only, saves nothing, and offers `Save my version` to copy the p
 - HV7 `Save my version` for a signed-in reader copies the page and its Sheets into their Personal Space, opens the
   copy with the toast `This is your own copy, with its Sheets copied too. …`, and their edits there write to their
   own Sheet.
+- HV8 redirects a signed-out visitor opening a private `/nodes/<id>?view=immersive` link to
+  `/login?returnTo=/nodes/<id>?view=immersive` (`Sign in to open this resource.`) and returns straight to the
+  immersive page after sign-in, while a signed-in user without access sees `Unable to open this resource`.
 
 ## How to get to it (user POV)
 
@@ -52,7 +56,8 @@ $V cli hv-validate html-view validate --file "$EVIDENCE/hv.univer.html" --json  
 $V cli hv-create html-view create --file "$EVIDENCE/hv.univer.html" --space $SPACE --name 'Qty page' --idempotency-key "hv-$VERIFY_UVW_RUN-0001-abcdef" --json   # PN=.nodeId
 ```
 
-In a private Personal Space, `repositoryVisibility` is `private` and `privateSourceUnitIds` lists `$U`.
+In a private Personal Space, `repositoryVisibility` is `private`, `privateSourceUnitIds` lists `$U`, and `access`
+starts with `Only signed-in people with access can open shareUrl.`.
 
 ### HV2. Open
 
@@ -96,6 +101,21 @@ becomes the copy's `/nodes/<id>` in the second user's Space with the copy toast 
 Fill `4` there and reload: it stays `4`, and the owner's trunk still reads `3`/`6`.
 
 - Clean up with `share $PN --link off` and `share <sheet node> --link off`.
+
+### HV8. Private immersive link redirects signed-out visitors through sign-in back to immersive view
+
+With `$PN` private (Link Sharing `off`):
+
+1. `$V open-anon hv-private "$ORIGIN/nodes/$PN?view=immersive"`: `hv-private.node-status` reports `404` and
+   `hv-private.page.txt` includes `Sign in to open this resource.` (not `Unable to open this resource`).
+2. In a fresh signed-out browser session (`AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION-hv8`), pin `en-US` and open
+   `$ORIGIN/nodes/$PN?view=immersive`. Confirm the URL is `/login?returnTo=%2Fnodes%2F$PN%3Fview%3Dimmersive` and the
+   card shows `Sign in to open this resource.`.
+3. Sign in on that `/login` page as the baseline owner (`$O` / `$RUN/user.pw`): confirm the browser returns directly
+   to `$ORIGIN/nodes/$PN?view=immersive` and renders the live HTML View (`Qty` / `Double`).
+4. In the second user's signed-in session (from HV7, who has no access to `$PN`), open
+   `$ORIGIN/nodes/$PN?view=immersive`: confirm it stays on `/nodes/$PN?view=immersive` (no redirect to `/login`) and
+   renders `Unable to open this resource` with `Back to home`.
 
 ## Gotchas
 
