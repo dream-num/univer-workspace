@@ -184,12 +184,15 @@ with `AGENT_NOT_ALLOWED` and a message telling it to give the user its handoff l
 ### Hand a guest agent's work over
 
 ```bash
-uvw claim [--json]
+uvw claim [--node <file-link-or-node-id>] [--immersive] [--json]
 ```
 
 `uvw claim` prints a handoff link for the signed-in guest agent, with `claimUrl` and `expiresAt` in
-`--json`. Whoever opens it sees everything the agent owns, read-only and live, without signing in,
-private repositories included. A person who signs in there and takes the agent becomes its owner: the
+`--json`. Pass `--node <target>` (a file link or Node ID) to open that file directly from the
+handoff link without signing in; add `--immersive` to open it in immersive view (automatic for
+`.univer.html` pages and `?view=immersive` links, and rejected without `--node`). Whoever opens it
+sees everything the agent owns, read-only and live, without signing in, private repositories
+included. A person who signs in there and takes the agent becomes its owner: the
 agent stops expiring, and the person opens, edits and manages its files in the browser. The agent
 gets no access to the person's files. The link works for 7 days, or until a person takes the agent, so
 give the same link again and make a new one only when it is lost or has expired. An agent keeps at most
@@ -215,7 +218,7 @@ uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
 
 | Group   | Commands                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `repo member list/add/edit/remove`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment/submit/accept/send-back`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/check/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
+| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `repo member list/add/edit/remove`, `fork create/list/view/delete`, `issue list/view/create/edit/close/reopen/comment/submit/accept/send-back`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/check/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share`, `claim` |
 | Content | `space browse/find/node`, `unit`, `execute`, `outline`, `read`, `find` (Sheet only), `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-markdown`, `export-markdown`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                      |
 | Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 
@@ -339,7 +342,9 @@ A fork is not a repository. Commands that take a repository, such as `repo edit`
 and `pr create`, refuse a fork's name and say which repository it forks.
 
 The CLI saves no page drafts. `html-view create` publishes to a repository's trunk at once, so it refuses a fork's
-name in `--space`. A page change through a fork is an HTML View draft attached to the fork's pull request, which
+name in `--space`, and returns `workspaceUrl`, `shareUrl`, `repositoryVisibility`, `privateSourceUnitIds`,
+`access`, and for unclaimed guest agents `handoffUrl` and `handoffExpiresAt` (opening the page live without
+signing in so the user can claim the agent). A page change through a fork is an HTML View draft attached to the fork's pull request, which
 the MCP tool `html_view_save` saves with the fork's name as `worktree`.
 
 `blob replace --worktree <fork>` does not change the upstream file. Its bytes become a draft in the fork's pull

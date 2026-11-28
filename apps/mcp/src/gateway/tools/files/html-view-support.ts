@@ -1,5 +1,13 @@
 import { readFile } from "node:fs/promises";
-import { findWorkspaceHtmlViewDraft, isForkAddress, workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import {
+  createClaimLink,
+  describeHtmlViewAccess,
+  findWorkspaceHtmlViewDraft,
+  isForkAddress,
+  WorkspaceSpaceFeature,
+  workspaceError,
+  type WorkspaceSubject,
+} from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { htmlViewInput, htmlViewMaxBytes } from "../../../shared/executor-protocol.js";
 import type { ToolContext } from "../definition.js";
@@ -69,4 +77,30 @@ export async function pendingPageDraft(context: ToolContext, worktreeId: string,
   return await findWorkspaceHtmlViewDraft(async () => context.http, context.identityOrigin, {
     worktreeId, resourceId, authorId: context.user.id,
   });
+}
+
+export function subjectOf(user: WorkspaceSubject): WorkspaceSubject {
+  return user.kind === "agent"
+    ? { id: user.id, name: user.name, kind: "agent", claimed: user.claimed === true }
+    : { id: user.id, name: user.name };
+}
+
+export async function publishedHtmlViewAccess(
+  context: ToolContext,
+  nodeId: string,
+): Promise<{ readonly access: string; readonly handoffUrl?: string; readonly handoffExpiresAt?: string }> {
+  const caller = subjectOf(context.user);
+  if (caller.kind === "agent" && !caller.claimed && context.scopes.has("publish")) {
+    const claim = await createClaimLink(
+      new WorkspaceSpaceFeature(async () => context.http),
+      context.identityOrigin,
+      { to: `/nodes/${encodeURIComponent(nodeId)}?view=immersive` },
+    );
+    return {
+      handoffUrl: claim.claimUrl,
+      handoffExpiresAt: claim.expiresAt,
+      access: describeHtmlViewAccess({ caller, handoffUrl: claim.claimUrl }),
+    };
+  }
+  return { access: describeHtmlViewAccess({ caller }) };
 }

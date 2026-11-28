@@ -17,6 +17,9 @@ export const htmlViewDraftSchema = z.object({
   shareUrl: z.url().optional(),
   previewUrl: z.url(),
   expiresAt: z.string(),
+  access: z.string().optional(),
+  handoffUrl: z.url().optional(),
+  handoffExpiresAt: z.string().optional(),
 });
 
 export const htmlViewDraftOutput = z.object({ draft: htmlViewDraftSchema });

@@ -10,12 +10,14 @@ import {
 } from "@univerjs/core";
 import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewBinding } from "@univerjs-labs/html-view";
 import { WorkspaceBlobFeature } from "./blob.js";
+import type { WorkspaceSubject } from "./auth.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import { parseHtmlViewDraft, readWorkspaceHtmlViewDraft } from "./html-view-draft.js";
-import { readWorkspaceHtmlView, requireHtmlView, htmlViewUrls } from "./html-view-page.js";
+import { describeHtmlViewAccess, htmlViewUrls, readWorkspaceHtmlView, requireHtmlView } from "./html-view-page.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp } from "./http.js";
+import { createClaimLink } from "./share.js";
 import { parseDetachedNode } from "./space-model.js";
 import { WorkspaceSpaceFeature } from "./space.js";
 import { WorkspaceContentSource } from "./runtime-source.js";
@@ -39,6 +41,7 @@ export interface WorkspaceHtmlViewOptions {
     readonly unitId: string;
   }) => Promise<WorkspaceRuntimeTarget>;
   readonly configuredOrigin: () => Promise<string>;
+  readonly caller?: () => Promise<WorkspaceSubject>;
   readonly onWrite?: () => void;
 }
 
@@ -129,7 +132,7 @@ export class WorkspaceHtmlViewFeature {
     return {
       ...upload,
       ...htmlViewUrls(origin, upload["nodeId"]),
-      ...access,
+      ...(await this.accessGuidance(access, origin, upload["nodeId"])),
     };
   }
 
@@ -161,7 +164,7 @@ export class WorkspaceHtmlViewFeature {
       ...replacement,
       nodeId: view.node.nodeId,
       ...htmlViewUrls(origin, view.node.nodeId),
-      ...access,
+      ...(await this.accessGuidance(access, origin, view.node.nodeId)),
     };
   }
 
@@ -189,6 +192,7 @@ export class WorkspaceHtmlViewFeature {
     const worktree = source.worktree;
     const origin = await this.options.configuredOrigin();
     const access = await this.describeAccess(spaceId, source.validation.unitIds, worktree);
+    const guidance = await this.accessGuidance(access, origin);
     const { idempotencyKey, ...body } = intent;
     const draftWorktreeId = input.kind === "revise" ? sourceWorktreeId : worktree?.id;
     this.options.onWrite?.();
@@ -196,7 +200,7 @@ export class WorkspaceHtmlViewFeature {
       method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8"),
         ...(draftWorktreeId === undefined ? {} : { sourceWorktreeId: draftWorktreeId }) },
     });
-    return { ...parseHtmlViewDraft(response["draft"], origin), ...access,
+    return { ...parseHtmlViewDraft(response["draft"], origin), ...guidance,
       bindings: source.validation.bindings, bindingCount: source.validation.bindingCount,
       ...(source.validation.truncated === undefined ? {} : { truncated: source.validation.truncated }),
     };
@@ -246,6 +250,39 @@ export class WorkspaceHtmlViewFeature {
     return {
       repositoryVisibility: destination.publicRead === true ? ("public" as const) : ("private" as const),
       privateSourceUnitIds: privateSourceUnitIds.sort(),
+      spaceType: destination.type,
+    };
+  }
+
+  private async accessGuidance(
+    access: {
+      readonly repositoryVisibility: "public" | "private";
+      readonly privateSourceUnitIds: readonly string[];
+      readonly spaceType?: "personal" | "team" | undefined;
+    },
+    origin: string,
+    nodeId?: string,
+  ) {
+    const caller = this.options.caller ? await this.options.caller() : undefined;
+    const handoff =
+      nodeId !== undefined && caller?.kind === "agent" && !caller.claimed
+        ? await createClaimLink(
+            new WorkspaceSpaceFeature(this.options.authenticatedHttp),
+            origin,
+            { to: `/nodes/${encodeURIComponent(nodeId)}?view=immersive` },
+          )
+        : undefined;
+    return {
+      repositoryVisibility: access.repositoryVisibility,
+      privateSourceUnitIds: access.privateSourceUnitIds,
+      ...(handoff === undefined ? {} : { handoffUrl: handoff.claimUrl, handoffExpiresAt: handoff.expiresAt }),
+      access: describeHtmlViewAccess({
+        repositoryVisibility: access.repositoryVisibility,
+        privateSourceUnitIds: access.privateSourceUnitIds,
+        caller,
+        handoffUrl: handoff?.claimUrl,
+        spaceType: access.spaceType,
+      }),
     };
   }
 

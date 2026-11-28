@@ -232,7 +232,12 @@ export function AuthCard(props: {
             Univer Workspace
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t("authTagline")}
+            {t(
+              props.returnTo?.startsWith("/nodes/") ||
+                props.returnTo?.startsWith("/spaces/")
+                ? "authSignInToOpenResource"
+                : "authTagline"
+            )}
           </p>
         </div>
       </div>

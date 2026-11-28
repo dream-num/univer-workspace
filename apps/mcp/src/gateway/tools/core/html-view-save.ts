@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import { describeHtmlViewAccess, workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
-import { htmlViewSourceSchema, readHtmlView, htmlViewPullRequestShape, htmlViewWorktree, pendingPageDraft } from "../files/html-view-support.js";
+import { htmlViewSourceSchema, readHtmlView, htmlViewPullRequestShape, htmlViewWorktree, pendingPageDraft, subjectOf } from "../files/html-view-support.js";
 import { opSpecs } from "../../../shared/executor-protocol.js";
 import { writeAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
@@ -69,6 +69,24 @@ export const htmlViewSaveTool = executorTool({
   response: (result, args, context) => {
     if (args.html !== undefined)
       context.usage?.addTransfer("upload_bytes", Buffer.byteLength(args.html, "utf8"));
-    return { output: result.output };
+    const draft = result.output.draft;
+    if (draft === undefined) return { output: result.output };
+    const caller = subjectOf(context.user);
+    return {
+      output: {
+        ...result.output,
+        draft: {
+          ...draft,
+          access:
+            (caller.kind === "agent" && !caller.claimed) || draft.access === undefined
+              ? describeHtmlViewAccess({
+                  repositoryVisibility: draft.repositoryVisibility,
+                  privateSourceUnitIds: draft.privateSourceUnitIds,
+                  caller,
+                })
+              : draft.access,
+        },
+      },
+    };
   },
 });

@@ -1,3 +1,4 @@
+import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import type { WorkspaceSubject } from "./auth.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import { resolveNodeReference } from "./repo-ref.js";
@@ -26,15 +27,60 @@ export interface WorkspaceClaimLink {
   readonly expiresAt: string;
 }
 
+export interface CreateClaimLinkOptions {
+  readonly to?: string;
+}
+
 export async function createClaimLink(
   spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
   origin: string,
+  options?: CreateClaimLinkOptions,
 ): Promise<WorkspaceClaimLink> {
+  if (options?.to !== undefined) validateClaimTarget(options.to, origin);
   const { claimUrl, expiresIn } = await spaces.createAgentClaimCode();
+  const url = new URL(claimUrl, origin);
+  if (options?.to !== undefined) url.searchParams.set("to", options.to);
   return {
-    claimUrl: new URL(claimUrl, origin).toString(),
+    claimUrl: url.toString(),
     expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
   };
+}
+
+export async function resolveClaimTarget(
+  spaces: Pick<WorkspaceSpaceFeature, "getNode">,
+  origin: string,
+  input: { readonly node: string; readonly immersive?: boolean },
+): Promise<string> {
+  const resolved = await resolveNodeReference(spaces, input.node, origin);
+  const trimmed = input.node.trim();
+  const urlImmersive =
+    /^https?:\/\//i.test(trimmed) && new URL(trimmed).searchParams.get("view") === "immersive";
+  const useImmersive =
+    input.immersive === true ||
+    (input.immersive === undefined && (urlImmersive || isHtmlViewFilename(resolved.name)));
+  return `/nodes/${encodeURIComponent(resolved.nodeId)}${useImmersive ? "?view=immersive" : ""}`;
+}
+
+function validateClaimTarget(to: string, origin: string): void {
+  const invalid = () =>
+    workspaceError("workspace-argument-invalid", "Claim target must be a /nodes/ or /spaces/ path.");
+  if (!to.startsWith("/nodes/") && !to.startsWith("/spaces/")) throw invalid();
+  let target: URL;
+  let baseOrigin: string;
+  try {
+    baseOrigin = new URL(origin).origin;
+    target = new URL(to, origin);
+  } catch {
+    throw invalid();
+  }
+  if (
+    target.origin !== baseOrigin ||
+    target.username !== "" ||
+    target.password !== "" ||
+    (!target.pathname.startsWith("/nodes/") && !target.pathname.startsWith("/spaces/"))
+  ) {
+    throw invalid();
+  }
 }
 
 /** Reads the Link Sharing of a file, named by its link or Node ID, and sets it first when `link` is given. */

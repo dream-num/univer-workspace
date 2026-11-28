@@ -1,6 +1,6 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { components } from "../../../../generated/http/schema.js";
-import { claimLanding } from "./claim-landing";
+import { claimLanding, validClaimTarget } from "./claim-landing";
 
 const agent = {
   id: "agent-1", username: "workbuddy-connector-sjds", displayName: "WorkBuddy Connector · sjds", avatarUrl: null,
@@ -36,4 +36,26 @@ it("lists the agent's repositories when its work is in more than one place", () 
   const list = { to: "/repositories", search: { q: "workbuddy-connector-sjds" } };
   expect(claimLanding(agent, [...mine, space("budget", "team", "agent-1"), space("sales", "team", "agent-1")])).toEqual(list);
   expect(claimLanding({ ...agent, files: 1 }, [...mine, space("budget", "team", "agent-1")])).toEqual(list);
+});
+
+describe("validClaimTarget", () => {
+  it.each([
+    ["/nodes/node-1", "/nodes/node-1"],
+    ["/nodes/node-1?view=immersive#chart", "/nodes/node-1?view=immersive#chart"],
+    ["/spaces/space-1", "/spaces/space-1"],
+    ["/spaces/space-1?view=files", "/spaces/space-1?view=files"],
+    ["/claim/code-1", undefined],
+    ["/login", undefined],
+    ["/login?returnTo=/nodes/node-1", undefined],
+    ["/home", undefined],
+    ["//evil.com/nodes/node-1", undefined],
+    ["https://evil.com/nodes/node-1", undefined],
+    ["/\\evil.com/nodes/node-1", undefined],
+    ["/nodes/../login", undefined],
+    ["", undefined],
+    [undefined, undefined],
+    [42, undefined],
+  ])("validates %j -> %j", (value, expected) => {
+    expect(validClaimTarget(value)).toBe(expected);
+  });
 });

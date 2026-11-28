@@ -2,7 +2,7 @@ import { isForkAddress, readWorkspaceHtmlView, readWorkspaceHtmlViewDraftContent
 import { z } from "zod";
 import { RESULT_LIMIT, resultTooLarge, serializedLength } from "../../paging.js";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
-import { pendingPageDraft } from "../files/html-view-support.js";
+import { pendingPageDraft, publishedHtmlViewAccess } from "../files/html-view-support.js";
 import { forkFeature } from "./issue-support.js";
 import { worktreeOrForkInput } from "./space-support.js";
 
@@ -26,6 +26,7 @@ export const htmlViewReadTool: ToolDefinition = {
   }), z.object({
     resource: z.string(), node: z.string(), space: z.string(), name: z.string(),
     html: z.string(), etag: z.string(), shareUrl: z.url(),
+    access: z.string().optional(), handoffUrl: z.url().optional(), handoffExpiresAt: z.string().optional(),
   })]),
   annotations: readOnlyAnnotations,
   async run(context, args) {
@@ -55,6 +56,7 @@ export const htmlViewReadTool: ToolDefinition = {
       resource: page.resourceId, node: page.nodeId, space: page.spaceId,
       name: page.name, html: page.html, etag: page.etag,
       shareUrl: new URL(`/nodes/${encodeURIComponent(page.nodeId)}?view=immersive`, context.identityOrigin).href,
+      ...await publishedHtmlViewAccess(context, page.nodeId),
     };
     if (serializedLength(output) > RESULT_LIMIT)
       throw resultTooLarge("html_view_read", "The page is too large to revise inline.");

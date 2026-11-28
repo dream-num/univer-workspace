@@ -11,7 +11,7 @@ import { encodeFrame, decodeFrame } from "../src/shared/frame.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkspaceContentSource } from "@univerjs/univer-workspace-client-core";
-import { WorkspaceHttp, workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import { describeHtmlViewAccess, WorkspaceHttp, workspaceError, type WorkspaceSubject } from "@univerjs/univer-workspace-client-core/product";
 import { htmlViewDraft, htmlViewValidate } from "../src/executor/ops/html-view.js";
 import type { OpContext } from "../src/executor/context.js";
 import { htmlViewMaxBytes, opSpecs } from "../src/shared/executor-protocol.js";
@@ -209,6 +209,7 @@ it("saves one validated creation draft per call with its key and identity previe
     id: "draft-1", kind: "create", state: "pending", publishWhen: "publish", name: "Dashboard.univer.html", space: "space",
     previewUrl: "https://workspace.test/drafts/draft-1", expiresAt: "2026-11-19T00:00:00Z",
     repositoryVisibility: "private", privateSourceUnitIds: ["unit"],
+    access: describeHtmlViewAccess({ repositoryVisibility: "private", privateSourceUnitIds: ["unit"], spaceType: "team" }),
   }, bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] });
   expect(f.draftPosts).toEqual([{ kind: "create", html, name: "Dashboard.univer.html", spaceId: "space", parentNodeId: "folder" }]);
   expect(onWrite).toHaveBeenCalledOnce();
@@ -263,13 +264,16 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(stores.splice(0).map((store) => store.close()));
 });
-function uploadContext(options: ConstructorParameters<typeof LocalStagingStore>[2] = {}) {
+function uploadContext(
+  options: ConstructorParameters<typeof LocalStagingStore>[2] = {},
+  overrides: { readonly user?: WorkspaceSubject; readonly scopes?: ReadonlySet<ToolScope> } = {},
+) {
   const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp", options);
   stores.push(store);
   const f = setup();
   const usage = new UsageAccumulator();
-  const user = { id: "owner", name: "Owner" };
-  const scopes = new Set<ToolScope>(["read", "write"]);
+  const user = overrides.user ?? { id: "owner", name: "Owner" };
+  const scopes = overrides.scopes ?? new Set<ToolScope>(["read", "write"]);
   const context: ToolContext = {
     staging: store, usage, user, scopes,
     http: f.ctx.http(), identityOrigin: "https://workspace.test", requestId: "html-upload",
@@ -407,15 +411,52 @@ function revisionSetup(page = html, name = "Dashboard.univer.html", stale = fals
   return { ...f, writes };
 }
 
-it("reads a page inline with a strong ETag and immersive link", async () => {
+it("reads a page inline with a strong ETag, immersive link, and caller-tailored access", async () => {
   const { context } = uploadContext();
   const f = revisionSetup();
   const result = await htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { resource: "resource" });
   expect(result).toEqual({ repo: "space", output: {
     resource: "resource", node: "node", space: "space", name: "Dashboard.univer.html",
     html, etag: '"v1"', shareUrl: "https://workspace.test/nodes/node?view=immersive",
+    access: describeHtmlViewAccess({ caller: context.user }),
   } });
   expect(htmlViewReadTool.outputSchema.parse(result.output)).toEqual(result.output);
+});
+
+it("attaches handoffUrl and unclaimed-agent access when html_view_read runs for an unclaimed agent", async () => {
+  const unclaimed: WorkspaceSubject = { id: "agent-1", name: "Agent", kind: "agent", claimed: false };
+  for (const hasPublish of [true, false]) {
+    const { context } = uploadContext({}, {
+      user: unclaimed,
+      scopes: new Set<ToolScope>(hasPublish ? ["read", "publish"] : ["read"]),
+    });
+    const f = revisionSetup();
+    const original = f.fetcher.getMockImplementation()!;
+    f.fetcher.mockImplementation(async (url, init) => {
+      const request = new Request(url, init);
+      if (request.method === "POST" && new URL(request.url).pathname === "/api/agents/claim-codes") {
+        return Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 604_800 }, { status: 201 });
+      }
+      return await original(url, init);
+    });
+    const result = await htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { resource: "resource" });
+    expect(htmlViewReadTool.outputSchema.parse(result.output)).toEqual(result.output);
+    if (hasPublish) {
+      const handoffUrl = "https://workspace.test/claim/c0de?to=%2Fnodes%2Fnode%3Fview%3Dimmersive";
+      expect(result.output).toMatchObject({
+        shareUrl: "https://workspace.test/nodes/node?view=immersive",
+        handoffUrl,
+        handoffExpiresAt: expect.any(String),
+        access: describeHtmlViewAccess({ caller: unclaimed, handoffUrl }),
+      });
+    } else {
+      expect(result.output).toMatchObject({
+        shareUrl: "https://workspace.test/nodes/node?view=immersive",
+        access: describeHtmlViewAccess({ caller: unclaimed }),
+      });
+      expect(result.output).not.toHaveProperty("handoffUrl");
+    }
+  }
 });
 
 it("refuses non-pages and oversize pages rather than returning partial HTML", async () => {
@@ -532,9 +573,68 @@ it.each(["create", "replace"] as const)("reads every %s draft state over HTTP wi
     else expect(result.output).not.toHaveProperty("draft.publishWhen");
     if (state === "published") expect(result.output).toMatchObject({ draft: {
       resource: "resource", node: "node/1", etag: '"v2"', shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
+      access: describeHtmlViewAccess({ caller: context.user }),
     } });
-    else for (const key of ["shareUrl", "node", "resource", "etag"]) expect(result.output).not.toHaveProperty(`draft.${key}`);
+    else for (const key of ["shareUrl", "node", "resource", "etag", "access", "handoffUrl", "handoffExpiresAt"]) expect(result.output).not.toHaveProperty(`draft.${key}`);
     expect(fetcher).toHaveBeenCalledOnce();
+  }
+});
+
+it("attaches handoffUrl to published html_view_draft_get for an unclaimed agent with publish scope", async () => {
+  const unclaimed: WorkspaceSubject = { id: "agent-1", name: "Agent", kind: "agent", claimed: false };
+  for (const hasPublish of [true, false]) {
+    const { context } = uploadContext({}, {
+      user: unclaimed,
+      scopes: new Set<ToolScope>(hasPublish ? ["read", "publish"] : ["read"]),
+    });
+    const fetcher = vi.fn<typeof fetch>(async (url, options) => {
+      const request = new Request(url, options);
+      const path = new URL(request.url).pathname;
+      if (path === "/api/html-view-drafts/draft-1") return Response.json({ draft: draftView("create", "published") });
+      if (request.method === "POST" && path === "/api/agents/claim-codes") {
+        return Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 604_800 }, { status: 201 });
+      }
+      throw new Error(`Unexpected request ${request.method} ${path}`);
+    });
+    const http = new WorkspaceHttp({ origin: "https://workspace.test", role: "client", cookie: "session=test", fetcher });
+    const result = await htmlViewDraftGetTool.run({ ...context, http }, { draft: "draft-1" });
+    expect(htmlViewDraftGetTool.outputSchema.parse(result.output)).toEqual(result.output);
+    if (hasPublish) {
+      const handoffUrl = "https://workspace.test/claim/c0de?to=%2Fnodes%2Fnode%252F1%3Fview%3Dimmersive";
+      expect(result.output).toMatchObject({
+        draft: {
+          state: "published",
+          handoffUrl,
+          handoffExpiresAt: expect.any(String),
+          access: describeHtmlViewAccess({ caller: unclaimed, handoffUrl }),
+        },
+      });
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } else {
+      expect(result.output).toMatchObject({
+        draft: {
+          state: "published",
+          access: describeHtmlViewAccess({ caller: unclaimed }),
+        },
+      });
+      expect(result.output).not.toHaveProperty("draft.handoffUrl");
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+  }
+});
+
+it("tailors draft.access in html_view_save to human vs unclaimed agent", async () => {
+  const human: WorkspaceSubject = { id: "owner", name: "Owner" };
+  const unclaimed: WorkspaceSubject = { id: "agent-1", name: "Agent", kind: "agent", claimed: false };
+  for (const [principal, expectedAccess] of [
+    [human, describeHtmlViewAccess({ repositoryVisibility: "private", privateSourceUnitIds: ["unit"], caller: human, spaceType: "team" })],
+    [unclaimed, describeHtmlViewAccess({ repositoryVisibility: "private", privateSourceUnitIds: ["unit"], caller: unclaimed })],
+  ] as const) {
+    const f = setup();
+    const { context } = uploadContext({}, { user: principal });
+    connectReplacement(f.ctx);
+    const result = await htmlViewSaveTool.run(context, { ...createArgs, html });
+    expect(result.output).toMatchObject({ draft: { access: expectedAccess } });
   }
 });
 

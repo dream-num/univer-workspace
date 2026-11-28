@@ -103,8 +103,10 @@ export {
 export {
   createClaimLink,
   formatShare,
+  resolveClaimTarget,
   SHARE_LINKS,
   shareNode,
+  type CreateClaimLinkOptions,
   type WorkspaceClaimLink,
   type WorkspaceShare,
   type WorkspaceShareLink,
@@ -137,7 +139,13 @@ export type { WorkspaceCheck, WorkspaceCheckResult, WorkspaceChecksSummary, Work
 
 export { WorkspaceAssetFeature } from "./asset.js";
 
-export { readWorkspaceHtmlView, type WorkspaceHtmlViewPage } from "./html-view-page.js";
+export {
+  describeHtmlViewAccess,
+  htmlViewUrls,
+  readWorkspaceHtmlView,
+  type HtmlViewAccessInput,
+  type WorkspaceHtmlViewPage,
+} from "./html-view-page.js";
 
 export { findWorkspaceHtmlViewDraft, readWorkspaceHtmlViewDraftContent, readWorkspaceHtmlViewDraft, htmlViewDraftUrl, type WorkspaceHtmlViewDraft, type WorkspaceHtmlViewDraftStatus } from "./html-view-draft.js";
 

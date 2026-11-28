@@ -96,7 +96,9 @@ zero static bindings; runtime requests still require access to each source Unit.
 Blob write keys must be 16–200 ASCII letters, digits, underscores or hyphens; a UUID is a suitable key. This applies to both creation and replacement.
 
 `create` performs the same validation and uploads the validated HTML as a new Blob. It adds
-`.univer.html` to the name if missing and returns Blob identities plus `workspaceUrl`, `shareUrl`, `repositoryVisibility` and `privateSourceUnitIds`. The Space
+`.univer.html` to the name if missing and returns Blob identities plus `workspaceUrl`, `shareUrl`,
+`repositoryVisibility`, `privateSourceUnitIds`, `access`, and for unclaimed guest agents `handoffUrl`
+and `handoffExpiresAt`. The Space
 is explicit; the parent defaults to its root. Reuse an idempotency key only when retrying identical
 content, name and destination. Creation publishes immediately without a Unit Worktree and does
 not modify source cells.
@@ -107,22 +109,19 @@ synchronization; report which checks ran. Unit screenshot commands do not render
 
 ## Share the page
 
-Return `shareUrl` (the immersive page link) to the user and say who can open it.
-When `repositoryVisibility` is `public` and `privateSourceUnitIds` is empty, anyone
-with the link can view the page and its declared sources. Otherwise, only signed-in
-people with access can open the page with all its data. A public page can open
-without its private source data. Signed-out visitors and signed-in non-members are
-read-only; page writes are rejected for them.
+If signed in as an unclaimed guest agent, **never give `shareUrl` alone** — nobody else
+can open it, even after signing in. Return `handoffUrl` from `html-view create` (or run
+`claim --node <node-id> --immersive`) so the user opens the page live without signing in
+and can claim the agent.
 
-If the user wants anyone with the link to open a private repository's page, the
-repository must be public, which makes everything in it readable. Use CLI
-`repo edit <repo> --visibility public` or MCP `repo_edit`, and give the user the confirm
-link it returns. An unclaimed agent gets none: give the user the handoff link from `claim`,
-where they open the page with its live data before they sign in.
-Keep source Sheets in the same public repository as the page, or list the
-`privateSourceUnitIds` to the user. These fields describe declared sources at
-creation time; script-created references and later permission changes still need
-checking, and Workspace authorizes every visitor's requests.
+Otherwise, return `shareUrl` and say who can open it from `access` (signing in is required
+unless `repositoryVisibility` is `public` and `privateSourceUnitIds` is empty). Public pages
+open without private source data; visitors and non-members are read-only.
+
+To let anyone with the link open a private repository's page, make it public with
+`repo edit <repo> --visibility public` or MCP `repo_edit` and return its confirm link.
+Keep source Sheets in the same public repository or list `privateSourceUnitIds`.
+These fields reflect creation time; runtime requests authorize each visitor per source.
 
 Media referenced with `data-workspace-src` appears only when the file itself is in a public
 repository or has link sharing on, for every visitor including signed-in members. Tell the user

@@ -11,7 +11,7 @@ import {
   nodeChildrenQueryOptions,
   nodeQueryOptions,
 } from "../features/nodes";
-import { anonymousUser, sessionQueryOptions } from "../features/auth";
+import { anonymousUser, redirectToLogin, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
 import { mySpacesQueryOptions } from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
@@ -56,7 +56,10 @@ export const Route = createFileRoute("/nodes/$nodeId")({
         await context.queryClient.ensureQueryData(nodeChildrenQueryOptions(params.nodeId));
       }
     } catch (error) {
-      if (isResourceUnavailableError(error)) throw notFound();
+      if (isResourceUnavailableError(error)) {
+        if (!session.authenticated) redirectToLogin(location.href);
+        throw notFound();
+      }
       throw error;
     }
   },

@@ -292,7 +292,18 @@ export {
   type WorkspaceHtmlViewValidation,
 } from "./html-view.js";
 
-export type { WorkspaceHtmlViewPage } from "./html-view-page.js";
+export {
+  describeHtmlViewAccess,
+  htmlViewUrls,
+  type HtmlViewAccessInput,
+  type WorkspaceHtmlViewPage,
+} from "./html-view-page.js";
+export {
+  createClaimLink,
+  resolveClaimTarget,
+  type CreateClaimLinkOptions,
+  type WorkspaceClaimLink,
+} from "./share.js";
 
 export { findWorkspaceHtmlViewDraft, readWorkspaceHtmlViewDraftContent, readWorkspaceHtmlViewDraft, htmlViewDraftUrl, type WorkspaceHtmlViewDraft, type WorkspaceHtmlViewDraftStatus } from "./html-view-draft.js";
 

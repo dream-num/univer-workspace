@@ -730,7 +730,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"3a6be969ae331dbc2cb6cd679bce960641a4d7d4b0c288b862acac078b954ce2"`);
+    expect(digest).toMatchInlineSnapshot(`"39d503312564da3f099dd733707da695d88961dd22fdc0c48be1771faa6f8b26"`);
   });
 
   it("says in pr_view's own output schema what to do with each freshness label, for clients that drop server instructions", async () => {

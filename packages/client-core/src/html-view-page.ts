@@ -1,7 +1,37 @@
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
+import type { WorkspaceSubject } from "./auth.js";
 import { WorkspaceBlobFeature } from "./blob.js";
 import { workspaceError } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp } from "./http.js";
+
+export interface HtmlViewAccessInput {
+  readonly repositoryVisibility?: "public" | "private" | undefined;
+  readonly privateSourceUnitIds?: readonly string[] | undefined;
+  readonly caller?: WorkspaceSubject | undefined;
+  readonly handoffUrl?: string | undefined;
+  readonly spaceType?: "personal" | "team" | undefined;
+}
+
+export function describeHtmlViewAccess(input: HtmlViewAccessInput): string {
+  if (input.caller?.kind === "agent" && !input.caller.claimed) {
+    return input.handoffUrl
+      ? "Only this temporary agent can open shareUrl directly. Give the user handoffUrl instead so they can open the page live without signing in and claim this agent."
+      : "Only this temporary agent can open shareUrl directly. Do not give shareUrl to the user alone; run claim (uvw claim in the CLI) with this node to get a handoff link so they can open the page live without signing in.";
+  }
+  const privateCount = input.privateSourceUnitIds?.length ?? 0;
+  if (input.repositoryVisibility === "public" && privateCount === 0) {
+    return "Anyone with the link can open shareUrl and view its live data without signing in (read-only for visitors).";
+  }
+  if (input.repositoryVisibility === "public" && privateCount > 0) {
+    return `Anyone with the link can open shareUrl, but its private source Sheets (${input.privateSourceUnitIds!.join(", ")}) require signing in with access.`;
+  }
+  if (input.repositoryVisibility === "private") {
+    return input.spaceType === "personal"
+      ? "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before turning on Link Sharing."
+      : "Only signed-in people with access can open shareUrl. To let anyone with the link view it without signing in, ask the user before making the repository public.";
+  }
+  return "Only signed-in people with access can open shareUrl unless the repository is public or Link Sharing is enabled.";
+}
 
 export interface WorkspaceHtmlViewPage {
   readonly resourceId: string;
